@@ -20,6 +20,7 @@ class FinishedProductStockScreen extends ConsumerStatefulWidget {
   ConsumerState<FinishedProductStockScreen> createState() => _FinishedProductStockScreenState();
 }
 
+// This is class ant
 class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStockScreen> {
   String _searchQuery = '';
   bool _showOnlyLowStock = false;
