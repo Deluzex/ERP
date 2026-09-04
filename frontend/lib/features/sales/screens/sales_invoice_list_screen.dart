@@ -24,99 +24,10 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
-<<<<<<< Updated upstream
     final sales = db.sales.where((s) {
       return s.invoiceNumber.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           s.partyName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           (s.projectName != null && s.projectName!.toLowerCase().contains(_searchQuery.toLowerCase()));
-=======
-    final currentSection = ref.watch(currentNavSectionProvider);
-
-    // 1. Dashboard summary data calculation
-    final totalQuotations = db.sales.where((s) => s.documentType == SalesDocumentType.quotation).length;
-    final pendingQuotations = db.sales.where((s) => s.documentType == SalesDocumentType.quotation && (s.quotationStatus == QuotationStatus.sent || s.quotationStatus == QuotationStatus.draft || s.quotationStatus == null)).length;
-    final approvedQuotations = db.sales.where((s) => s.documentType == SalesDocumentType.quotation && s.quotationStatus == QuotationStatus.approved).length;
-
-    final totalOrders = db.sales.where((s) => s.documentType == SalesDocumentType.salesOrder).length;
-    final pendingOrders = db.sales.where((s) => s.documentType == SalesDocumentType.salesOrder && (s.salesOrderStatus == SalesOrderStatus.pending || s.salesOrderStatus == SalesOrderStatus.confirmed || s.salesOrderStatus == SalesOrderStatus.inProgress)).length;
-    final completedOrders = db.sales.where((s) => s.documentType == SalesDocumentType.salesOrder && s.salesOrderStatus == SalesOrderStatus.done).length;
-
-    final totalSalesAmount = db.sales.where((s) => s.documentType == SalesDocumentType.invoice).fold(0.0, (sum, s) => sum + s.totalAmount);
-    final paidSalesAmount = db.sales.where((s) => s.documentType == SalesDocumentType.invoice).fold(0.0, (sum, s) => sum + s.paidAmount);
-    final outstandingAmount = db.sales.where((s) => s.documentType == SalesDocumentType.invoice).fold(0.0, (sum, s) => sum + s.pendingAmount);
-
-    final totalReturns = db.sales.where((s) => s.documentType == SalesDocumentType.salesReturn).length;
-
-    // 2. Map view configs based on active NavSection
-    String pageTitle = 'Sales Module';
-    String pageSubtitle = 'Create, approve and manage customers quotations, dispatches and invoice documents';
-    Widget? createButton;
-    List<ErpColumn> tableColumns = [];
-    List<List<Widget>> tableRows = [];
-
-    // Filter local lists
-    final activeSalesList = db.sales.where((s) {
-      // Document Type Filter
-      switch (currentSection) {
-        case ErpNavSection.quotations:
-          if (s.documentType != SalesDocumentType.quotation) return false;
-          break;
-        case ErpNavSection.salesOrders:
-          if (s.documentType != SalesDocumentType.salesOrder) return false;
-          break;
-        case ErpNavSection.salesInvoiceList:
-          if (s.documentType != SalesDocumentType.invoice) return false;
-          break;
-        case ErpNavSection.salesReturns:
-          if (s.documentType != SalesDocumentType.salesReturn) return false;
-          break;
-        default:
-          return false;
-      }
-
-      // Search Query Filter
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        final matchNo = s.invoiceNumber.toLowerCase().contains(query);
-        final matchParty = s.partyName.toLowerCase().contains(query);
-        final matchProduct = s.items.any((i) => i.finishedProductName.toLowerCase().contains(query) || i.finishedProductCode.toLowerCase().contains(query));
-        final matchSO = s.salesOrderNumber?.toLowerCase().contains(query) ?? false;
-        final matchQuote = s.quotationReferenceId?.toLowerCase().contains(query) ?? false;
-        final matchArch = s.architectName?.toLowerCase().contains(query) ?? false;
-        final matchPrj = s.projectName?.toLowerCase().contains(query) ?? false;
-        final matchNotes = s.notes?.toLowerCase().contains(query) ?? false;
-        if (!matchNo && !matchParty && !matchProduct && !matchSO && !matchQuote && !matchArch && !matchPrj && !matchNotes) return false;
-      }
-
-      // Status Dropdown Filter
-      if (_statusFilter != null) {
-        if (currentSection == ErpNavSection.quotations) {
-          final qStatus = s.quotationStatus.toString().split('.').last.toLowerCase();
-          if (qStatus != _statusFilter!.toLowerCase()) return false;
-        } else if (currentSection == ErpNavSection.salesOrders) {
-          final soStatus = s.salesOrderStatus.toString().split('.').last.toLowerCase();
-          if (soStatus != _statusFilter!.toLowerCase()) return false;
-        } else if (currentSection == ErpNavSection.salesInvoiceList) {
-          final payStatus = s.status.toString().split('.').last.toLowerCase();
-          if (payStatus != _statusFilter!.toLowerCase()) return false;
-        } else if (currentSection == ErpNavSection.salesReturns) {
-          final retStatus = s.salesReturnStatus.toString().split('.').last.toLowerCase();
-          if (retStatus != _statusFilter!.toLowerCase()) return false;
-        }
-      }
-
-      // Customer Filter
-      if (_customerFilter != null && s.partyId != _customerFilter) return false;
-
-      // Date Range Filter
-      if (_dateRangeFilter != null) {
-        if (s.saleDate.isBefore(_dateRangeFilter!.start) || s.saleDate.isAfter(_dateRangeFilter!.end.add(const Duration(days: 1)))) {
-          return false;
-        }
-      }
-
-      return true;
->>>>>>> Stashed changes
     }).toList();
 
     return SingleChildScrollView(

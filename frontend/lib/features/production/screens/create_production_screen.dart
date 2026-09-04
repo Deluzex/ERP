@@ -48,8 +48,6 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
 
   String? _selectedFinishedProductId;
   final List<_RawMaterialUsageDraft> _rawMaterialsUsed = [];
-<<<<<<< Updated upstream
-=======
   bool _overrideStockValidation = false;
 
   bool get _hasLowStockWarning {
@@ -73,7 +71,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
 
     setState(() {
       _rawMaterialsUsed.clear();
-      // Simulation: Every finished good unit requires:
+      // Every finished good unit requires:
       // - 1.2 units of first Raw Material
       // - 0.7 units of second Raw Material
       if (db.rawMaterials.isNotEmpty) {
@@ -101,7 +99,6 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
       }
     });
   }
->>>>>>> Stashed changes
 
   @override
   void initState() {
@@ -110,20 +107,6 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
     if (db.finishedProducts.isNotEmpty) {
       _selectedFinishedProductId = db.finishedProducts.first.id;
     }
-<<<<<<< Updated upstream
-    if (db.rawMaterials.isNotEmpty) {
-      for (final rm in db.rawMaterials.take(2)) {
-        _rawMaterialsUsed.add(_RawMaterialUsageDraft(
-          rawMaterialId: rm.id,
-          rawMaterialName: rm.name,
-          rawMaterialCode: rm.itemCode,
-          unit: rm.unit,
-          quantityUsed: 20.0,
-          unitCost: rm.defaultPurchasePrice,
-        ));
-      }
-    }
-=======
     
     _actualQtyCtrl.addListener(() {
       setState(() {});
@@ -132,7 +115,6 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _calculateBomRequirements();
     });
->>>>>>> Stashed changes
   }
 
   void _addRawMaterial() {

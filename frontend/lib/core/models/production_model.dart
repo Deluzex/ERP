@@ -44,6 +44,9 @@ class ProductionOrder {
   final ProductionStatus status;
   final String? notes;
   final DateTime createdAt;
+  final bool isDeleted;
+  final String? deletedReason;
+  final DateTime? deletedAt;
 
   ProductionOrder({
     required this.id,
@@ -64,6 +67,9 @@ class ProductionOrder {
     required this.status,
     this.notes,
     required this.createdAt,
+    this.isDeleted = false,
+    this.deletedReason,
+    this.deletedAt,
   });
 
   String get statusLabel {
@@ -98,6 +104,9 @@ class ProductionOrder {
     ProductionStatus? status,
     String? notes,
     DateTime? createdAt,
+    bool? isDeleted,
+    String? deletedReason,
+    DateTime? deletedAt,
   }) {
     return ProductionOrder(
       id: id ?? this.id,
@@ -118,6 +127,9 @@ class ProductionOrder {
       status: status ?? this.status,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedReason: deletedReason ?? this.deletedReason,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 }

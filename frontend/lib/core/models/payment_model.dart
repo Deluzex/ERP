@@ -21,6 +21,8 @@ class ErpPayment {
   final String? transactionReference; // Cheque No / UPI Ref / Bank Ref
   final String? notes;
   final DateTime createdAt;
+  final String? paymentStatus;
+  final String? attachmentUrl;
 
   ErpPayment({
     required this.id,
@@ -36,6 +38,8 @@ class ErpPayment {
     this.transactionReference,
     this.notes,
     required this.createdAt,
+    this.paymentStatus,
+    this.attachmentUrl,
   });
 
   String get typeLabel {

@@ -197,7 +197,6 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                       isSelected: currentSection == ErpNavSection.createProduction,
                       onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
                     ),
-<<<<<<< Updated upstream
                     _buildSubNavItem(
                       title: 'Production History',
                       isSelected: currentSection == ErpNavSection.productionHistory,
@@ -208,8 +207,6 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                       isSelected: currentSection == ErpNavSection.productionCosting,
                       onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionCosting,
                     ),
-=======
->>>>>>> Stashed changes
                   ],
                 ),
 
@@ -316,69 +313,14 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                       onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.dealers,
                     ),
                     _buildSubNavItem(
-<<<<<<< Updated upstream
                       title: 'Architects & Commission',
                       isSelected: currentSection == ErpNavSection.architects,
                       onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
-=======
+                    ),
+                    _buildSubNavItem(
                       title: 'Projects',
                       isSelected: currentSection == ErpNavSection.projectList,
                       onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectList,
-                    ),
-                    _buildNestedNavGroup(
-                      groupTitle: 'Architects',
-                      isExpanded: _expandedGroups['Architects'] ?? false,
-                      onGroupTap: () {
-                        setState(() {
-                          _expandedGroups['Architects'] = !(_expandedGroups['Architects'] ?? false);
-                        });
-                        ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects;
-                      },
-                      children: [
-                        _buildNestedSubNavItem(
-                          title: 'Architect Details',
-                          isSelected: currentSection == ErpNavSection.architects && ref.watch(architectsTabActiveIndexProvider) == 0,
-                          onTap: () {
-                            ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects;
-                            ref.read(architectsTabActiveIndexProvider.notifier).state = 0;
-                          },
-                        ),
-                        _buildNestedSubNavItem(
-                          title: 'Related Sales',
-                          isSelected: currentSection == ErpNavSection.architects && ref.watch(architectsTabActiveIndexProvider) == 1,
-                          onTap: () {
-                            ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects;
-                            ref.read(architectsTabActiveIndexProvider.notifier).state = 1;
-                          },
-                        ),
-                        _buildNestedSubNavItem(
-                          title: 'Projects',
-                          isSelected: currentSection == ErpNavSection.architects && ref.watch(architectsTabActiveIndexProvider) == 2,
-                          onTap: () {
-                            ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects;
-                            ref.read(architectsTabActiveIndexProvider.notifier).state = 2;
-                          },
-                        ),
-                        _buildNestedSubNavItem(
-                          title: 'Commission',
-                          isSelected: currentSection == ErpNavSection.architects && ref.watch(architectsTabActiveIndexProvider) == 3,
-                          onTap: () {
-                            ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects;
-                            ref.read(architectsTabActiveIndexProvider.notifier).state = 3;
-                          },
-                        ),
-                      ],
->>>>>>> Stashed changes
-                    ),
-                    _buildSubNavItem(
-                      title: 'Raw Materials',
-                      isSelected: currentSection == ErpNavSection.rawMaterials,
-                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterials,
-                    ),
-                    _buildSubNavItem(
-                      title: 'Finished Products',
-                      isSelected: currentSection == ErpNavSection.finishedProducts,
-                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProducts,
                     ),
                   ],
                 ),

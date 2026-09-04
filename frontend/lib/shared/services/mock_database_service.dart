@@ -842,6 +842,20 @@ class MockDatabaseService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void deleteProductionOrder({required String orderId, String? reason}) {
+    final index = productionOrders.indexWhere((o) => o.id == orderId);
+    if (index != -1) {
+      final order = productionOrders[index];
+      productionOrders[index] = order.copyWith(
+        isDeleted: true,
+        deletedReason: reason,
+        deletedAt: DateTime.now(),
+        status: ProductionStatus.cancelled,
+      );
+      notifyListeners();
+    }
+  }
+
   // -------------------------------------------------------------
   // SALES WORKFLOW
   // -------------------------------------------------------------
@@ -949,6 +963,54 @@ class MockDatabaseService extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  void approveQuotation(String quotationId) {
+    final index = sales.indexWhere((s) => s.id == quotationId);
+    if (index != -1) {
+      final q = sales[index];
+      final soNumber = IdGenerator.generateDocNumber('SO', sales.length + 1);
+      final so = q.copyWith(
+        id: IdGenerator.generateId('SO'),
+        invoiceNumber: soNumber,
+        documentType: SalesDocumentType.salesOrder,
+        salesOrderNumber: soNumber,
+        salesOrderReferenceId: q.id,
+        salesOrderStatus: SalesOrderStatus.confirmed,
+        quotationStatus: null,
+        createdAt: DateTime.now(),
+      );
+      sales[index] = q.copyWith(
+        quotationStatus: QuotationStatus.approved,
+        salesOrderNumber: soNumber,
+      );
+      sales.insert(0, so);
+      notifyListeners();
+    }
+  }
+
+  void rejectQuotation(String quotationId) {
+    final index = sales.indexWhere((s) => s.id == quotationId);
+    if (index != -1) {
+      sales[index] = sales[index].copyWith(quotationStatus: QuotationStatus.rejected);
+      notifyListeners();
+    }
+  }
+
+  void updateSalesOrderStatus(String orderId, SalesOrderStatus newStatus) {
+    final index = sales.indexWhere((s) => s.id == orderId);
+    if (index != -1) {
+      sales[index] = sales[index].copyWith(salesOrderStatus: newStatus);
+      notifyListeners();
+    }
+  }
+
+  void updateSalesReturnStatus(String returnId, SalesReturnStatus newStatus) {
+    final index = sales.indexWhere((s) => s.id == returnId);
+    if (index != -1) {
+      sales[index] = sales[index].copyWith(salesReturnStatus: newStatus);
+      notifyListeners();
+    }
   }
 
   // -------------------------------------------------------------

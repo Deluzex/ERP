@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/models/commission_model.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/models/purchase_model.dart';
 import '../../../core/utils/formatters.dart';
@@ -84,6 +86,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     final refCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
     String? selectedPartyId;
+    String? selectedLinkedDocId;
     PaymentMode selectedMode = PaymentMode.bankTransfer;
     final formKey = GlobalKey<FormState>();
 
@@ -120,93 +123,58 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           builder: (context, setDlgState) {
             double outstanding = 0.0;
             String partyName = '';
+            List<DropdownMenuItem<String>> linkedDocItems = [];
 
             if (type == PaymentType.customerPayment && selectedPartyId != null) {
               final c = db.customers.firstWhere((cust) => cust.id == selectedPartyId, orElse: () => db.customers.first);
               outstanding = c.outstandingAmount;
               partyName = c.name;
+              final sales = db.sales.where((s) => s.partyId == selectedPartyId && s.pendingAmount > 0);
+              linkedDocItems = sales.map((s) => DropdownMenuItem(value: s.id, child: Text('${s.invoiceNumber} (Pending: ₹${s.pendingAmount})'))).toList();
             } else if (type == PaymentType.dealerPayment && selectedPartyId != null) {
               final d = db.dealers.firstWhere((dlr) => dlr.id == selectedPartyId, orElse: () => db.dealers.first);
               outstanding = d.outstandingAmount;
               partyName = d.name;
+              final sales = db.sales.where((s) => s.partyId == selectedPartyId && s.pendingAmount > 0);
+              linkedDocItems = sales.map((s) => DropdownMenuItem(value: s.id, child: Text('${s.invoiceNumber} (Pending: ₹${s.pendingAmount})'))).toList();
             } else if (type == PaymentType.vendorPayment && selectedPartyId != null) {
               final v = db.vendors.firstWhere((ven) => ven.id == selectedPartyId, orElse: () => db.vendors.first);
               outstanding = v.outstandingBalance;
               partyName = v.name;
+              final purchases = db.purchases.where((p) => p.vendorId == selectedPartyId && p.pendingAmount > 0);
+              linkedDocItems = purchases.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.purchaseNumber} (Pending: ₹${p.pendingAmount})'))).toList();
             } else if (type == PaymentType.commissionPayment && selectedPartyId != null) {
               final a = db.architects.firstWhere((arc) => arc.id == selectedPartyId, orElse: () => db.architects.first);
               outstanding = a.pendingCommission;
               partyName = a.name;
-<<<<<<< Updated upstream
-=======
 
               // Unpaid commissions
               final commissions = db.commissions.where((cm) => cm.architectId == selectedPartyId && cm.status != CommissionStatus.paid);
               linkedDocItems = commissions.map((cm) => DropdownMenuItem(value: cm.id, child: Text('${cm.commissionNumber} (Amt: ₹${cm.commissionAmount})'))).toList();
->>>>>>> Stashed changes
             }
 
             return AlertDialog(
               title: Text(title, style: AppTextStyles.h2),
               content: SizedBox(
-<<<<<<< Updated upstream
-                width: 480,
-=======
                 width: 540,
->>>>>>> Stashed changes
                 child: Form(
                   key: formKey,
                   child: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-<<<<<<< Updated upstream
-                        DropdownButtonFormField<String>(
-                          value: selectedPartyId,
-                          decoration: InputDecoration(
-                            labelText: type == PaymentType.customerPayment
-                                ? 'Customer *'
-                                : type == PaymentType.dealerPayment
-                                    ? 'Dealer *'
-                                    : type == PaymentType.vendorPayment
-                                        ? 'Vendor *'
-                                        : 'Architect *',
-                          ),
-                          items: type == PaymentType.customerPayment
-                              ? db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text('${c.name} (Due: ₹${c.outstandingAmount})'))).toList()
-                              : type == PaymentType.dealerPayment
-                                  ? db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text('${d.name} (Due: ₹${d.outstandingAmount})'))).toList()
-                                  : type == PaymentType.vendorPayment
-                                      ? db.vendors.where((v) => !v.isDeleted).map((v) => DropdownMenuItem(value: v.id, child: Text('${v.name} (Due: ₹${v.outstandingBalance})'))).toList()
-                                      : db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (Due: ₹${a.approvedCommission})'))).toList(),
-                          onChanged: (val) => setDlgState(() => selectedPartyId = val),
-                        ),
-                        const SizedBox(height: 14),
-=======
                         // Party Outstanding Badge
->>>>>>> Stashed changes
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-<<<<<<< Updated upstream
-                            color: AppColors.surfaceMuted,
-                            borderRadius: BorderRadius.circular(8),
-=======
                             color: AppColors.primarySoft,
-                            borderRadius: AppRadius.smBorderRadius,
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
->>>>>>> Stashed changes
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-<<<<<<< Updated upstream
-                              Text('Current Outstanding Balance:', style: AppTextStyles.bodyMedium),
-                              Text(
-                                Formatters.formatCurrency(outstanding),
-                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
-=======
                               Text('Current Outstanding / Balance:', style: AppTextStyles.bodyMedium),
                               Text(
                                 Formatters.formatCurrency(outstanding),
@@ -214,19 +182,10 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                   color: outstanding > 0 ? AppColors.dangerText : AppColors.successText,
                                   fontSize: 16,
                                 ),
->>>>>>> Stashed changes
                               ),
                             ],
                           ),
                         ),
-<<<<<<< Updated upstream
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: amountCtrl,
-                          keyboardType: TextInputType.number,
-                          validator: Validators.positiveNumber,
-                          decoration: const InputDecoration(labelText: 'Payment Amount (₹) *'),
-=======
 
                         // Party Selector
                         if (type == PaymentType.customerPayment) ...[
@@ -298,29 +257,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           const SizedBox(height: 14),
                         ],
 
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: amountCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.positiveNumber,
-                                decoration: const InputDecoration(labelText: 'Payment Amount (₹) *'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<PaymentStatus>(
-                                value: selectedStatus,
-                                decoration: const InputDecoration(labelText: 'Payment Status'),
-                                items: PaymentStatus.values.map((s) => DropdownMenuItem(value: s, child: Text(s.name.toUpperCase()))).toList(),
-                                onChanged: (val) {
-                                  if (val != null) setDlgState(() => selectedStatus = val);
-                                },
-                              ),
-                            ),
-                          ],
->>>>>>> Stashed changes
+                        TextFormField(
+                          controller: amountCtrl,
+                          keyboardType: TextInputType.number,
+                          validator: Validators.positiveNumber,
+                          decoration: const InputDecoration(labelText: 'Payment Amount (₹) *'),
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<PaymentMode>(
@@ -338,51 +279,10 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           controller: refCtrl,
                           decoration: const InputDecoration(labelText: 'Transaction Reference / UTR / Cheque No'),
                         ),
-<<<<<<< Updated upstream
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: notesCtrl,
                           decoration: const InputDecoration(labelText: 'Notes'),
-=======
-                        const SizedBox(height: 16),
-
-                        // Attachment Uploader Component
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: AppRadius.smBorderRadius,
-                            border: Border.all(color: AppColors.border, style: BorderStyle.solid),
-                          ),
-                          child: attachmentFileName != null
-                              ? Row(
-                                  children: [
-                                    const Icon(Icons.picture_as_pdf, color: AppColors.danger, size: 24),
-                                    const SizedBox(width: 10),
-                                    Expanded(child: Text(attachmentFileName!, style: AppTextStyles.bodyMedium)),
-                                    IconButton(
-                                      icon: const Icon(Icons.cancel, color: AppColors.textMuted),
-                                      onPressed: () => setDlgState(() => attachmentFileName = null),
-                                    ),
-                                  ],
-                                )
-                              : InkWell(
-                                  onTap: () {
-                                    setDlgState(() {
-                                      attachmentFileName = 'Voucher_Receipt_PAY_${DateTime.now().millisecondsSinceEpoch.toString().substring(10)}.pdf';
-                                    });
-                                  },
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(Icons.cloud_upload_outlined, color: AppColors.primary),
-                                      const SizedBox(width: 8),
-                                      Text('Upload Payment Receipt / Proof', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                                    ],
-                                  ),
-                                ),
->>>>>>> Stashed changes
                         ),
                       ],
                     ),
@@ -407,6 +307,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                       paymentType: type,
                       partyId: selectedPartyId!,
                       partyName: partyName,
+                      referenceDocumentId: selectedLinkedDocId,
                       amount: amt,
                       paymentMode: selectedMode,
                       paymentDate: DateTime.now(),
@@ -541,7 +442,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           p.partyName.toLowerCase().contains(query) ||
           (p.referenceDocumentNumber != null && p.referenceDocumentNumber!.toLowerCase().contains(query)) ||
           (p.transactionReference != null && p.transactionReference!.toLowerCase().contains(query)) ||
-          (p.paymentStatus != null && p.paymentStatus!.toLowerCase().contains(query)) ||
           p.paymentMode.name.toLowerCase().contains(query) ||
           (p.notes != null && p.notes!.toLowerCase().contains(query));
     }).toList();
@@ -568,9 +468,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         };
 
         return [
-<<<<<<< Updated upstream
-          Text(p.paymentNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-=======
           InkWell(
             onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', parentSection),
             child: Text(
@@ -582,7 +479,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               ),
             ),
           ),
->>>>>>> Stashed changes
           Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
           Text(p.partyName, style: AppTextStyles.bodyMedium),
           Text(p.referenceDocumentNumber ?? '-', style: AppTextStyles.bodySmall),

@@ -5,13 +5,6 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
-<<<<<<< Updated upstream
-import '../../../core/utils/formatters.dart';
-import '../../../core/widgets/erp_button.dart';
-import '../../../core/widgets/erp_data_table.dart';
-import '../../../core/widgets/stat_card.dart';
-import '../../../shared/providers/app_state_providers.dart';
-=======
 import '../../../app/theme/app_radius.dart';
 import '../../../core/models/project_model.dart';
 import '../../../core/models/sale_model.dart';
@@ -25,7 +18,6 @@ import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
->>>>>>> Stashed changes
 
 class ReportsHubScreen extends ConsumerStatefulWidget {
   final ErpNavSection? reportType;
@@ -139,8 +131,6 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
     super.dispose();
   }
 
-<<<<<<< Updated upstream
-=======
   String _getReportTitle(int index) {
     switch (index) {
       case 0:
@@ -1296,7 +1286,6 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
     }
   }
 
->>>>>>> Stashed changes
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -1328,17 +1317,6 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
                   Text('Cross-module reporting for stock valuation, sales performance, production costing, and financials', style: AppTextStyles.subtitle),
                 ],
               ),
-<<<<<<< Updated upstream
-              ErpButton(
-                text: 'Export PDF / Excel',
-                icon: Icons.file_download_outlined,
-                isOutlined: true,
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Report exported to PDF / CSV successfully!')),
-                  );
-                },
-=======
               Row(
                 children: [
                   ErpButton(
@@ -1354,7 +1332,6 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
                     onPressed: () => _downloadReportToDevice(activeIndex),
                   ),
                 ],
->>>>>>> Stashed changes
               ),
             ],
           ),
@@ -1386,160 +1363,12 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
             height: 520,
             child: TabBarView(
               controller: _tabController,
-<<<<<<< Updated upstream
-              children: [
-                // 1. Inventory Report
-                ErpDataTable(
-                  columns: const [
-                    ErpColumn(title: 'Item Type'),
-                    ErpColumn(title: 'Code'),
-                    ErpColumn(title: 'Item Name'),
-                    ErpColumn(title: 'Current Stock', isNumeric: true),
-                    ErpColumn(title: 'Unit Valuation', isNumeric: true),
-                    ErpColumn(title: 'Total Value', isNumeric: true),
-                  ],
-                  rows: [
-                    ...db.rawMaterials.map((rm) => [
-                          Text('Raw Material', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
-                          Text(rm.itemCode, style: AppTextStyles.bodyBold),
-                          Text(rm.name, style: AppTextStyles.bodyMedium),
-                          Text('${rm.currentStock} ${rm.unit}', style: AppTextStyles.bodyMedium),
-                          Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodySmall),
-                          Text(Formatters.formatCurrency(rm.currentStock * rm.defaultPurchasePrice), style: AppTextStyles.bodyBold),
-                        ]),
-                    ...db.finishedProducts.map((fp) => [
-                          Text('Finished Good', style: AppTextStyles.bodySmall.copyWith(color: AppColors.infoText)),
-                          Text(fp.itemCode, style: AppTextStyles.bodyBold),
-                          Text(fp.name, style: AppTextStyles.bodyMedium),
-                          Text('${fp.currentStock} ${fp.unit}', style: AppTextStyles.bodyMedium),
-                          Text(Formatters.formatCurrency(fp.costPrice), style: AppTextStyles.bodySmall),
-                          Text(Formatters.formatCurrency(fp.currentStock * fp.costPrice), style: AppTextStyles.bodyBold),
-                        ]),
-                  ],
-                ),
-
-                // 2. Purchase Report
-                ErpDataTable(
-                  columns: const [
-                    ErpColumn(title: 'Purchase Order'),
-                    ErpColumn(title: 'Vendor'),
-                    ErpColumn(title: 'Date'),
-                    ErpColumn(title: 'Invoice No'),
-                    ErpColumn(title: 'Total Amount', isNumeric: true),
-                    ErpColumn(title: 'Status'),
-                  ],
-                  rows: db.purchases.map((p) {
-                    return [
-                      Text(p.purchaseNumber, style: AppTextStyles.bodyBold),
-                      Text(p.vendorName, style: AppTextStyles.bodyMedium),
-                      Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
-                      Text(p.vendorInvoiceNumber, style: AppTextStyles.bodySmall),
-                      Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                      Text(p.statusLabel, style: AppTextStyles.bodySmall),
-                    ];
-                  }).toList(),
-                ),
-
-                // 3. Production Report
-                ErpDataTable(
-                  columns: const [
-                    ErpColumn(title: 'Batch Order'),
-                    ErpColumn(title: 'Product Produced'),
-                    ErpColumn(title: 'Produced Qty', isNumeric: true),
-                    ErpColumn(title: 'Raw Material Cost', isNumeric: true),
-                    ErpColumn(title: 'Labor & Expenses', isNumeric: true),
-                    ErpColumn(title: 'Total Cost', isNumeric: true),
-                    ErpColumn(title: 'Unit Cost', isNumeric: true),
-                  ],
-                  rows: db.productionOrders.map((po) {
-                    return [
-                      Text(po.productionNumber, style: AppTextStyles.bodyBold),
-                      Text(po.finishedProductName, style: AppTextStyles.bodyMedium),
-                      Text('${po.actualQuantityProduced} ${po.unit}', style: AppTextStyles.bodyBold),
-                      Text(Formatters.formatCurrency(po.rawMaterialCost), style: AppTextStyles.bodySmall),
-                      Text(Formatters.formatCurrency(po.labourCost + po.otherExpenses), style: AppTextStyles.bodySmall),
-                      Text(Formatters.formatCurrency(po.totalProductionCost), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                      Text(Formatters.formatCurrency(po.costPerUnit), style: AppTextStyles.bodySmall),
-                    ];
-                  }).toList(),
-                ),
-
-                // 4. Sales Report
-                ErpDataTable(
-                  columns: const [
-                    ErpColumn(title: 'Invoice No'),
-                    ErpColumn(title: 'Customer / Dealer'),
-                    ErpColumn(title: 'Date'),
-                    ErpColumn(title: 'Taxable Amount', isNumeric: true),
-                    ErpColumn(title: 'GST Tax', isNumeric: true),
-                    ErpColumn(title: 'Total Invoiced', isNumeric: true),
-                  ],
-                  rows: db.sales.map((s) {
-                    return [
-                      Text(s.invoiceNumber, style: AppTextStyles.bodyBold),
-                      Text(s.partyName, style: AppTextStyles.bodyMedium),
-                      Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                      Text(Formatters.formatCurrency(s.subtotalAmount - s.discountAmount), style: AppTextStyles.bodySmall),
-                      Text(Formatters.formatCurrency(s.gstAmount), style: AppTextStyles.bodySmall),
-                      Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                    ];
-                  }).toList(),
-                ),
-
-                // 5. Commission Report
-                ErpDataTable(
-                  columns: const [
-                    ErpColumn(title: 'Architect'),
-                    ErpColumn(title: 'Total Earned', isNumeric: true),
-                    ErpColumn(title: 'Pending Review', isNumeric: true),
-                    ErpColumn(title: 'Approved', isNumeric: true),
-                    ErpColumn(title: 'Paid to Date', isNumeric: true),
-                  ],
-                  rows: db.architects.map((a) {
-                    return [
-                      Text(a.name, style: AppTextStyles.bodyBold),
-                      Text(Formatters.formatCurrency(a.totalCommissionEarned), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
-                      Text(Formatters.formatCurrency(a.pendingCommission), style: AppTextStyles.bodySmall.copyWith(color: AppColors.warningText)),
-                      Text(Formatters.formatCurrency(a.approvedCommission), style: AppTextStyles.bodySmall.copyWith(color: AppColors.infoText)),
-                      Text(Formatters.formatCurrency(a.paidCommission), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                    ];
-                  }).toList(),
-                ),
-
-                // 7. Financial Reports (Outstanding receivables & payables)
-                ErpDataTable(
-                  columns: const [
-                    ErpColumn(title: 'Financial Ledger Statement'),
-                    ErpColumn(title: 'Account Balance', isNumeric: true),
-                  ],
-                  rows: [
-                    [
-                      Text('Customer Accounts Receivable (Outstanding)', style: AppTextStyles.bodyBold),
-                      Text(Formatters.formatCurrency(db.pendingCustomerPayments), style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText)),
-                    ],
-                    [
-                      Text('Vendor Accounts Payable (Outstanding)', style: AppTextStyles.bodyBold),
-                      Text(Formatters.formatCurrency(db.pendingVendorPayments), style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText)),
-                    ],
-                    [
-                      Text('Architect Commission Payable', style: AppTextStyles.bodyBold),
-                      Text(Formatters.formatCurrency(db.pendingCommissionAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
-                    ],
-                    [
-                      Text('Total Stock Capital Value (Inventory Assets)', style: AppTextStyles.bodyBold),
-                      Text(Formatters.formatCurrency(db.totalStockValue), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                    ],
-                  ],
-                ),
-              ],
-=======
               children: List.generate(7, (i) {
                 return ErpDataTable(
                   columns: _getReportColumns(i),
                   rows: _getReportRows(db, i),
                 );
               }),
->>>>>>> Stashed changes
             ),
           ),
         ],

@@ -33,6 +33,7 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
     final priceCtrl = TextEditingController(text: existing?.defaultPurchasePrice.toString() ?? '100');
     String selectedCategory = existing?.categoryId ?? (db.categories.isNotEmpty ? db.categories.first.id : '');
     String selectedUnit = existing?.unit ?? (db.units.isNotEmpty ? db.units.first.symbol : 'PCS');
+    String? selectedVendorId = existing?.preferredVendorIds.isNotEmpty == true ? existing!.preferredVendorIds.first : null;
     final formKey = GlobalKey<FormState>();
 
     showDialog(
@@ -129,13 +130,6 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                           ],
                         ),
                         const SizedBox(height: 12),
-<<<<<<< Updated upstream
-                        TextFormField(
-                          controller: priceCtrl,
-                          keyboardType: TextInputType.number,
-                          validator: Validators.positiveNumber,
-                          decoration: const InputDecoration(labelText: 'Default Purchase Price (₹) *'),
-=======
                         DropdownButtonFormField<String?>(
                           value: selectedVendorId,
                           decoration: const InputDecoration(labelText: 'Preferred Vendor'),
@@ -146,7 +140,6 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                             }),
                           ],
                           onChanged: (val) => setDlgState(() => selectedVendorId = val),
->>>>>>> Stashed changes
                         ),
                       ],
                     ),
@@ -166,15 +159,12 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                     final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
                     final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
                     final priceVal = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
-<<<<<<< Updated upstream
-=======
                     final catObj = db.categories.firstWhere((c) => c.id == selectedCategory, orElse: () => db.categories.first);
                     final prefVendor = selectedVendorId != null
                         ? db.vendors.firstWhere((v) => v.id == selectedVendorId)
                         : null;
                     final prefVendorIds = prefVendor != null ? [prefVendor.id] : <String>[];
                     final prefVendorNames = prefVendor != null ? [prefVendor.name] : <String>[];
->>>>>>> Stashed changes
 
                     if (isEdit) {
                       db.updateRawMaterial(existing.copyWith(
@@ -286,15 +276,9 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
               ErpColumn(title: 'Material Name'),
               ErpColumn(title: 'Category'),
               ErpColumn(title: 'Current Stock', isNumeric: true),
-<<<<<<< Updated upstream
-              ErpColumn(title: 'Min / Reorder', isNumeric: true),
+              ErpColumn(title: 'Min Stock', isNumeric: true),
               ErpColumn(title: 'Purchase Rate', isNumeric: true),
               ErpColumn(title: 'Total Value', isNumeric: true),
-=======
-              ErpColumn(title: 'Min Stock', isNumeric: true),
-              ErpColumn(title: 'Default Purchase Price', isNumeric: true),
-              ErpColumn(title: 'Preferred Vendor'),
->>>>>>> Stashed changes
               ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
@@ -309,11 +293,7 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                     color: rm.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
                   ),
                 ),
-<<<<<<< Updated upstream
-                Text('${Formatters.formatNumber(rm.minimumStock)} / ${Formatters.formatNumber(rm.reorderLevel)} ${rm.unit}', style: AppTextStyles.bodySmall),
-=======
-                Text(Formatters.formatNumber(rm.minimumStock), style: AppTextStyles.bodySmall),
->>>>>>> Stashed changes
+                Text('${Formatters.formatNumber(rm.minimumStock)} ${rm.unit}', style: AppTextStyles.bodySmall),
                 Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
                 Text(Formatters.formatCurrency(rm.totalValuation), style: AppTextStyles.bodyBold),
                 rm.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('IN STOCK'),

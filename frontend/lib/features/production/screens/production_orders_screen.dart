@@ -4,9 +4,11 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/models/production_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_status_badge.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ProductionOrdersScreen extends ConsumerStatefulWidget {
@@ -19,15 +21,6 @@ class ProductionOrdersScreen extends ConsumerStatefulWidget {
 class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen> {
   String _searchQuery = '';
 
-<<<<<<< Updated upstream
-  @override
-  Widget build(BuildContext context) {
-    final db = ref.watch(databaseServiceProvider);
-    final orders = db.productionOrders.where((o) {
-      return o.productionNumber.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          o.finishedProductName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          o.finishedProductCode.toLowerCase().contains(_searchQuery.toLowerCase());
-=======
   void _confirmDelete(ProductionOrder o) {
     showDialog(
       context: context,
@@ -117,7 +110,6 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
           o.statusLabel.toLowerCase().contains(query) ||
           (o.notes != null && o.notes!.toLowerCase().contains(query)) ||
           o.rawMaterialsUsed.any((rm) => rm.rawMaterialName.toLowerCase().contains(query));
->>>>>>> Stashed changes
     }).toList();
 
     return SingleChildScrollView(
