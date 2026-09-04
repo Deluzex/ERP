@@ -9,6 +9,7 @@ import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class DealersScreen extends ConsumerStatefulWidget {
@@ -37,7 +38,42 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text(isEdit ? 'Edit Dealer' : 'Add Dealer Master', style: AppTextStyles.h2),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(isEdit ? 'Edit Dealer' : 'Add Dealer Master', style: AppTextStyles.h2),
+              ErpButton(
+                text: 'Scan & Upload (OCR)',
+                icon: Icons.document_scanner_outlined,
+                isOutlined: true,
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ocrCtx) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      child: SizedBox(
+                        width: 800,
+                        height: 600,
+                        child: DocumentOcrUploader(
+                          docType: OcrDocType.customerDoc,
+                          onCancel: () => Navigator.of(ocrCtx).pop(),
+                          onConfirm: (data) {
+                            nameCtrl.text = data['Customer Name'] ?? data['Company Name'] ?? nameCtrl.text;
+                            compCtrl.text = data['Company Name'] ?? compCtrl.text;
+                            contactCtrl.text = data['Contact Person'] ?? contactCtrl.text;
+                            mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
+                            emailCtrl.text = data['Email'] ?? emailCtrl.text;
+                            addrCtrl.text = data['Address'] ?? addrCtrl.text;
+                            Navigator.of(ocrCtx).pop();
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
           content: SizedBox(
             width: 520,
             child: Form(
@@ -155,9 +191,15 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final dealers = db.dealers.where((d) {
-      return d.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          d.contactPerson.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          d.companyName.toLowerCase().contains(_searchQuery.toLowerCase());
+      final query = _searchQuery.trim().toLowerCase();
+      return query.isEmpty ||
+          d.name.toLowerCase().contains(query) ||
+          d.contactPerson.toLowerCase().contains(query) ||
+          d.companyName.toLowerCase().contains(query) ||
+          d.mobile.toLowerCase().contains(query) ||
+          d.email.toLowerCase().contains(query) ||
+          d.gstNumber.toLowerCase().contains(query) ||
+          d.address.toLowerCase().contains(query);
     }).toList();
 
     return SingleChildScrollView(
@@ -188,7 +230,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
           TextField(
             onChanged: (val) => setState(() => _searchQuery = val),
             decoration: const InputDecoration(
-              hintText: 'Search dealer by showroom name, contact person or company...',
+              hintText: 'Search dealer by showroom name, contact person, mobile, email, or company...',
               prefixIcon: Icon(Icons.search, size: 18),
             ),
           ),
@@ -199,7 +241,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
               ErpColumn(title: 'Showroom / Dealer Name'),
               ErpColumn(title: 'Company Entity'),
               ErpColumn(title: 'Contact Person'),
-              ErpColumn(title: 'Mobile Phone'),
+              ErpColumn(title: 'Mobile / Email'),
               ErpColumn(title: 'GST Number'),
               ErpColumn(title: 'Showroom Address'),
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
@@ -210,7 +252,15 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                 Text(d.name, style: AppTextStyles.bodyBold),
                 Text(d.companyName, style: AppTextStyles.bodyMedium),
                 Text(d.contactPerson, style: AppTextStyles.bodySmall),
-                Text(d.mobile, style: AppTextStyles.bodySmall),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(d.mobile, style: AppTextStyles.bodySmall),
+                    if (d.email.isNotEmpty)
+                      Text(d.email, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                  ],
+                ),
                 Text(d.gstNumber.isNotEmpty ? d.gstNumber : '-', style: AppTextStyles.bodySmall),
                 Text(d.address, style: AppTextStyles.bodySmall),
                 Text(

@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -59,6 +60,30 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   DateTime _invoiceDate = DateTime.now();
   PaymentMode _paymentMode = PaymentMode.bankTransfer;
   final List<_LineItemDraft> _items = [];
+  String? _attachmentName;
+  String? _attachmentSize;
+
+  Future<void> _pickAttachmentFile() async {
+    try {
+      final result = await FilePickerPlatform.instance.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp'],
+      );
+      if (result.isNotEmpty) {
+        final file = result.first;
+        setState(() {
+          _attachmentName = file.name;
+          _attachmentSize = 'Uploaded File';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to open storage: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -500,7 +525,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  flex: 3,
+                  flex: 1,
                   child: Container(
                     padding: AppSpacing.cardPadding,
                     decoration: BoxDecoration(
@@ -511,18 +536,71 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Purchase Notes & Terms', style: AppTextStyles.h3),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _notesCtrl,
-                          maxLines: 3,
-                          decoration: const InputDecoration(hintText: 'Enter purchase terms, delivery notes or inspection instructions...'),
-                        ),
+                        Text('Invoice / Proof Attachment', style: AppTextStyles.h3),
+                        const SizedBox(height: 6),
+                        Text('Attach bill or vendor document from device storage', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                        const SizedBox(height: 16),
+                        _attachmentName != null
+                            ? Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceMuted,
+                                  borderRadius: AppRadius.smBorderRadius,
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.description, color: AppColors.primary, size: 28),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(_attachmentName!, style: AppTextStyles.bodyBold, overflow: TextOverflow.ellipsis),
+                                          Text('Size: ${_attachmentSize ?? 'Uploaded File'}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete, color: AppColors.danger, size: 20),
+                                      onPressed: () => setState(() {
+                                        _attachmentName = null;
+                                        _attachmentSize = null;
+                                      }),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : Material(
+                                color: AppColors.surfaceMuted,
+                                borderRadius: AppRadius.mdBorderRadius,
+                                child: InkWell(
+                                  onTap: _pickAttachmentFile,
+                                  borderRadius: AppRadius.mdBorderRadius,
+                                  child: Container(
+                                    height: 90,
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: AppColors.border, style: BorderStyle.solid),
+                                      borderRadius: AppRadius.mdBorderRadius,
+                                    ),
+                                    child: Center(
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.cloud_upload_outlined, color: AppColors.primary),
+                                          const SizedBox(width: 10),
+                                          Text('Click to Upload from Storage', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 24),
                 Expanded(
                   flex: 2,
                   child: Container(

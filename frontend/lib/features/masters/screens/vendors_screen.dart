@@ -11,6 +11,7 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class VendorsScreen extends ConsumerStatefulWidget {
@@ -41,7 +42,44 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text(isEdit ? 'Edit Vendor' : 'Add Vendor Master', style: AppTextStyles.h2),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(isEdit ? 'Edit Vendor' : 'Add Vendor Master', style: AppTextStyles.h2),
+              ErpButton(
+                text: 'Scan & Upload (OCR)',
+                icon: Icons.document_scanner_outlined,
+                isOutlined: true,
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ocrCtx) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      child: SizedBox(
+                        width: 800,
+                        height: 600,
+                        child: DocumentOcrUploader(
+                          docType: OcrDocType.vendorDoc,
+                          onCancel: () => Navigator.of(ocrCtx).pop(),
+                          onConfirm: (data) {
+                            nameCtrl.text = data['Vendor Name'] ?? data['Company Name'] ?? nameCtrl.text;
+                            contactCtrl.text = data['Contact Person'] ?? contactCtrl.text;
+                            mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
+                            emailCtrl.text = data['Email'] ?? emailCtrl.text;
+                            addressCtrl.text = data['Address'] ?? addressCtrl.text;
+                            if (data.containsKey('Payment Terms')) {
+                              termsCtrl.text = data['Payment Terms']!;
+                            }
+                            Navigator.of(ocrCtx).pop();
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
           content: SizedBox(
             width: 560,
             child: Form(
@@ -206,9 +244,16 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final vendors = db.vendors.where((v) {
-      return v.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          v.contactPerson.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          v.mobile.toLowerCase().contains(_searchQuery.toLowerCase());
+      final query = _searchQuery.trim().toLowerCase();
+      return query.isEmpty ||
+          v.name.toLowerCase().contains(query) ||
+          v.contactPerson.toLowerCase().contains(query) ||
+          v.mobile.toLowerCase().contains(query) ||
+          v.email.toLowerCase().contains(query) ||
+          v.gstNumber.toLowerCase().contains(query) ||
+          v.panNumber.toLowerCase().contains(query) ||
+          v.address.toLowerCase().contains(query) ||
+          v.paymentTerms.toLowerCase().contains(query);
     }).toList();
 
     return SingleChildScrollView(
@@ -239,7 +284,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
           TextField(
             onChanged: (val) => setState(() => _searchQuery = val),
             decoration: const InputDecoration(
-              hintText: 'Search vendors by company, contact person or phone...',
+              hintText: 'Search vendors by name, contact person, mobile, email, GST, or PAN...',
               prefixIcon: Icon(Icons.search, size: 18),
             ),
           ),

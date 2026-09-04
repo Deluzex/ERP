@@ -1,0 +1,282 @@
+import 'dart:typed_data';
+import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+
+class ReportPdfGenerator {
+  ReportPdfGenerator._();
+
+  static String _cleanText(String input) {
+    return input
+        .replaceAll('₹', 'Rs. ')
+        .replaceAll('\u20B9', 'Rs. ')
+        .replaceAll('Rs.  ', 'Rs. ');
+  }
+
+  static Future<Uint8List> generateReportPdfBytes({
+    required String title,
+    required String subtitle,
+    required List<String> columnHeaders,
+    required List<List<String>> dataRows,
+    required List<bool> isNumericColumns,
+    Map<String, String>? summaryKpis,
+  }) async {
+    final cleanTitle = _cleanText(title);
+    final cleanSubtitle = _cleanText(subtitle);
+    final cleanHeaders = columnHeaders.map(_cleanText).toList();
+    final cleanRows = dataRows.map((row) => row.map(_cleanText).toList()).toList();
+    final cleanKpis = summaryKpis?.map((k, v) => MapEntry(_cleanText(k), _cleanText(v)));
+
+    final pdf = pw.Document();
+    final now = DateTime.now();
+    final dateStr = DateFormat('dd MMM yyyy, hh:mm a').format(now);
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        header: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'DELUZEX ERP SYSTEMS PVT. LTD.',
+                        style: pw.TextStyle(
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.blueGrey900,
+                        ),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'GSTIN: 27AABCO8890K1Z9 | contact@deluzex.com | +91 22 2890 1234',
+                        style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700),
+                      ),
+                      pw.Text(
+                        'Architectural & High-End Commercial Lighting Solutions, Mumbai, MH',
+                        style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700),
+                      ),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: pw.BoxDecoration(
+                          color: PdfColors.grey200,
+                          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                        ),
+                        child: pw.Text(
+                          'AUDIT REPORT',
+                          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey800),
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text('Generated: $dateStr', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                      pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 6),
+              pw.Divider(thickness: 1.2, color: PdfColors.grey400),
+              pw.SizedBox(height: 4),
+              pw.Center(
+                child: pw.Text(
+                  cleanTitle.toUpperCase(),
+                  style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey900, letterSpacing: 1.1),
+                ),
+              ),
+              if (cleanSubtitle.isNotEmpty) ...[
+                pw.SizedBox(height: 2),
+                pw.Center(
+                  child: pw.Text(cleanSubtitle, style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                ),
+              ],
+              pw.SizedBox(height: 10),
+            ],
+          );
+        },
+        footer: (context) {
+          return pw.Column(
+            children: [
+              pw.Divider(thickness: 0.8, color: PdfColors.grey300),
+              pw.SizedBox(height: 4),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Confidential & Proprietary - Generated by Deluzex ERP Intelligent System',
+                    style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey600),
+                  ),
+                  pw.Text(
+                    'Page ${context.pageNumber} of ${context.pagesCount}',
+                    style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey600),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+        build: (context) => [
+          // KPI Summary Cards block
+          if (cleanKpis != null && cleanKpis.isNotEmpty) ...[
+            pw.Container(
+              padding: const pw.EdgeInsets.all(8),
+              margin: const pw.EdgeInsets.only(bottom: 12),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                border: pw.Border.all(color: PdfColors.grey300, width: 0.8),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                children: cleanKpis.entries.map((entry) {
+                  return pw.Column(
+                    children: [
+                      pw.Text(entry.key, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                      pw.SizedBox(height: 2),
+                      pw.Text(entry.value, style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey900)),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+
+          // Data Table
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.6),
+            columnWidths: {
+              for (int i = 0; i < cleanHeaders.length; i++)
+                i: i == 0 ? const pw.FlexColumnWidth(2.4) : const pw.FlexColumnWidth(1.2),
+            },
+            children: [
+              // Header Row
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.blueGrey50),
+                children: cleanHeaders.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final text = entry.value;
+                  final isNum = idx < isNumericColumns.length && isNumericColumns[idx];
+                  return pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                    child: pw.Text(
+                      text,
+                      style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey900),
+                      textAlign: isNum ? pw.TextAlign.right : pw.TextAlign.left,
+                    ),
+                  );
+                }).toList(),
+              ),
+              // Data Rows
+              ...cleanRows.map((row) {
+                return pw.TableRow(
+                  children: row.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final text = entry.value;
+                    final isNum = idx < isNumericColumns.length && isNumericColumns[idx];
+                    return pw.Padding(
+                      padding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 6),
+                      child: pw.Text(
+                        text,
+                        style: const pw.TextStyle(fontSize: 8, color: PdfColors.black),
+                        textAlign: isNum ? pw.TextAlign.right : pw.TextAlign.left,
+                      ),
+                    );
+                  }).toList(),
+                );
+              }),
+            ],
+          ),
+
+          pw.SizedBox(height: 30),
+
+          // Signatures Block
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Prepared & Verified By:', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800)),
+                  pw.SizedBox(height: 22),
+                  pw.Container(width: 140, height: 0.8, color: PdfColors.grey600),
+                  pw.SizedBox(height: 3),
+                  pw.Text('ERP Operations Auditor', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey600)),
+                ],
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text('For DELUZEX ERP SYSTEMS PVT. LTD.', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey900)),
+                  pw.SizedBox(height: 22),
+                  pw.Container(width: 160, height: 0.8, color: PdfColors.grey600),
+                  pw.SizedBox(height: 3),
+                  pw.Text('Authorized Commercial Signatory', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey600)),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  static Future<void> downloadReportPdf({
+    required String filename,
+    required String title,
+    required String subtitle,
+    required List<String> columnHeaders,
+    required List<List<String>> dataRows,
+    required List<bool> isNumericColumns,
+    Map<String, String>? summaryKpis,
+  }) async {
+    final bytes = await generateReportPdfBytes(
+      title: title,
+      subtitle: subtitle,
+      columnHeaders: columnHeaders,
+      dataRows: dataRows,
+      isNumericColumns: isNumericColumns,
+      summaryKpis: summaryKpis,
+    );
+
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: filename.endsWith('.pdf') ? filename : '$filename.pdf',
+    );
+  }
+
+  static Future<void> printOrPreviewReport({
+    required String title,
+    required String subtitle,
+    required List<String> columnHeaders,
+    required List<List<String>> dataRows,
+    required List<bool> isNumericColumns,
+    Map<String, String>? summaryKpis,
+  }) async {
+    final bytes = await generateReportPdfBytes(
+      title: title,
+      subtitle: subtitle,
+      columnHeaders: columnHeaders,
+      dataRows: dataRows,
+      isNumericColumns: isNumericColumns,
+      summaryKpis: summaryKpis,
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (format) async => bytes,
+      name: title,
+    );
+  }
+}

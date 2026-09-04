@@ -20,6 +20,8 @@ class StockAdjustmentScreen extends ConsumerStatefulWidget {
 }
 
 class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
+  String _searchQuery = '';
+
   void _openCreateAdjustmentDialog() {
     final db = ref.read(databaseServiceProvider);
     ItemType selectedItemType = ItemType.finishedProduct;
@@ -236,6 +238,16 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+    final adjustments = db.stockAdjustments.where((adj) {
+      final query = _searchQuery.trim().toLowerCase();
+      return query.isEmpty ||
+          adj.adjustmentNumber.toLowerCase().contains(query) ||
+          adj.itemName.toLowerCase().contains(query) ||
+          adj.itemCode.toLowerCase().contains(query) ||
+          adj.reasonLabel.toLowerCase().contains(query) ||
+          adj.performedBy.toLowerCase().contains(query) ||
+          (adj.remarks != null && adj.remarks!.toLowerCase().contains(query));
+    }).toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -262,6 +274,15 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
           ),
           const SizedBox(height: 24),
 
+          TextField(
+            onChanged: (val) => setState(() => _searchQuery = val),
+            decoration: const InputDecoration(
+              hintText: 'Search adjustments by number, item, reason, notes, or user...',
+              prefixIcon: Icon(Icons.search, size: 18),
+            ),
+          ),
+          const SizedBox(height: 20),
+
           // Data Table of adjustments
           ErpDataTable(
             columns: const [
@@ -276,7 +297,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
               ErpColumn(title: 'Remarks'),
               ErpColumn(title: 'Performed By'),
             ],
-            rows: db.stockAdjustments.map((adj) {
+            rows: adjustments.map((adj) {
               return [
                 Text(Formatters.formatDateTime(adj.adjustmentDate), style: AppTextStyles.bodySmall),
                 Text(adj.adjustmentNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),

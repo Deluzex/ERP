@@ -20,13 +20,15 @@ class _ErpApplicationState extends State<ErpApplication> {
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: _isAuthenticated
-          ? const AppShell()
-          : LoginScreen(
-              onLoginSuccess: () {
-                setState(() => _isAuthenticated = true);
-              },
-            ),
+      home: SelectionArea(
+        child: _isAuthenticated
+            ? const AppShell()
+            : LoginScreen(
+                onLoginSuccess: () {
+                  setState(() => _isAuthenticated = true);
+                },
+              ),
+      ),
     );
   }
 }

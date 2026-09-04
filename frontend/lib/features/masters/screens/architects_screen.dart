@@ -12,6 +12,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ArchitectsScreen extends ConsumerStatefulWidget {
@@ -53,7 +54,41 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text(isEdit ? 'Edit Architect' : 'Add Architect Master', style: AppTextStyles.h2),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(isEdit ? 'Edit Architect' : 'Add Architect Master', style: AppTextStyles.h2),
+              ErpButton(
+                text: 'Scan & Upload (OCR)',
+                icon: Icons.document_scanner_outlined,
+                isOutlined: true,
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ocrCtx) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      child: SizedBox(
+                        width: 800,
+                        height: 600,
+                        child: DocumentOcrUploader(
+                          docType: OcrDocType.architectDoc,
+                          onCancel: () => Navigator.of(ocrCtx).pop(),
+                          onConfirm: (data) {
+                            nameCtrl.text = data['Architect Name'] ?? data['Firm Name'] ?? nameCtrl.text;
+                            compCtrl.text = data['Firm Name'] ?? compCtrl.text;
+                            mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
+                            emailCtrl.text = data['Email'] ?? emailCtrl.text;
+                            addrCtrl.text = data['Address'] ?? addrCtrl.text;
+                            Navigator.of(ocrCtx).pop();
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
           content: SizedBox(
             width: 520,
             child: Form(
@@ -238,9 +273,13 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final architects = db.architects.where((a) {
-      return a.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          a.companyName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          a.mobile.toLowerCase().contains(_searchQuery.toLowerCase());
+      final query = _searchQuery.trim().toLowerCase();
+      return query.isEmpty ||
+          a.name.toLowerCase().contains(query) ||
+          a.companyName.toLowerCase().contains(query) ||
+          a.mobile.toLowerCase().contains(query) ||
+          a.email.toLowerCase().contains(query) ||
+          (a.address != null && a.address!.toLowerCase().contains(query));
     }).toList();
 
     return SingleChildScrollView(

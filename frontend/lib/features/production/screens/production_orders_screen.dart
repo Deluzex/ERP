@@ -7,7 +7,6 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
-import '../../../core/widgets/erp_status_badge.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ProductionOrdersScreen extends ConsumerStatefulWidget {
@@ -20,6 +19,7 @@ class ProductionOrdersScreen extends ConsumerStatefulWidget {
 class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen> {
   String _searchQuery = '';
 
+<<<<<<< Updated upstream
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -27,6 +27,97 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
       return o.productionNumber.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           o.finishedProductName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           o.finishedProductCode.toLowerCase().contains(_searchQuery.toLowerCase());
+=======
+  void _confirmDelete(ProductionOrder o) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Production Order'),
+        content: Text('Are you sure you want to delete draft order ${o.productionNumber}? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () {
+              final db = ref.read(databaseServiceProvider);
+              db.deleteProductionOrder(orderId: o.id, reason: 'Draft deletion');
+              Navigator.of(ctx).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Order ${o.productionNumber} deleted successfully.')),
+              );
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmCancelAndSoftDelete(ProductionOrder o) {
+    final reasonCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel & Soft-Delete Production Order'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('You are cancelling/deactivating production run ${o.productionNumber}. Please specify the reason below:'),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: reasonCtrl,
+                validator: (v) => v == null || v.trim().isEmpty ? 'Cancellation reason is required' : null,
+                decoration: const InputDecoration(
+                  labelText: 'Cancellation Reason *',
+                  hintText: 'E.g., Client request, machine breakdown...',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              final db = ref.read(databaseServiceProvider);
+              db.deleteProductionOrder(orderId: o.id, reason: reasonCtrl.text.trim());
+              Navigator.of(ctx).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Order ${o.productionNumber} cancelled & soft-deleted.')),
+              );
+            },
+            child: const Text('Confirm Cancellation'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final db = ref.watch(databaseServiceProvider);
+    final orders = db.productionOrders.where((o) => !o.isDeleted).where((o) {
+      final query = _searchQuery.trim().toLowerCase();
+      return query.isEmpty ||
+          o.productionNumber.toLowerCase().contains(query) ||
+          o.finishedProductName.toLowerCase().contains(query) ||
+          o.finishedProductCode.toLowerCase().contains(query) ||
+          o.statusLabel.toLowerCase().contains(query) ||
+          (o.notes != null && o.notes!.toLowerCase().contains(query)) ||
+          o.rawMaterialsUsed.any((rm) => rm.rawMaterialName.toLowerCase().contains(query));
+>>>>>>> Stashed changes
     }).toList();
 
     return SingleChildScrollView(

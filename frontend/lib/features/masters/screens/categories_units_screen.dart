@@ -18,6 +18,8 @@ class CategoriesUnitsScreen extends ConsumerStatefulWidget {
 }
 
 class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
+  String _searchQuery = '';
+
   void _openAddCategoryDialog() {
     final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
@@ -135,6 +137,19 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+    final query = _searchQuery.trim().toLowerCase();
+
+    final categories = db.categories.where((c) {
+      return query.isEmpty ||
+          c.name.toLowerCase().contains(query) ||
+          c.description.toLowerCase().contains(query);
+    }).toList();
+
+    final units = db.units.where((u) {
+      return query.isEmpty ||
+          u.name.toLowerCase().contains(query) ||
+          u.symbol.toLowerCase().contains(query);
+    }).toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -145,6 +160,15 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
           const SizedBox(height: 4),
           Text('Configure product classifications and standardized measurement units (PCS, MTR, KG, etc.)', style: AppTextStyles.subtitle),
           const SizedBox(height: 24),
+
+          TextField(
+            onChanged: (val) => setState(() => _searchQuery = val),
+            decoration: const InputDecoration(
+              hintText: 'Search categories and units by name, symbol or description...',
+              prefixIcon: Icon(Icons.search, size: 18),
+            ),
+          ),
+          const SizedBox(height: 20),
 
           // Side by side cards on desktop
           Row(
@@ -158,7 +182,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Item Categories', style: AppTextStyles.h3),
+                        Text('Item Categories (${categories.length})', style: AppTextStyles.h3),
                         ErpButton(
                           text: 'Add Category',
                           icon: Icons.add,
@@ -173,7 +197,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                         ErpColumn(title: 'Category Name'),
                         ErpColumn(title: 'Description'),
                       ],
-                      rows: db.categories.map((c) {
+                      rows: categories.map((c) {
                         return [
                           Text(c.name, style: AppTextStyles.bodyBold),
                           Text(c.description, style: AppTextStyles.bodySmall),
@@ -193,7 +217,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Units of Measure (UOM)', style: AppTextStyles.h3),
+                        Text('Units of Measure (${units.length})', style: AppTextStyles.h3),
                         ErpButton(
                           text: 'Add Unit',
                           icon: Icons.add,
@@ -208,7 +232,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                         ErpColumn(title: 'Unit Name'),
                         ErpColumn(title: 'Standard Symbol'),
                       ],
-                      rows: db.units.map((u) {
+                      rows: units.map((u) {
                         return [
                           Text(u.name, style: AppTextStyles.bodyBold),
                           Text(u.symbol, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),

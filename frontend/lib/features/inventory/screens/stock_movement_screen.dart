@@ -9,6 +9,13 @@ import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
+enum StockLedgerCategory {
+  all,
+  stockIn,
+  stockOut,
+  stockAdjustments,
+}
+
 class StockMovementScreen extends ConsumerStatefulWidget {
   const StockMovementScreen({super.key});
 
@@ -18,17 +25,44 @@ class StockMovementScreen extends ConsumerStatefulWidget {
 
 class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
   String _searchQuery = '';
-  StockMovementType? _selectedType;
+  StockLedgerCategory _selectedCategory = StockLedgerCategory.all;
 
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
-    final movements = db.stockMovements.where((m) {
-      final matchesSearch = m.itemName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          m.itemCode.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          m.referenceNumber.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesType = _selectedType == null || m.transactionType == _selectedType;
-      return matchesSearch && matchesType;
+
+    final allMovements = db.stockMovements;
+    final inCount = allMovements.where((m) => m.stockIn > 0 && m.transactionType != StockMovementType.adjustment).length;
+    final outCount = allMovements.where((m) => m.stockOut > 0 && m.transactionType != StockMovementType.adjustment).length;
+    final adjCount = allMovements.where((m) => m.transactionType == StockMovementType.adjustment || m.transactionType == StockMovementType.damage).length;
+
+    final movements = allMovements.where((m) {
+      final query = _searchQuery.trim().toLowerCase();
+      final matchesSearch = query.isEmpty ||
+          m.itemName.toLowerCase().contains(query) ||
+          m.itemCode.toLowerCase().contains(query) ||
+          m.referenceNumber.toLowerCase().contains(query) ||
+          m.transactionTypeLabel.toLowerCase().contains(query) ||
+          m.performedBy.toLowerCase().contains(query) ||
+          (m.notes != null && m.notes!.toLowerCase().contains(query));
+
+      bool matchesCategory = true;
+      switch (_selectedCategory) {
+        case StockLedgerCategory.all:
+          matchesCategory = true;
+          break;
+        case StockLedgerCategory.stockIn:
+          matchesCategory = m.stockIn > 0 && m.transactionType != StockMovementType.adjustment;
+          break;
+        case StockLedgerCategory.stockOut:
+          matchesCategory = m.stockOut > 0 && m.transactionType != StockMovementType.adjustment;
+          break;
+        case StockLedgerCategory.stockAdjustments:
+          matchesCategory = m.transactionType == StockMovementType.adjustment || m.transactionType == StockMovementType.damage;
+          break;
+      }
+
+      return matchesSearch && matchesCategory;
     }).toList();
 
     return SingleChildScrollView(
@@ -42,37 +76,58 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
             'Immutable audit trail of all inventory inward, outward, consumption and adjustment events',
             style: AppTextStyles.subtitle,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          // Filters
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  onChanged: (val) => setState(() => _searchQuery = val),
-                  decoration: const InputDecoration(
-                    hintText: 'Search by item code, product name, or reference number...',
-                    prefixIcon: Icon(Icons.search, size: 18),
-                  ),
+          // Primary Filter Tabs
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildCategoryTab(
+                  label: 'All Movements',
+                  count: allMovements.length,
+                  category: StockLedgerCategory.all,
+                  icon: Icons.all_inclusive,
                 ),
-              ),
-              const SizedBox(width: 16),
-              DropdownButton<StockMovementType?>(
-                value: _selectedType,
-                hint: const Text('All Transaction Types'),
-                underline: const SizedBox.shrink(),
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('All Transaction Types')),
-                  ...StockMovementType.values.map((t) {
-                    return DropdownMenuItem(
-                      value: t,
-                      child: Text(t.toString().split('.').last.toUpperCase()),
-                    );
-                  }),
-                ],
-                onChanged: (val) => setState(() => _selectedType = val),
-              ),
-            ],
+                const SizedBox(width: 8),
+                _buildCategoryTab(
+                  label: 'Stock In',
+                  count: inCount,
+                  category: StockLedgerCategory.stockIn,
+                  icon: Icons.arrow_downward_rounded,
+                  activeColor: AppColors.successText,
+                  badgeBg: AppColors.successLight,
+                ),
+                const SizedBox(width: 8),
+                _buildCategoryTab(
+                  label: 'Stock Out',
+                  count: outCount,
+                  category: StockLedgerCategory.stockOut,
+                  icon: Icons.arrow_upward_rounded,
+                  activeColor: AppColors.dangerText,
+                  badgeBg: AppColors.dangerLight,
+                ),
+                const SizedBox(width: 8),
+                _buildCategoryTab(
+                  label: 'Stock Adjustments',
+                  count: adjCount,
+                  category: StockLedgerCategory.stockAdjustments,
+                  icon: Icons.tune_rounded,
+                  activeColor: AppColors.primary,
+                  badgeBg: AppColors.primaryLight,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Search Bar
+          TextField(
+            onChanged: (val) => setState(() => _searchQuery = val),
+            decoration: const InputDecoration(
+              hintText: 'Search by item code, name, reference number, notes, or user...',
+              prefixIcon: Icon(Icons.search, size: 18),
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -87,7 +142,6 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
               ErpColumn(title: 'Stock In', isNumeric: true),
               ErpColumn(title: 'Stock Out', isNumeric: true),
               ErpColumn(title: 'Balance After', isNumeric: true),
-              ErpColumn(title: 'Audited Notes'),
               ErpColumn(title: 'User'),
             ],
             rows: movements.map((m) {
@@ -123,12 +177,70 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
                   '${Formatters.formatNumber(m.currentBalance)} ${m.unit}',
                   style: AppTextStyles.bodyBold.copyWith(color: AppColors.textPrimary),
                 ),
-                Text(m.notes ?? '-', style: AppTextStyles.bodySmall),
                 Text(m.performedBy, style: AppTextStyles.bodySmall),
               ];
             }).toList(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryTab({
+    required String label,
+    required int count,
+    required StockLedgerCategory category,
+    required IconData icon,
+    Color? activeColor,
+    Color? badgeBg,
+  }) {
+    final isSelected = _selectedCategory == category;
+    final color = activeColor ?? AppColors.primary;
+    final bg = badgeBg ?? AppColors.primaryLight;
+
+    return InkWell(
+      onTap: () => setState(() => _selectedCategory = category),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.08) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? color : AppColors.border,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: isSelected ? color : AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: isSelected ? color : AppColors.textPrimary,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected ? bg : AppColors.neutralLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$count',
+                style: AppTextStyles.bodySmall.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? color : AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

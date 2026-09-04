@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -61,6 +62,33 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
   DateTime _saleDate = DateTime.now();
   PaymentMode _paymentMode = PaymentMode.bankTransfer;
   final List<_SaleLineItemDraft> _items = [];
+<<<<<<< Updated upstream
+=======
+  String? _attachmentName;
+  String? _attachmentSize;
+
+  Future<void> _pickAttachmentFile() async {
+    try {
+      final result = await FilePickerPlatform.instance.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp'],
+      );
+      if (result.isNotEmpty) {
+        final file = result.first;
+        setState(() {
+          _attachmentName = file.name;
+          _attachmentSize = 'Uploaded File';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to open storage: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+>>>>>>> Stashed changes
 
   @override
   void initState() {
@@ -566,12 +594,88 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
             ),
             const SizedBox(height: 24),
 
+<<<<<<< Updated upstream
+=======
+            // Attachment Picker (Requirement 16)
+            Container(
+              padding: AppSpacing.cardPadding,
+              margin: const EdgeInsets.only(bottom: 24),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: AppRadius.lgBorderRadius,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Document Proof / Attachment', style: AppTextStyles.h3),
+                  const SizedBox(height: 8),
+                  Text('Supported formats: PDF, JPG, JPEG, PNG', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                  const SizedBox(height: 16),
+                  _attachmentName != null
+                      ? Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceMuted,
+                            borderRadius: AppRadius.smBorderRadius,
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.description, color: AppColors.primary, size: 30),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(_attachmentName!, style: AppTextStyles.bodyBold),
+                                    Text('Size: ${_attachmentSize ?? 'Uploaded File'}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: AppColors.danger),
+                                onPressed: () => setState(() {
+                                  _attachmentName = null;
+                                  _attachmentSize = null;
+                                }),
+                              ),
+                            ],
+                          ),
+                        )
+                      : InkWell(
+                          onTap: _pickAttachmentFile,
+                          borderRadius: AppRadius.mdBorderRadius,
+                          child: Container(
+                            height: 80,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: AppColors.border, style: BorderStyle.solid),
+                              borderRadius: AppRadius.mdBorderRadius,
+                            ),
+                            child: Center(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.cloud_upload_outlined, color: AppColors.primary),
+                                  const SizedBox(width: 10),
+                                  Text('Click to Upload from Device Storage', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                ],
+              ),
+            ),
+
+>>>>>>> Stashed changes
             // Financial Summary & Commission
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   flex: 3,
+<<<<<<< Updated upstream
                   child: Container(
                     padding: AppSpacing.cardPadding,
                     decoration: BoxDecoration(
@@ -609,11 +713,37 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                 ),
                               ],
                             ),
+=======
+                  child: _selectedArchitectId != null
+                      ? Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.purpleLight,
+                            borderRadius: AppRadius.lgBorderRadius,
+                            border: Border.all(color: AppColors.purple.withValues(alpha: 0.2)),
+>>>>>>> Stashed changes
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.stars_rounded, color: AppColors.purple, size: 24),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Architect Linked Deal', style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Generated Commission: ${Formatters.formatCurrency(_calculatedCommission)}',
+                                      style: AppTextStyles.h3.copyWith(color: AppColors.purple),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
                 const SizedBox(width: 16),
                 Expanded(

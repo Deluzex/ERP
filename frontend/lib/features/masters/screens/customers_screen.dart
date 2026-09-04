@@ -9,6 +9,7 @@ import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class CustomersScreen extends ConsumerStatefulWidget {
@@ -35,7 +36,40 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text(isEdit ? 'Edit Customer' : 'Add Customer Master', style: AppTextStyles.h2),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(isEdit ? 'Edit Customer' : 'Add Customer Master', style: AppTextStyles.h2),
+              ErpButton(
+                text: 'Scan & Upload (OCR)',
+                icon: Icons.document_scanner_outlined,
+                isOutlined: true,
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ocrCtx) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      child: SizedBox(
+                        width: 800,
+                        height: 600,
+                        child: DocumentOcrUploader(
+                          docType: OcrDocType.customerDoc,
+                          onCancel: () => Navigator.of(ocrCtx).pop(),
+                          onConfirm: (data) {
+                            nameCtrl.text = data['Customer Name'] ?? data['Company Name'] ?? nameCtrl.text;
+                            mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
+                            emailCtrl.text = data['Email'] ?? emailCtrl.text;
+                            addressCtrl.text = data['Address'] ?? addressCtrl.text;
+                            Navigator.of(ocrCtx).pop();
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
           content: SizedBox(
             width: 500,
             child: Form(
@@ -130,9 +164,12 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final customers = db.customers.where((c) {
-      return c.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          c.mobile.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          c.email.toLowerCase().contains(_searchQuery.toLowerCase());
+      final query = _searchQuery.trim().toLowerCase();
+      return query.isEmpty ||
+          c.name.toLowerCase().contains(query) ||
+          c.mobile.toLowerCase().contains(query) ||
+          c.email.toLowerCase().contains(query) ||
+          c.address.toLowerCase().contains(query);
     }).toList();
 
     return SingleChildScrollView(
@@ -163,7 +200,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
           TextField(
             onChanged: (val) => setState(() => _searchQuery = val),
             decoration: const InputDecoration(
-              hintText: 'Search customer by name, mobile or email...',
+              hintText: 'Search customer by name, mobile, email, company, GST, or address...',
               prefixIcon: Icon(Icons.search, size: 18),
             ),
           ),

@@ -30,7 +30,6 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
     final codeCtrl = TextEditingController(text: existing?.itemCode ?? 'RAW-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}');
     final stockCtrl = TextEditingController(text: existing?.currentStock.toString() ?? '0');
     final minCtrl = TextEditingController(text: existing?.minimumStock.toString() ?? '10');
-    final reorderCtrl = TextEditingController(text: existing?.reorderLevel.toString() ?? '20');
     final priceCtrl = TextEditingController(text: existing?.defaultPurchasePrice.toString() ?? '100');
     String selectedCategory = existing?.categoryId ?? (db.categories.isNotEmpty ? db.categories.first.id : '');
     String selectedUnit = existing?.unit ?? (db.units.isNotEmpty ? db.units.first.symbol : 'PCS');
@@ -121,20 +120,33 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                             const SizedBox(width: 12),
                             Expanded(
                               child: TextFormField(
-                                controller: reorderCtrl,
+                                controller: priceCtrl,
                                 keyboardType: TextInputType.number,
                                 validator: Validators.nonNegativeNumber,
-                                decoration: const InputDecoration(labelText: 'Reorder Level *'),
+                                decoration: const InputDecoration(labelText: 'Default Purchase Price (₹) *'),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 12),
+<<<<<<< Updated upstream
                         TextFormField(
                           controller: priceCtrl,
                           keyboardType: TextInputType.number,
                           validator: Validators.positiveNumber,
                           decoration: const InputDecoration(labelText: 'Default Purchase Price (₹) *'),
+=======
+                        DropdownButtonFormField<String?>(
+                          value: selectedVendorId,
+                          decoration: const InputDecoration(labelText: 'Preferred Vendor'),
+                          items: [
+                            const DropdownMenuItem(value: null, child: Text('None')),
+                            ...db.vendors.map((v) {
+                              return DropdownMenuItem(value: v.id, child: Text(v.name));
+                            }),
+                          ],
+                          onChanged: (val) => setDlgState(() => selectedVendorId = val),
+>>>>>>> Stashed changes
                         ),
                       ],
                     ),
@@ -151,11 +163,18 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                   text: isEdit ? 'Update Material' : 'Save Material',
                   onPressed: () {
                     if (!formKey.currentState!.validate()) return;
-                    final catObj = db.categories.firstWhere((c) => c.id == selectedCategory, orElse: () => db.categories.first);
                     final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
                     final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
-                    final reorderVal = double.tryParse(reorderCtrl.text.trim()) ?? 0.0;
                     final priceVal = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
+<<<<<<< Updated upstream
+=======
+                    final catObj = db.categories.firstWhere((c) => c.id == selectedCategory, orElse: () => db.categories.first);
+                    final prefVendor = selectedVendorId != null
+                        ? db.vendors.firstWhere((v) => v.id == selectedVendorId)
+                        : null;
+                    final prefVendorIds = prefVendor != null ? [prefVendor.id] : <String>[];
+                    final prefVendorNames = prefVendor != null ? [prefVendor.name] : <String>[];
+>>>>>>> Stashed changes
 
                     if (isEdit) {
                       db.updateRawMaterial(existing.copyWith(
@@ -166,7 +185,6 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                         unit: selectedUnit,
                         currentStock: stockVal,
                         minimumStock: minVal,
-                        reorderLevel: reorderVal,
                         defaultPurchasePrice: priceVal,
                         updatedAt: DateTime.now(),
                       ));
@@ -181,7 +199,7 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                         currentStock: stockVal,
                         openingStock: stockVal,
                         minimumStock: minVal,
-                        reorderLevel: reorderVal,
+                        reorderLevel: minVal * 1.5,
                         defaultPurchasePrice: priceVal,
                         gstPercent: 18.0,
                         preferredVendorIds: [],
@@ -206,9 +224,13 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final rawMaterials = db.rawMaterials.where((rm) {
-      final matchesSearch = rm.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          rm.itemCode.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          rm.categoryName.toLowerCase().contains(_searchQuery.toLowerCase());
+      final query = _searchQuery.trim().toLowerCase();
+      final matchesSearch = query.isEmpty ||
+          rm.name.toLowerCase().contains(query) ||
+          rm.itemCode.toLowerCase().contains(query) ||
+          rm.categoryName.toLowerCase().contains(query) ||
+          rm.unit.toLowerCase().contains(query) ||
+          rm.preferredVendorNames.any((v) => v.toLowerCase().contains(query));
       final matchesLow = !_showOnlyLowStock || rm.isLowStock;
       return matchesSearch && matchesLow;
     }).toList();
@@ -226,13 +248,8 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                 children: [
                   Text('Raw Material Stock', style: AppTextStyles.h1),
                   const SizedBox(height: 4),
-                  Text('Manage raw material quantities, reorder thresholds, and valuations', style: AppTextStyles.subtitle),
+                  Text('Manage raw material quantities, thresholds, and valuations', style: AppTextStyles.subtitle),
                 ],
-              ),
-              ErpButton(
-                text: 'Add Raw Material',
-                icon: Icons.add,
-                onPressed: () => _openAddEditDialog(),
               ),
             ],
           ),
@@ -245,7 +262,7 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                 child: TextField(
                   onChanged: (val) => setState(() => _searchQuery = val),
                   decoration: const InputDecoration(
-                    hintText: 'Search raw material by name, code or category...',
+                    hintText: 'Search raw material by name, code, category, or vendor...',
                     prefixIcon: Icon(Icons.search, size: 18),
                   ),
                 ),
@@ -269,9 +286,15 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
               ErpColumn(title: 'Material Name'),
               ErpColumn(title: 'Category'),
               ErpColumn(title: 'Current Stock', isNumeric: true),
+<<<<<<< Updated upstream
               ErpColumn(title: 'Min / Reorder', isNumeric: true),
               ErpColumn(title: 'Purchase Rate', isNumeric: true),
               ErpColumn(title: 'Total Value', isNumeric: true),
+=======
+              ErpColumn(title: 'Min Stock', isNumeric: true),
+              ErpColumn(title: 'Default Purchase Price', isNumeric: true),
+              ErpColumn(title: 'Preferred Vendor'),
+>>>>>>> Stashed changes
               ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
@@ -286,7 +309,11 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                     color: rm.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
                   ),
                 ),
+<<<<<<< Updated upstream
                 Text('${Formatters.formatNumber(rm.minimumStock)} / ${Formatters.formatNumber(rm.reorderLevel)} ${rm.unit}', style: AppTextStyles.bodySmall),
+=======
+                Text(Formatters.formatNumber(rm.minimumStock), style: AppTextStyles.bodySmall),
+>>>>>>> Stashed changes
                 Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
                 Text(Formatters.formatCurrency(rm.totalValuation), style: AppTextStyles.bodyBold),
                 rm.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('IN STOCK'),

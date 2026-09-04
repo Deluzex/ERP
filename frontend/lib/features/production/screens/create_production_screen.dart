@@ -41,7 +41,6 @@ class CreateProductionScreen extends ConsumerStatefulWidget {
 
 class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _plannedQtyCtrl = TextEditingController(text: '20');
   final _actualQtyCtrl = TextEditingController(text: '20');
   final _labourCostCtrl = TextEditingController(text: '3000');
   final _otherExpensesCtrl = TextEditingController(text: '1200');
@@ -49,6 +48,60 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
 
   String? _selectedFinishedProductId;
   final List<_RawMaterialUsageDraft> _rawMaterialsUsed = [];
+<<<<<<< Updated upstream
+=======
+  bool _overrideStockValidation = false;
+
+  bool get _hasLowStockWarning {
+    final db = ref.read(databaseServiceProvider);
+    for (final usage in _rawMaterialsUsed) {
+      final rmIndex = db.rawMaterials.indexWhere((r) => r.id == usage.rawMaterialId);
+      if (rmIndex != -1) {
+        final rm = db.rawMaterials[rmIndex];
+        if (rm.currentStock < usage.quantityUsed) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  void _calculateBomRequirements() {
+    final db = ref.read(databaseServiceProvider);
+    if (_selectedFinishedProductId == null) return;
+    final prodQty = double.tryParse(_actualQtyCtrl.text.trim()) ?? 0.0;
+
+    setState(() {
+      _rawMaterialsUsed.clear();
+      // Simulation: Every finished good unit requires:
+      // - 1.2 units of first Raw Material
+      // - 0.7 units of second Raw Material
+      if (db.rawMaterials.isNotEmpty) {
+        final rm1 = db.rawMaterials[0];
+        _rawMaterialsUsed.add(_RawMaterialUsageDraft(
+          rawMaterialId: rm1.id,
+          rawMaterialName: rm1.name,
+          rawMaterialCode: rm1.itemCode,
+          unit: rm1.unit,
+          quantityUsed: prodQty * 1.2,
+          unitCost: rm1.defaultPurchasePrice,
+        ));
+        
+        if (db.rawMaterials.length > 1) {
+          final rm2 = db.rawMaterials[1];
+          _rawMaterialsUsed.add(_RawMaterialUsageDraft(
+            rawMaterialId: rm2.id,
+            rawMaterialName: rm2.name,
+            rawMaterialCode: rm2.itemCode,
+            unit: rm2.unit,
+            quantityUsed: prodQty * 0.7,
+            unitCost: rm2.defaultPurchasePrice,
+          ));
+        }
+      }
+    });
+  }
+>>>>>>> Stashed changes
 
   @override
   void initState() {
@@ -57,6 +110,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
     if (db.finishedProducts.isNotEmpty) {
       _selectedFinishedProductId = db.finishedProducts.first.id;
     }
+<<<<<<< Updated upstream
     if (db.rawMaterials.isNotEmpty) {
       for (final rm in db.rawMaterials.take(2)) {
         _rawMaterialsUsed.add(_RawMaterialUsageDraft(
@@ -69,6 +123,16 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
         ));
       }
     }
+=======
+    
+    _actualQtyCtrl.addListener(() {
+      setState(() {});
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _calculateBomRequirements();
+    });
+>>>>>>> Stashed changes
   }
 
   void _addRawMaterial() {
@@ -138,7 +202,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
       finishedProductName: fp.name,
       finishedProductCode: fp.itemCode,
       unit: fp.unit,
-      plannedQuantity: double.tryParse(_plannedQtyCtrl.text.trim()) ?? _actualQty,
+      plannedQuantity: _actualQty,
       actualQuantityProduced: _actualQty,
       rawMaterialsUsed: usageList,
       rawMaterialCost: _rawMaterialCost,
@@ -243,21 +307,11 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                       Expanded(
                         flex: 2,
                         child: TextFormField(
-                          controller: _plannedQtyCtrl,
-                          keyboardType: TextInputType.number,
-                          validator: Validators.positiveNumber,
-                          decoration: const InputDecoration(labelText: 'Planned Quantity *'),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 2,
-                        child: TextFormField(
                           controller: _actualQtyCtrl,
                           keyboardType: TextInputType.number,
                           validator: Validators.positiveNumber,
                           onChanged: (_) => setState(() {}),
-                          decoration: const InputDecoration(labelText: 'Actual Produced Quantity *'),
+                          decoration: const InputDecoration(labelText: 'Production Quantity *'),
                         ),
                       ),
                     ],
@@ -295,11 +349,14 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                     scrollDirection: Axis.horizontal,
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
-                        minWidth: MediaQuery.of(context).size.width < 1100 ? 880 : MediaQuery.of(context).size.width - 320,
+                        minWidth: MediaQuery.of(context).size.width < 1200 ? 980 : MediaQuery.of(context).size.width - 320,
                       ),
                       child: Column(
                         children: List.generate(_rawMaterialsUsed.length, (index) {
                           final item = _rawMaterialsUsed[index];
+                          final prodQty = _actualQty > 0 ? _actualQty : 1.0;
+                          final perUnitQty = item.quantityUsed / prodQty;
+                          final perUnitCost = item.totalCost / prodQty;
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
@@ -312,7 +369,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                             child: Row(
                               children: [
                                 SizedBox(
-                                  width: 280,
+                                  width: 260,
                                   child: DropdownButtonFormField<String>(
                                     value: item.rawMaterialId,
                                     isExpanded: true,
@@ -343,12 +400,12 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                 ),
                                 const SizedBox(width: 12),
                                 SizedBox(
-                                  width: 140,
+                                  width: 130,
                                   child: TextFormField(
                                     initialValue: item.quantityUsed.toString(),
                                     keyboardType: TextInputType.number,
                                     validator: Validators.positiveNumber,
-                                    decoration: InputDecoration(labelText: 'Qty Used (${item.unit})'),
+                                    decoration: InputDecoration(labelText: 'Total Qty (${item.unit})'),
                                     onChanged: (v) {
                                       final num = double.tryParse(v) ?? 0.0;
                                       setState(() => item.quantityUsed = num);
@@ -357,7 +414,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                 ),
                                 const SizedBox(width: 12),
                                 SizedBox(
-                                  width: 130,
+                                  width: 120,
                                   child: TextFormField(
                                     initialValue: item.unitCost.toString(),
                                     keyboardType: TextInputType.number,
@@ -369,9 +426,42 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                     },
                                   ),
                                 ),
-                                const SizedBox(width: 16),
+                                const SizedBox(width: 14),
+
+                                // Per Product Raw Material Calculation Card
+                                Container(
+                                  width: 190,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: AppRadius.smBorderRadius,
+                                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text('Per Product:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
+                                          Text(
+                                            Formatters.formatCurrency(perUnitCost),
+                                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${perUnitQty.toStringAsFixed(2)} ${item.unit} / unit',
+                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText, fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                const SizedBox(width: 14),
                                 SizedBox(
-                                  width: 120,
+                                  width: 110,
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
@@ -393,6 +483,49 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                           );
                         }),
                       ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+                  // Per Product BOM Recipe Summary Banner
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: AppRadius.smBorderRadius,
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.calculate_outlined, color: AppColors.primaryDark, size: 22),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Per Product Raw Material Calculation',
+                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                          ),
+                          child: Text(
+                            'Raw Material Cost: ${Formatters.formatCurrency(_actualQty > 0 ? _rawMaterialCost / _actualQty : 0.0)} / unit',
+                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 13),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -441,12 +574,6 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _notesCtrl,
-                          maxLines: 2,
-                          decoration: const InputDecoration(labelText: 'Production Notes / Batch Remarks', hintText: 'E.g., Batch inspected and QC passed'),
-                        ),
                       ],
                     ),
                   ),
@@ -469,7 +596,16 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Raw Material Cost:', style: AppTextStyles.bodyMedium),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Raw Material Cost:', style: AppTextStyles.bodyMedium),
+                                Text(
+                                  '(${Formatters.formatCurrency(_actualQty > 0 ? _rawMaterialCost / _actualQty : 0.0)} / unit)',
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                ),
+                              ],
+                            ),
                             Text(Formatters.formatCurrency(_rawMaterialCost), style: AppTextStyles.bodyBold),
                           ],
                         ),
@@ -477,7 +613,16 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Labour Cost:', style: AppTextStyles.bodyMedium),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Labour Cost:', style: AppTextStyles.bodyMedium),
+                                Text(
+                                  '(${Formatters.formatCurrency(_actualQty > 0 ? _labourCost / _actualQty : 0.0)} / unit)',
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                ),
+                              ],
+                            ),
                             Text(Formatters.formatCurrency(_labourCost), style: AppTextStyles.bodyBold),
                           ],
                         ),
@@ -485,7 +630,16 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Other Expenses:', style: AppTextStyles.bodyMedium),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Other Expenses:', style: AppTextStyles.bodyMedium),
+                                Text(
+                                  '(${Formatters.formatCurrency(_actualQty > 0 ? _otherExpenses / _actualQty : 0.0)} / unit)',
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                ),
+                              ],
+                            ),
                             Text(Formatters.formatCurrency(_otherExpenses), style: AppTextStyles.bodyBold),
                           ],
                         ),
@@ -499,15 +653,22 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                         ),
                         const SizedBox(height: 10),
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: AppColors.primarySoft,
                             borderRadius: AppRadius.smBorderRadius,
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Cost per Product:', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark)),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Total Cost per Product:', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark)),
+                                  Text('Materials + Labour + Overheads', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
+                                ],
+                              ),
                               Text(
                                 Formatters.formatCurrency(_costPerUnit),
                                 style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark, fontSize: 16),

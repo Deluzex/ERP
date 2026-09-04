@@ -25,18 +25,17 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
   String _searchQuery = '';
   bool _showOnlyLowStock = false;
 
-  void _openAddEditDialog([FinishedProduct? existing]) {
+  void _openEditDialog(FinishedProduct existing) {
     final db = ref.read(databaseServiceProvider);
-    final isEdit = existing != null;
-    final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final codeCtrl = TextEditingController(text: existing?.itemCode ?? 'DLX-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}');
-    final stockCtrl = TextEditingController(text: existing?.currentStock.toString() ?? '0');
-    final minCtrl = TextEditingController(text: existing?.minimumStock.toString() ?? '5');
-    final costCtrl = TextEditingController(text: existing?.costPrice.toString() ?? '1500');
-    final dealerCtrl = TextEditingController(text: existing?.dealerSellingPrice.toString() ?? '2500');
-    final custCtrl = TextEditingController(text: existing?.customerSellingPrice.toString() ?? '3200');
-    String selectedCategory = existing?.categoryId ?? (db.categories.isNotEmpty ? db.categories.first.id : '');
-    String selectedUnit = existing?.unit ?? (db.units.isNotEmpty ? db.units.first.symbol : 'PCS');
+    final nameCtrl = TextEditingController(text: existing.name);
+    final codeCtrl = TextEditingController(text: existing.itemCode);
+    final stockCtrl = TextEditingController(text: existing.currentStock.toString());
+    final minCtrl = TextEditingController(text: existing.minimumStock.toString());
+    final costCtrl = TextEditingController(text: existing.costPrice.toString());
+    final dealerCtrl = TextEditingController(text: existing.dealerSellingPrice.toString());
+    final custCtrl = TextEditingController(text: existing.customerSellingPrice.toString());
+    String selectedCategory = existing.categoryId;
+    String selectedUnit = existing.unit;
     final formKey = GlobalKey<FormState>();
 
     showDialog(
@@ -45,7 +44,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
         return StatefulBuilder(
           builder: (context, setDlgState) {
             return AlertDialog(
-              title: Text(isEdit ? 'Edit Finished Product' : 'Add Finished Product', style: AppTextStyles.h2),
+              title: Text('Edit Finished Product', style: AppTextStyles.h2),
               content: SizedBox(
                 width: 580,
                 child: Form(
@@ -105,7 +104,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                                 controller: stockCtrl,
                                 keyboardType: TextInputType.number,
                                 validator: Validators.nonNegativeNumber,
-                                decoration: InputDecoration(labelText: isEdit ? 'Current Stock' : 'Opening Stock *'),
+                                decoration: const InputDecoration(labelText: 'Current Stock *'),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -162,51 +161,36 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                   onPressed: () => Navigator.of(ctx).pop(),
                 ),
                 ErpButton(
-                  text: isEdit ? 'Update Product' : 'Save Product',
+                  text: 'Update Product',
                   onPressed: () {
                     if (!formKey.currentState!.validate()) return;
-                    final catObj = db.categories.firstWhere((c) => c.id == selectedCategory, orElse: () => db.categories.first);
                     final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
                     final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
                     final costVal = double.tryParse(costCtrl.text.trim()) ?? 0.0;
                     final dealerVal = double.tryParse(dealerCtrl.text.trim()) ?? 0.0;
                     final custVal = double.tryParse(custCtrl.text.trim()) ?? 0.0;
+                    final catObj = db.categories.firstWhere((c) => c.id == selectedCategory, orElse: () => db.categories.first);
 
-                    if (isEdit) {
-                      db.updateFinishedProduct(existing.copyWith(
-                        name: nameCtrl.text.trim(),
-                        itemCode: codeCtrl.text.trim(),
-                        categoryId: catObj.id,
-                        categoryName: catObj.name,
-                        unit: selectedUnit,
-                        currentStock: stockVal,
-                        minimumStock: minVal,
-                        costPrice: costVal,
-                        dealerSellingPrice: dealerVal,
-                        customerSellingPrice: custVal,
-                        updatedAt: DateTime.now(),
-                      ));
-                    } else {
-                      final newFp = FinishedProduct(
-                        id: IdGenerator.generateId('FP'),
-                        name: nameCtrl.text.trim(),
-                        itemCode: codeCtrl.text.trim(),
-                        categoryId: catObj.id,
-                        categoryName: catObj.name,
-                        unit: selectedUnit,
-                        currentStock: stockVal,
-                        openingStock: stockVal,
-                        minimumStock: minVal,
-                        costPrice: costVal,
-                        dealerSellingPrice: dealerVal,
-                        customerSellingPrice: custVal,
-                        gstPercent: 18.0,
-                        createdAt: DateTime.now(),
-                        updatedAt: DateTime.now(),
-                      );
-                      db.addFinishedProduct(newFp);
-                    }
+                    db.updateFinishedProduct(existing.copyWith(
+                      name: nameCtrl.text.trim(),
+                      itemCode: codeCtrl.text.trim(),
+                      categoryId: catObj.id,
+                      categoryName: catObj.name,
+                      unit: selectedUnit,
+                      currentStock: stockVal,
+                      minimumStock: minVal,
+                      costPrice: costVal,
+                      dealerSellingPrice: dealerVal,
+                      customerSellingPrice: custVal,
+                      updatedAt: DateTime.now(),
+                    ));
                     Navigator.of(ctx).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Product updated successfully!'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
                   },
                 ),
               ],
@@ -221,9 +205,12 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final products = db.finishedProducts.where((fp) {
-      final matchesSearch = fp.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          fp.itemCode.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          fp.categoryName.toLowerCase().contains(_searchQuery.toLowerCase());
+      final query = _searchQuery.trim().toLowerCase();
+      final matchesSearch = query.isEmpty ||
+          fp.name.toLowerCase().contains(query) ||
+          fp.itemCode.toLowerCase().contains(query) ||
+          fp.categoryName.toLowerCase().contains(query) ||
+          fp.unit.toLowerCase().contains(query);
       final matchesLow = !_showOnlyLowStock || fp.isLowStock;
       return matchesSearch && matchesLow;
     }).toList();
@@ -242,22 +229,6 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                   Text('Finished Product Stock', style: AppTextStyles.h1),
                   const SizedBox(height: 4),
                   Text('Manage finished goods catalog, multi-tier pricing, and stock levels', style: AppTextStyles.subtitle),
-                ],
-              ),
-              Row(
-                children: [
-                  ErpButton(
-                    text: 'Produce Item',
-                    icon: Icons.precision_manufacturing_outlined,
-                    isOutlined: true,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
-                  ),
-                  const SizedBox(width: 12),
-                  ErpButton(
-                    text: 'Add Product',
-                    icon: Icons.add,
-                    onPressed: () => _openAddEditDialog(),
-                  ),
                 ],
               ),
             ],
@@ -324,7 +295,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                     IconButton(
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       tooltip: 'Edit Product',
-                      onPressed: () => _openAddEditDialog(fp),
+                      onPressed: () => _openEditDialog(fp),
                     ),
                   ],
                 ),

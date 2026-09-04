@@ -1167,6 +1167,11 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  void deleteRawMaterial(String id) {
+    rawMaterials.removeWhere((item) => item.id == id);
+    notifyListeners();
+  }
+
   void addFinishedProduct(FinishedProduct fp) {
     finishedProducts.insert(0, fp);
     if (fp.openingStock > 0) {
@@ -1193,6 +1198,11 @@ class MockDatabaseService extends ChangeNotifier {
       finishedProducts[index] = fp;
       notifyListeners();
     }
+  }
+
+  void deleteFinishedProduct(String id) {
+    finishedProducts.removeWhere((item) => item.id == id);
+    notifyListeners();
   }
 
   void addVendor(Vendor vendor) {
@@ -1270,6 +1280,11 @@ class MockDatabaseService extends ChangeNotifier {
       projects[index] = project;
       notifyListeners();
     }
+  }
+
+  void deleteProject(String id) {
+    projects.removeWhere((p) => p.id == id);
+    notifyListeners();
   }
 
   void addCategory(ItemCategory category) {

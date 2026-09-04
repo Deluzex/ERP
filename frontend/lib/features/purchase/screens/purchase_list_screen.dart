@@ -7,7 +7,6 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/purchase_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
-import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
@@ -25,9 +24,14 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final purchases = db.purchases.where((p) {
-      return p.purchaseNumber.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          p.vendorName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          p.vendorInvoiceNumber.toLowerCase().contains(_searchQuery.toLowerCase());
+      final query = _searchQuery.trim().toLowerCase();
+      return query.isEmpty ||
+          p.purchaseNumber.toLowerCase().contains(query) ||
+          p.vendorName.toLowerCase().contains(query) ||
+          p.vendorInvoiceNumber.toLowerCase().contains(query) ||
+          (p.notes != null && p.notes!.toLowerCase().contains(query)) ||
+          p.status.toString().toLowerCase().contains(query) ||
+          p.items.any((item) => item.rawMaterialName.toLowerCase().contains(query));
     }).toList();
 
     return SingleChildScrollView(

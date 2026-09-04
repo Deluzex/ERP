@@ -12,6 +12,8 @@ import '../features/masters/screens/architects_screen.dart';
 import '../features/masters/screens/categories_units_screen.dart';
 import '../features/masters/screens/customers_screen.dart';
 import '../features/masters/screens/dealers_screen.dart';
+import '../features/masters/screens/product_master_screen.dart';
+import '../features/masters/screens/raw_material_master_screen.dart';
 import '../features/masters/screens/vendors_screen.dart';
 import '../features/payments/screens/payment_center_screen.dart';
 import '../features/production/screens/create_production_screen.dart';
@@ -49,12 +51,16 @@ class _AppShellState extends ConsumerState<AppShell> {
         contentWidget = const DashboardScreen();
         break;
       case ErpNavSection.rawMaterialStock:
-      case ErpNavSection.rawMaterials:
         contentWidget = const RawMaterialStockScreen();
         break;
+      case ErpNavSection.rawMaterials:
+        contentWidget = const RawMaterialMasterScreen();
+        break;
       case ErpNavSection.finishedProductStock:
-      case ErpNavSection.finishedProducts:
         contentWidget = const FinishedProductStockScreen();
+        break;
+      case ErpNavSection.finishedProducts:
+        contentWidget = const ProductMasterScreen();
         break;
       case ErpNavSection.stockMovement:
         contentWidget = const StockMovementScreen();
