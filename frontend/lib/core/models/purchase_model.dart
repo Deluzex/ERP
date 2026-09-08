@@ -12,6 +12,7 @@ enum PaymentMode {
   cheque,
   upi,
   credit,
+  creditNote,
 }
 
 class PurchaseLineItem {

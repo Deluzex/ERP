@@ -13,17 +13,27 @@ enum ErpNavSection {
   createProduction,
   productionHistory,
   productionCosting,
+  // Sales Module
+  salesDashboard,
+  quotations,
+  createQuotation,
+  proformaInvoices,
+  salesOrders,
+  createSalesOrder,
+  salesDeliveries,
   salesInvoiceList,
   createSale,
-  quotations,
-  salesOrders,
   salesReturns,
+  createSalesReturn,
+  // Projects
   projectList,
   createProject,
+  // Payments
   customerPayments,
   dealerPayments,
   vendorPaymentsSection,
   commissionPayments,
+  // Masters
   categoriesUnits,
   vendors,
   customers,
@@ -31,6 +41,7 @@ enum ErpNavSection {
   architects,
   rawMaterials,
   finishedProducts,
+  // Reports
   inventoryReports,
   purchaseReports,
   productionReports,
@@ -38,6 +49,7 @@ enum ErpNavSection {
   projectReports,
   commissionReports,
   financialReports,
+  // Settings
   settings,
 }
 

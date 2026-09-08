@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/models/payment_model.dart';
 import '../core/widgets/erp_header.dart';
 import '../core/widgets/erp_sidebar.dart';
+import '../core/widgets/record_details_view.dart';
 import '../features/dashboard/screens/dashboard_screen.dart';
 import '../features/inventory/screens/finished_product_stock_screen.dart';
 import '../features/inventory/screens/raw_material_stock_screen.dart';
@@ -22,8 +23,16 @@ import '../features/projects/screens/project_list_screen.dart';
 import '../features/purchase/screens/create_purchase_screen.dart';
 import '../features/purchase/screens/purchase_list_screen.dart';
 import '../features/reports/screens/reports_hub_screen.dart';
+import '../features/sales/screens/create_quotation_screen.dart';
 import '../features/sales/screens/create_sale_screen.dart';
+import '../features/sales/screens/create_sales_order_screen.dart';
+import '../features/sales/screens/deliveries_screen.dart';
+import '../features/sales/screens/proforma_invoices_screen.dart';
+import '../features/sales/screens/quotations_screen.dart';
+import '../features/sales/screens/sales_dashboard_screen.dart';
 import '../features/sales/screens/sales_invoice_list_screen.dart';
+import '../features/sales/screens/sales_orders_screen.dart';
+import '../features/sales/screens/sales_returns_screen.dart';
 import '../features/settings/screens/settings_screen.dart';
 import '../shared/providers/app_state_providers.dart';
 import 'routes/app_routes.dart';
@@ -43,99 +52,133 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget build(BuildContext context) {
     final currentSection = ref.watch(currentNavSectionProvider);
     final isDesktop = MediaQuery.of(context).size.width >= 1024;
+    final detailsStack = ref.watch(activeRecordDetailsStackProvider);
 
     Widget contentWidget;
-    switch (currentSection) {
-      case ErpNavSection.dashboard:
-      case ErpNavSection.inventoryDashboard:
-        contentWidget = const DashboardScreen();
-        break;
-      case ErpNavSection.rawMaterialStock:
-        contentWidget = const RawMaterialStockScreen();
-        break;
-      case ErpNavSection.rawMaterials:
-        contentWidget = const RawMaterialMasterScreen();
-        break;
-      case ErpNavSection.finishedProductStock:
-        contentWidget = const FinishedProductStockScreen();
-        break;
-      case ErpNavSection.finishedProducts:
-        contentWidget = const ProductMasterScreen();
-        break;
-      case ErpNavSection.stockMovement:
-        contentWidget = const StockMovementScreen();
-        break;
-      case ErpNavSection.stockAdjustments:
-        contentWidget = const StockAdjustmentScreen();
-        break;
-      case ErpNavSection.purchaseList:
-      case ErpNavSection.purchaseHistory:
-        contentWidget = const PurchaseListScreen();
-        break;
-      case ErpNavSection.createPurchase:
-        contentWidget = const CreatePurchaseScreen();
-        break;
-      case ErpNavSection.vendorPayments:
-      case ErpNavSection.vendorPaymentsSection:
-        contentWidget = const PaymentCenterScreen(initialTab: PaymentType.vendorPayment);
-        break;
-      case ErpNavSection.productionOrders:
-      case ErpNavSection.productionHistory:
-      case ErpNavSection.productionCosting:
-        contentWidget = const ProductionOrdersScreen();
-        break;
-      case ErpNavSection.createProduction:
-        contentWidget = const CreateProductionScreen();
-        break;
-      case ErpNavSection.salesInvoiceList:
-      case ErpNavSection.quotations:
-      case ErpNavSection.salesOrders:
-      case ErpNavSection.salesReturns:
-        contentWidget = const SalesInvoiceListScreen();
-        break;
-      case ErpNavSection.createSale:
-        contentWidget = const CreateSaleScreen();
-        break;
-      case ErpNavSection.projectList:
-      case ErpNavSection.createProject:
-        contentWidget = const ProjectListScreen();
-        break;
-      case ErpNavSection.customerPayments:
-        contentWidget = const PaymentCenterScreen(initialTab: PaymentType.customerPayment);
-        break;
-      case ErpNavSection.dealerPayments:
-        contentWidget = const PaymentCenterScreen(initialTab: PaymentType.dealerPayment);
-        break;
-      case ErpNavSection.commissionPayments:
-        contentWidget = const PaymentCenterScreen(initialTab: PaymentType.commissionPayment);
-        break;
-      case ErpNavSection.categoriesUnits:
-        contentWidget = const CategoriesUnitsScreen();
-        break;
-      case ErpNavSection.vendors:
-        contentWidget = const VendorsScreen();
-        break;
-      case ErpNavSection.customers:
-        contentWidget = const CustomersScreen();
-        break;
-      case ErpNavSection.dealers:
-        contentWidget = const DealersScreen();
-        break;
-      case ErpNavSection.architects:
-        contentWidget = const ArchitectsScreen();
-        break;
-      case ErpNavSection.inventoryReports:
-      case ErpNavSection.purchaseReports:
-      case ErpNavSection.productionReports:
-      case ErpNavSection.salesReports:
-      case ErpNavSection.projectReports:
-      case ErpNavSection.commissionReports:
-      case ErpNavSection.financialReports:
-        contentWidget = ReportsHubScreen(reportType: currentSection);
-        break;
-      case ErpNavSection.settings:
-        contentWidget = const SettingsScreen();
-        break;
+
+    // Check if there is an active detail view in the drilldown stack
+    if (detailsStack.isNotEmpty) {
+      contentWidget = RecordDetailsView(details: detailsStack.last);
+    } else {
+      switch (currentSection) {
+        case ErpNavSection.dashboard:
+        case ErpNavSection.inventoryDashboard:
+          contentWidget = const DashboardScreen();
+          break;
+        case ErpNavSection.rawMaterialStock:
+          contentWidget = const RawMaterialStockScreen();
+          break;
+        case ErpNavSection.rawMaterials:
+          contentWidget = const RawMaterialMasterScreen();
+          break;
+        case ErpNavSection.finishedProductStock:
+          contentWidget = const FinishedProductStockScreen();
+          break;
+        case ErpNavSection.finishedProducts:
+          contentWidget = const ProductMasterScreen();
+          break;
+        case ErpNavSection.stockMovement:
+          contentWidget = const StockMovementScreen();
+          break;
+        case ErpNavSection.stockAdjustments:
+          contentWidget = const StockAdjustmentScreen();
+          break;
+        case ErpNavSection.purchaseList:
+        case ErpNavSection.purchaseHistory:
+          contentWidget = const PurchaseListScreen();
+          break;
+        case ErpNavSection.createPurchase:
+          contentWidget = const CreatePurchaseScreen();
+          break;
+        case ErpNavSection.vendorPayments:
+        case ErpNavSection.vendorPaymentsSection:
+          contentWidget = const PaymentCenterScreen(initialTab: PaymentType.vendorPayment);
+          break;
+        case ErpNavSection.productionOrders:
+        case ErpNavSection.productionHistory:
+        case ErpNavSection.productionCosting:
+          contentWidget = const ProductionOrdersScreen();
+          break;
+        case ErpNavSection.createProduction:
+          contentWidget = const CreateProductionScreen();
+          break;
+        // Sales Workflow Suite
+        case ErpNavSection.salesDashboard:
+          contentWidget = const SalesDashboardScreen();
+          break;
+        case ErpNavSection.quotations:
+          contentWidget = const QuotationsScreen();
+          break;
+        case ErpNavSection.createQuotation:
+          contentWidget = const CreateQuotationScreen();
+          break;
+        case ErpNavSection.proformaInvoices:
+          contentWidget = const ProformaInvoicesScreen();
+          break;
+        case ErpNavSection.salesOrders:
+          contentWidget = const SalesOrdersScreen();
+          break;
+        case ErpNavSection.createSalesOrder:
+          contentWidget = const CreateSalesOrderScreen();
+          break;
+        case ErpNavSection.salesDeliveries:
+          contentWidget = const DeliveriesScreen();
+          break;
+        case ErpNavSection.salesInvoiceList:
+          contentWidget = const SalesInvoiceListScreen();
+          break;
+        case ErpNavSection.createSale:
+          contentWidget = const CreateSaleScreen();
+          break;
+        case ErpNavSection.salesReturns:
+        case ErpNavSection.createSalesReturn:
+          contentWidget = const SalesReturnsScreen();
+          break;
+        // Projects
+        case ErpNavSection.projectList:
+        case ErpNavSection.createProject:
+          contentWidget = const ProjectListScreen();
+          break;
+        // Payments
+        case ErpNavSection.customerPayments:
+          contentWidget = const PaymentCenterScreen(initialTab: PaymentType.customerPayment);
+          break;
+        case ErpNavSection.dealerPayments:
+          contentWidget = const PaymentCenterScreen(initialTab: PaymentType.dealerPayment);
+          break;
+        case ErpNavSection.commissionPayments:
+          contentWidget = const PaymentCenterScreen(initialTab: PaymentType.commissionPayment);
+          break;
+        // Masters
+        case ErpNavSection.categoriesUnits:
+          contentWidget = const CategoriesUnitsScreen();
+          break;
+        case ErpNavSection.vendors:
+          contentWidget = const VendorsScreen();
+          break;
+        case ErpNavSection.customers:
+          contentWidget = const CustomersScreen();
+          break;
+        case ErpNavSection.dealers:
+          contentWidget = const DealersScreen();
+          break;
+        case ErpNavSection.architects:
+          contentWidget = const ArchitectsScreen();
+          break;
+        // Reports
+        case ErpNavSection.inventoryReports:
+        case ErpNavSection.purchaseReports:
+        case ErpNavSection.productionReports:
+        case ErpNavSection.salesReports:
+        case ErpNavSection.projectReports:
+        case ErpNavSection.commissionReports:
+        case ErpNavSection.financialReports:
+          contentWidget = ReportsHubScreen(reportType: currentSection);
+          break;
+        case ErpNavSection.settings:
+          contentWidget = const SettingsScreen();
+          break;
+      }
     }
 
     return Scaffold(

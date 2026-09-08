@@ -17,113 +17,187 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../shared/services/mock_database_service.dart';
 
-class _SaleLineItemDraft {
+class _QuotationItemDraft {
   String finishedProductId;
   String finishedProductName;
   String finishedProductCode;
+  String productDescription;
   String unit;
   double quantity;
   double rate;
   double discount;
   double gstPercent;
+  double availableStockSnapshot;
 
-  _SaleLineItemDraft({
+  _QuotationItemDraft({
     required this.finishedProductId,
     required this.finishedProductName,
     required this.finishedProductCode,
+    this.productDescription = '',
     required this.unit,
     this.quantity = 1.0,
     this.rate = 1000.0,
     this.discount = 0.0,
     this.gstPercent = 18.0,
+    this.availableStockSnapshot = 0.0,
   });
 
-  double get lineTotal => SaleLineItem.calculateLineTotal(
-        quantity: quantity,
-        rate: rate,
-        discountAmount: discount,
-        gstPercent: gstPercent,
-      );
+  double get taxableAmount => ((quantity * rate) - discount).clamp(0.0, double.infinity);
+  double get gstAmount => taxableAmount * (gstPercent / 100.0);
+  double get lineTotal => taxableAmount + gstAmount;
+
+  _QuotationItemDraft copy() {
+    return _QuotationItemDraft(
+      finishedProductId: finishedProductId,
+      finishedProductName: finishedProductName,
+      finishedProductCode: finishedProductCode,
+      productDescription: productDescription,
+      unit: unit,
+      quantity: quantity,
+      rate: rate,
+      discount: discount,
+      gstPercent: gstPercent,
+      availableStockSnapshot: availableStockSnapshot,
+    );
+  }
 }
 
-class CreateSaleScreen extends ConsumerStatefulWidget {
-  const CreateSaleScreen({super.key});
+class CreateQuotationScreen extends ConsumerStatefulWidget {
+  const CreateQuotationScreen({super.key});
 
   @override
-  ConsumerState<CreateSaleScreen> createState() => _CreateSaleScreenState();
+  ConsumerState<CreateQuotationScreen> createState() => _CreateQuotationScreenState();
 }
 
-class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
+class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _paidAmountCtrl = TextEditingController(text: '0');
-  final _notesCtrl = TextEditingController();
 
   PartyType _partyType = PartyType.customer;
   String? _selectedPartyId;
   String? _selectedProjectId;
-  DateTime _saleDate = DateTime.now();
-  PaymentMode _paymentMode = PaymentMode.bankTransfer;
-  final List<_SaleLineItemDraft> _items = [];
+  String _salesExecutive = 'Alex Sterling';
+
+  // Customer autofill controllers
+  final _contactPersonCtrl = TextEditingController();
+  final _mobileCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _gstNumberCtrl = TextEditingController();
+  final _billingAddressCtrl = TextEditingController();
+  final _shippingAddressCtrl = TextEditingController();
+
+  DateTime _quotationDate = DateTime.now();
+  DateTime _validTill = DateTime.now().add(const Duration(days: 30));
+
+  final _notesCtrl = TextEditingController();
+  final _termsCtrl = TextEditingController(
+    text: '1. Prices are valid for 30 days from the quotation date.\n2. Payment terms: 50% advance along with confirmed Purchase Order, balance before dispatch.\n3. Standard 3-Year comprehensive manufacturer warranty on all luminaires & LED drivers.\n4. Freight charges will be billed as actuals or FOB Mumbai.',
+  );
+
+  final List<_QuotationItemDraft> _items = [];
+  Sale? _sourceQuotation;
+  bool _isRevision = false;
+  int _revisionNumber = 0;
 
   @override
   void initState() {
     super.initState();
     final db = ref.read(databaseServiceProvider);
-    if (db.customers.isNotEmpty) {
-      _selectedPartyId = db.customers.first.id;
+    final sourceId = ref.read(salesCreateSourceDocIdProvider);
+
+    if (sourceId != null) {
+      _sourceQuotation = db.sales.where((s) => s.id == sourceId).firstOrNull;
+      if (_sourceQuotation != null) {
+        _isRevision = true;
+        _revisionNumber = _sourceQuotation!.revisionNumber + 1;
+        _partyType = _sourceQuotation!.partyType;
+        _selectedPartyId = _sourceQuotation!.partyId;
+        _selectedProjectId = _sourceQuotation!.projectId;
+        _contactPersonCtrl.text = _sourceQuotation!.customerContactPerson ?? '';
+        _mobileCtrl.text = _sourceQuotation!.customerMobile ?? '';
+        _emailCtrl.text = _sourceQuotation!.customerEmail ?? '';
+        _gstNumberCtrl.text = _sourceQuotation!.customerGstNumber ?? '';
+        _billingAddressCtrl.text = _sourceQuotation!.billingAddress ?? '';
+        _shippingAddressCtrl.text = _sourceQuotation!.shippingAddress ?? '';
+        _notesCtrl.text = _sourceQuotation!.notes ?? '';
+        if (_sourceQuotation!.termsAndConditions != null) {
+          _termsCtrl.text = _sourceQuotation!.termsAndConditions!;
+        }
+
+        for (final item in _sourceQuotation!.items) {
+          final fp = db.finishedProducts.where((p) => p.id == item.finishedProductId).firstOrNull;
+          _items.add(_QuotationItemDraft(
+            finishedProductId: item.finishedProductId,
+            finishedProductName: item.finishedProductName,
+            finishedProductCode: item.finishedProductCode,
+            productDescription: item.productDescription,
+            unit: item.unit,
+            quantity: item.quantity,
+            rate: item.rate,
+            discount: item.discountAmount,
+            gstPercent: item.gstPercent,
+            availableStockSnapshot: fp?.availableStock ?? 0.0,
+          ));
+        }
+      }
     }
-    if (db.finishedProducts.isNotEmpty) {
-      final fp = db.finishedProducts.first;
-      _items.add(_SaleLineItemDraft(
-        finishedProductId: fp.id,
-        finishedProductName: fp.name,
-        finishedProductCode: fp.itemCode,
-        unit: fp.unit,
-        quantity: 10.0,
-        rate: _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice,
-        discount: 0.0,
-        gstPercent: fp.gstPercent,
-      ));
+
+    if (_items.isEmpty) {
+      if (db.customers.isNotEmpty) {
+        _selectedPartyId = db.customers.first.id;
+        _autoFillPartyDetails(db.customers.first.id, PartyType.customer, db);
+      }
+      if (db.finishedProducts.isNotEmpty) {
+        final fp = db.finishedProducts.first;
+        _items.add(_QuotationItemDraft(
+          finishedProductId: fp.id,
+          finishedProductName: fp.name,
+          finishedProductCode: fp.itemCode,
+          productDescription: 'Architectural luminaire with high-efficiency driver',
+          unit: fp.unit,
+          quantity: 10.0,
+          rate: fp.customerSellingPrice,
+          discount: 0.0,
+          gstPercent: fp.gstPercent,
+          availableStockSnapshot: fp.availableStock,
+        ));
+      }
     }
   }
 
-  void _addNewLineItem() {
-    final db = ref.read(databaseServiceProvider);
-    if (db.finishedProducts.isEmpty) return;
-    final fp = db.finishedProducts.first;
-    setState(() {
-      _items.add(_SaleLineItemDraft(
-        finishedProductId: fp.id,
-        finishedProductName: fp.name,
-        finishedProductCode: fp.itemCode,
-        unit: fp.unit,
-        quantity: 1.0,
-        rate: _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice,
-        gstPercent: fp.gstPercent,
-      ));
-    });
-  }
-
-  void _removeLineItem(int index) {
-    if (_items.length > 1) {
-      setState(() => _items.removeAt(index));
+  void _autoFillPartyDetails(String partyId, PartyType type, MockDatabaseService db) {
+    if (type == PartyType.customer) {
+      final c = db.customers.where((cust) => cust.id == partyId).firstOrNull;
+      if (c != null) {
+        _contactPersonCtrl.text = 'Mr./Ms. Client Representative';
+        _mobileCtrl.text = c.mobile;
+        _emailCtrl.text = c.email;
+        _gstNumberCtrl.text = c.gstNumber;
+        _billingAddressCtrl.text = c.address;
+        _shippingAddressCtrl.text = c.address;
+      }
+    } else if (type == PartyType.dealer) {
+      final d = db.dealers.where((dlr) => dlr.id == partyId).firstOrNull;
+      if (d != null) {
+        _contactPersonCtrl.text = d.contactPerson;
+        _mobileCtrl.text = d.mobile;
+        _emailCtrl.text = d.email;
+        _gstNumberCtrl.text = d.gstNumber;
+        _billingAddressCtrl.text = d.address;
+        _shippingAddressCtrl.text = d.address;
+      }
+    } else if (type == PartyType.architect) {
+      final a = db.architects.where((arc) => arc.id == partyId).firstOrNull;
+      if (a != null) {
+        _contactPersonCtrl.text = a.name;
+        _mobileCtrl.text = a.mobile;
+        _emailCtrl.text = a.email;
+        _gstNumberCtrl.text = a.gstNumber;
+        _billingAddressCtrl.text = a.address;
+        _shippingAddressCtrl.text = a.address;
+      }
     }
-  }
-
-  double get _subtotalAmount => _items.fold(0.0, (sum, i) => sum + (i.quantity * i.rate));
-  double get _totalDiscount => _items.fold(0.0, (sum, i) => sum + i.discount);
-  double get _totalGst => _items.fold(0.0, (sum, i) => sum + (((i.quantity * i.rate) - i.discount) * (i.gstPercent / 100.0)));
-  double get _totalAmount => _items.fold(0.0, (sum, item) => sum + item.lineTotal);
-  double get _paidAmount => double.tryParse(_paidAmountCtrl.text.trim()) ?? 0.0;
-  double get _pendingAmount => (_totalAmount - _paidAmount).clamp(0.0, double.infinity);
-
-  double get _calculatedCommission {
-    if (_partyType != PartyType.architect || _selectedPartyId == null) return 0.0;
-    final db = ref.read(databaseServiceProvider);
-    final arch = db.architects.firstWhere((a) => a.id == _selectedPartyId, orElse: () => db.architects.first);
-    final baseAmount = _subtotalAmount - _totalDiscount;
-    return (baseAmount * arch.defaultCommissionRate) / 100.0;
   }
 
   void _openQuickAddPartyDialog(PartyType partyType) {
@@ -326,6 +400,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                   db.addCustomer(newCust);
                   setState(() {
                     _selectedPartyId = newCust.id;
+                    _autoFillPartyDetails(newCust.id, PartyType.customer, db);
                   });
                 } else if (partyType == PartyType.dealer) {
                   final newDealer = Dealer(
@@ -343,6 +418,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                   db.addDealer(newDealer);
                   setState(() {
                     _selectedPartyId = newDealer.id;
+                    _autoFillPartyDetails(newDealer.id, PartyType.dealer, db);
                   });
                 } else if (partyType == PartyType.architect) {
                   final newArch = Architect(
@@ -363,6 +439,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                   db.addArchitect(newArch);
                   setState(() {
                     _selectedPartyId = newArch.id;
+                    _autoFillPartyDetails(newArch.id, PartyType.architect, db);
                   });
                 }
 
@@ -513,113 +590,177 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
     );
   }
 
-  void _createInvoice(bool isDraft) {
-    if (!_formKey.currentState!.validate()) return;
+  void _addNewProductRow() {
     final db = ref.read(databaseServiceProvider);
+    if (db.finishedProducts.isEmpty) return;
+    final fp = db.finishedProducts.first;
+    setState(() {
+      _items.add(_QuotationItemDraft(
+        finishedProductId: fp.id,
+        finishedProductName: fp.name,
+        finishedProductCode: fp.itemCode,
+        productDescription: 'Standard specification luminaire',
+        unit: fp.unit,
+        quantity: 1.0,
+        rate: _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice,
+        discount: 0.0,
+        gstPercent: fp.gstPercent,
+        availableStockSnapshot: fp.availableStock,
+      ));
+    });
+  }
 
-    // Validate finished product inventory
-    if (!isDraft) {
-      for (final item in _items) {
-        final fp = db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId, orElse: () => db.finishedProducts.first);
-        if (fp.currentStock < item.quantity) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Insufficient stock for ${fp.name}! Available: ${fp.currentStock} ${fp.unit}, Invoiced: ${item.quantity} ${fp.unit}'),
-              backgroundColor: AppColors.danger,
-            ),
-          );
-          return;
-        }
-      }
+  void _duplicateRow(int index) {
+    setState(() {
+      _items.insert(index + 1, _items[index].copy());
+    });
+  }
+
+  void _removeRow(int index) {
+    if (_items.length > 1) {
+      setState(() => _items.removeAt(index));
     }
+  }
+
+  double get _subtotalAmount => _items.fold(0.0, (sum, i) => sum + (i.quantity * i.rate));
+  double get _totalDiscount => _items.fold(0.0, (sum, i) => sum + i.discount);
+  double get _totalTaxable => (_subtotalAmount - _totalDiscount).clamp(0.0, double.infinity);
+  double get _totalGst => _items.fold(0.0, (sum, i) => sum + i.gstAmount);
+  double get _grandTotal => _totalTaxable + _totalGst;
+
+  void _saveQuotation(bool isDraft) {
+    if (!_formKey.currentState!.validate()) return;
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add at least one product row.'), backgroundColor: AppColors.danger),
+      );
+      return;
+    }
+
+    final db = ref.read(databaseServiceProvider);
 
     String partyName = '';
     if (_partyType == PartyType.customer) {
-      final c = db.customers.firstWhere((cust) => cust.id == _selectedPartyId, orElse: () => db.customers.first);
-      partyName = c.name;
+      final c = db.customers.where((cust) => cust.id == _selectedPartyId).firstOrNull;
+      partyName = c?.name ?? 'Customer';
     } else if (_partyType == PartyType.dealer) {
-      final d = db.dealers.firstWhere((dlr) => dlr.id == _selectedPartyId, orElse: () => db.dealers.first);
-      partyName = d.name;
+      final d = db.dealers.where((dlr) => dlr.id == _selectedPartyId).firstOrNull;
+      partyName = d?.name ?? 'Dealer';
     } else {
-      final a = db.architects.firstWhere((arc) => arc.id == _selectedPartyId, orElse: () => db.architects.first);
-      partyName = '${a.name} (${a.companyName})';
+      final a = db.architects.where((arc) => arc.id == _selectedPartyId).firstOrNull;
+      partyName = a != null ? '${a.name} (${a.companyName})' : 'Architect';
     }
 
     String? projName;
     if (_selectedProjectId != null) {
-      final p = db.projects.firstWhere((prj) => prj.id == _selectedProjectId, orElse: () => db.projects.first);
-      projName = p.name;
+      final p = db.projects.where((prj) => prj.id == _selectedProjectId).firstOrNull;
+      projName = p?.name;
     }
 
     String? archName;
     String? archId;
     if (_partyType == PartyType.architect) {
-      final a = db.architects.firstWhere((arc) => arc.id == _selectedPartyId, orElse: () => db.architects.first);
-      archName = a.name;
-      archId = a.id;
+      final a = db.architects.where((arc) => arc.id == _selectedPartyId).firstOrNull;
+      archName = a?.name;
+      archId = a?.id;
     }
 
-    final saleItems = _items.map((i) {
+    // Generate quotation number (DLZ/QT/2026/0105 or DLZ/QT/2026/0103-R1)
+    String quoteNumber;
+    if (_isRevision && _sourceQuotation != null) {
+      final base = _sourceQuotation!.invoiceNumber.split('-R')[0];
+      quoteNumber = '$base-R$_revisionNumber';
+    } else {
+      quoteNumber = 'DLZ/QT/2026/${db.nextQuotationNumber.toString().padLeft(4, '0')}';
+    }
+
+    final lineItems = _items.map((i) {
       return SaleLineItem(
         finishedProductId: i.finishedProductId,
         finishedProductName: i.finishedProductName,
         finishedProductCode: i.finishedProductCode,
+        productDescription: i.productDescription,
         quantity: i.quantity,
         unit: i.unit,
         rate: i.rate,
         discountAmount: i.discount,
         gstPercent: i.gstPercent,
+        taxableAmount: i.taxableAmount,
+        cgstAmount: i.gstAmount / 2,
+        sgstAmount: i.gstAmount / 2,
+        igstAmount: 0.0,
         lineTotal: i.lineTotal,
       );
     }).toList();
 
-    SaleStatus status;
-    if (isDraft) {
-      status = SaleStatus.draft;
-    } else if (_paidAmount >= _totalAmount) {
-      status = SaleStatus.paid;
-    } else if (_paidAmount > 0) {
-      status = SaleStatus.partialPaid;
-    } else {
-      status = SaleStatus.active;
-    }
-
-    final sale = Sale(
-      id: IdGenerator.generateId('SALE'),
-      invoiceNumber: IdGenerator.generateDocNumber('INV', db.nextSalesNumber),
-      documentType: SalesDocumentType.invoice,
+    final quotation = Sale(
+      id: IdGenerator.generateId('QT'),
+      invoiceNumber: quoteNumber,
+      documentType: SalesDocumentType.quotation,
       partyType: _partyType,
-      partyId: _selectedPartyId!,
+      partyId: _selectedPartyId ?? 'CUST-001',
       partyName: partyName,
+      customerContactPerson: _contactPersonCtrl.text.trim(),
+      customerMobile: _mobileCtrl.text.trim(),
+      customerEmail: _emailCtrl.text.trim(),
+      customerGstNumber: _gstNumberCtrl.text.trim(),
+      billingAddress: _billingAddressCtrl.text.trim(),
+      shippingAddress: _shippingAddressCtrl.text.trim(),
       projectId: _selectedProjectId,
       projectName: projName,
       architectId: archId,
       architectName: archName,
-      saleDate: _saleDate,
-      items: saleItems,
+      salesExecutive: _salesExecutive,
+      saleDate: _quotationDate,
+      validUntil: _validTill,
+      revisionNumber: _revisionNumber,
+      originalQuotationId: _sourceQuotation?.originalQuotationId ?? _sourceQuotation?.id,
+      parentQuotationId: _sourceQuotation?.id,
+      parentQuotationNumber: _sourceQuotation?.invoiceNumber,
+      quotationStatus: isDraft ? QuotationStatus.draft : QuotationStatus.sent,
+      items: lineItems,
       subtotalAmount: _subtotalAmount,
       discountAmount: _totalDiscount,
+      taxableAmount: _totalTaxable,
+      cgstAmount: _totalGst / 2,
+      sgstAmount: _totalGst / 2,
+      igstAmount: 0.0,
       gstAmount: _totalGst,
-      totalAmount: _totalAmount,
-      paidAmount: _paidAmount,
-      pendingAmount: _pendingAmount,
-      paymentMode: _paymentMode,
-      status: status,
-      architectCommissionAmount: _calculatedCommission,
+      totalAmount: _grandTotal,
+      paidAmount: 0.0,
+      pendingAmount: _grandTotal,
+      paymentMode: PaymentMode.bankTransfer,
+      status: SaleStatus.draft,
+      termsAndConditions: _termsCtrl.text.trim(),
       notes: _notesCtrl.text.trim(),
       createdAt: DateTime.now(),
+      activityLogs: [
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: _isRevision ? 'Revision Created ($quoteNumber)' : (isDraft ? 'Quotation Draft Saved' : 'Quotation Created & Sent'),
+          performedBy: db.currentUser.name,
+          timestamp: DateTime.now(),
+          details: 'Physical and reserved stock unchanged per quotation rule.',
+        ),
+      ],
     );
 
-    db.createSale(sale);
+    if (_isRevision && _sourceQuotation != null) {
+      db.createQuotationRevision(_sourceQuotation!.id, quotation);
+    } else {
+      db.createQuotation(quotation);
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(isDraft ? 'Draft Sale Saved' : 'Invoice Created! Finished Product stock deducted & commission generated.'),
+        content: Text(_isRevision
+            ? 'Quotation Revision $quoteNumber created! Old version marked as Superseded.'
+            : (isDraft ? 'Quotation Draft Saved ($quoteNumber)' : 'Quotation $quoteNumber Created and Sent to Client!')),
         backgroundColor: AppColors.success,
       ),
     );
 
-    ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+    ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations;
   }
 
   @override
@@ -633,35 +774,40 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 1. Header & Actions
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Create Sales Invoice', style: AppTextStyles.h1),
+                    Text(_isRevision ? 'Create Quotation Revision (Rev $_revisionNumber)' : 'Create New Quotation', style: AppTextStyles.h1),
                     const SizedBox(height: 4),
-                    Text('Dispatch finished products, link project/architect, and record revenue', style: AppTextStyles.subtitle),
+                    Text(
+                      _isRevision
+                          ? 'Creating revision for ${_sourceQuotation?.invoiceNumber}. Old version will be superseded.'
+                          : 'Commercial estimate with finished product lines (Zero stock impact until confirmed)',
+                      style: AppTextStyles.subtitle,
+                    ),
                   ],
                 ),
-                Row(
+                Wrap(
+                  spacing: 12,
                   children: [
                     ErpButton(
                       text: 'Cancel',
                       isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
                     ),
-                    const SizedBox(width: 12),
                     ErpButton(
-                      text: 'Save Draft',
+                      text: 'Save as Draft',
                       isOutlined: true,
-                      onPressed: () => _createInvoice(true),
+                      onPressed: () => _saveQuotation(true),
                     ),
-                    const SizedBox(width: 12),
                     ErpButton(
-                      text: 'Create Invoice & Dispatch',
-                      icon: Icons.receipt_long_outlined,
-                      onPressed: () => _createInvoice(false),
+                      text: 'Save & Mark Sent',
+                      icon: Icons.send_outlined,
+                      onPressed: () => _saveQuotation(false),
                     ),
                   ],
                 ),
@@ -669,7 +815,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Party & Billing Card
+            // 2. Customer & Project Selection Card
             Container(
               padding: AppSpacing.cardPadding,
               decoration: BoxDecoration(
@@ -680,7 +826,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Customer / Dealer & Project Association', style: AppTextStyles.h3),
+                  Text('Customer & Commercial Details', style: AppTextStyles.h3),
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -701,6 +847,9 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                       _partyType = val;
                                       _selectedProjectId = null;
                                       _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
+                                      if (_selectedPartyId != null) {
+                                        _autoFillPartyDetails(_selectedPartyId!, PartyType.customer, db);
+                                      }
                                     });
                                   }
                                 },
@@ -719,6 +868,9 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                       _partyType = val;
                                       _selectedProjectId = null;
                                       _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
+                                      if (_selectedPartyId != null) {
+                                        _autoFillPartyDetails(_selectedPartyId!, PartyType.dealer, db);
+                                      }
                                     });
                                   }
                                 },
@@ -736,6 +888,9 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                     setState(() {
                                       _partyType = val;
                                       _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
+                                      if (_selectedPartyId != null) {
+                                        _autoFillPartyDetails(_selectedPartyId!, PartyType.architect, db);
+                                      }
                                     });
                                   }
                                 },
@@ -797,13 +952,73 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                               return;
                             }
                             if (val == '__DIVIDER__') return;
-                            setState(() => _selectedPartyId = val);
+                            setState(() {
+                              _selectedPartyId = val;
+                              if (val != null) {
+                                _autoFillPartyDetails(val, _partyType, db);
+                              }
+                            });
                           },
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
+
+                  // Customer Autofill Fields Grid
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _contactPersonCtrl,
+                          decoration: const InputDecoration(labelText: 'Contact Person'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _mobileCtrl,
+                          decoration: const InputDecoration(labelText: 'Mobile Number'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _emailCtrl,
+                          decoration: const InputDecoration(labelText: 'Email Address'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _gstNumberCtrl,
+                          decoration: const InputDecoration(labelText: 'Client GST Number'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _billingAddressCtrl,
+                          decoration: const InputDecoration(labelText: 'Billing Address'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _shippingAddressCtrl,
+                          decoration: const InputDecoration(labelText: 'Shipping / Site Address'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Project & Validity Row
                   Row(
                     children: [
                       if (_partyType == PartyType.architect) ...[
@@ -849,18 +1064,21 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                         const SizedBox(width: 16),
                       ],
                       Expanded(
-                        child: DropdownButtonFormField<PaymentMode>(
-                          value: _paymentMode,
-                          isExpanded: true,
-                          decoration: const InputDecoration(labelText: 'Payment Mode'),
-                          items: PaymentMode.values.map((mode) {
-                            return DropdownMenuItem(
-                              value: mode,
-                              child: Text(mode.toString().split('.').last.toUpperCase()),
+                        child: TextFormField(
+                          readOnly: true,
+                          decoration: InputDecoration(
+                            labelText: 'Valid Till',
+                            suffixIcon: const Icon(Icons.calendar_today, size: 18),
+                            hintText: Formatters.formatDate(_validTill),
+                          ),
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _validTill,
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(const Duration(days: 180)),
                             );
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) setState(() => _paymentMode = val);
+                            if (picked != null) setState(() => _validTill = picked);
                           },
                         ),
                       ),
@@ -871,7 +1089,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Products Table Card
+            // 3. Product Line Items Card
             Container(
               padding: AppSpacing.cardPadding,
               decoration: BoxDecoration(
@@ -885,52 +1103,62 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Finished Products Invoiced', style: AppTextStyles.h3),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Product Line Items', style: AppTextStyles.h3),
+                          const SizedBox(height: 2),
+                          Text('Product data is loaded from Finished Product Masters. Stock is NOT reduced at quotation.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                        ],
+                      ),
                       ErpButton(
-                        text: 'Add Product',
+                        text: 'Add Product Row',
                         icon: Icons.add,
                         isOutlined: true,
-                        onPressed: _addNewLineItem,
+                        onPressed: _addNewProductRow,
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: MediaQuery.of(context).size.width < 1100 ? 980 : MediaQuery.of(context).size.width - 320,
-                      ),
-                      child: Column(
-                        children: List.generate(_items.length, (index) {
-                          final item = _items[index];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceMuted,
-                              borderRadius: AppRadius.smBorderRadius,
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Row(
+
+                  // Line Items List
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _items.length,
+                    separatorBuilder: (_, __) => const Divider(height: 24),
+                    itemBuilder: (ctx, idx) {
+                      final item = _items[idx];
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
                               children: [
-                                // Product dropdown
-                                SizedBox(
-                                  width: 280,
+                                CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: AppColors.primaryLight,
+                                  child: Text('${idx + 1}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                                ),
+                                const SizedBox(width: 12),
+                                // Product Picker
+                                Expanded(
+                                  flex: 3,
                                   child: DropdownButtonFormField<String>(
                                     value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
                                         ? item.finishedProductId
                                         : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
                                     isExpanded: true,
-                                    decoration: const InputDecoration(labelText: 'Product'),
+                                    decoration: const InputDecoration(labelText: 'Finished Product *'),
                                     items: db.finishedProducts.map((fp) {
                                       return DropdownMenuItem(
                                         value: fp.id,
-                                        child: Text(
-                                          '${fp.itemCode} - ${fp.name}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                        child: Text('${fp.name} (${fp.itemCode}) - Avail: ${fp.availableStock} ${fp.unit}'),
                                       );
                                     }).toList(),
                                     onChanged: (val) {
@@ -943,114 +1171,102 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                           item.unit = fp.unit;
                                           item.rate = _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice;
                                           item.gstPercent = fp.gstPercent;
+                                          item.availableStockSnapshot = fp.availableStock;
                                         });
                                       }
                                     },
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-
+                                const SizedBox(width: 12),
                                 // Quantity
-                                SizedBox(
-                                  width: 110,
+                                Expanded(
+                                  flex: 1,
                                   child: TextFormField(
                                     initialValue: item.quantity.toString(),
                                     keyboardType: TextInputType.number,
-                                    validator: Validators.positiveNumber,
-                                    decoration: InputDecoration(labelText: 'Qty (${item.unit})'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.quantity = num);
-                                    },
+                                    decoration: InputDecoration(labelText: 'Quantity (${item.unit})'),
+                                    onChanged: (val) => setState(() => item.quantity = double.tryParse(val) ?? 1.0),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-
-                                // Rate
-                                SizedBox(
-                                  width: 110,
+                                const SizedBox(width: 12),
+                                // Unit Price / Rate
+                                Expanded(
+                                  flex: 1,
                                   child: TextFormField(
                                     initialValue: item.rate.toString(),
                                     keyboardType: TextInputType.number,
-                                    validator: Validators.positiveNumber,
-                                    decoration: const InputDecoration(labelText: 'Rate (₹)'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.rate = num);
-                                    },
+                                    decoration: const InputDecoration(labelText: 'Unit Rate (₹)'),
+                                    onChanged: (val) => setState(() => item.rate = double.tryParse(val) ?? 0.0),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-
+                                const SizedBox(width: 12),
                                 // Discount
-                                SizedBox(
-                                  width: 110,
+                                Expanded(
+                                  flex: 1,
                                   child: TextFormField(
                                     initialValue: item.discount.toString(),
                                     keyboardType: TextInputType.number,
-                                    validator: Validators.nonNegativeNumber,
                                     decoration: const InputDecoration(labelText: 'Discount (₹)'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.discount = num);
-                                    },
+                                    onChanged: (val) => setState(() => item.discount = double.tryParse(val) ?? 0.0),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-
+                                const SizedBox(width: 12),
                                 // GST %
-                                SizedBox(
-                                  width: 80,
+                                Expanded(
+                                  flex: 1,
                                   child: TextFormField(
                                     initialValue: item.gstPercent.toString(),
                                     keyboardType: TextInputType.number,
-                                    validator: Validators.nonNegativeNumber,
                                     decoration: const InputDecoration(labelText: 'GST %'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.gstPercent = num);
-                                    },
+                                    onChanged: (val) => setState(() => item.gstPercent = double.tryParse(val) ?? 18.0),
                                   ),
                                 ),
-                                const SizedBox(width: 14),
-
-                                // Line Total
-                                SizedBox(
-                                  width: 120,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text('Line Total', style: AppTextStyles.bodySmall),
-                                      Text(
-                                        Formatters.formatCurrency(item.lineTotal),
-                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-                                      ),
-                                    ],
-                                  ),
+                                const SizedBox(width: 16),
+                                // Line Total & Action Buttons
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('Line Total', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                                    Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodyBold.copyWith(fontSize: 14)),
+                                  ],
                                 ),
                                 const SizedBox(width: 8),
-
-                                // Delete
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
-                                  onPressed: () => _removeLineItem(index),
+                                  icon: const Icon(Icons.copy, size: 18, color: Colors.grey),
+                                  tooltip: 'Duplicate Row',
+                                  onPressed: () => _duplicateRow(idx),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                                  tooltip: 'Remove Row',
+                                  onPressed: () => _removeRow(idx),
                                 ),
                               ],
                             ),
-                          );
-                        }),
-                      ),
-                    ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              initialValue: item.productDescription,
+                              decoration: const InputDecoration(
+                                labelText: 'Product Description / Custom Specifications for Quote PDF',
+                                isDense: true,
+                              ),
+                              onChanged: (val) => item.productDescription = val,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
 
-            // Financial Summary & Commission
+            // 4. Totals & Terms Card
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Left: Terms and Notes
                 Expanded(
                   flex: 3,
                   child: Container(
@@ -1063,40 +1279,25 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Sale Notes & Dispatch Instructions', style: AppTextStyles.h3),
+                        Text('Terms & Conditions & Commercial Notes', style: AppTextStyles.h3),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _termsCtrl,
+                          maxLines: 4,
+                          decoration: const InputDecoration(labelText: 'Terms & Conditions (Printed on PDF)'),
+                        ),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _notesCtrl,
-                          maxLines: 3,
-                          decoration: const InputDecoration(hintText: 'Enter dispatch address, site contact, or warranty notes...'),
+                          maxLines: 2,
+                          decoration: const InputDecoration(labelText: 'Internal Sales Notes'),
                         ),
-                        if (_partyType == PartyType.architect && _selectedPartyId != null) ...[
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.purpleLight,
-                              borderRadius: AppRadius.smBorderRadius,
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.stars_rounded, color: AppColors.purple, size: 20),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    'Architect Commission Generated: ${Formatters.formatCurrency(_calculatedCommission)}',
-                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 20),
+                // Right: Financial Summary Box
                 Expanded(
                   flex: 2,
                   child: Container(
@@ -1109,59 +1310,35 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Invoice Total', style: AppTextStyles.h3),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Subtotal:', style: AppTextStyles.bodyMedium),
-                            Text(Formatters.formatCurrency(_subtotalAmount), style: AppTextStyles.bodyBold),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Discount:', style: AppTextStyles.bodyMedium),
-                            Text('- ${Formatters.formatCurrency(_totalDiscount)}', style: AppTextStyles.bodySmall),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('GST Tax (18%):', style: AppTextStyles.bodyMedium),
-                            Text(Formatters.formatCurrency(_totalGst), style: AppTextStyles.bodySmall),
-                          ],
-                        ),
-                        const Divider(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Grand Total:', style: AppTextStyles.bodyBold),
-                            Text(Formatters.formatCurrency(_totalAmount), style: AppTextStyles.h2),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _paidAmountCtrl,
-                          keyboardType: TextInputType.number,
-                          validator: Validators.nonNegativeNumber,
-                          onChanged: (_) => setState(() {}),
-                          decoration: const InputDecoration(labelText: 'Received Paid Amount (₹)'),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Customer Outstanding:', style: AppTextStyles.bodyMedium),
-                            Text(
-                              Formatters.formatCurrency(_pendingAmount),
-                              style: AppTextStyles.bodyBold.copyWith(
-                                color: _pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
+                        Text('Quotation Totals', style: AppTextStyles.h3),
+                        const SizedBox(height: 16),
+                        _buildSummaryRow('Subtotal Amount', Formatters.formatCurrency(_subtotalAmount)),
+                        if (_totalDiscount > 0)
+                          _buildSummaryRow('Total Discount', '- ${Formatters.formatCurrency(_totalDiscount)}', color: AppColors.dangerText),
+                        _buildSummaryRow('Taxable Amount', Formatters.formatCurrency(_totalTaxable)),
+                        _buildSummaryRow('CGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
+                        _buildSummaryRow('SGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
+                        const Divider(height: 20),
+                        _buildSummaryRow('Grand Total', Formatters.formatCurrency(_grandTotal), isBold: true, fontSize: 16, color: AppColors.primary),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.info.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.info_outline, color: AppColors.info, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Quotation rule active: Physical & reserved inventory remain untouched until order confirmation.',
+                                  style: AppTextStyles.bodySmall.copyWith(fontSize: 11, color: AppColors.info),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -1171,6 +1348,19 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(String label, String value, {bool isBold = false, double fontSize = 13, Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: fontSize, fontWeight: isBold ? FontWeight.bold : FontWeight.w500, color: Colors.grey.shade700)),
+          Text(value, style: TextStyle(fontSize: fontSize, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: color ?? Colors.black87)),
+        ],
       ),
     );
   }

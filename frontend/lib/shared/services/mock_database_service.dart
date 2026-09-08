@@ -15,6 +15,7 @@ import '../../core/models/stock_adjustment_model.dart';
 import '../../core/models/stock_movement_model.dart';
 import '../../core/models/user_model.dart';
 import '../../core/models/vendor_model.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 
 class MockDatabaseService extends ChangeNotifier {
@@ -51,6 +52,11 @@ class MockDatabaseService extends ChangeNotifier {
   int _purchaseCounter = 104;
   int _productionCounter = 88;
   int _salesCounter = 215;
+  int _quotationCounter = 106;
+  int _proformaCounter = 53;
+  int _soCounter = 75;
+  int _deliveryCounter = 42;
+  int _returnCounter = 13;
   int _paymentCounter = 312;
   int _commissionCounter = 55;
   int _adjCounter = 19;
@@ -590,26 +596,257 @@ class MockDatabaseService extends ChangeNotifier {
       ),
     ];
 
-    // Seed Sales
+    // Seed Sales & Quotations Workflow Data
     sales = [
+      // 1. Quotation: Active Sent with Revision History
       Sale(
-        id: 'SALE-001',
-        invoiceNumber: 'INV-2026-0214',
-        documentType: SalesDocumentType.invoice,
+        id: 'QT-002',
+        invoiceNumber: 'DLZ/QT/2026/0103-R2',
+        documentType: SalesDocumentType.quotation,
         partyType: PartyType.customer,
         partyId: 'CUST-001',
         partyName: 'Oberoi Sky City Residences',
+        customerContactPerson: 'Rahul Oberoi',
+        customerMobile: '+91 98201 11223',
+        customerEmail: 'projects@oberoigroup.com',
+        customerGstNumber: '27AAACG9876K1Z1',
+        billingAddress: 'Oberoi Realty Head Office, Commerz II, Goregaon East, Mumbai',
+        shippingAddress: 'Oberoi Sky City Site, Western Express Highway, Borivali East, Mumbai',
         projectId: 'PRJ-001',
         projectName: 'Sky City Tower C Luxury Penthouses',
         architectId: 'ARCH-001',
         architectName: 'Ar. Sanjay Puri',
-        saleDate: now.subtract(const Duration(hours: 1)),
+        salesExecutive: 'Alex Sterling',
+        saleDate: now.subtract(const Duration(days: 3)),
+        validUntil: now.add(const Duration(days: 27)),
+        revisionNumber: 2,
+        originalQuotationId: 'QT-001',
+        parentQuotationId: 'QT-001-R1',
+        parentQuotationNumber: 'DLZ/QT/2026/0103-R1',
+        quotationStatus: QuotationStatus.accepted,
+        items: [
+          SaleLineItem(
+            finishedProductId: 'FP-001',
+            finishedProductName: 'Aarix Axis Wall Light',
+            finishedProductCode: 'DLX-WL-001',
+            productDescription: 'Architectural aluminum linear wall fixture, 3000K Warm White CRI 90+',
+            quantity: 30.0,
+            unit: 'PCS',
+            rate: 4800.0,
+            discountAmount: 6000.0,
+            gstPercent: 18.0,
+            lineTotal: 162840.0,
+          ),
+          SaleLineItem(
+            finishedProductId: 'FP-002',
+            finishedProductName: 'Lumina Sphere Chandelier',
+            finishedProductCode: 'DLX-CH-002',
+            productDescription: 'Handcrafted suspension pendant with brushed brass accents',
+            quantity: 10.0,
+            unit: 'PCS',
+            rate: 14500.0,
+            discountAmount: 5000.0,
+            gstPercent: 18.0,
+            lineTotal: 165200.0,
+          ),
+        ],
+        subtotalAmount: 289000.0,
+        discountAmount: 11000.0,
+        taxableAmount: 278000.0,
+        cgstAmount: 25020.0,
+        sgstAmount: 25020.0,
+        igstAmount: 0.0,
+        gstAmount: 50040.0,
+        totalAmount: 328040.0,
+        paidAmount: 0.0,
+        pendingAmount: 328040.0,
+        paymentMode: PaymentMode.bankTransfer,
+        status: SaleStatus.active,
+        termsAndConditions: '1. 50% advance with Purchase Order, balance before dispatch.\n2. Delivery timeline: 2-3 weeks from confirmed drawing approval.\n3. 3-Year comprehensive manufacturer warranty on LED drivers & modules.',
+        notes: 'Revised pricing approved by Service Director with 5% project rebate.',
+        createdAt: now.subtract(const Duration(days: 3)),
+      ),
+      Sale(
+        id: 'QT-001-R1',
+        invoiceNumber: 'DLZ/QT/2026/0103-R1',
+        documentType: SalesDocumentType.quotation,
+        partyType: PartyType.customer,
+        partyId: 'CUST-001',
+        partyName: 'Oberoi Sky City Residences',
+        saleDate: now.subtract(const Duration(days: 7)),
+        revisionNumber: 1,
+        originalQuotationId: 'QT-001',
+        quotationStatus: QuotationStatus.superseded,
+        items: [
+          SaleLineItem(
+            finishedProductId: 'FP-001',
+            finishedProductName: 'Aarix Axis Wall Light',
+            finishedProductCode: 'DLX-WL-001',
+            quantity: 30.0,
+            unit: 'PCS',
+            rate: 5200.0,
+            discountAmount: 0.0,
+            gstPercent: 18.0,
+            lineTotal: 184080.0,
+          ),
+        ],
+        subtotalAmount: 156000.0,
+        discountAmount: 0.0,
+        gstAmount: 28080.0,
+        totalAmount: 184080.0,
+        pendingAmount: 184080.0,
+        paymentMode: PaymentMode.bankTransfer,
+        status: SaleStatus.active,
+        createdAt: now.subtract(const Duration(days: 7)),
+      ),
+
+      // 2. Proforma Invoice: Issued with Advance Payment recorded
+      Sale(
+        id: 'PI-001',
+        invoiceNumber: 'DLZ/PI/2026/0051',
+        documentType: SalesDocumentType.proformaInvoice,
+        partyType: PartyType.customer,
+        partyId: 'CUST-001',
+        partyName: 'Oberoi Sky City Residences',
+        customerContactPerson: 'Rahul Oberoi',
+        customerMobile: '+91 98201 11223',
+        customerEmail: 'projects@oberoigroup.com',
+        customerGstNumber: '27AAACG9876K1Z1',
+        billingAddress: 'Oberoi Realty Head Office, Commerz II, Goregaon East, Mumbai',
+        shippingAddress: 'Oberoi Sky City Site, Western Express Highway, Borivali East, Mumbai',
+        projectId: 'PRJ-001',
+        projectName: 'Sky City Tower C Luxury Penthouses',
+        architectId: 'ARCH-001',
+        architectName: 'Ar. Sanjay Puri',
+        saleDate: now.subtract(const Duration(days: 2)),
+        quotationReferenceId: 'QT-002',
+        parentQuotationNumber: 'DLZ/QT/2026/0103-R2',
+        proformaStatus: ProformaStatus.partialPaid,
+        bankDetails: 'Bank: HDFC Bank Ltd | A/C: 50200049281144 | IFSC: HDFC0000060 | Branch: Fort, Mumbai',
+        items: [
+          SaleLineItem(
+            finishedProductId: 'FP-001',
+            finishedProductName: 'Aarix Axis Wall Light',
+            finishedProductCode: 'DLX-WL-001',
+            quantity: 30.0,
+            unit: 'PCS',
+            rate: 4800.0,
+            discountAmount: 6000.0,
+            gstPercent: 18.0,
+            lineTotal: 162840.0,
+          ),
+          SaleLineItem(
+            finishedProductId: 'FP-002',
+            finishedProductName: 'Lumina Sphere Chandelier',
+            finishedProductCode: 'DLX-CH-002',
+            quantity: 10.0,
+            unit: 'PCS',
+            rate: 14500.0,
+            discountAmount: 5000.0,
+            gstPercent: 18.0,
+            lineTotal: 165200.0,
+          ),
+        ],
+        subtotalAmount: 289000.0,
+        discountAmount: 11000.0,
+        taxableAmount: 278000.0,
+        cgstAmount: 25020.0,
+        sgstAmount: 25020.0,
+        igstAmount: 0.0,
+        gstAmount: 50040.0,
+        totalAmount: 328040.0,
+        paidAmount: 100000.0, // Advance received
+        pendingAmount: 228040.0,
+        paymentMode: PaymentMode.bankTransfer,
+        status: SaleStatus.partialPaid,
+        termsAndConditions: 'PROFORMA INVOICE (Not a Tax Invoice). Material will be released upon receipt of milestone advance.',
+        notes: 'Milestone 1 advance of ₹1,00,000 received via RTGS.',
+        linkedPaymentIds: ['PAY-003'],
+        createdAt: now.subtract(const Duration(days: 2)),
+      ),
+
+      // 3. Sales Order: Confirmed with Stock Reservation & Production Shortage Linkage
+      Sale(
+        id: 'SO-001',
+        invoiceNumber: 'DLZ/SO/2026/0074',
+        documentType: SalesDocumentType.salesOrder,
+        partyType: PartyType.customer,
+        partyId: 'CUST-001',
+        partyName: 'Oberoi Sky City Residences',
+        customerContactPerson: 'Rahul Oberoi',
+        customerMobile: '+91 98201 11223',
+        customerGstNumber: '27AAACG9876K1Z1',
+        billingAddress: 'Oberoi Realty Head Office, Goregaon East, Mumbai',
+        shippingAddress: 'Tower C Penthouses, Borivali East, Mumbai',
+        projectId: 'PRJ-001',
+        projectName: 'Sky City Tower C Luxury Penthouses',
+        architectId: 'ARCH-001',
+        architectName: 'Ar. Sanjay Puri',
+        salesOrderNumber: 'DLZ/SO/2026/0074',
+        salesOrderStatus: SalesOrderStatus.partiallyDelivered,
+        proformaReferenceId: 'PI-001',
+        proformaNumber: 'DLZ/PI/2026/0051',
+        quotationReferenceId: 'QT-002',
+        saleDate: now.subtract(const Duration(days: 1)),
+        deliveryDate: now.add(const Duration(days: 10)),
+        items: [
+          SaleLineItem(
+            finishedProductId: 'FP-001',
+            finishedProductName: 'Aarix Axis Wall Light',
+            finishedProductCode: 'DLX-WL-001',
+            quantity: 30.0,
+            reservedQuantity: 10.0, // 20 dispatched, 10 still reserved
+            producedQuantity: 30.0,
+            deliveredQuantity: 20.0, // 20 delivered in DLV-001
+            invoicedQuantity: 20.0,
+            returnedQuantity: 0.0,
+            unit: 'PCS',
+            rate: 4800.0,
+            discountAmount: 6000.0,
+            gstPercent: 18.0,
+            lineTotal: 162840.0,
+          ),
+        ],
+        subtotalAmount: 144000.0,
+        discountAmount: 6000.0,
+        taxableAmount: 138000.0,
+        gstAmount: 24840.0,
+        totalAmount: 162840.0,
+        paidAmount: 100000.0,
+        pendingAmount: 62840.0,
+        paymentMode: PaymentMode.bankTransfer,
+        status: SaleStatus.active,
+        linkedDeliveryIds: ['DLV-001'],
+        linkedProductionOrderIds: ['PRD-001'],
+        createdAt: now.subtract(const Duration(days: 1)),
+      ),
+
+      // 4. Delivery / Dispatch Note: Dispatched 20 units
+      Sale(
+        id: 'DLV-001',
+        invoiceNumber: 'DLZ/DLV/2026/0041',
+        documentType: SalesDocumentType.delivery,
+        partyType: PartyType.customer,
+        partyId: 'CUST-001',
+        partyName: 'Oberoi Sky City Residences',
+        customerContactPerson: 'Site Incharge - Mr. Verma',
+        customerMobile: '+91 98201 55441',
+        shippingAddress: 'Tower C Penthouses, Borivali East, Mumbai',
+        salesOrderReferenceId: 'SO-001',
+        salesOrderNumber: 'DLZ/SO/2026/0074',
+        deliveryStatus: DeliveryStatus.delivered,
+        deliveryNumber: 'DLZ/DLV/2026/0041',
+        vehicleNumber: 'MH-04-KU-8842',
+        driverContact: 'Sunil Jadhav (+91 97654 32100)',
+        trackingNumber: 'TRK-2026-9921',
+        saleDate: now.subtract(const Duration(hours: 2)),
         items: [
           SaleLineItem(
             finishedProductId: 'FP-001',
             finishedProductName: 'Aarix Axis Wall Light',
             finishedProductCode: 'DLX-WL-001',
             quantity: 20.0,
+            deliveredQuantity: 20.0,
             unit: 'PCS',
             rate: 4800.0,
             discountAmount: 4000.0,
@@ -621,13 +858,151 @@ class MockDatabaseService extends ChangeNotifier {
         discountAmount: 4000.0,
         gstAmount: 16560.0,
         totalAmount: 108560.0,
+        paidAmount: 0.0,
+        pendingAmount: 108560.0,
+        paymentMode: PaymentMode.bankTransfer,
+        status: SaleStatus.completed,
+        notes: 'Delivered batch of 20 units with inspection challan signed by Site Manager.',
+        createdAt: now.subtract(const Duration(hours: 2)),
+      ),
+
+      // 5. Final Sales Invoice: Invoiced for delivered 20 units
+      Sale(
+        id: 'SALE-001',
+        invoiceNumber: 'INV-2026-0214',
+        documentType: SalesDocumentType.invoice,
+        partyType: PartyType.customer,
+        partyId: 'CUST-001',
+        partyName: 'Oberoi Sky City Residences',
+        projectId: 'PRJ-001',
+        projectName: 'Sky City Tower C Luxury Penthouses',
+        architectId: 'ARCH-001',
+        architectName: 'Ar. Sanjay Puri',
+        salesOrderReferenceId: 'SO-001',
+        salesOrderNumber: 'DLZ/SO/2026/0074',
+        saleDate: now.subtract(const Duration(hours: 1)),
+        items: [
+          SaleLineItem(
+            finishedProductId: 'FP-001',
+            finishedProductName: 'Aarix Axis Wall Light',
+            finishedProductCode: 'DLX-WL-001',
+            quantity: 20.0,
+            deliveredQuantity: 20.0,
+            invoicedQuantity: 20.0,
+            unit: 'PCS',
+            rate: 4800.0,
+            discountAmount: 4000.0,
+            gstPercent: 18.0,
+            lineTotal: 108560.0,
+          ),
+        ],
+        subtotalAmount: 96000.0,
+        discountAmount: 4000.0,
+        taxableAmount: 92000.0,
+        cgstAmount: 8280.0,
+        sgstAmount: 8280.0,
+        igstAmount: 0.0,
+        gstAmount: 16560.0,
+        totalAmount: 108560.0,
         paidAmount: 50000.0,
         pendingAmount: 58560.0,
         paymentMode: PaymentMode.bankTransfer,
         status: SaleStatus.partialPaid,
         architectCommissionAmount: 4600.0, // 5% of discounted subtotal
-        notes: 'Direct site delivery to Penthouse Tower C',
+        notes: 'Tax invoice created against Delivery DLZ/DLV/2026/0041.',
+        linkedPaymentIds: ['PAY-001'],
         createdAt: now.subtract(const Duration(hours: 1)),
+      ),
+
+      // 6. Direct Counter Sale: Immediate invoice & payment
+      Sale(
+        id: 'SALE-002',
+        invoiceNumber: 'INV-2026-0215',
+        documentType: SalesDocumentType.invoice,
+        partyType: PartyType.customer,
+        partyId: 'CUST-002',
+        partyName: 'Godrej Woodsman Estate',
+        customerContactPerson: 'Amitabh Joshi',
+        customerMobile: '+91 99200 44332',
+        customerGstNumber: '27AABCG1234F1Z9',
+        billingAddress: 'Tower 4, Godrej Woodsman Estate, Vikhroli, Mumbai',
+        shippingAddress: 'Tower 4, Godrej Woodsman Estate, Vikhroli, Mumbai',
+        saleDate: now.subtract(const Duration(hours: 3)),
+        items: [
+          SaleLineItem(
+            finishedProductId: 'FP-002',
+            finishedProductName: 'Lumina Sphere Chandelier',
+            finishedProductCode: 'DLX-CH-002',
+            quantity: 2.0,
+            deliveredQuantity: 2.0,
+            invoicedQuantity: 2.0,
+            unit: 'PCS',
+            rate: 14500.0,
+            discountAmount: 1000.0,
+            gstPercent: 18.0,
+            lineTotal: 33040.0,
+          ),
+        ],
+        subtotalAmount: 29000.0,
+        discountAmount: 1000.0,
+        taxableAmount: 28000.0,
+        cgstAmount: 2520.0,
+        sgstAmount: 2520.0,
+        igstAmount: 0.0,
+        gstAmount: 5040.0,
+        totalAmount: 33040.0,
+        paidAmount: 33040.0,
+        pendingAmount: 0.0,
+        paymentMode: PaymentMode.upi,
+        status: SaleStatus.paid,
+        notes: 'Direct counter sale paid instantly via UPI receipt.',
+        createdAt: now.subtract(const Duration(hours: 3)),
+      ),
+
+      // 7. Sales Return: Good condition restocked item
+      Sale(
+        id: 'RET-001',
+        invoiceNumber: 'DLZ/RET/2026/0012',
+        documentType: SalesDocumentType.salesReturn,
+        partyType: PartyType.customer,
+        partyId: 'CUST-001',
+        partyName: 'Oberoi Sky City Residences',
+        originalInvoiceId: 'SALE-001',
+        originalInvoiceNumber: 'INV-2026-0214',
+        salesReturnStatus: SalesReturnStatus.completed,
+        returnCondition: ReturnCondition.goodCondition,
+        returnFinancialAction: ReturnFinancialAction.adjustOutstanding,
+        returnReason: 'Excess quantity ordered by client for Penthouse A foyer',
+        saleDate: now.subtract(const Duration(minutes: 30)),
+        items: [
+          SaleLineItem(
+            finishedProductId: 'FP-001',
+            finishedProductName: 'Aarix Axis Wall Light',
+            finishedProductCode: 'DLX-WL-001',
+            quantity: 2.0,
+            returnedQuantity: 2.0,
+            unit: 'PCS',
+            rate: 4800.0,
+            discountAmount: 400.0,
+            gstPercent: 18.0,
+            lineTotal: 10856.0,
+            returnCondition: ReturnCondition.goodCondition,
+          ),
+        ],
+        subtotalAmount: 9600.0,
+        discountAmount: 400.0,
+        taxableAmount: 9200.0,
+        cgstAmount: 828.0,
+        sgstAmount: 828.0,
+        igstAmount: 0.0,
+        gstAmount: 1656.0,
+        totalAmount: 10856.0,
+        paidAmount: 0.0,
+        pendingAmount: 0.0,
+        paymentMode: PaymentMode.bankTransfer,
+        status: SaleStatus.completed,
+        notes: 'Inspected by QA: Unused in original sealed box. Restocked to finished goods inventory.',
+        createdAt: now.subtract(const Duration(minutes: 30)),
       ),
     ];
 
@@ -834,8 +1209,53 @@ class MockDatabaseService extends ChangeNotifier {
         stockOut: 0.0,
         newBalance: newStock,
         unit: fp.unit,
-        notes: 'Produced batch of ${order.actualQuantityProduced} units',
+        notes: 'Produced batch of ${order.actualQuantityProduced} units${order.salesOrderNumber != null ? " for SO ${order.salesOrderNumber}" : ""}',
       );
+
+      // 3. If this production order was created for a Sales Order shortage, allocate & reserve stock
+      if (order.salesOrderId != null) {
+        final soIndex = sales.indexWhere((s) => s.id == order.salesOrderId);
+        if (soIndex != -1) {
+          final so = sales[soIndex];
+          final updatedItems = so.items.map((item) {
+            if (item.finishedProductId == order.finishedProductId) {
+              final newProduced = item.producedQuantity + order.actualQuantityProduced;
+              final newReserved = (item.reservedQuantity + order.actualQuantityProduced).clamp(0.0, item.quantity);
+              return item.copyWith(
+                producedQuantity: newProduced,
+                reservedQuantity: newReserved,
+              );
+            }
+            return item;
+          }).toList();
+
+          // Reserve in finished product master
+          finishedProducts[fpIndex] = finishedProducts[fpIndex].copyWith(
+            reservedStock: finishedProducts[fpIndex].reservedStock + order.actualQuantityProduced,
+          );
+
+          // Check if all items now have full reservation
+          final isFullyReserved = updatedItems.every((i) => i.reservedQuantity >= i.quantity);
+          final updatedStatus = isFullyReserved ? SalesOrderStatus.readyForDispatch : SalesOrderStatus.productionPending;
+
+          sales[soIndex] = so.copyWith(
+            items: updatedItems,
+            salesOrderStatus: updatedStatus,
+            activityLogs: [
+              ...so.activityLogs,
+              DocumentActivityLog(
+                id: IdGenerator.generateId('LOG'),
+                action: 'Production Batch Completed',
+                performedBy: currentUser.name,
+                timestamp: DateTime.now(),
+                details: 'Produced & reserved ${order.actualQuantityProduced} units via ${order.productionNumber}',
+                statusBefore: so.salesOrderStatus?.name,
+                statusAfter: updatedStatus.name,
+              ),
+            ],
+          );
+        }
+      }
     }
 
     productionOrders.insert(0, order);
@@ -857,158 +1277,1267 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
-  // SALES WORKFLOW
+  // SALES WORKFLOW SUITE (Quotation -> Proforma -> Sales Order -> Delivery -> Invoice -> Return)
   // -------------------------------------------------------------
+
+  // --- 1. QUOTATION WORKFLOW (CRITICAL: ZERO STOCK DEDUCTION) ---
+  void createQuotation(Sale quotation) {
+    sales.insert(0, quotation);
+    notifyListeners();
+  }
+
+  void updateQuotation(Sale quotation) {
+    final index = sales.indexWhere((s) => s.id == quotation.id);
+    if (index != -1) {
+      sales[index] = quotation;
+      notifyListeners();
+    }
+  }
+
+  void markQuotationSent(String quotationId) {
+    final index = sales.indexWhere((s) => s.id == quotationId);
+    if (index != -1) {
+      final q = sales[index];
+      sales[index] = q.copyWith(
+        quotationStatus: QuotationStatus.sent,
+        activityLogs: [
+          ...q.activityLogs,
+          DocumentActivityLog(
+            id: IdGenerator.generateId('LOG'),
+            action: 'Quotation Sent to Client',
+            performedBy: currentUser.name,
+            timestamp: DateTime.now(),
+            details: 'Quotation shared with customer for review',
+          ),
+        ],
+      );
+      notifyListeners();
+    }
+  }
+
+  void acceptQuotation(String quotationId) {
+    final index = sales.indexWhere((s) => s.id == quotationId);
+    if (index != -1) {
+      final q = sales[index];
+      sales[index] = q.copyWith(
+        quotationStatus: QuotationStatus.accepted,
+        activityLogs: [
+          ...q.activityLogs,
+          DocumentActivityLog(
+            id: IdGenerator.generateId('LOG'),
+            action: 'Quotation Accepted',
+            performedBy: currentUser.name,
+            timestamp: DateTime.now(),
+            details: 'Customer accepted the quotation terms',
+          ),
+        ],
+      );
+      notifyListeners();
+    }
+  }
+
+  void rejectQuotation(String quotationId, {String? reason}) {
+    final index = sales.indexWhere((s) => s.id == quotationId);
+    if (index != -1) {
+      final q = sales[index];
+      sales[index] = q.copyWith(
+        quotationStatus: QuotationStatus.rejected,
+        notes: reason != null ? '${q.notes ?? ""}\nRejection Reason: $reason' : q.notes,
+        activityLogs: [
+          ...q.activityLogs,
+          DocumentActivityLog(
+            id: IdGenerator.generateId('LOG'),
+            action: 'Quotation Rejected',
+            performedBy: currentUser.name,
+            timestamp: DateTime.now(),
+            details: reason ?? 'Customer rejected the quotation',
+          ),
+        ],
+      );
+      notifyListeners();
+    }
+  }
+
+  Sale createQuotationRevision(String originalQuotationId, [Sale? revisedQuotation]) {
+    final oldIndex = sales.indexWhere((s) => s.id == originalQuotationId);
+    if (oldIndex == -1) throw Exception('Quotation not found');
+    final oldQ = sales[oldIndex];
+
+    final newRevNumber = oldQ.revisionNumber + 1;
+    final baseNumber = oldQ.invoiceNumber.split('-R').first;
+    final newDocNumber = '$baseNumber-R$newRevNumber';
+
+    final revision = revisedQuotation ??
+        oldQ.copyWith(
+          id: IdGenerator.generateId('QT'),
+          invoiceNumber: newDocNumber,
+          revisionNumber: newRevNumber,
+          parentQuotationId: oldQ.id,
+          parentQuotationNumber: oldQ.invoiceNumber,
+          quotationStatus: QuotationStatus.draft,
+          createdAt: DateTime.now(),
+          saleDate: DateTime.now(),
+          activityLogs: [
+            DocumentActivityLog(
+              id: IdGenerator.generateId('LOG'),
+              action: 'Created Revision $newRevNumber from ${oldQ.invoiceNumber}',
+              performedBy: currentUser.name,
+              timestamp: DateTime.now(),
+            ),
+          ],
+        );
+
+    // 1. Mark existing quotation as Superseded
+    sales[oldIndex] = oldQ.copyWith(
+      quotationStatus: QuotationStatus.superseded,
+      activityLogs: [
+        ...oldQ.activityLogs,
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: 'Superseded by Revision ${revision.invoiceNumber}',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+        ),
+      ],
+    );
+
+    // 2. Insert new revision
+    sales.insert(0, revision);
+    notifyListeners();
+    return revision;
+  }
+
+  // --- 2. PROFORMA INVOICE WORKFLOW ---
+  Sale createProformaFromQuotation(String quotationId) {
+    final q = sales.firstWhere((s) => s.id == quotationId);
+    final piNumber = 'DLZ/PI/2026/${(++_proformaCounter).toString().padLeft(4, '0')}';
+    
+    final proforma = Sale(
+      id: IdGenerator.generateId('PI'),
+      invoiceNumber: piNumber,
+      documentType: SalesDocumentType.proformaInvoice,
+      partyType: q.partyType,
+      partyId: q.partyId,
+      partyName: q.partyName,
+      customerContactPerson: q.customerContactPerson,
+      customerMobile: q.customerMobile,
+      customerEmail: q.customerEmail,
+      customerGstNumber: q.customerGstNumber,
+      billingAddress: q.billingAddress,
+      shippingAddress: q.shippingAddress,
+      projectId: q.projectId,
+      projectName: q.projectName,
+      architectId: q.architectId,
+      architectName: q.architectName,
+      salesExecutive: q.salesExecutive,
+      saleDate: DateTime.now(),
+      quotationReferenceId: q.id,
+      parentQuotationNumber: q.invoiceNumber,
+      proformaStatus: ProformaStatus.issued,
+      items: q.items.map((i) => i.copyWith()).toList(),
+      subtotalAmount: q.subtotalAmount,
+      discountAmount: q.discountAmount,
+      taxableAmount: q.taxableAmount,
+      cgstAmount: q.cgstAmount,
+      sgstAmount: q.sgstAmount,
+      igstAmount: q.igstAmount,
+      gstAmount: q.gstAmount,
+      totalAmount: q.totalAmount,
+      paidAmount: 0.0,
+      pendingAmount: q.totalAmount,
+      paymentMode: q.paymentMode,
+      status: SaleStatus.active,
+      bankDetails: 'Bank: HDFC Bank Ltd | A/C: 50200049281144 | IFSC: HDFC0000060 | Branch: Fort, Mumbai',
+      termsAndConditions: 'PROFORMA INVOICE (Not a Tax Invoice).\n${q.termsAndConditions ?? ""}',
+      notes: q.notes,
+      createdAt: DateTime.now(),
+      activityLogs: [
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: 'Proforma Invoice Created from ${q.invoiceNumber}',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+        ),
+      ],
+    );
+
+    // Update Quotation status to converted
+    final qIndex = sales.indexWhere((s) => s.id == quotationId);
+    if (qIndex != -1) {
+      sales[qIndex] = sales[qIndex].copyWith(
+        quotationStatus: QuotationStatus.converted,
+        proformaReferenceId: proforma.id,
+        proformaNumber: piNumber,
+      );
+    }
+
+    sales.insert(0, proforma);
+    notifyListeners();
+    return proforma;
+  }
+
+  void recordProformaAdvancePayment({
+    required String proformaId,
+    required double amount,
+    required PaymentMode paymentMode,
+    String? transactionRef,
+    String? notes,
+  }) {
+    final index = sales.indexWhere((s) => s.id == proformaId);
+    if (index != -1) {
+      final pi = sales[index];
+      final newPaid = pi.paidAmount + amount;
+      final newPending = (pi.totalAmount - newPaid).clamp(0.0, double.infinity);
+      final newStatus = newPending <= 0 ? ProformaStatus.paid : ProformaStatus.partialPaid;
+
+      // 1. Record ErpPayment
+      final payment = ErpPayment(
+        id: IdGenerator.generateId('PAY'),
+        paymentNumber: IdGenerator.generateDocNumber('PAY', ++_paymentCounter),
+        paymentType: pi.partyType == PartyType.customer ? PaymentType.customerPayment : PaymentType.dealerPayment,
+        partyId: pi.partyId,
+        partyName: pi.partyName,
+        referenceDocumentId: pi.id,
+        referenceDocumentNumber: pi.invoiceNumber,
+        amount: amount,
+        paymentMode: paymentMode,
+        paymentDate: DateTime.now(),
+        transactionReference: transactionRef,
+        notes: notes ?? 'Advance payment against Proforma ${pi.invoiceNumber}',
+        createdAt: DateTime.now(),
+      );
+      payments.insert(0, payment);
+
+      // 2. Update Proforma
+      sales[index] = pi.copyWith(
+        paidAmount: newPaid,
+        pendingAmount: newPending,
+        proformaStatus: newStatus,
+        status: newPending <= 0 ? SaleStatus.paid : SaleStatus.partialPaid,
+        linkedPaymentIds: [...pi.linkedPaymentIds, payment.id],
+        activityLogs: [
+          ...pi.activityLogs,
+          DocumentActivityLog(
+            id: IdGenerator.generateId('LOG'),
+            action: 'Advance Payment Recorded: ₹$amount',
+            performedBy: currentUser.name,
+            timestamp: DateTime.now(),
+            details: 'Mode: ${paymentMode.name}, Ref: ${transactionRef ?? "-"}',
+          ),
+        ],
+      );
+
+      notifyListeners();
+    }
+  }
+
+  // --- 3. SALES ORDER & INVENTORY ALLOCATION WORKFLOW ---
+  Sale createSalesOrder(Sale salesOrder, {bool autoAllocate = true}) {
+    // 1. Check Finished Product stock and allocate/reserve
+    List<SaleLineItem> allocatedItems = [];
+    List<String> generatedProductionIds = [];
+    bool hasShortage = false;
+
+    for (final item in salesOrder.items) {
+      final fpIndex = finishedProducts.indexWhere((fp) => fp.id == item.finishedProductId);
+      double reserved = 0.0;
+      double shortage = 0.0;
+
+      if (fpIndex != -1) {
+        final fp = finishedProducts[fpIndex];
+        final available = fp.availableStock; // currentStock - reservedStock
+
+        if (available >= item.quantity) {
+          // Full stock available -> reserve full quantity
+          reserved = item.quantity;
+          finishedProducts[fpIndex] = fp.copyWith(
+            reservedStock: fp.reservedStock + reserved,
+          );
+        } else {
+          // Shortage -> reserve whatever is available, create production requirement for shortage
+          reserved = available > 0 ? available : 0.0;
+          shortage = item.quantity - reserved;
+          hasShortage = true;
+
+          if (reserved > 0) {
+            finishedProducts[fpIndex] = fp.copyWith(
+              reservedStock: fp.reservedStock + reserved,
+            );
+          }
+
+          // Auto create linked production requirement
+          final prdNumber = 'PRD-2026-${(++_productionCounter).toString().padLeft(4, '0')}';
+          final prdOrder = ProductionOrder(
+            id: IdGenerator.generateId('PRD'),
+            productionNumber: prdNumber,
+            finishedProductId: fp.id,
+            finishedProductName: fp.name,
+            finishedProductCode: fp.itemCode,
+            unit: fp.unit,
+            plannedQuantity: shortage,
+            rawMaterialsUsed: [], // To be specified by production manager
+            productionDate: DateTime.now().add(const Duration(days: 3)),
+            status: ProductionStatus.planned,
+            salesOrderId: salesOrder.id,
+            salesOrderNumber: salesOrder.invoiceNumber,
+            notes: 'Auto-generated for Sales Order ${salesOrder.invoiceNumber} shortage ($shortage ${fp.unit})',
+            createdAt: DateTime.now(),
+          );
+          productionOrders.insert(0, prdOrder);
+          generatedProductionIds.add(prdOrder.id);
+        }
+      }
+
+      allocatedItems.add(item.copyWith(
+        reservedQuantity: reserved,
+        producedQuantity: reserved,
+      ));
+    }
+
+    final finalStatus = hasShortage
+        ? SalesOrderStatus.productionPending
+        : SalesOrderStatus.readyForDispatch;
+
+    final finalSO = salesOrder.copyWith(
+      items: allocatedItems,
+      salesOrderStatus: finalStatus,
+      linkedProductionOrderIds: generatedProductionIds,
+      activityLogs: [
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: 'Sales Order Created & Stock Checked',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+          details: hasShortage
+              ? 'Stock shortage detected. Created ${generatedProductionIds.length} production requirement order(s).'
+              : 'Full finished product stock allocated and reserved. Ready for dispatch.',
+          statusAfter: finalStatus.name,
+        ),
+      ],
+    );
+
+    // If converted from Quotation or Proforma, mark source as converted
+    if (salesOrder.proformaReferenceId != null) {
+      final piIndex = sales.indexWhere((s) => s.id == salesOrder.proformaReferenceId);
+      if (piIndex != -1) {
+        sales[piIndex] = sales[piIndex].copyWith(
+          proformaStatus: ProformaStatus.converted,
+          salesOrderNumber: finalSO.invoiceNumber,
+        );
+      }
+    } else if (salesOrder.quotationReferenceId != null) {
+      final qIndex = sales.indexWhere((s) => s.id == salesOrder.quotationReferenceId);
+      if (qIndex != -1) {
+        sales[qIndex] = sales[qIndex].copyWith(
+          quotationStatus: QuotationStatus.converted,
+          salesOrderNumber: finalSO.invoiceNumber,
+        );
+      }
+    }
+
+    sales.insert(0, finalSO);
+    notifyListeners();
+    return finalSO;
+  }
+
+  // --- 4. DELIVERY / DISPATCH WORKFLOW (CRITICAL: DEDUCTS PHYSICAL STOCK & RELEASES RESERVED) ---
+  Sale createDelivery({
+    required String salesOrderId,
+    required List<SaleLineItem> deliveryItems,
+    required String vehicleNumber,
+    required String driverContact,
+    String? trackingNumber,
+    String? notes,
+  }) {
+    final soIndex = sales.indexWhere((s) => s.id == salesOrderId);
+    if (soIndex == -1) throw Exception('Sales Order not found');
+    final so = sales[soIndex];
+
+    final dlvNumber = 'DLZ/DLV/2026/${(++_deliveryCounter).toString().padLeft(4, '0')}';
+
+    // 1. Process stock deduction for each delivered item
+    for (final item in deliveryItems) {
+      final fpIndex = finishedProducts.indexWhere((fp) => fp.id == item.finishedProductId);
+      if (fpIndex != -1) {
+        final fp = finishedProducts[fpIndex];
+        // Deduct physical stock and release reserved stock
+        final updatedPhysical = (fp.currentStock - item.quantity).clamp(0.0, double.infinity);
+        final updatedReserved = (fp.reservedStock - item.quantity).clamp(0.0, double.infinity);
+
+        finishedProducts[fpIndex] = fp.copyWith(
+          currentStock: updatedPhysical,
+          reservedStock: updatedReserved,
+          updatedAt: DateTime.now(),
+        );
+
+        // Record official Stock Movement ledger entry
+        _recordStockTransaction(
+          itemId: fp.id,
+          itemName: fp.name,
+          itemCode: fp.itemCode,
+          itemType: ItemType.finishedProduct,
+          transactionType: StockMovementType.sale,
+          referenceNumber: dlvNumber,
+          stockIn: 0.0,
+          stockOut: item.quantity,
+          newBalance: updatedPhysical,
+          unit: fp.unit,
+          notes: 'Dispatched for Sales Order ${so.invoiceNumber} (Vehicle: $vehicleNumber)',
+        );
+      }
+    }
+
+    // 2. Update Sales Order line item delivered quantities
+    final updatedSoItems = so.items.map((soItem) {
+      final delItem = deliveryItems.where((d) => d.finishedProductId == soItem.finishedProductId).firstOrNull;
+      if (delItem != null) {
+        final newDelivered = soItem.deliveredQuantity + delItem.quantity;
+        final newReserved = (soItem.reservedQuantity - delItem.quantity).clamp(0.0, double.infinity);
+        return soItem.copyWith(
+          deliveredQuantity: newDelivered,
+          reservedQuantity: newReserved,
+        );
+      }
+      return soItem;
+    }).toList();
+
+    final isAllDelivered = updatedSoItems.every((i) => i.deliveredQuantity >= i.quantity);
+    final soStatus = isAllDelivered ? SalesOrderStatus.delivered : SalesOrderStatus.partiallyDelivered;
+
+    final deliveryDoc = Sale(
+      id: IdGenerator.generateId('DLV'),
+      invoiceNumber: dlvNumber,
+      documentType: SalesDocumentType.delivery,
+      partyType: so.partyType,
+      partyId: so.partyId,
+      partyName: so.partyName,
+      customerContactPerson: so.customerContactPerson,
+      customerMobile: so.customerMobile,
+      shippingAddress: so.shippingAddress,
+      salesOrderReferenceId: so.id,
+      salesOrderNumber: so.invoiceNumber,
+      deliveryStatus: DeliveryStatus.dispatched,
+      deliveryNumber: dlvNumber,
+      vehicleNumber: vehicleNumber,
+      driverContact: driverContact,
+      trackingNumber: trackingNumber,
+      saleDate: DateTime.now(),
+      items: deliveryItems,
+      subtotalAmount: deliveryItems.fold(0.0, (sum, i) => sum + (i.quantity * i.rate)),
+      discountAmount: deliveryItems.fold(0.0, (sum, i) => sum + i.discountAmount),
+      gstAmount: deliveryItems.fold(0.0, (sum, i) => sum + (i.lineTotal - ((i.quantity * i.rate) - i.discountAmount))),
+      totalAmount: deliveryItems.fold(0.0, (sum, i) => sum + i.lineTotal),
+      paidAmount: 0.0,
+      pendingAmount: deliveryItems.fold(0.0, (sum, i) => sum + i.lineTotal),
+      paymentMode: so.paymentMode,
+      status: SaleStatus.completed,
+      notes: notes ?? 'Dispatched under delivery challan $dlvNumber',
+      createdAt: DateTime.now(),
+    );
+
+    // Update Sales Order
+    sales[soIndex] = so.copyWith(
+      items: updatedSoItems,
+      salesOrderStatus: soStatus,
+      linkedDeliveryIds: [...so.linkedDeliveryIds, deliveryDoc.id],
+      activityLogs: [
+        ...so.activityLogs,
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: 'Delivery Dispatched ($dlvNumber)',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+          details: 'Dispatched via $vehicleNumber (Driver: $driverContact)',
+          statusBefore: so.salesOrderStatus?.name,
+          statusAfter: soStatus.name,
+        ),
+      ],
+    );
+
+    sales.insert(0, deliveryDoc);
+    notifyListeners();
+    return deliveryDoc;
+  }
+
+  // --- 5. SALES INVOICE WORKFLOW (CREATED FROM DELIVERED QUANTITIES) ---
+  Sale createSalesInvoiceFromDelivery({
+    required String deliveryId,
+    double discountAmount = 0.0,
+    double initialPaidAmount = 0.0,
+    PaymentMode paymentMode = PaymentMode.bankTransfer,
+    String? notes,
+  }) {
+    final dlvIndex = sales.indexWhere((s) => s.id == deliveryId);
+    if (dlvIndex == -1) throw Exception('Delivery document not found');
+    final dlv = sales[dlvIndex];
+
+    final invNumber = IdGenerator.generateDocNumber('INV', ++_salesCounter);
+
+    final invoiceItems = dlv.items.map((i) => i.copyWith(invoicedQuantity: i.quantity)).toList();
+    final subtotal = invoiceItems.fold(0.0, (sum, i) => sum + (i.quantity * i.rate));
+    final taxable = (subtotal - discountAmount).clamp(0.0, double.infinity);
+    final gst = invoiceItems.fold(0.0, (sum, i) => sum + ((taxable * (i.gstPercent / 100.0)) / (invoiceItems.length)));
+    final total = taxable + gst;
+    final pending = (total - initialPaidAmount).clamp(0.0, double.infinity);
+
+    // Architect commission
+    double commission = 0.0;
+    if (dlv.architectId != null) {
+      final arch = architects.where((a) => a.id == dlv.architectId).firstOrNull;
+      if (arch != null) {
+        commission = (taxable * arch.defaultCommissionRate) / 100.0;
+      }
+    }
+
+    SaleStatus status;
+    if (initialPaidAmount >= total) {
+      status = SaleStatus.paid;
+    } else if (initialPaidAmount > 0) {
+      status = SaleStatus.partialPaid;
+    } else {
+      status = SaleStatus.active;
+    }
+
+    final invoice = Sale(
+      id: IdGenerator.generateId('SALE'),
+      invoiceNumber: invNumber,
+      documentType: SalesDocumentType.invoice,
+      partyType: dlv.partyType,
+      partyId: dlv.partyId,
+      partyName: dlv.partyName,
+      customerContactPerson: dlv.customerContactPerson,
+      customerMobile: dlv.customerMobile,
+      customerGstNumber: dlv.customerGstNumber,
+      billingAddress: dlv.billingAddress,
+      shippingAddress: dlv.shippingAddress,
+      projectId: dlv.projectId,
+      projectName: dlv.projectName,
+      architectId: dlv.architectId,
+      architectName: dlv.architectName,
+      salesOrderReferenceId: dlv.salesOrderReferenceId,
+      salesOrderNumber: dlv.salesOrderNumber,
+      saleDate: DateTime.now(),
+      items: invoiceItems,
+      subtotalAmount: subtotal,
+      discountAmount: discountAmount,
+      taxableAmount: taxable,
+      cgstAmount: gst / 2,
+      sgstAmount: gst / 2,
+      igstAmount: 0.0,
+      gstAmount: gst,
+      totalAmount: total,
+      paidAmount: initialPaidAmount,
+      pendingAmount: pending,
+      paymentMode: paymentMode,
+      status: status,
+      architectCommissionAmount: commission,
+      notes: notes ?? 'Invoiced against Delivery ${dlv.invoiceNumber}',
+      createdAt: DateTime.now(),
+      activityLogs: [
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: 'Tax Invoice Created ($invNumber)',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+          details: 'Generated against Delivery ${dlv.invoiceNumber}',
+        ),
+      ],
+    );
+
+    // 1. Update Customer / Dealer Outstanding
+    if (invoice.partyType == PartyType.customer) {
+      final cIndex = customers.indexWhere((c) => c.id == invoice.partyId);
+      if (cIndex != -1) {
+        customers[cIndex] = customers[cIndex].copyWith(
+          outstandingAmount: customers[cIndex].outstandingAmount + pending,
+        );
+      }
+    } else {
+      final dIndex = dealers.indexWhere((d) => d.id == invoice.partyId);
+      if (dIndex != -1) {
+        dealers[dIndex] = dealers[dIndex].copyWith(
+          outstandingAmount: dealers[dIndex].outstandingAmount + pending,
+        );
+      }
+    }
+
+    // 2. Generate Architect Commission
+    if (invoice.architectId != null && commission > 0) {
+      final architect = architects.firstWhere((a) => a.id == invoice.architectId, orElse: () => architects.first);
+      final comm = ArchitectCommission(
+        id: IdGenerator.generateId('COM'),
+        commissionNumber: IdGenerator.generateDocNumber('COM', ++_commissionCounter),
+        architectId: architect.id,
+        architectName: architect.name,
+        saleInvoiceId: invoice.id,
+        saleInvoiceNumber: invoice.invoiceNumber,
+        projectId: invoice.projectId,
+        projectName: invoice.projectName,
+        saleAmount: taxable,
+        commissionRate: architect.defaultCommissionRate,
+        commissionAmount: commission,
+        status: CommissionStatus.generated,
+        generatedDate: DateTime.now(),
+      );
+      commissions.insert(0, comm);
+
+      final archIndex = architects.indexWhere((a) => a.id == architect.id);
+      if (archIndex != -1) {
+        architects[archIndex] = architects[archIndex].copyWith(
+          totalCommissionEarned: architects[archIndex].totalCommissionEarned + commission,
+          pendingCommission: architects[archIndex].pendingCommission + commission,
+        );
+      }
+    }
+
+    // 3. Record Payment if initial paid amount > 0
+    if (initialPaidAmount > 0) {
+      _recordPayment(
+        paymentType: invoice.partyType == PartyType.customer ? PaymentType.customerPayment : PaymentType.dealerPayment,
+        partyId: invoice.partyId,
+        partyName: invoice.partyName,
+        referenceDocumentId: invoice.id,
+        referenceDocumentNumber: invoice.invoiceNumber,
+        amount: initialPaidAmount,
+        paymentMode: paymentMode,
+        notes: 'Initial receipt for invoice ${invoice.invoiceNumber}',
+      );
+    }
+
+    sales.insert(0, invoice);
+    notifyListeners();
+    return invoice;
+  }
+
+  // --- 6. DIRECT SALE (IMMEDIATE COUNTER SALE) ---
   void createSale(Sale sale) {
     sales.insert(0, sale);
+    notifyListeners();
+  }
 
-    if (sale.status != SaleStatus.draft && sale.status != SaleStatus.cancelled) {
-      // 1. Deduct finished product stock
-      for (final line in sale.items) {
-        final fpIndex = finishedProducts.indexWhere((fp) => fp.id == line.finishedProductId);
-        if (fpIndex != -1) {
-          final fp = finishedProducts[fpIndex];
-          final newStock = (fp.currentStock - line.quantity).clamp(0.0, double.infinity);
+  void createDirectSale(Sale sale) {
+    createSale(sale);
+  }
+
+  // --- 7. CUSTOMER INVOICE PAYMENT ---
+  void recordCustomerInvoicePayment({
+    required String invoiceId,
+    required double amount,
+    required PaymentMode paymentMode,
+    String? transactionRef,
+    String? notes,
+  }) {
+    final index = sales.indexWhere((s) => s.id == invoiceId);
+    if (index != -1) {
+      final inv = sales[index];
+      final newPaid = inv.paidAmount + amount;
+      final newPending = (inv.totalAmount - newPaid).clamp(0.0, double.infinity);
+      final newStatus = newPending <= 0 ? SaleStatus.paid : SaleStatus.partialPaid;
+
+      // 1. Record ErpPayment
+      final payment = ErpPayment(
+        id: IdGenerator.generateId('PAY'),
+        paymentNumber: IdGenerator.generateDocNumber('PAY', ++_paymentCounter),
+        paymentType: inv.partyType == PartyType.customer ? PaymentType.customerPayment : PaymentType.dealerPayment,
+        partyId: inv.partyId,
+        partyName: inv.partyName,
+        referenceDocumentId: inv.id,
+        referenceDocumentNumber: inv.invoiceNumber,
+        amount: amount,
+        paymentMode: paymentMode,
+        paymentDate: DateTime.now(),
+        transactionReference: transactionRef,
+        notes: notes ?? 'Receipt against invoice ${inv.invoiceNumber}',
+        createdAt: DateTime.now(),
+      );
+      payments.insert(0, payment);
+
+      // 2. Reduce Customer / Dealer Outstanding
+      if (inv.partyType == PartyType.customer) {
+        final cIndex = customers.indexWhere((c) => c.id == inv.partyId);
+        if (cIndex != -1) {
+          customers[cIndex] = customers[cIndex].copyWith(
+            outstandingAmount: (customers[cIndex].outstandingAmount - amount).clamp(0.0, double.infinity),
+          );
+        }
+      } else {
+        final dIndex = dealers.indexWhere((d) => d.id == inv.partyId);
+        if (dIndex != -1) {
+          dealers[dIndex] = dealers[dIndex].copyWith(
+            outstandingAmount: (dealers[dIndex].outstandingAmount - amount).clamp(0.0, double.infinity),
+          );
+        }
+      }
+
+      // 3. Update Invoice
+      sales[index] = inv.copyWith(
+        paidAmount: newPaid,
+        pendingAmount: newPending,
+        status: newStatus,
+        linkedPaymentIds: [...inv.linkedPaymentIds, payment.id],
+        activityLogs: [
+          ...inv.activityLogs,
+          DocumentActivityLog(
+            id: IdGenerator.generateId('LOG'),
+            action: 'Payment Received: ₹$amount',
+            performedBy: currentUser.name,
+            timestamp: DateTime.now(),
+            details: 'Mode: ${paymentMode.name}, Ref: ${transactionRef ?? "-"}',
+            statusBefore: inv.status.name,
+            statusAfter: newStatus.name,
+          ),
+        ],
+      );
+
+      notifyListeners();
+    }
+  }
+
+  // --- 8. SALES RETURN WORKFLOW ---
+  Sale createSalesReturn({
+    required String originalInvoiceId,
+    required List<SaleLineItem> returnItems,
+    required String returnReason,
+    required ReturnCondition condition,
+    required ReturnFinancialAction financialAction,
+    SalesReturnStatus initialStatus = SalesReturnStatus.draft,
+    String? notes,
+  }) {
+    final invIndex = sales.indexWhere((s) => s.id == originalInvoiceId);
+    if (invIndex == -1) throw Exception('Original invoice not found');
+    final origInv = sales[invIndex];
+
+    // Validate quantities: Cannot exceed available return quantity
+    for (final retItem in returnItems) {
+      final origItem = origInv.items.where((i) => i.finishedProductId == retItem.finishedProductId).firstOrNull;
+      if (origItem == null) {
+        throw Exception('Product ${retItem.finishedProductName} not found on original invoice');
+      }
+      final availableQty = (origItem.quantity - origItem.returnedQuantity).clamp(0.0, double.infinity);
+      if (retItem.quantity > availableQty) {
+        throw Exception('Return quantity for ${retItem.finishedProductName} (${retItem.quantity.toInt()}) exceeds available return quantity (${availableQty.toInt()}).');
+      }
+    }
+
+    final returnNumber = 'DLZ/RET/2026/${(++_returnCounter).toString().padLeft(4, '0')}';
+    final returnSubtotal = returnItems.fold(0.0, (sum, i) => sum + (i.quantity * i.rate));
+    final returnDiscount = returnItems.fold(0.0, (sum, i) => sum + i.discountAmount);
+    final returnTaxable = (returnSubtotal - returnDiscount).clamp(0.0, double.infinity);
+    final returnGst = returnItems.fold(0.0, (sum, i) => sum + (i.lineTotal - ((i.quantity * i.rate) - i.discountAmount)));
+    final returnTotal = returnTaxable + returnGst;
+
+    // Detect Full Return vs Partial Return
+    final totalInvoicedQty = origInv.items.fold(0.0, (sum, i) => sum + i.quantity);
+    final currentReturnedQty = origInv.items.fold(0.0, (sum, i) => sum + i.returnedQuantity);
+    final thisReturnQty = returnItems.fold(0.0, (sum, i) => sum + i.quantity);
+    final returnType = (currentReturnedQty + thisReturnQty >= totalInvoicedQty && totalInvoicedQty > 0)
+        ? ReturnType.fullReturn
+        : ReturnType.partialReturn;
+
+    // Calculate initial refund status based on invoice payment status
+    RefundStatus initialRefundStatus = RefundStatus.notRequired;
+    double initialRefundAmount = 0.0;
+    if (origInv.paidAmount > 0) {
+      final netInvoiceAfterReturn = (origInv.totalAmount - returnTotal).clamp(0.0, double.infinity);
+      if (origInv.paidAmount > netInvoiceAfterReturn) {
+        initialRefundStatus = RefundStatus.pending;
+        initialRefundAmount = (origInv.paidAmount - netInvoiceAfterReturn).clamp(0.0, returnTotal);
+      }
+    }
+
+    final returnDoc = Sale(
+      id: IdGenerator.generateId('RET'),
+      invoiceNumber: returnNumber,
+      documentType: SalesDocumentType.salesReturn,
+      partyType: origInv.partyType,
+      partyId: origInv.partyId,
+      partyName: origInv.partyName,
+      customerContactPerson: origInv.customerContactPerson,
+      customerMobile: origInv.customerMobile,
+      customerEmail: origInv.customerEmail,
+      customerGstNumber: origInv.customerGstNumber,
+      billingAddress: origInv.billingAddress,
+      shippingAddress: origInv.shippingAddress,
+      projectId: origInv.projectId,
+      projectName: origInv.projectName,
+      architectId: origInv.architectId,
+      architectName: origInv.architectName,
+      salesOrderNumber: origInv.salesOrderNumber,
+      salesOrderReferenceId: origInv.salesOrderReferenceId,
+      originalInvoiceId: origInv.id,
+      originalInvoiceNumber: origInv.invoiceNumber,
+      salesReturnStatus: initialStatus,
+      returnCondition: condition,
+      returnFinancialAction: financialAction,
+      returnType: returnType,
+      refundStatus: initialRefundStatus,
+      refundAmount: initialRefundAmount,
+      returnReason: returnReason,
+      saleDate: DateTime.now(),
+      items: returnItems,
+      subtotalAmount: returnSubtotal,
+      discountAmount: returnDiscount,
+      taxableAmount: returnTaxable,
+      cgstAmount: returnGst / 2,
+      sgstAmount: returnGst / 2,
+      igstAmount: 0.0,
+      gstAmount: returnGst,
+      totalAmount: returnTotal,
+      paidAmount: 0.0,
+      pendingAmount: 0.0,
+      paymentMode: origInv.paymentMode,
+      status: SaleStatus.draft,
+      createdBy: currentUser.name,
+      notes: notes ?? 'Sales return against invoice ${origInv.invoiceNumber}',
+      createdAt: DateTime.now(),
+      activityLogs: [
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: 'Sales Return Created (${initialStatus.name.toUpperCase()})',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+          details: 'Return $returnNumber created for ${Formatters.formatCurrency(returnTotal)} (${returnType == ReturnType.fullReturn ? "Full Return" : "Partial Return"}). Reason: $returnReason',
+        ),
+      ],
+    );
+
+    // Insert return document without touching stock or ledger yet
+    sales.insert(0, returnDoc);
+    notifyListeners();
+    return returnDoc;
+  }
+
+  void updateSalesReturnStatus(String returnId, SalesReturnStatus newStatus) {
+    final index = sales.indexWhere((s) => s.id == returnId);
+    if (index == -1) return;
+    final current = sales[index];
+
+    // If already approved/completed, cannot change status arbitrarily
+    if (current.isProcessed && (newStatus == SalesReturnStatus.draft || newStatus == SalesReturnStatus.submitted || newStatus == SalesReturnStatus.rejected)) {
+      throw Exception('Cannot revert or modify an already approved and processed sales return.');
+    }
+
+    // If transitioning to Approved / Completed, invoke full approval engine
+    if (newStatus == SalesReturnStatus.approved || newStatus == SalesReturnStatus.completed) {
+      approveSalesReturn(returnId);
+      return;
+    }
+
+    // If transitioning to Rejected, invoke reject engine
+    if (newStatus == SalesReturnStatus.rejected) {
+      rejectSalesReturn(returnId, 'Status updated to Rejected');
+      return;
+    }
+
+    sales[index] = current.copyWith(
+      salesReturnStatus: newStatus,
+      activityLogs: [
+        ...current.activityLogs,
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: 'Status Updated: ${newStatus.name.toUpperCase()}',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+          statusBefore: current.salesReturnStatus?.name,
+          statusAfter: newStatus.name,
+        ),
+      ],
+    );
+    notifyListeners();
+  }
+
+  void approveSalesReturn(String returnId) {
+    final retIndex = sales.indexWhere((s) => s.id == returnId);
+    if (retIndex == -1) throw Exception('Sales return document not found');
+    final returnDoc = sales[retIndex];
+
+    // Idempotency check: prevent duplicate processing
+    if (returnDoc.isProcessed || returnDoc.salesReturnStatus == SalesReturnStatus.approved || returnDoc.salesReturnStatus == SalesReturnStatus.completed) {
+      return;
+    }
+
+    final invIndex = sales.indexWhere((s) => s.id == returnDoc.originalInvoiceId);
+    if (invIndex == -1) throw Exception('Original invoice not found');
+    final origInv = sales[invIndex];
+
+    List<String> movementIds = [];
+    List<String> adjustmentIds = [];
+
+    // 1. Inventory Handling based on item condition
+    for (final item in returnDoc.items) {
+      final itemCondition = item.returnCondition ?? returnDoc.returnCondition ?? ReturnCondition.resalable;
+      final fpIndex = finishedProducts.indexWhere((fp) => fp.id == item.finishedProductId);
+
+      if (fpIndex != -1) {
+        final fp = finishedProducts[fpIndex];
+
+        if (itemCondition == ReturnCondition.resalable || itemCondition == ReturnCondition.goodCondition) {
+          // RESALABLE: Restock usable finished product and record IN stock movement
+          final updatedStock = fp.currentStock + item.quantity;
           finishedProducts[fpIndex] = fp.copyWith(
-            currentStock: newStock,
+            currentStock: updatedStock,
             updatedAt: DateTime.now(),
           );
 
-          _recordStockTransaction(
+          final movId = IdGenerator.generateId('MOV');
+          final movement = StockMovement(
+            id: movId,
+            date: DateTime.now(),
             itemId: fp.id,
             itemName: fp.name,
             itemCode: fp.itemCode,
             itemType: ItemType.finishedProduct,
-            transactionType: StockMovementType.sale,
-            referenceNumber: sale.invoiceNumber,
-            stockIn: 0.0,
-            stockOut: line.quantity,
-            newBalance: newStock,
+            transactionType: StockMovementType.saleReturn,
+            referenceNumber: returnDoc.invoiceNumber,
+            stockIn: item.quantity,
+            stockOut: 0.0,
+            currentBalance: updatedStock,
             unit: fp.unit,
-            notes: 'Sale to ${sale.partyName} (${sale.partyType == PartyType.customer ? "Customer" : "Dealer"})',
+            notes: 'Restocked from approved return ${returnDoc.invoiceNumber} (${origInv.invoiceNumber})',
+            performedBy: currentUser.name,
           );
-        }
-      }
-
-      // 2. Update Customer / Dealer Outstanding
-      if (sale.partyType == PartyType.customer) {
-        final cIndex = customers.indexWhere((c) => c.id == sale.partyId);
-        if (cIndex != -1) {
-          final c = customers[cIndex];
-          customers[cIndex] = c.copyWith(outstandingAmount: c.outstandingAmount + sale.pendingAmount);
-        }
-      } else {
-        final dIndex = dealers.indexWhere((d) => d.id == sale.partyId);
-        if (dIndex != -1) {
-          final d = dealers[dIndex];
-          dealers[dIndex] = d.copyWith(outstandingAmount: d.outstandingAmount + sale.pendingAmount);
-        }
-      }
-
-      // 3. Update Project if linked
-      if (sale.projectId != null) {
-        final pIndex = projects.indexWhere((p) => p.id == sale.projectId);
-        if (pIndex != -1) {
-          final p = projects[pIndex];
-          projects[pIndex] = p.copyWith(
-            totalSalesAmount: p.totalSalesAmount + sale.totalAmount,
-            totalCommissionAmount: p.totalCommissionAmount + sale.architectCommissionAmount,
+          stockMovements.insert(0, movement);
+          movementIds.add(movId);
+        } else if (itemCondition == ReturnCondition.damaged) {
+          // DAMAGED: Do NOT add to available stock. Create Damaged Stock Adjustment & movement
+          final adjNumber = 'ADJ-DMG-${(++_adjCounter).toString().padLeft(4, '0')}';
+          final adjId = IdGenerator.generateId('ADJ');
+          final adj = StockAdjustment(
+            id: adjId,
+            adjustmentNumber: adjNumber,
+            adjustmentDate: DateTime.now(),
+            itemId: fp.id,
+            itemName: fp.name,
+            itemCode: fp.itemCode,
+            itemType: ItemType.finishedProduct,
+            currentStockBefore: fp.currentStock,
+            adjustedStockAfter: fp.currentStock,
+            adjustmentQuantity: 0.0,
+            unit: fp.unit,
+            reason: AdjustmentReason.damagedGoods,
+            remarks: 'Damaged return ${item.quantity.toInt()} ${fp.unit} logged from ${returnDoc.invoiceNumber}',
+            performedBy: currentUser.name,
+            createdAt: DateTime.now(),
           );
+          stockAdjustments.insert(0, adj);
+          adjustmentIds.add(adjId);
+
+          final movId = IdGenerator.generateId('MOV');
+          final movement = StockMovement(
+            id: movId,
+            date: DateTime.now(),
+            itemId: fp.id,
+            itemName: fp.name,
+            itemCode: fp.itemCode,
+            itemType: ItemType.finishedProduct,
+            transactionType: StockMovementType.damage,
+            referenceNumber: returnDoc.invoiceNumber,
+            stockIn: 0.0,
+            stockOut: 0.0,
+            currentBalance: fp.currentStock,
+            unit: fp.unit,
+            notes: 'Damaged item return logged from ${returnDoc.invoiceNumber} (${item.quantity.toInt()} ${fp.unit})',
+            performedBy: currentUser.name,
+          );
+          stockMovements.insert(0, movement);
+          movementIds.add(movId);
+        } else {
+          // SCRAP: Do NOT add to available stock. Create Scrap Stock Adjustment & movement
+          final adjNumber = 'ADJ-SCRAP-${(++_adjCounter).toString().padLeft(4, '0')}';
+          final adjId = IdGenerator.generateId('ADJ');
+          final adj = StockAdjustment(
+            id: adjId,
+            adjustmentNumber: adjNumber,
+            adjustmentDate: DateTime.now(),
+            itemId: fp.id,
+            itemName: fp.name,
+            itemCode: fp.itemCode,
+            itemType: ItemType.finishedProduct,
+            currentStockBefore: fp.currentStock,
+            adjustedStockAfter: fp.currentStock,
+            adjustmentQuantity: 0.0,
+            unit: fp.unit,
+            reason: AdjustmentReason.other,
+            remarks: 'Scrap return ${item.quantity.toInt()} ${fp.unit} logged from ${returnDoc.invoiceNumber}',
+            performedBy: currentUser.name,
+            createdAt: DateTime.now(),
+          );
+          stockAdjustments.insert(0, adj);
+          adjustmentIds.add(adjId);
+
+          final movId = IdGenerator.generateId('MOV');
+          final movement = StockMovement(
+            id: movId,
+            date: DateTime.now(),
+            itemId: fp.id,
+            itemName: fp.name,
+            itemCode: fp.itemCode,
+            itemType: ItemType.finishedProduct,
+            transactionType: StockMovementType.damage,
+            referenceNumber: returnDoc.invoiceNumber,
+            stockIn: 0.0,
+            stockOut: 0.0,
+            currentBalance: fp.currentStock,
+            unit: fp.unit,
+            notes: 'Scrap item return logged from ${returnDoc.invoiceNumber} (${item.quantity.toInt()} ${fp.unit})',
+            performedBy: currentUser.name,
+          );
+          stockMovements.insert(0, movement);
+          movementIds.add(movId);
         }
       }
+    }
 
-      // 4. Generate Architect Commission if architect linked & commission > 0
-      if (sale.architectId != null && sale.architectCommissionAmount > 0) {
-        final architect = architects.firstWhere((a) => a.id == sale.architectId, orElse: () => architects.first);
-        final commission = ArchitectCommission(
-          id: IdGenerator.generateId('COM'),
-          commissionNumber: IdGenerator.generateDocNumber('COM', ++_commissionCounter),
-          architectId: architect.id,
-          architectName: architect.name,
-          saleInvoiceId: sale.id,
-          saleInvoiceNumber: sale.invoiceNumber,
-          projectId: sale.projectId,
-          projectName: sale.projectName,
-          saleAmount: sale.subtotalAmount - sale.discountAmount,
-          commissionRate: architect.defaultCommissionRate,
-          commissionAmount: sale.architectCommissionAmount,
-          status: CommissionStatus.generated,
-          generatedDate: DateTime.now(),
+    // 2. Update Original Invoice items returned quantity and recalculate pending balance
+    final updatedOrigItems = origInv.items.map((invItem) {
+      final retItem = returnDoc.items.where((r) => r.finishedProductId == invItem.finishedProductId).firstOrNull;
+      if (retItem != null) {
+        return invItem.copyWith(returnedQuantity: invItem.returnedQuantity + retItem.quantity);
+      }
+      return invItem;
+    }).toList();
+
+    final newInvoicePending = (origInv.pendingAmount - returnDoc.totalAmount).clamp(0.0, double.infinity);
+    final newInvoiceStatus = newInvoicePending == 0 && origInv.paidAmount > 0
+        ? SaleStatus.paid
+        : (newInvoicePending > 0 ? (origInv.paidAmount > 0 ? SaleStatus.partialPaid : SaleStatus.active) : SaleStatus.completed);
+
+    sales[invIndex] = origInv.copyWith(
+      items: updatedOrigItems,
+      pendingAmount: newInvoicePending,
+      status: newInvoiceStatus,
+      linkedReturnIds: [...origInv.linkedReturnIds, returnDoc.id],
+      activityLogs: [
+        ...origInv.activityLogs,
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: 'Sales Return Approved (${returnDoc.invoiceNumber})',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+          details: 'Return value ${Formatters.formatCurrency(returnDoc.totalAmount)} approved. Adjusted pending invoice balance to ${Formatters.formatCurrency(newInvoicePending)}.',
+        ),
+      ],
+    );
+
+    // 3. Customer Ledger & Balance Adjustments
+    final balanceReduction = origInv.pendingAmount >= returnDoc.totalAmount
+        ? returnDoc.totalAmount
+        : origInv.pendingAmount;
+
+    if (origInv.partyType == PartyType.customer) {
+      final cIndex = customers.indexWhere((c) => c.id == origInv.partyId);
+      if (cIndex != -1) {
+        customers[cIndex] = customers[cIndex].copyWith(
+          outstandingAmount: (customers[cIndex].outstandingAmount - balanceReduction).clamp(0.0, double.infinity),
         );
-        commissions.insert(0, commission);
-
-        final archIndex = architects.indexWhere((a) => a.id == architect.id);
-        if (archIndex != -1) {
-          final a = architects[archIndex];
-          architects[archIndex] = a.copyWith(
-            totalCommissionEarned: a.totalCommissionEarned + sale.architectCommissionAmount,
-            pendingCommission: a.pendingCommission + sale.architectCommissionAmount,
-          );
-        }
       }
-
-      // 5. Record Payment if paidAmount > 0
-      if (sale.paidAmount > 0) {
-        _recordPayment(
-          paymentType: sale.partyType == PartyType.customer ? PaymentType.customerPayment : PaymentType.dealerPayment,
-          partyId: sale.partyId,
-          partyName: sale.partyName,
-          referenceDocumentId: sale.id,
-          referenceDocumentNumber: sale.invoiceNumber,
-          amount: sale.paidAmount,
-          paymentMode: sale.paymentMode,
-          notes: 'Receipt against invoice ${sale.invoiceNumber}',
+    } else {
+      final dIndex = dealers.indexWhere((d) => d.id == origInv.partyId);
+      if (dIndex != -1) {
+        dealers[dIndex] = dealers[dIndex].copyWith(
+          outstandingAmount: (dealers[dIndex].outstandingAmount - balanceReduction).clamp(0.0, double.infinity),
         );
       }
     }
+
+    // 4. Determine Refund Requirements
+    RefundStatus determinedRefundStatus = RefundStatus.notRequired;
+    double determinedRefundAmount = 0.0;
+    final totalInvoiceReturnsSoFar = sales
+        .where((s) => s.documentType == SalesDocumentType.salesReturn && s.originalInvoiceId == origInv.id && (s.id == returnDoc.id || s.salesReturnStatus == SalesReturnStatus.approved || s.salesReturnStatus == SalesReturnStatus.completed))
+        .fold(0.0, (sum, r) => sum + r.totalAmount);
+    final netInvoiceTotal = (origInv.totalAmount - totalInvoiceReturnsSoFar).clamp(0.0, double.infinity);
+
+    if (origInv.paidAmount > netInvoiceTotal) {
+      determinedRefundStatus = RefundStatus.pending;
+      determinedRefundAmount = (origInv.paidAmount - netInvoiceTotal).clamp(0.0, returnDoc.totalAmount);
+    }
+
+    // 5. Architect Commission Adjustment
+    double commissionAdjustment = 0.0;
+    if (origInv.architectId != null && origInv.architectCommissionAmount > 0 && origInv.totalAmount > 0) {
+      commissionAdjustment = ((returnDoc.totalAmount / origInv.totalAmount) * origInv.architectCommissionAmount);
+      final archIndex = architects.indexWhere((a) => a.id == origInv.architectId);
+      if (archIndex != -1) {
+        final arch = architects[archIndex];
+        architects[archIndex] = arch.copyWith(
+          totalCommissionEarned: (arch.totalCommissionEarned - commissionAdjustment).clamp(0.0, double.infinity),
+          pendingCommission: (arch.pendingCommission - commissionAdjustment).clamp(0.0, double.infinity),
+        );
+      }
+
+      final commIndex = commissions.indexWhere((c) => c.saleInvoiceId == origInv.id);
+      if (commIndex != -1) {
+        final comm = commissions[commIndex];
+        commissions[commIndex] = comm.copyWith(
+          commissionAmount: (comm.commissionAmount - commissionAdjustment).clamp(0.0, double.infinity),
+          notes: '${comm.notes ?? ""}\nAdjusted -${Formatters.formatCurrency(commissionAdjustment)} for Return ${returnDoc.invoiceNumber}',
+        );
+      }
+    }
+
+    // 6. Project Revenue Adjustment
+    double projectAdjustment = 0.0;
+    if (origInv.projectId != null) {
+      final prjIndex = projects.indexWhere((p) => p.id == origInv.projectId);
+      if (prjIndex != -1) {
+        projectAdjustment = returnDoc.totalAmount;
+        final prj = projects[prjIndex];
+        projects[prjIndex] = prj.copyWith(
+          totalSalesAmount: (prj.totalSalesAmount - returnDoc.totalAmount).clamp(0.0, double.infinity),
+          totalCommissionAmount: (prj.totalCommissionAmount - commissionAdjustment).clamp(0.0, double.infinity),
+          notes: '${prj.notes ?? ""}\nAdjusted -${Formatters.formatCurrency(returnDoc.totalAmount)} for Return ${returnDoc.invoiceNumber}',
+        );
+      }
+    }
+
+    // 7. Mark Sales Return as Approved & Completed
+    sales[retIndex] = returnDoc.copyWith(
+      salesReturnStatus: SalesReturnStatus.completed,
+      status: SaleStatus.completed,
+      isProcessed: true,
+      refundStatus: determinedRefundStatus,
+      refundAmount: determinedRefundAmount,
+      linkedStockMovementIds: movementIds,
+      linkedStockAdjustmentIds: adjustmentIds,
+      commissionAdjustmentAmount: commissionAdjustment,
+      projectAdjustmentAmount: projectAdjustment,
+      activityLogs: [
+        ...returnDoc.activityLogs,
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: 'Sales Return Approved & Processed',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+          details: 'Stock movements & ledger adjustments generated. Refund status: ${determinedRefundStatus.name.toUpperCase()} (${Formatters.formatCurrency(determinedRefundAmount)})',
+          statusBefore: returnDoc.salesReturnStatus?.name,
+          statusAfter: SalesReturnStatus.completed.name,
+        ),
+      ],
+    );
 
     notifyListeners();
   }
 
-  void approveQuotation(String quotationId) {
-    final index = sales.indexWhere((s) => s.id == quotationId);
-    if (index != -1) {
-      final q = sales[index];
-      final soNumber = IdGenerator.generateDocNumber('SO', sales.length + 1);
-      final so = q.copyWith(
-        id: IdGenerator.generateId('SO'),
-        invoiceNumber: soNumber,
-        documentType: SalesDocumentType.salesOrder,
-        salesOrderNumber: soNumber,
-        salesOrderReferenceId: q.id,
-        salesOrderStatus: SalesOrderStatus.confirmed,
-        quotationStatus: null,
-        createdAt: DateTime.now(),
-      );
-      sales[index] = q.copyWith(
-        quotationStatus: QuotationStatus.approved,
-        salesOrderNumber: soNumber,
-      );
-      sales.insert(0, so);
-      notifyListeners();
+  void rejectSalesReturn(String returnId, String rejectionReason) {
+    final index = sales.indexWhere((s) => s.id == returnId);
+    if (index == -1) return;
+    final returnDoc = sales[index];
+
+    if (returnDoc.isProcessed || returnDoc.salesReturnStatus == SalesReturnStatus.completed) {
+      throw Exception('Cannot reject an already processed sales return.');
     }
+
+    sales[index] = returnDoc.copyWith(
+      salesReturnStatus: SalesReturnStatus.rejected,
+      status: SaleStatus.cancelled,
+      refundStatus: RefundStatus.cancelled,
+      activityLogs: [
+        ...returnDoc.activityLogs,
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: 'Sales Return Rejected',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+          details: 'Rejection Reason: $rejectionReason',
+          statusBefore: returnDoc.salesReturnStatus?.name,
+          statusAfter: SalesReturnStatus.rejected.name,
+        ),
+      ],
+    );
+    notifyListeners();
   }
 
-  void rejectQuotation(String quotationId) {
-    final index = sales.indexWhere((s) => s.id == quotationId);
-    if (index != -1) {
-      sales[index] = sales[index].copyWith(quotationStatus: QuotationStatus.rejected);
-      notifyListeners();
+  void processSalesReturnRefund({
+    required String returnId,
+    required PaymentMode paymentMode,
+    required double amount,
+    String? transactionRef,
+    String? notes,
+    bool asCustomerCredit = false,
+  }) {
+    final index = sales.indexWhere((s) => s.id == returnId);
+    if (index == -1) throw Exception('Sales return document not found');
+    final returnDoc = sales[index];
+
+    if (returnDoc.refundStatus != RefundStatus.pending && returnDoc.refundStatus != RefundStatus.approved) {
+      throw Exception('Refund is not in a payable state.');
     }
+
+    String paymentId = IdGenerator.generateId('PAY');
+    String paymentNumber = IdGenerator.generateDocNumber('PAY', ++_paymentCounter);
+
+    if (asCustomerCredit) {
+      if (returnDoc.partyType == PartyType.customer) {
+        final cIndex = customers.indexWhere((c) => c.id == returnDoc.partyId);
+        if (cIndex != -1) {
+          customers[cIndex] = customers[cIndex].copyWith(
+            creditBalance: customers[cIndex].creditBalance + amount,
+          );
+        }
+      }
+
+      final payment = ErpPayment(
+        id: paymentId,
+        paymentNumber: paymentNumber,
+        paymentType: returnDoc.partyType == PartyType.customer ? PaymentType.customerPayment : PaymentType.dealerPayment,
+        partyId: returnDoc.partyId,
+        partyName: returnDoc.partyName,
+        referenceDocumentId: returnDoc.id,
+        referenceDocumentNumber: returnDoc.invoiceNumber,
+        amount: amount,
+        paymentMode: PaymentMode.creditNote,
+        paymentDate: DateTime.now(),
+        transactionReference: transactionRef ?? 'STORE-CREDIT-${returnDoc.invoiceNumber}',
+        notes: notes ?? 'Customer Store Credit issued against Return ${returnDoc.invoiceNumber}',
+        createdAt: DateTime.now(),
+      );
+      payments.insert(0, payment);
+    } else {
+      final payment = ErpPayment(
+        id: paymentId,
+        paymentNumber: paymentNumber,
+        paymentType: returnDoc.partyType == PartyType.customer ? PaymentType.customerPayment : PaymentType.dealerPayment,
+        partyId: returnDoc.partyId,
+        partyName: returnDoc.partyName,
+        referenceDocumentId: returnDoc.id,
+        referenceDocumentNumber: returnDoc.invoiceNumber,
+        amount: amount,
+        paymentMode: paymentMode,
+        paymentDate: DateTime.now(),
+        transactionReference: transactionRef,
+        notes: notes ?? 'Refund payment against Return ${returnDoc.invoiceNumber}',
+        createdAt: DateTime.now(),
+      );
+      payments.insert(0, payment);
+    }
+
+    sales[index] = returnDoc.copyWith(
+      refundStatus: RefundStatus.processed,
+      refundAmount: amount,
+      refundPaymentMode: asCustomerCredit ? PaymentMode.creditNote : paymentMode,
+      refundTransactionRef: transactionRef,
+      refundDate: DateTime.now(),
+      linkedRefundPaymentId: paymentId,
+      activityLogs: [
+        ...returnDoc.activityLogs,
+        DocumentActivityLog(
+          id: IdGenerator.generateId('LOG'),
+          action: asCustomerCredit ? 'Customer Store Credit Issued' : 'Refund Processed (${paymentMode.name.toUpperCase()})',
+          performedBy: currentUser.name,
+          timestamp: DateTime.now(),
+          details: 'Amount ${Formatters.formatCurrency(amount)} disbursed via ${asCustomerCredit ? "Customer Credit" : paymentMode.name}. Voucher: $paymentNumber',
+        ),
+      ],
+    );
+
+    notifyListeners();
   }
 
   void updateSalesOrderStatus(String orderId, SalesOrderStatus newStatus) {
     final index = sales.indexWhere((s) => s.id == orderId);
     if (index != -1) {
       sales[index] = sales[index].copyWith(salesOrderStatus: newStatus);
-      notifyListeners();
-    }
-  }
-
-  void updateSalesReturnStatus(String returnId, SalesReturnStatus newStatus) {
-    final index = sales.indexWhere((s) => s.id == returnId);
-    if (index != -1) {
-      sales[index] = sales[index].copyWith(salesReturnStatus: newStatus);
       notifyListeners();
     }
   }
@@ -1362,7 +2891,35 @@ class MockDatabaseService extends ChangeNotifier {
   // -------------------------------------------------------------
   // GETTERS & DASHBOARD COMPUTED METRICS
   // -------------------------------------------------------------
-  double get totalSalesAmount => sales.fold(0.0, (sum, s) => sum + s.totalAmount);
+  // Filtered Sales Collections
+  List<Sale> get quotations => sales.where((s) => s.documentType == SalesDocumentType.quotation).toList();
+  List<Sale> get activeQuotations => quotations.where((q) => q.quotationStatus != QuotationStatus.superseded && q.quotationStatus != QuotationStatus.cancelled).toList();
+  List<Sale> get proformaInvoices => sales.where((s) => s.documentType == SalesDocumentType.proformaInvoice).toList();
+  List<Sale> get salesOrders => sales.where((s) => s.documentType == SalesDocumentType.salesOrder).toList();
+  List<Sale> get deliveries => sales.where((s) => s.documentType == SalesDocumentType.delivery).toList();
+  List<Sale> get salesInvoices => sales.where((s) => s.documentType == SalesDocumentType.invoice).toList();
+  List<Sale> get salesReturns => sales.where((s) => s.documentType == SalesDocumentType.salesReturn).toList();
+  List<Sale> get approvedSalesReturns => salesReturns.where((s) => s.salesReturnStatus == SalesReturnStatus.approved || s.salesReturnStatus == SalesReturnStatus.completed).toList();
+
+  // Sales Workflow Dashboard Metrics
+  int get totalQuotationsCount => quotations.length;
+  int get pendingQuotationsCount => quotations.where((q) => q.quotationStatus == QuotationStatus.draft || q.quotationStatus == QuotationStatus.sent).length;
+  int get acceptedQuotationsCount => quotations.where((q) => q.quotationStatus == QuotationStatus.accepted || q.quotationStatus == QuotationStatus.approved).length;
+  int get expiringQuotationsCount => quotations.where((q) => q.quotationStatus == QuotationStatus.sent && q.validUntil != null && q.validUntil!.difference(DateTime.now()).inDays <= 5).length;
+  
+  int get totalSalesOrdersCount => salesOrders.length;
+  int get ordersPendingProductionCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.productionPending || so.salesOrderStatus == SalesOrderStatus.inProduction).length;
+  int get ordersReadyForDispatchCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.readyForDispatch).length;
+  int get ordersPartiallyDeliveredCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.partiallyDelivered).length;
+
+  double get totalInvoicedRevenue => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount);
+  double get totalSalesReturnsAmount => approvedSalesReturns.fold(0.0, (sum, s) => sum + s.totalAmount);
+  double get netSalesRevenue => (totalSalesAmount - totalSalesReturnsAmount).clamp(0.0, double.infinity);
+  double get salesReturnRatePercentage => totalSalesAmount > 0 ? (totalSalesReturnsAmount / totalSalesAmount) * 100 : 0.0;
+  int get pendingRefundsCount => salesReturns.where((r) => r.refundStatus == RefundStatus.pending).length;
+  double get pendingInvoiceAmount => salesInvoices.fold(0.0, (sum, s) => sum + s.pendingAmount);
+
+  double get totalSalesAmount => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount);
   double get totalPurchaseAmount => purchases.fold(0.0, (sum, p) => sum + p.totalAmount);
   double get rawMaterialStockValue => rawMaterials.fold(0.0, (sum, rm) => sum + rm.totalValuation);
   double get finishedProductStockValue => finishedProducts.fold(0.0, (sum, fp) => sum + fp.totalValuation);
@@ -1370,7 +2927,7 @@ class MockDatabaseService extends ChangeNotifier {
 
   double get todaySalesAmount {
     final today = DateTime.now();
-    return sales
+    return salesInvoices
         .where((s) => s.saleDate.year == today.year && s.saleDate.month == today.month && s.saleDate.day == today.day)
         .fold(0.0, (sum, s) => sum + s.totalAmount);
   }
@@ -1386,5 +2943,10 @@ class MockDatabaseService extends ChangeNotifier {
   int get nextPurchaseNumber => ++_purchaseCounter;
   int get nextProductionNumber => ++_productionCounter;
   int get nextSalesNumber => ++_salesCounter;
+  int get nextQuotationNumber => ++_quotationCounter;
+  int get nextProformaNumber => ++_proformaCounter;
+  int get nextSalesOrderNumber => ++_soCounter;
+  int get nextDeliveryNumber => ++_deliveryCounter;
+  int get nextReturnNumber => ++_returnCounter;
   int get nextAdjustmentNumber => ++_adjCounter;
 }

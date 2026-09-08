@@ -49,7 +49,7 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
         billingAddress = cust.address;
         shippingAddress = cust.address;
       }
-    } else {
+    } else if (quotation.partyType == PartyType.dealer) {
       final dlr = db.dealers.where((d) => d.id == quotation.partyId).firstOrNull;
       if (dlr != null) {
         customerCode = dlr.id;
@@ -57,6 +57,15 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
         customerEmail = dlr.email;
         billingAddress = dlr.address;
         shippingAddress = dlr.address;
+      }
+    } else if (quotation.partyType == PartyType.architect) {
+      final arch = db.architects.where((a) => a.id == quotation.partyId).firstOrNull;
+      if (arch != null) {
+        customerCode = arch.id;
+        customerPhone = arch.mobile;
+        customerEmail = arch.email;
+        billingAddress = arch.address;
+        shippingAddress = arch.address;
       }
     }
 

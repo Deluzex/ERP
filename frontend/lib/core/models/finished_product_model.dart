@@ -6,6 +6,7 @@ class FinishedProduct {
   final String categoryName;
   final String unit;
   final double currentStock;
+  final double reservedStock;
   final double openingStock;
   final double minimumStock;
   final double costPrice;
@@ -23,6 +24,7 @@ class FinishedProduct {
     required this.categoryName,
     required this.unit,
     required this.currentStock,
+    this.reservedStock = 0.0,
     required this.openingStock,
     required this.minimumStock,
     required this.costPrice,
@@ -35,6 +37,7 @@ class FinishedProduct {
 
   bool get isLowStock => currentStock <= minimumStock;
   double get totalValuation => currentStock * costPrice;
+  double get availableStock => (currentStock - reservedStock).clamp(0.0, double.infinity);
 
   FinishedProduct copyWith({
     String? id,
@@ -44,6 +47,7 @@ class FinishedProduct {
     String? categoryName,
     String? unit,
     double? currentStock,
+    double? reservedStock,
     double? openingStock,
     double? minimumStock,
     double? costPrice,
@@ -61,6 +65,7 @@ class FinishedProduct {
       categoryName: categoryName ?? this.categoryName,
       unit: unit ?? this.unit,
       currentStock: currentStock ?? this.currentStock,
+      reservedStock: reservedStock ?? this.reservedStock,
       openingStock: openingStock ?? this.openingStock,
       minimumStock: minimumStock ?? this.minimumStock,
       costPrice: costPrice ?? this.costPrice,

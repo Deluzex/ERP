@@ -6,6 +6,7 @@ class Customer {
   final String gstNumber;
   final String address;
   final double outstandingAmount;
+  final double creditBalance;
   final DateTime createdAt;
 
   Customer({
@@ -16,6 +17,7 @@ class Customer {
     required this.gstNumber,
     required this.address,
     this.outstandingAmount = 0.0,
+    this.creditBalance = 0.0,
     required this.createdAt,
   });
 
@@ -27,6 +29,7 @@ class Customer {
     String? gstNumber,
     String? address,
     double? outstandingAmount,
+    double? creditBalance,
     DateTime? createdAt,
   }) {
     return Customer(
@@ -37,6 +40,7 @@ class Customer {
       gstNumber: gstNumber ?? this.gstNumber,
       address: address ?? this.address,
       outstandingAmount: outstandingAmount ?? this.outstandingAmount,
+      creditBalance: creditBalance ?? this.creditBalance,
       createdAt: createdAt ?? this.createdAt,
     );
   }

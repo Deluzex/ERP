@@ -54,6 +54,22 @@ class ErpStatusBadge extends StatelessWidget {
     );
   }
 
+  factory ErpStatusBadge.purple(String label) {
+    return ErpStatusBadge(
+      label: label,
+      backgroundColor: AppColors.purpleLight,
+      textColor: AppColors.purple,
+    );
+  }
+
+  factory ErpStatusBadge.teal(String label) {
+    return ErpStatusBadge(
+      label: label,
+      backgroundColor: AppColors.tealLight,
+      textColor: AppColors.teal,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(

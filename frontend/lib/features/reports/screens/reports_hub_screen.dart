@@ -393,8 +393,9 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
         final custRec = db.pendingCustomerPayments;
         final venPay = db.pendingVendorPayments;
         final commPay = db.pendingCommissionAmount;
+        final storeCredits = db.customers.fold(0.0, (sum, c) => sum + c.creditBalance);
         final totalAssets = totalStock + custRec;
-        final totalLiabilities = venPay + commPay;
+        final totalLiabilities = venPay + commPay + storeCredits;
         final netWorkingCap = totalAssets - totalLiabilities;
 
         return [
@@ -433,6 +434,14 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
             Text(Formatters.formatCurrency(commPay), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
             Text('-${Formatters.formatCurrency(commPay)}', style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
           ],
+          if (storeCredits > 0)
+            [
+              Text('Customer Store Credit Notes', style: AppTextStyles.bodyBold),
+              Text('Current Liability (Customer Wallets)', style: AppTextStyles.bodySmall),
+              const Text('-', style: TextStyle(fontSize: 12)),
+              Text(Formatters.formatCurrency(storeCredits), style: AppTextStyles.bodyBold.copyWith(color: AppColors.warningText)),
+              Text('-${Formatters.formatCurrency(storeCredits)}', style: AppTextStyles.bodyBold.copyWith(color: AppColors.warningText)),
+            ],
           [
             Text('Net Working Capital & Operating Balance', style: AppTextStyles.bodyBold.copyWith(fontSize: 14)),
             Text('Total Assets - Liabilities', style: AppTextStyles.bodyBold),
@@ -575,8 +584,9 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
         final custRec = db.pendingCustomerPayments;
         final venPay = db.pendingVendorPayments;
         final commPay = db.pendingCommissionAmount;
+        final storeCredits = db.customers.fold(0.0, (sum, c) => sum + c.creditBalance);
         final totalAssets = totalStock + custRec;
-        final totalLiabilities = venPay + commPay;
+        final totalLiabilities = venPay + commPay + storeCredits;
         final netWorkingCap = totalAssets - totalLiabilities;
         return [
           [
@@ -614,6 +624,14 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
             Formatters.formatCurrency(commPay),
             '-${Formatters.formatCurrency(commPay)}',
           ],
+          if (storeCredits > 0)
+            [
+              'Customer Store Credit Notes',
+              'Current Liability (Customer Wallets)',
+              '-',
+              Formatters.formatCurrency(storeCredits),
+              '-${Formatters.formatCurrency(storeCredits)}',
+            ],
           [
             'Net Working Capital & Operating Balance',
             'Total Assets - Total Liabilities',
@@ -653,10 +671,10 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
         };
       case 3:
         return {
-          'Gross Revenue': Formatters.formatCurrency(db.totalSalesAmount),
+          'Gross Turnover': Formatters.formatCurrency(db.totalInvoicedRevenue),
+          'Sales Returns': Formatters.formatCurrency(db.totalSalesReturnsAmount),
+          'Net Revenue': Formatters.formatCurrency(db.netSalesRevenue),
           'Customer Receivables': Formatters.formatCurrency(db.pendingCustomerPayments),
-          'GST Tax Liability': Formatters.formatCurrency(db.sales.fold(0.0, (s, i) => s + i.gstAmount)),
-          'Invoices Recorded': '${db.sales.length} Invoices',
         };
       case 4:
         return {
@@ -676,14 +694,15 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
       default:
         final rawVal = db.rawMaterialStockValue;
         final fgVal = db.finishedProductStockValue;
+        final storeCredits = db.customers.fold(0.0, (sum, c) => sum + c.creditBalance);
         final totalAssets = (rawVal + fgVal) + db.pendingCustomerPayments;
-        final totalLiabilities = db.pendingVendorPayments + db.pendingCommissionAmount;
+        final totalLiabilities = db.pendingVendorPayments + db.pendingCommissionAmount + storeCredits;
         final netWorkingCap = totalAssets - totalLiabilities;
         return {
           'Total Business Assets': Formatters.formatCurrency(totalAssets),
           'Total Liabilities': Formatters.formatCurrency(totalLiabilities),
           'Net Working Capital': Formatters.formatCurrency(netWorkingCap),
-          'Gross Sales Turnover': Formatters.formatCurrency(db.totalSalesAmount),
+          'Net Sales Turnover': Formatters.formatCurrency(db.netSalesRevenue),
         };
     }
   }

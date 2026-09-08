@@ -42,6 +42,8 @@ class ProductionOrder {
   final double costPerUnit;
   final DateTime productionDate;
   final ProductionStatus status;
+  final String? salesOrderId;
+  final String? salesOrderNumber;
   final String? notes;
   final DateTime createdAt;
   final bool isDeleted;
@@ -65,6 +67,8 @@ class ProductionOrder {
     this.costPerUnit = 0.0,
     required this.productionDate,
     required this.status,
+    this.salesOrderId,
+    this.salesOrderNumber,
     this.notes,
     required this.createdAt,
     this.isDeleted = false,
@@ -102,6 +106,8 @@ class ProductionOrder {
     double? costPerUnit,
     DateTime? productionDate,
     ProductionStatus? status,
+    String? salesOrderId,
+    String? salesOrderNumber,
     String? notes,
     DateTime? createdAt,
     bool? isDeleted,
@@ -125,6 +131,8 @@ class ProductionOrder {
       costPerUnit: costPerUnit ?? this.costPerUnit,
       productionDate: productionDate ?? this.productionDate,
       status: status ?? this.status,
+      salesOrderId: salesOrderId ?? this.salesOrderId,
+      salesOrderNumber: salesOrderNumber ?? this.salesOrderNumber,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       isDeleted: isDeleted ?? this.isDeleted,

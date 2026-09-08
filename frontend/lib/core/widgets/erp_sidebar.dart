@@ -41,14 +41,18 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
         section == ErpNavSection.vendorPayments) {
       _expandedGroups['Purchase'] = true;
     } else if (section == ErpNavSection.productionOrders ||
-        section == ErpNavSection.productionHistory ||
-        section == ErpNavSection.productionCosting ||
         section == ErpNavSection.createProduction) {
       _expandedGroups['Production'] = true;
     } else if (section == ErpNavSection.quotations ||
+        section == ErpNavSection.createQuotation ||
+        section == ErpNavSection.proformaInvoices ||
         section == ErpNavSection.salesOrders ||
+        section == ErpNavSection.createSalesOrder ||
+        section == ErpNavSection.salesDeliveries ||
         section == ErpNavSection.salesInvoiceList ||
-        section == ErpNavSection.salesReturns) {
+        section == ErpNavSection.createSale ||
+        section == ErpNavSection.salesReturns ||
+        section == ErpNavSection.createSalesReturn) {
       _expandedGroups['Sales'] = true;
     } else if (section == ErpNavSection.customerPayments ||
         section == ErpNavSection.dealerPayments ||
@@ -197,16 +201,6 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                       isSelected: currentSection == ErpNavSection.createProduction,
                       onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
                     ),
-                    _buildSubNavItem(
-                      title: 'Production History',
-                      isSelected: currentSection == ErpNavSection.productionHistory,
-                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionHistory,
-                    ),
-                    _buildSubNavItem(
-                      title: 'Production Costing',
-                      isSelected: currentSection == ErpNavSection.productionCosting,
-                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionCosting,
-                    ),
                   ],
                 ),
 
@@ -218,28 +212,38 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                   onGroupTap: () => _toggleGroup('Sales'),
                   children: [
                     _buildSubNavItem(
+                      title: 'Quotations',
+                      isSelected: currentSection == ErpNavSection.quotations || currentSection == ErpNavSection.createQuotation,
+                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
+                    ),
+                    _buildSubNavItem(
+                      title: 'Proforma Invoices',
+                      isSelected: currentSection == ErpNavSection.proformaInvoices,
+                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.proformaInvoices,
+                    ),
+                    _buildSubNavItem(
+                      title: 'Sales Orders',
+                      isSelected: currentSection == ErpNavSection.salesOrders || currentSection == ErpNavSection.createSalesOrder,
+                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders,
+                    ),
+                    _buildSubNavItem(
+                      title: 'Deliveries & Dispatch',
+                      isSelected: currentSection == ErpNavSection.salesDeliveries,
+                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesDeliveries,
+                    ),
+                    _buildSubNavItem(
                       title: 'Sales Invoices',
                       isSelected: currentSection == ErpNavSection.salesInvoiceList,
                       onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
                     ),
                     _buildSubNavItem(
-                      title: 'Create Sale',
+                      title: 'Create Direct Sale',
                       isSelected: currentSection == ErpNavSection.createSale,
                       onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
                     ),
                     _buildSubNavItem(
-                      title: 'Quotations',
-                      isSelected: currentSection == ErpNavSection.quotations,
-                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
-                    ),
-                    _buildSubNavItem(
-                      title: 'Sales Orders',
-                      isSelected: currentSection == ErpNavSection.salesOrders,
-                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders,
-                    ),
-                    _buildSubNavItem(
                       title: 'Sales Returns',
-                      isSelected: currentSection == ErpNavSection.salesReturns,
+                      isSelected: currentSection == ErpNavSection.salesReturns || currentSection == ErpNavSection.createSalesReturn,
                       onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesReturns,
                     ),
                   ],

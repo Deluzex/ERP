@@ -3,12 +3,15 @@ import 'purchase_model.dart';
 enum PartyType {
   customer,
   dealer,
+  architect,
 }
 
 enum SalesDocumentType {
-  invoice,
   quotation,
+  proformaInvoice,
   salesOrder,
+  delivery,
+  invoice,
   salesReturn,
 }
 
@@ -17,6 +20,7 @@ enum SaleStatus {
   active,
   partialPaid,
   paid,
+  overdue,
   completed,
   cancelled,
 }
@@ -24,53 +28,165 @@ enum SaleStatus {
 enum QuotationStatus {
   draft,
   sent,
+  accepted,
   approved,
   rejected,
+  expired,
+  superseded,
+  converted,
+  cancelled,
+}
+
+enum ProformaStatus {
+  draft,
+  issued,
+  partialPaid,
+  paid,
+  cancelled,
   converted,
 }
 
 enum SalesOrderStatus {
+  draft,
   pending,
   confirmed,
+  stockAllocationPending,
+  productionPending,
   inProduction,
+  readyForDispatch,
+  partiallyDelivered,
   dispatched,
   delivered,
+  completed,
   done,
+  onHold,
+  cancelled,
+}
+
+enum DeliveryStatus {
+  draft,
+  dispatched,
+  delivered,
   cancelled,
 }
 
 enum SalesReturnStatus {
-  pending,
-  requested,
+  draft,
+  submitted,
+  itemsReceived,
+  inspection,
   approved,
   completed,
   rejected,
+  pending,
+  requested,
+}
+
+enum ReturnCondition {
+  resalable,
+  damaged,
+  scrap,
+  goodCondition,
+  repairable,
+}
+
+enum RefundStatus {
+  notRequired,
+  pending,
+  approved,
+  processed,
+  cancelled,
+}
+
+enum ReturnType {
+  fullReturn,
+  partialReturn,
+}
+
+enum InvoiceReturnIndicator {
+  noReturn,
+  partiallyReturned,
+  fullyReturned,
+}
+
+enum ReturnFinancialAction {
+  creditNote,
+  refund,
+  adjustOutstanding,
+}
+
+class DocumentActivityLog {
+  final String id;
+  final String action;
+  final String performedBy;
+  final DateTime timestamp;
+  final String? details;
+  final String? statusBefore;
+  final String? statusAfter;
+
+  DocumentActivityLog({
+    required this.id,
+    required this.action,
+    required this.performedBy,
+    required this.timestamp,
+    this.details,
+    this.statusBefore,
+    this.statusAfter,
+  });
 }
 
 class SaleLineItem {
   final String finishedProductId;
   final String finishedProductName;
   final String finishedProductCode;
-  final double quantity;
+  final String productDescription;
+  final double quantity; // Ordered / Quoted / Invoiced qty
+  final double reservedQuantity;
+  final double producedQuantity;
+  final double deliveredQuantity;
+  final double invoicedQuantity;
+  final double returnedQuantity;
   final String unit;
   final double rate;
   final double discountAmount;
   final double gstPercent;
+  final double taxableAmount;
+  final double cgstAmount;
+  final double sgstAmount;
+  final double igstAmount;
   final double lineTotal;
   final String? productCondition;
+  final ReturnCondition? returnCondition;
 
   SaleLineItem({
     required this.finishedProductId,
     required this.finishedProductName,
     required this.finishedProductCode,
+    this.productDescription = '',
     required this.quantity,
+    this.reservedQuantity = 0.0,
+    this.producedQuantity = 0.0,
+    this.deliveredQuantity = 0.0,
+    this.invoicedQuantity = 0.0,
+    this.returnedQuantity = 0.0,
     required this.unit,
     required this.rate,
     this.discountAmount = 0.0,
     this.gstPercent = 18.0,
+    double? taxableAmount,
+    double? cgstAmount,
+    double? sgstAmount,
+    double? igstAmount,
     required this.lineTotal,
     this.productCondition,
-  });
+    this.returnCondition,
+  })  : taxableAmount = taxableAmount ?? ((quantity * rate) - discountAmount).clamp(0.0, double.infinity),
+        cgstAmount = cgstAmount ?? ((((quantity * rate) - discountAmount) * (gstPercent / 2)) / 100.0),
+        sgstAmount = sgstAmount ?? ((((quantity * rate) - discountAmount) * (gstPercent / 2)) / 100.0),
+        igstAmount = igstAmount ?? 0.0;
+
+  double get pendingQuantity => (quantity - deliveredQuantity).clamp(0.0, double.infinity);
+  double get shortageQuantity => (quantity - reservedQuantity).clamp(0.0, double.infinity);
 
   static double calculateLineTotal({
     required double quantity,
@@ -82,23 +198,82 @@ class SaleLineItem {
     final gstAmount = (subtotal * gstPercent) / 100.0;
     return subtotal + gstAmount;
   }
+
+  SaleLineItem copyWith({
+    String? finishedProductId,
+    String? finishedProductName,
+    String? finishedProductCode,
+    String? productDescription,
+    double? quantity,
+    double? reservedQuantity,
+    double? producedQuantity,
+    double? deliveredQuantity,
+    double? invoicedQuantity,
+    double? returnedQuantity,
+    String? unit,
+    double? rate,
+    double? discountAmount,
+    double? gstPercent,
+    double? taxableAmount,
+    double? cgstAmount,
+    double? sgstAmount,
+    double? igstAmount,
+    double? lineTotal,
+    String? productCondition,
+    ReturnCondition? returnCondition,
+  }) {
+    return SaleLineItem(
+      finishedProductId: finishedProductId ?? this.finishedProductId,
+      finishedProductName: finishedProductName ?? this.finishedProductName,
+      finishedProductCode: finishedProductCode ?? this.finishedProductCode,
+      productDescription: productDescription ?? this.productDescription,
+      quantity: quantity ?? this.quantity,
+      reservedQuantity: reservedQuantity ?? this.reservedQuantity,
+      producedQuantity: producedQuantity ?? this.producedQuantity,
+      deliveredQuantity: deliveredQuantity ?? this.deliveredQuantity,
+      invoicedQuantity: invoicedQuantity ?? this.invoicedQuantity,
+      returnedQuantity: returnedQuantity ?? this.returnedQuantity,
+      unit: unit ?? this.unit,
+      rate: rate ?? this.rate,
+      discountAmount: discountAmount ?? this.discountAmount,
+      gstPercent: gstPercent ?? this.gstPercent,
+      taxableAmount: taxableAmount ?? this.taxableAmount,
+      cgstAmount: cgstAmount ?? this.cgstAmount,
+      sgstAmount: sgstAmount ?? this.sgstAmount,
+      igstAmount: igstAmount ?? this.igstAmount,
+      lineTotal: lineTotal ?? this.lineTotal,
+      productCondition: productCondition ?? this.productCondition,
+      returnCondition: returnCondition ?? this.returnCondition,
+    );
+  }
 }
 
 class Sale {
   final String id;
-  final String invoiceNumber; // e.g. INV-2026-001
+  final String invoiceNumber; // Unique document code e.g. QT-2026-001, PI-2026-001, SO-2026-001, INV-2026-001
   final SalesDocumentType documentType;
   final PartyType partyType;
   final String partyId; // Customer ID or Dealer ID
   final String partyName;
+  final String? customerContactPerson;
+  final String? customerMobile;
+  final String? customerEmail;
+  final String? customerGstNumber;
+  final String? billingAddress;
+  final String? shippingAddress;
   final String? projectId;
   final String? projectName;
   final String? architectId;
   final String? architectName;
+  final String? salesExecutive;
   final DateTime saleDate;
   final List<SaleLineItem> items;
   final double subtotalAmount;
   final double discountAmount;
+  final double taxableAmount;
+  final double cgstAmount;
+  final double sgstAmount;
+  final double igstAmount;
   final double gstAmount;
   final double totalAmount;
   final double paidAmount;
@@ -107,19 +282,61 @@ class Sale {
   final SaleStatus status;
   final double architectCommissionAmount;
   final String? notes;
+  final String? termsAndConditions;
+  final String? bankDetails;
   final DateTime createdAt;
+  final DateTime? updatedAt;
   final DateTime? validUntil;
+  
+  // Lineage and Revision Tracking
+  final int revisionNumber;
+  final String? originalQuotationId;
+  final String? parentQuotationId;
+  final String? parentQuotationNumber;
   final QuotationStatus? quotationStatus;
+  
+  final ProformaStatus? proformaStatus;
+  final String? proformaReferenceId;
+  final String? proformaNumber;
+
   final String? salesOrderNumber;
+  final String? salesOrderReferenceId;
   final DateTime? deliveryDate;
   final SalesOrderStatus? salesOrderStatus;
+  
+  final DeliveryStatus? deliveryStatus;
+  final String? deliveryNumber;
+  final String? vehicleNumber;
+  final String? driverContact;
+  final String? trackingNumber;
+  
+  final List<String> linkedDeliveryIds;
+  final List<String> linkedProductionOrderIds;
+  final List<String> linkedPaymentIds;
+
   final SalesReturnStatus? salesReturnStatus;
+  final ReturnCondition? returnCondition;
+  final ReturnFinancialAction? returnFinancialAction;
+  final ReturnType? returnType;
+  final RefundStatus? refundStatus;
+  final double refundAmount;
+  final PaymentMode? refundPaymentMode;
+  final String? refundTransactionRef;
+  final DateTime? refundDate;
+  final bool isProcessed;
+  final List<String> linkedStockMovementIds;
+  final List<String> linkedStockAdjustmentIds;
+  final List<String> linkedReturnIds;
+  final String? linkedRefundPaymentId;
+  final double commissionAdjustmentAmount;
+  final double projectAdjustmentAmount;
+  final String? createdBy;
   final String? originalInvoiceId;
   final String? originalInvoiceNumber;
   final String? returnReason;
-  final String? salesOrderReferenceId;
   final String? quotationReferenceId;
   final String? attachmentUrl;
+  final List<DocumentActivityLog> activityLogs;
 
   Sale({
     required this.id,
@@ -128,14 +345,25 @@ class Sale {
     required this.partyType,
     required this.partyId,
     required this.partyName,
+    this.customerContactPerson,
+    this.customerMobile,
+    this.customerEmail,
+    this.customerGstNumber,
+    this.billingAddress,
+    this.shippingAddress,
     this.projectId,
     this.projectName,
     this.architectId,
     this.architectName,
+    this.salesExecutive,
     required this.saleDate,
     required this.items,
     required this.subtotalAmount,
     this.discountAmount = 0.0,
+    double? taxableAmount,
+    double? cgstAmount,
+    double? sgstAmount,
+    double? igstAmount,
     required this.gstAmount,
     required this.totalAmount,
     this.paidAmount = 0.0,
@@ -144,37 +372,238 @@ class Sale {
     required this.status,
     this.architectCommissionAmount = 0.0,
     this.notes,
+    this.termsAndConditions,
+    this.bankDetails,
     required this.createdAt,
+    this.updatedAt,
     this.validUntil,
+    this.revisionNumber = 0,
+    this.originalQuotationId,
+    this.parentQuotationId,
+    this.parentQuotationNumber,
     this.quotationStatus,
+    this.proformaStatus,
+    this.proformaReferenceId,
+    this.proformaNumber,
     this.salesOrderNumber,
+    this.salesOrderReferenceId,
     this.deliveryDate,
     this.salesOrderStatus,
+    this.deliveryStatus,
+    this.deliveryNumber,
+    this.vehicleNumber,
+    this.driverContact,
+    this.trackingNumber,
+    this.linkedDeliveryIds = const [],
+    this.linkedProductionOrderIds = const [],
+    this.linkedPaymentIds = const [],
     this.salesReturnStatus,
+    this.returnCondition,
+    this.returnFinancialAction,
+    this.returnType,
+    this.refundStatus,
+    this.refundAmount = 0.0,
+    this.refundPaymentMode,
+    this.refundTransactionRef,
+    this.refundDate,
+    this.isProcessed = false,
+    this.linkedStockMovementIds = const [],
+    this.linkedStockAdjustmentIds = const [],
+    this.linkedReturnIds = const [],
+    this.linkedRefundPaymentId,
+    this.commissionAdjustmentAmount = 0.0,
+    this.projectAdjustmentAmount = 0.0,
+    this.createdBy,
     this.originalInvoiceId,
     this.originalInvoiceNumber,
     this.returnReason,
-    this.salesOrderReferenceId,
     this.quotationReferenceId,
     this.attachmentUrl,
-  });
+    this.activityLogs = const [],
+  })  : taxableAmount = taxableAmount ?? (subtotalAmount - discountAmount).clamp(0.0, double.infinity),
+        cgstAmount = cgstAmount ?? (gstAmount / 2),
+        sgstAmount = sgstAmount ?? (gstAmount / 2),
+        igstAmount = igstAmount ?? 0.0;
 
   String get statusLabel {
-    switch (status) {
-      case SaleStatus.draft:
+    switch (documentType) {
+      case SalesDocumentType.quotation:
+        return quotationStatusLabel;
+      case SalesDocumentType.proformaInvoice:
+        return proformaStatusLabel;
+      case SalesDocumentType.salesOrder:
+        return salesOrderStatusLabel;
+      case SalesDocumentType.delivery:
+        return deliveryStatusLabel;
+      case SalesDocumentType.salesReturn:
+        return salesReturnStatusLabel;
+      case SalesDocumentType.invoice:
+        switch (status) {
+          case SaleStatus.draft:
+            return 'Draft';
+          case SaleStatus.active:
+            return 'Issued / Active';
+          case SaleStatus.partialPaid:
+            return 'Partially Paid';
+          case SaleStatus.paid:
+            return 'Paid';
+          case SaleStatus.overdue:
+            return 'Overdue';
+          case SaleStatus.completed:
+            return 'Completed';
+          case SaleStatus.cancelled:
+            return 'Cancelled';
+        }
+    }
+  }
+
+  String get quotationStatusLabel {
+    switch (quotationStatus ?? QuotationStatus.draft) {
+      case QuotationStatus.draft:
         return 'Draft';
-      case SaleStatus.active:
-        return 'Active';
-      case SaleStatus.partialPaid:
-        return 'Partially Paid';
-      case SaleStatus.paid:
-        return 'Paid';
-      case SaleStatus.completed:
-        return 'Completed';
-      case SaleStatus.cancelled:
+      case QuotationStatus.sent:
+        return 'Sent';
+      case QuotationStatus.accepted:
+      case QuotationStatus.approved:
+        return 'Accepted';
+      case QuotationStatus.rejected:
+        return 'Rejected';
+      case QuotationStatus.expired:
+        return 'Expired';
+      case QuotationStatus.superseded:
+        return 'Superseded (Rev $revisionNumber)';
+      case QuotationStatus.converted:
+        return 'Converted';
+      case QuotationStatus.cancelled:
         return 'Cancelled';
     }
   }
+
+  String get proformaStatusLabel {
+    switch (proformaStatus ?? ProformaStatus.draft) {
+      case ProformaStatus.draft:
+        return 'Draft';
+      case ProformaStatus.issued:
+        return 'Issued';
+      case ProformaStatus.partialPaid:
+        return 'Partially Paid';
+      case ProformaStatus.paid:
+        return 'Paid';
+      case ProformaStatus.converted:
+        return 'Converted to SO';
+      case ProformaStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  String get salesOrderStatusLabel {
+    switch (salesOrderStatus ?? SalesOrderStatus.draft) {
+      case SalesOrderStatus.draft:
+        return 'Draft';
+      case SalesOrderStatus.pending:
+        return 'Pending';
+      case SalesOrderStatus.confirmed:
+        return 'Confirmed';
+      case SalesOrderStatus.stockAllocationPending:
+        return 'Allocation Pending';
+      case SalesOrderStatus.productionPending:
+      case SalesOrderStatus.inProduction:
+        return 'In Production';
+      case SalesOrderStatus.readyForDispatch:
+        return 'Ready for Dispatch';
+      case SalesOrderStatus.partiallyDelivered:
+        return 'Partially Delivered';
+      case SalesOrderStatus.dispatched:
+        return 'Dispatched';
+      case SalesOrderStatus.delivered:
+        return 'Delivered';
+      case SalesOrderStatus.completed:
+      case SalesOrderStatus.done:
+        return 'Completed';
+      case SalesOrderStatus.onHold:
+        return 'On Hold';
+      case SalesOrderStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  String get deliveryStatusLabel {
+    switch (deliveryStatus ?? DeliveryStatus.draft) {
+      case DeliveryStatus.draft:
+        return 'Draft';
+      case DeliveryStatus.dispatched:
+        return 'Dispatched';
+      case DeliveryStatus.delivered:
+        return 'Delivered';
+      case DeliveryStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  String get salesReturnStatusLabel {
+    switch (salesReturnStatus ?? SalesReturnStatus.draft) {
+      case SalesReturnStatus.draft:
+        return 'Draft';
+      case SalesReturnStatus.submitted:
+        return 'Submitted';
+      case SalesReturnStatus.itemsReceived:
+        return 'Items Received';
+      case SalesReturnStatus.inspection:
+        return 'Under Inspection';
+      case SalesReturnStatus.approved:
+        return 'Approved';
+      case SalesReturnStatus.completed:
+        return 'Completed';
+      case SalesReturnStatus.rejected:
+        return 'Rejected';
+      case SalesReturnStatus.pending:
+        return 'Pending Review';
+      case SalesReturnStatus.requested:
+        return 'Requested';
+    }
+  }
+
+  String? get qaNotes => notes;
+  String? get referenceDocumentId => originalInvoiceId ?? salesOrderReferenceId ?? proformaReferenceId ?? quotationReferenceId;
+
+  String get refundStatusLabel {
+    switch (refundStatus ?? RefundStatus.notRequired) {
+      case RefundStatus.notRequired:
+        return 'Not Required';
+      case RefundStatus.pending:
+        return 'Refund Pending';
+      case RefundStatus.approved:
+        return 'Refund Approved';
+      case RefundStatus.processed:
+        return 'Refund Processed';
+      case RefundStatus.cancelled:
+        return 'Refund Cancelled';
+    }
+  }
+
+  double get totalReturnedQuantity => items.fold(0.0, (sum, i) => sum + i.returnedQuantity);
+
+  InvoiceReturnIndicator get invoiceReturnStatus {
+    final totalInvoiced = items.fold(0.0, (sum, i) => sum + i.quantity);
+    final totalRet = totalReturnedQuantity;
+    if (totalRet <= 0) return InvoiceReturnIndicator.noReturn;
+    if (totalRet >= totalInvoiced && totalInvoiced > 0) return InvoiceReturnIndicator.fullyReturned;
+    return InvoiceReturnIndicator.partiallyReturned;
+  }
+
+  String get invoiceReturnStatusLabel {
+    switch (invoiceReturnStatus) {
+      case InvoiceReturnIndicator.noReturn:
+        return 'No Return';
+      case InvoiceReturnIndicator.partiallyReturned:
+        return 'Partially Returned';
+      case InvoiceReturnIndicator.fullyReturned:
+        return 'Fully Returned';
+    }
+  }
+
+  bool get isQuotationValid =>
+      validUntil == null || validUntil!.isAfter(DateTime.now().subtract(const Duration(days: 1)));
 
   Sale copyWith({
     String? id,
@@ -183,14 +612,25 @@ class Sale {
     PartyType? partyType,
     String? partyId,
     String? partyName,
+    String? customerContactPerson,
+    String? customerMobile,
+    String? customerEmail,
+    String? customerGstNumber,
+    String? billingAddress,
+    String? shippingAddress,
     String? projectId,
     String? projectName,
     String? architectId,
     String? architectName,
+    String? salesExecutive,
     DateTime? saleDate,
     List<SaleLineItem>? items,
     double? subtotalAmount,
     double? discountAmount,
+    double? taxableAmount,
+    double? cgstAmount,
+    double? sgstAmount,
+    double? igstAmount,
     double? gstAmount,
     double? totalAmount,
     double? paidAmount,
@@ -199,19 +639,54 @@ class Sale {
     SaleStatus? status,
     double? architectCommissionAmount,
     String? notes,
+    String? termsAndConditions,
+    String? bankDetails,
     DateTime? createdAt,
+    DateTime? updatedAt,
     DateTime? validUntil,
+    int? revisionNumber,
+    String? originalQuotationId,
+    String? parentQuotationId,
+    String? parentQuotationNumber,
     QuotationStatus? quotationStatus,
+    ProformaStatus? proformaStatus,
+    String? proformaReferenceId,
+    String? proformaNumber,
     String? salesOrderNumber,
+    String? salesOrderReferenceId,
     DateTime? deliveryDate,
     SalesOrderStatus? salesOrderStatus,
+    DeliveryStatus? deliveryStatus,
+    String? deliveryNumber,
+    String? vehicleNumber,
+    String? driverContact,
+    String? trackingNumber,
+    List<String>? linkedDeliveryIds,
+    List<String>? linkedProductionOrderIds,
+    List<String>? linkedPaymentIds,
     SalesReturnStatus? salesReturnStatus,
+    ReturnCondition? returnCondition,
+    ReturnFinancialAction? returnFinancialAction,
+    ReturnType? returnType,
+    RefundStatus? refundStatus,
+    double? refundAmount,
+    PaymentMode? refundPaymentMode,
+    String? refundTransactionRef,
+    DateTime? refundDate,
+    bool? isProcessed,
+    List<String>? linkedStockMovementIds,
+    List<String>? linkedStockAdjustmentIds,
+    List<String>? linkedReturnIds,
+    String? linkedRefundPaymentId,
+    double? commissionAdjustmentAmount,
+    double? projectAdjustmentAmount,
+    String? createdBy,
     String? originalInvoiceId,
     String? originalInvoiceNumber,
     String? returnReason,
-    String? salesOrderReferenceId,
     String? quotationReferenceId,
     String? attachmentUrl,
+    List<DocumentActivityLog>? activityLogs,
   }) {
     return Sale(
       id: id ?? this.id,
@@ -220,14 +695,25 @@ class Sale {
       partyType: partyType ?? this.partyType,
       partyId: partyId ?? this.partyId,
       partyName: partyName ?? this.partyName,
+      customerContactPerson: customerContactPerson ?? this.customerContactPerson,
+      customerMobile: customerMobile ?? this.customerMobile,
+      customerEmail: customerEmail ?? this.customerEmail,
+      customerGstNumber: customerGstNumber ?? this.customerGstNumber,
+      billingAddress: billingAddress ?? this.billingAddress,
+      shippingAddress: shippingAddress ?? this.shippingAddress,
       projectId: projectId ?? this.projectId,
       projectName: projectName ?? this.projectName,
       architectId: architectId ?? this.architectId,
       architectName: architectName ?? this.architectName,
+      salesExecutive: salesExecutive ?? this.salesExecutive,
       saleDate: saleDate ?? this.saleDate,
       items: items ?? this.items,
       subtotalAmount: subtotalAmount ?? this.subtotalAmount,
       discountAmount: discountAmount ?? this.discountAmount,
+      taxableAmount: taxableAmount ?? this.taxableAmount,
+      cgstAmount: cgstAmount ?? this.cgstAmount,
+      sgstAmount: sgstAmount ?? this.sgstAmount,
+      igstAmount: igstAmount ?? this.igstAmount,
       gstAmount: gstAmount ?? this.gstAmount,
       totalAmount: totalAmount ?? this.totalAmount,
       paidAmount: paidAmount ?? this.paidAmount,
@@ -236,19 +722,54 @@ class Sale {
       status: status ?? this.status,
       architectCommissionAmount: architectCommissionAmount ?? this.architectCommissionAmount,
       notes: notes ?? this.notes,
+      termsAndConditions: termsAndConditions ?? this.termsAndConditions,
+      bankDetails: bankDetails ?? this.bankDetails,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       validUntil: validUntil ?? this.validUntil,
+      revisionNumber: revisionNumber ?? this.revisionNumber,
+      originalQuotationId: originalQuotationId ?? this.originalQuotationId,
+      parentQuotationId: parentQuotationId ?? this.parentQuotationId,
+      parentQuotationNumber: parentQuotationNumber ?? this.parentQuotationNumber,
       quotationStatus: quotationStatus ?? this.quotationStatus,
+      proformaStatus: proformaStatus ?? this.proformaStatus,
+      proformaReferenceId: proformaReferenceId ?? this.proformaReferenceId,
+      proformaNumber: proformaNumber ?? this.proformaNumber,
       salesOrderNumber: salesOrderNumber ?? this.salesOrderNumber,
+      salesOrderReferenceId: salesOrderReferenceId ?? this.salesOrderReferenceId,
       deliveryDate: deliveryDate ?? this.deliveryDate,
       salesOrderStatus: salesOrderStatus ?? this.salesOrderStatus,
+      deliveryStatus: deliveryStatus ?? this.deliveryStatus,
+      deliveryNumber: deliveryNumber ?? this.deliveryNumber,
+      vehicleNumber: vehicleNumber ?? this.vehicleNumber,
+      driverContact: driverContact ?? this.driverContact,
+      trackingNumber: trackingNumber ?? this.trackingNumber,
+      linkedDeliveryIds: linkedDeliveryIds ?? this.linkedDeliveryIds,
+      linkedProductionOrderIds: linkedProductionOrderIds ?? this.linkedProductionOrderIds,
+      linkedPaymentIds: linkedPaymentIds ?? this.linkedPaymentIds,
       salesReturnStatus: salesReturnStatus ?? this.salesReturnStatus,
+      returnCondition: returnCondition ?? this.returnCondition,
+      returnFinancialAction: returnFinancialAction ?? this.returnFinancialAction,
+      returnType: returnType ?? this.returnType,
+      refundStatus: refundStatus ?? this.refundStatus,
+      refundAmount: refundAmount ?? this.refundAmount,
+      refundPaymentMode: refundPaymentMode ?? this.refundPaymentMode,
+      refundTransactionRef: refundTransactionRef ?? this.refundTransactionRef,
+      refundDate: refundDate ?? this.refundDate,
+      isProcessed: isProcessed ?? this.isProcessed,
+      linkedStockMovementIds: linkedStockMovementIds ?? this.linkedStockMovementIds,
+      linkedStockAdjustmentIds: linkedStockAdjustmentIds ?? this.linkedStockAdjustmentIds,
+      linkedReturnIds: linkedReturnIds ?? this.linkedReturnIds,
+      linkedRefundPaymentId: linkedRefundPaymentId ?? this.linkedRefundPaymentId,
+      commissionAdjustmentAmount: commissionAdjustmentAmount ?? this.commissionAdjustmentAmount,
+      projectAdjustmentAmount: projectAdjustmentAmount ?? this.projectAdjustmentAmount,
+      createdBy: createdBy ?? this.createdBy,
       originalInvoiceId: originalInvoiceId ?? this.originalInvoiceId,
       originalInvoiceNumber: originalInvoiceNumber ?? this.originalInvoiceNumber,
       returnReason: returnReason ?? this.returnReason,
-      salesOrderReferenceId: salesOrderReferenceId ?? this.salesOrderReferenceId,
       quotationReferenceId: quotationReferenceId ?? this.quotationReferenceId,
       attachmentUrl: attachmentUrl ?? this.attachmentUrl,
+      activityLogs: activityLogs ?? this.activityLogs,
     );
   }
 }

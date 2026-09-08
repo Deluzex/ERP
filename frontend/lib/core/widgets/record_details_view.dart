@@ -17,7 +17,7 @@ import '../models/architect_model.dart';
 import '../models/project_model.dart';
 import '../models/sale_model.dart';
 import '../models/payment_model.dart';
-import '../../features/sales/widgets/quotation_pdf_preview_dialog.dart';
+import '../../features/sales/widgets/sales_pdf_generator.dart';
 import '../utils/formatters.dart';
 import 'erp_button.dart';
 import 'erp_data_table.dart';
@@ -42,81 +42,101 @@ class RecordDetailsView extends ConsumerWidget {
 
     switch (details.recordType) {
       case 'rawMaterial':
-        final rm = db.rawMaterials.firstWhere((r) => r.id == details.recordId, orElse: () => db.rawMaterials.first);
+        final rm = db.rawMaterials.where((r) => r.id == details.recordId).firstOrNull ?? (db.rawMaterials.isNotEmpty ? db.rawMaterials.first : null);
+        if (rm == null) return _buildNotFound(context, stack, 'Raw Material');
         title = 'Raw Material Details';
         subtitle = '${rm.name} (${rm.itemCode})';
         detailsWidget = _buildRawMaterialDetails(context, ref, rm, db);
         break;
 
       case 'vendor':
-        final v = db.vendors.firstWhere((ven) => ven.id == details.recordId, orElse: () => db.vendors.first);
+        final v = db.vendors.where((ven) => ven.id == details.recordId).firstOrNull ?? (db.vendors.isNotEmpty ? db.vendors.first : null);
+        if (v == null) return _buildNotFound(context, stack, 'Vendor');
         title = 'Vendor Details';
         subtitle = v.name;
         detailsWidget = _buildVendorDetails(context, ref, v, db);
         break;
 
       case 'purchase':
-        final p = db.purchases.firstWhere((pur) => pur.id == details.recordId, orElse: () => db.purchases.first);
+        final p = db.purchases.where((pur) => pur.id == details.recordId).firstOrNull ?? (db.purchases.isNotEmpty ? db.purchases.first : null);
+        if (p == null) return _buildNotFound(context, stack, 'Purchase Order');
         title = 'Purchase Order Details';
         subtitle = p.purchaseNumber;
         detailsWidget = _buildPurchaseDetails(context, ref, p, db);
         break;
 
       case 'production':
-        final po = db.productionOrders.firstWhere((o) => o.id == details.recordId, orElse: () => db.productionOrders.first);
+        final po = db.productionOrders.where((o) => o.id == details.recordId).firstOrNull ?? (db.productionOrders.isNotEmpty ? db.productionOrders.first : null);
+        if (po == null) return _buildNotFound(context, stack, 'Production Order');
         title = 'Production Order Details';
         subtitle = po.productionNumber;
         detailsWidget = _buildProductionDetails(context, ref, po, db);
         break;
 
       case 'customer':
-        final c = db.customers.firstWhere((cust) => cust.id == details.recordId, orElse: () => db.customers.first);
+        final c = db.customers.where((cust) => cust.id == details.recordId).firstOrNull ?? (db.customers.isNotEmpty ? db.customers.first : null);
+        if (c == null) return _buildNotFound(context, stack, 'Customer');
         title = 'Customer Profile';
         subtitle = c.name;
         detailsWidget = _buildCustomerDetails(context, ref, c, db);
         break;
 
       case 'dealer':
-        final d = db.dealers.firstWhere((dlr) => dlr.id == details.recordId, orElse: () => db.dealers.first);
+        final d = db.dealers.where((dlr) => dlr.id == details.recordId).firstOrNull ?? (db.dealers.isNotEmpty ? db.dealers.first : null);
+        if (d == null) return _buildNotFound(context, stack, 'Dealer');
         title = 'Dealer Profile';
         subtitle = d.name;
         detailsWidget = _buildDealerDetails(context, ref, d, db);
         break;
 
       case 'architect':
-        final a = db.architects.firstWhere((arc) => arc.id == details.recordId, orElse: () => db.architects.first);
+        final a = db.architects.where((arc) => arc.id == details.recordId).firstOrNull ?? (db.architects.isNotEmpty ? db.architects.first : null);
+        if (a == null) return _buildNotFound(context, stack, 'Architect');
         title = 'Architect Profile';
         subtitle = a.name;
         detailsWidget = _buildArchitectDetails(context, ref, a, db);
         break;
 
       case 'project':
-        final prj = db.projects.firstWhere((p) => p.id == details.recordId, orElse: () => db.projects.first);
+        final prj = db.projects.where((p) => p.id == details.recordId).firstOrNull ?? (db.projects.isNotEmpty ? db.projects.first : null);
+        if (prj == null) return _buildNotFound(context, stack, 'Project');
         title = 'Project Details';
         subtitle = prj.name;
         detailsWidget = _buildProjectDetails(context, ref, prj, db);
         break;
 
       case 'quotation':
+      case 'proformaInvoice':
       case 'salesOrder':
+      case 'delivery':
       case 'invoice':
       case 'salesReturn':
-        final s = db.sales.firstWhere((sale) => sale.id == details.recordId, orElse: () => db.sales.first);
+        final s = db.sales.where((sale) => sale.id == details.recordId).firstOrNull ?? (db.sales.isNotEmpty ? db.sales.first : null);
+        if (s == null) return _buildNotFound(context, stack, 'Sales Record');
         if (s.documentType == SalesDocumentType.quotation) {
           title = 'Quotation Details';
+        } else if (s.documentType == SalesDocumentType.proformaInvoice) {
+          title = 'Proforma Invoice Details';
         } else if (s.documentType == SalesDocumentType.salesOrder) {
           title = 'Sales Order Details';
+        } else if (s.documentType == SalesDocumentType.delivery) {
+          title = 'Delivery Challan Details';
         } else if (s.documentType == SalesDocumentType.salesReturn) {
-          title = 'Sales Return Details';
+          title = 'Sales Return & Credit Note Details';
         } else {
-          title = 'Sales Invoice Details';
+          title = 'Sales Tax Invoice Details';
         }
         subtitle = s.invoiceNumber;
-        detailsWidget = _buildSaleDetails(context, ref, s, db);
+        if (s.documentType == SalesDocumentType.salesReturn) {
+          detailsWidget = _buildSalesReturnDetails(context, ref, s, db);
+        } else {
+          detailsWidget = _buildSaleDetails(context, ref, s, db);
+        }
         break;
 
       case 'payment':
-        final pay = db.payments.firstWhere((py) => py.id == details.recordId, orElse: () => db.payments.first);
+        final pay = db.payments.where((py) => py.id == details.recordId).firstOrNull ?? (db.payments.isNotEmpty ? db.payments.first : null);
+        if (pay == null) return _buildNotFound(context, stack, 'Payment Record');
         title = 'Payment Voucher Details';
         subtitle = pay.paymentNumber;
         detailsWidget = _buildPaymentDetails(context, ref, pay, db);
@@ -634,7 +654,11 @@ class RecordDetailsView extends ConsumerWidget {
   // 5. Customer Details
   // -----------------------------------------------------------------
   Widget _buildCustomerDetails(BuildContext context, WidgetRef ref, Customer c, MockDatabaseService db) {
-    final customerSales = db.sales.where((s) => s.partyId == c.id).toList();
+    final customerSales = db.sales.where((s) => s.partyId == c.id && s.documentType != SalesDocumentType.salesReturn).toList();
+    final customerReturns = db.salesReturns.where((r) => r.partyId == c.id).toList();
+    final grossInvoiced = customerSales.where((s) => s.documentType == SalesDocumentType.invoice).fold(0.0, (sum, s) => sum + s.totalAmount);
+    final approvedReturns = customerReturns.where((r) => r.salesReturnStatus == SalesReturnStatus.approved).fold(0.0, (sum, r) => sum + r.totalAmount);
+    final netSalesRevenue = (grossInvoiced - approvedReturns).clamp(0.0, double.infinity);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -661,6 +685,7 @@ class RecordDetailsView extends ConsumerWidget {
                     _buildInfoRow('Contact Number', c.mobile),
                     _buildInfoRow('Email Address', c.email),
                     _buildInfoRow('Registered Address', c.address),
+                    _buildInfoRow('Account Created Date', Formatters.formatDate(c.createdAt)),
                   ],
                 ),
               ),
@@ -678,20 +703,48 @@ class RecordDetailsView extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Outstanding Balance', style: AppTextStyles.h3),
+                    Text('Financial & Credit Ledger', style: AppTextStyles.h3),
                     const Divider(height: 24),
+                    _buildInfoRow('Gross Sales Invoiced', Formatters.formatCurrency(grossInvoiced)),
+                    _buildInfoRow('Approved Sales Returns', Formatters.formatCurrency(approvedReturns)),
+                    const Divider(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Total Receivables:', style: AppTextStyles.bodyMedium),
+                        Text('Net Sales Revenue:', style: AppTextStyles.bodyBold),
+                        Text(Formatters.formatCurrency(netSalesRevenue), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Total Receivables Due:', style: AppTextStyles.bodyMedium),
                         Text(
                           Formatters.formatCurrency(c.outstandingAmount),
                           style: AppTextStyles.h2.copyWith(color: c.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    _buildInfoRow('Created Date', Formatters.formatDate(c.createdAt)),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: c.creditBalance > 0 ? AppColors.primary.withOpacity(0.08) : Colors.grey.shade50,
+                        borderRadius: AppRadius.smBorderRadius,
+                        border: Border.all(color: c.creditBalance > 0 ? AppColors.primary.withOpacity(0.3) : Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Customer Store Credit:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            Formatters.formatCurrency(c.creditBalance),
+                            style: AppTextStyles.bodyBold.copyWith(color: c.creditBalance > 0 ? AppColors.primary : AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -727,6 +780,37 @@ class RecordDetailsView extends ConsumerWidget {
             ];
           }).toList(),
         ),
+
+        if (customerReturns.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Sales Returns & Credit Notes', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Return No'),
+              ErpColumn(title: 'Date'),
+              ErpColumn(title: 'Original Invoice'),
+              ErpColumn(title: 'Return Type'),
+              ErpColumn(title: 'Total Amount', isNumeric: true),
+              ErpColumn(title: 'Status'),
+              ErpColumn(title: 'Refund / Credit Note'),
+            ],
+            rows: customerReturns.map((r) {
+              return [
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(r.id, 'salesReturn', details.parentSection),
+                  child: Text(r.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                ),
+                Text(Formatters.formatDate(r.saleDate), style: AppTextStyles.bodySmall),
+                Text(r.originalInvoiceNumber ?? '-', style: AppTextStyles.bodyMedium),
+                Text(r.returnType == ReturnType.fullReturn ? 'Full' : 'Partial', style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(r.totalAmount), style: AppTextStyles.bodyBold),
+                Text(r.salesReturnStatusLabel.toUpperCase(), style: AppTextStyles.bodySmall),
+                Text(r.refundStatusLabel, style: AppTextStyles.bodySmall),
+              ];
+            }).toList(),
+          ),
+        ],
       ],
     );
   }
@@ -1052,241 +1136,437 @@ class RecordDetailsView extends ConsumerWidget {
   }
 
   void _showSaleDocumentPdfDialog(BuildContext context, Sale s, MockDatabaseService db) {
-    final isInvoice = s.documentType == SalesDocumentType.invoice;
-    final title = isInvoice ? 'TAX INVOICE' : 'QUOTATION';
-    
+    SalesPdfGeneratorDialog.show(context, s, db);
+  }
+
+  void _showApproveReturnDialog(BuildContext context, Sale s, MockDatabaseService db) {
     showDialog(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: AppColors.success.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.check_circle_outline, color: AppColors.success, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Text('Approve Sales Return & Execute', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$title PDF Preview', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.black54),
-                onPressed: () => Navigator.of(ctx).pop(),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 820,
-            height: 600,
-            child: SingleChildScrollView(
-              child: Container(
-                padding: const EdgeInsets.all(24),
+              Text('Are you sure you want to approve Sales Return ${s.invoiceNumber}?', style: AppTextStyles.bodyMedium),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300, width: 2),
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade200),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header
+                    Text('Automated System Adjustments upon Approval:', style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                    const SizedBox(height: 6),
+                    Text('• Resalable items will be restocked to Finished Goods inventory.', style: AppTextStyles.bodySmall),
+                    Text('• Damaged/Scrap items will be recorded in Stock Adjustments.', style: AppTextStyles.bodySmall),
+                    Text('• Original Invoice returned quantities will be updated.', style: AppTextStyles.bodySmall),
+                    Text('• Customer balance will be credited / reduced.', style: AppTextStyles.bodySmall),
+                    Text('• Architect commission & project revenues will be adjusted.', style: AppTextStyles.bodySmall),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text('Total Credit Note Value: ${Formatters.formatCurrency(s.totalAmount)}', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              db.approveSalesReturn(s.id);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Sales Return ${s.invoiceNumber} Approved! All stock and ledger adjustments executed.'), backgroundColor: AppColors.success),
+              );
+            },
+            child: const Text('Confirm & Execute', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRejectReturnDialog(BuildContext context, Sale s, MockDatabaseService db) {
+    final reasonCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: AppColors.danger.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.cancel_outlined, color: AppColors.danger, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Text('Reject Sales Return', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: 450,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Provide rejection reason for return ${s.invoiceNumber}:', style: AppTextStyles.bodySmall),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: reasonCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: 'Enter rejection reason (e.g. Items out of return policy, unauthorized tampering)...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () {
+              if (reasonCtrl.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a rejection reason.'), backgroundColor: AppColors.warning),
+                );
+                return;
+              }
+              Navigator.of(ctx).pop();
+              db.rejectSalesReturn(s.id, reasonCtrl.text.trim());
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Sales Return ${s.invoiceNumber} Rejected.'), backgroundColor: AppColors.danger),
+              );
+            },
+            child: const Text('Confirm Rejection', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showProcessRefundDialog(BuildContext context, Sale s, MockDatabaseService db) {
+    final refundAmount = s.refundAmount > 0 ? s.refundAmount : s.totalAmount;
+    final amountCtrl = TextEditingController(text: refundAmount.toStringAsFixed(0));
+    final refCtrl = TextEditingController();
+    PaymentMode selectedMode = PaymentMode.creditNote;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.currency_rupee, color: AppColors.primary, size: 22),
+              ),
+              const SizedBox(width: 12),
+              const Text('Disburse Refund / Issue Credit Note', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Settlement for Return: ${s.invoiceNumber} (${s.partyName})', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<PaymentMode>(
+                  value: selectedMode,
+                  decoration: const InputDecoration(labelText: 'Refund / Settlement Channel *'),
+                  items: const [
+                    DropdownMenuItem(value: PaymentMode.creditNote, child: Text('CUSTOMER STORE CREDIT NOTE (WALLET)')),
+                    DropdownMenuItem(value: PaymentMode.bankTransfer, child: Text('BANK TRANSFER / NEFT / RTGS')),
+                    DropdownMenuItem(value: PaymentMode.upi, child: Text('UPI / ONLINE REFUND')),
+                    DropdownMenuItem(value: PaymentMode.cash, child: Text('CASH REFUND')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setDialogState(() => selectedMode = val);
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: amountCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Refund Amount (₹) *'),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: refCtrl,
+                  decoration: InputDecoration(
+                    labelText: selectedMode == PaymentMode.creditNote ? 'Credit Note Memo / Voucher Ref' : 'Transaction Ref / UTR / Cheque No.',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () {
+                final amt = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
+                if (amt <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a valid refund amount.'), backgroundColor: AppColors.warning),
+                  );
+                  return;
+                }
+                Navigator.of(ctx).pop();
+                db.processSalesReturnRefund(
+                  returnId: s.id,
+                  amount: amt,
+                  paymentMode: selectedMode,
+                  transactionRef: refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : null,
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Refund of ${Formatters.formatCurrency(amt)} recorded via ${selectedMode.name.toUpperCase()}!'), backgroundColor: AppColors.success),
+                );
+              },
+              child: const Text('Disburse & Finalize', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // -----------------------------------------------------------------
+  // 9. Sales Return Dedicated Details View (5 Key Sections)
+  // -----------------------------------------------------------------
+  Widget _buildSalesReturnDetails(BuildContext context, WidgetRef ref, Sale s, MockDatabaseService db) {
+    // Linked Stock Movements
+    final linkedMovements = db.stockMovements.where((m) => s.linkedStockMovementIds.contains(m.id)).toList();
+    // Linked Stock Adjustments
+    final linkedAdjustments = db.stockAdjustments.where((a) => s.linkedStockAdjustmentIds.contains(a.id)).toList();
+    // Linked Refund Payment
+    final linkedPayment = s.linkedRefundPaymentId != null ? db.payments.where((p) => p.id == s.linkedRefundPaymentId).firstOrNull : null;
+    // Original Invoice
+    final origInvoice = s.originalInvoiceId != null ? db.sales.where((inv) => inv.id == s.originalInvoiceId).firstOrNull : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Flow Trail
+        _buildDocumentFlowTrail(context, ref, s, db),
+        const SizedBox(height: 16),
+
+        // SECTION 1 & 4: Top Cards
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Section 1: Return Header Information
+            Expanded(
+              flex: 3,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: AppRadius.lgBorderRadius,
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'DELUZEX LIGHTING PVT. LTD.',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'GSTIN: 27AABCO8890K1Z9 | sales@deluzex.com',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                            ),
-                            Text(
-                              ' Borivali East, Mumbai, Maharashtra 400066',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                            ),
-                          ],
-                        ),
-                        const Icon(Icons.flash_on, size: 48, color: AppColors.primary),
+                        Text('Return Header Information', style: AppTextStyles.h3),
+                        ErpStatusBadge.neutral(s.salesReturnStatusLabel.toUpperCase()),
                       ],
                     ),
-                    const Divider(color: Colors.black87, thickness: 1.5, height: 24),
+                    const Divider(height: 24),
+                    _buildInfoRow('Return Voucher No', s.invoiceNumber),
+                    _buildInfoRow('Return Initiation Date', Formatters.formatDate(s.saleDate)),
+                    _buildInfoRow('Customer / Party', s.partyName),
+                    _buildInfoRow('Return Type', s.returnType == ReturnType.fullReturn ? 'FULL INVOICE RETURN' : 'PARTIAL ITEM RETURN'),
+                    _buildInfoRow('Return Reason', s.returnReason ?? 'Customer Return / Quality'),
+                    _buildInfoRow('Inspection & QA Notes', s.qaNotes ?? 'Pending QA clearance'),
+                    _buildInfoRow('Created By Operator', s.createdBy ?? 'Admin Staff'),
+                    _buildInfoRow('Financial Resolution', s.returnFinancialAction == ReturnFinancialAction.creditNote ? 'Store Credit Note Issued' : 'Direct Refund / Outstanding Adjusted'),
+                    if (s.notes != null && s.notes!.isNotEmpty)
+                      _buildInfoRow('Auditor Remarks', s.notes!),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
 
-                    Center(
-                      child: Text(
-                        title,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: 1.2),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Metadata
+            // Section 4: Financial Summary & Refund Settlement
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: AppRadius.lgBorderRadius,
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Financial & Refund Settlement', style: AppTextStyles.h3),
+                    const Divider(height: 24),
+                    _buildInfoRow('Return Subtotal', Formatters.formatCurrency(s.subtotalAmount)),
+                    _buildInfoRow('Discounts Reversed', Formatters.formatCurrency(s.discountAmount)),
+                    _buildInfoRow('GST Output Tax Reversal', Formatters.formatCurrency(s.gstAmount)),
+                    const Divider(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isInvoice ? 'Invoice No: ${s.invoiceNumber}' : 'Quotation No: ${s.invoiceNumber}',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
-                            ),
-                            Text(
-                              'Date: ${Formatters.formatDate(s.saleDate)}',
-                              style: const TextStyle(fontSize: 11, color: Colors.black87),
-                            ),
-                            if (!isInvoice && s.validUntil != null)
-                              Text(
-                                'Valid Until: ${Formatters.formatDate(s.validUntil!)}',
-                                style: const TextStyle(fontSize: 11, color: Colors.black87),
-                              ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            if (s.salesOrderNumber != null)
-                              Text('Sales Order: ${s.salesOrderNumber}', style: const TextStyle(fontSize: 11, color: Colors.black87)),
-                            if (s.quotationReferenceId != null)
-                              Text('Ref Quote ID: ${s.quotationReferenceId}', style: const TextStyle(fontSize: 11, color: Colors.black87)),
-                          ],
-                        ),
+                        Text('Total Credit Note Value:', style: AppTextStyles.bodyBold),
+                        Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.h2.copyWith(color: AppColors.dangerText)),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Refund Status:', style: AppTextStyles.bodyMedium),
+                        Text(s.refundStatusLabel.toUpperCase(), style: AppTextStyles.bodyBold.copyWith(color: s.refundStatus == RefundStatus.processed ? AppColors.successText : (s.refundStatus == RefundStatus.notRequired ? AppColors.textMuted : AppColors.warningText))),
+                      ],
+                    ),
+                    if (s.refundAmount > 0) ...[
+                      const SizedBox(height: 8),
+                      _buildInfoRow('Refund Amount Disbursed', Formatters.formatCurrency(s.refundAmount)),
+                      if (s.refundPaymentMode != null)
+                        _buildInfoRow('Refund Channel', s.refundPaymentMode!.name.toUpperCase()),
+                      if (s.refundTransactionRef != null)
+                        _buildInfoRow('Transaction / UTR Ref', s.refundTransactionRef!),
+                    ],
+                    const Divider(height: 24),
 
-                    // Client details
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        border: Border.all(color: Colors.grey.shade300),
+                    // Return Action Buttons
+                    Text('Workflow Actions', style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                    const SizedBox(height: 10),
+
+                    if (s.salesReturnStatus == SalesReturnStatus.draft) ...[
+                      ErpButton(
+                        text: 'Submit for Warehouse Receiving',
+                        icon: Icons.send_outlined,
+                        onPressed: () {
+                          db.updateSalesReturnStatus(s.id, SalesReturnStatus.submitted);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Return Submitted for Warehouse Receiving'), backgroundColor: AppColors.primary),
+                          );
+                        },
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(height: 8),
+                    ],
+
+                    if (s.salesReturnStatus == SalesReturnStatus.submitted) ...[
+                      ErpButton(
+                        text: 'Acknowledge Items Received',
+                        icon: Icons.inventory_2_outlined,
+                        onPressed: () {
+                          db.updateSalesReturnStatus(s.id, SalesReturnStatus.itemsReceived);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Items Received at Warehouse! Ready for QA.'), backgroundColor: AppColors.primary),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    if (s.salesReturnStatus == SalesReturnStatus.itemsReceived) ...[
+                      ErpButton(
+                        text: 'Mark QA Inspection Complete',
+                        icon: Icons.fact_check_outlined,
+                        onPressed: () {
+                          db.updateSalesReturnStatus(s.id, SalesReturnStatus.inspection);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('QA Inspection Logged. Ready for Approval.'), backgroundColor: AppColors.primary),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    if (s.salesReturnStatus == SalesReturnStatus.inspection || s.salesReturnStatus == SalesReturnStatus.submitted || s.salesReturnStatus == SalesReturnStatus.itemsReceived || s.salesReturnStatus == SalesReturnStatus.requested) ...[
+                      Row(
                         children: [
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('BILL TO:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
-                                const SizedBox(height: 4),
-                                Text(s.partyName, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87)),
-                                Text('Client ID: ${s.partyId}', style: const TextStyle(fontSize: 11, color: Colors.black87)),
-                              ],
+                            child: ErpButton(
+                              text: 'Approve & Execute',
+                              icon: Icons.check_circle_outline,
+                              onPressed: () => _showApproveReturnDialog(context, s, db),
                             ),
                           ),
-                          if (s.projectName != null)
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('PROJECT LOCATION:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
-                                  const SizedBox(height: 4),
-                                  Text(s.projectName!, style: const TextStyle(fontSize: 11, color: Colors.black87)),
-                                ],
-                              ),
-                            ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Items table
-                    Table(
-                      border: TableBorder.all(color: Colors.grey.shade300),
-                      children: [
-                        TableRow(
-                          decoration: BoxDecoration(color: Colors.grey.shade200),
-                          children: const [
-                            Padding(padding: EdgeInsets.all(6), child: Text('Sr No', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))),
-                            Padding(padding: EdgeInsets.all(6), child: Text('Item SKU', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))),
-                            Padding(padding: EdgeInsets.all(6), child: Text('Description', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))),
-                            Padding(padding: EdgeInsets.all(6), child: Text('Qty', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))),
-                            Padding(padding: EdgeInsets.all(6), child: Text('Rate', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))),
-                            Padding(padding: EdgeInsets.all(6), child: Text('Discount', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))),
-                            Padding(padding: EdgeInsets.all(6), child: Text('Total', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))),
-                          ],
-                        ),
-                        ...List.generate(s.items.length, (idx) {
-                          final item = s.items[idx];
-                          return TableRow(
-                            children: [
-                              Padding(padding: const EdgeInsets.all(6), child: Text('${idx + 1}', style: const TextStyle(fontSize: 9))),
-                              Padding(padding: const EdgeInsets.all(6), child: Text(item.finishedProductCode, style: const TextStyle(fontSize: 9))),
-                              Padding(padding: const EdgeInsets.all(6), child: Text(item.finishedProductName, style: const TextStyle(fontSize: 9))),
-                              Padding(padding: const EdgeInsets.all(6), child: Text('${item.quantity} ${item.unit}', style: const TextStyle(fontSize: 9))),
-                              Padding(padding: const EdgeInsets.all(6), child: Text(Formatters.formatCurrency(item.rate), style: const TextStyle(fontSize: 9))),
-                              Padding(padding: const EdgeInsets.all(6), child: Text(Formatters.formatCurrency(item.discountAmount), style: const TextStyle(fontSize: 9))),
-                              Padding(padding: const EdgeInsets.all(6), child: Text(Formatters.formatCurrency(item.lineTotal), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold))),
-                            ],
-                          );
-                        }),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Summary block
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: SizedBox(
-                        width: 300,
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Subtotal:', style: TextStyle(fontSize: 10, color: Colors.black54)),
-                                Text(Formatters.formatCurrency(s.subtotalAmount), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                              ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ErpButton(
+                              text: 'Reject Return',
+                              icon: Icons.cancel_outlined,
+                              isOutlined: true,
+                              onPressed: () => _showRejectReturnDialog(context, s, db),
                             ),
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Total Discount:', style: TextStyle(fontSize: 10, color: Colors.black54)),
-                                Text('- ${Formatters.formatCurrency(s.discountAmount)}', style: const TextStyle(fontSize: 10)),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('GST Output Tax (18%):', style: TextStyle(fontSize: 10, color: Colors.black54)),
-                                Text(Formatters.formatCurrency(s.gstAmount), style: const TextStyle(fontSize: 10)),
-                              ],
-                            ),
-                            const Divider(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('GRAND TOTAL:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                Text(Formatters.formatCurrency(s.totalAmount), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                              ],
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 40),
+                      const SizedBox(height: 8),
+                    ],
 
-                    // Footer terms and signatures
+                    if (s.salesReturnStatus == SalesReturnStatus.approved && (s.refundStatus == RefundStatus.pending || s.refundStatus == RefundStatus.approved)) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ErpButton(
+                              text: 'Process Refund / Credit Note',
+                              icon: Icons.payments_outlined,
+                              onPressed: () => _showProcessRefundDialog(context, s, db),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    // PDF Button
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Prepared By: Sales Desk', style: TextStyle(fontSize: 9, color: Colors.black54)),
-                            const SizedBox(height: 24),
-                            Container(width: 120, height: 1, color: Colors.grey),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            const Text('Authorized Signatory', style: TextStyle(fontSize: 9, color: Colors.black54)),
-                            const SizedBox(height: 24),
-                            Container(width: 120, height: 1, color: Colors.grey),
-                          ],
+                        Expanded(
+                          child: ErpButton(
+                            text: 'View / Download Credit Note PDF',
+                            isOutlined: true,
+                            icon: Icons.picture_as_pdf,
+                            onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
+                          ),
                         ),
                       ],
                     ),
@@ -1294,26 +1574,249 @@ class RecordDetailsView extends ConsumerWidget {
                 ),
               ),
             ),
-          ),
-          actions: [
-            ErpButton(
-              text: 'Download / Print PDF',
-              icon: Icons.print,
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Document exported to system downloads successfully!'), backgroundColor: AppColors.success),
-                );
-              },
-            ),
           ],
-        );
-      },
+        ),
+        const SizedBox(height: 24),
+
+        // SECTION 2: Original Transaction Reference Card
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: AppRadius.lgBorderRadius,
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Original Sales Transaction Reference', style: AppTextStyles.h3),
+              const Divider(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text('Original Tax Invoice: ', style: AppTextStyles.bodyMedium),
+                            if (s.originalInvoiceId != null)
+                              InkWell(
+                                onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.originalInvoiceId!, 'invoice', details.parentSection),
+                                child: Text(s.originalInvoiceNumber ?? s.originalInvoiceId!, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                              )
+                            else
+                              Text(s.originalInvoiceNumber ?? '-', style: AppTextStyles.bodyBold),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        _buildInfoRow('Original Sale Date', origInvoice != null ? Formatters.formatDate(origInvoice.saleDate) : '-'),
+                        _buildInfoRow('Invoice Status', origInvoice?.statusLabel ?? '-'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildInfoRow('Original Invoice Amount', origInvoice != null ? Formatters.formatCurrency(origInvoice.totalAmount) : '-'),
+                        _buildInfoRow('Customer Paid Amount', origInvoice != null ? Formatters.formatCurrency(origInvoice.paidAmount) : '-'),
+                        _buildInfoRow('Outstanding Pending Balance', origInvoice != null ? Formatters.formatCurrency(origInvoice.pendingAmount) : '-'),
+                      ],
+                    ),
+                  ),
+                  if (s.projectName != null || s.salesOrderNumber != null) ...[
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (s.salesOrderNumber != null)
+                            _buildInfoRow('Sales Order Ref', s.salesOrderNumber!),
+                          if (s.projectName != null)
+                            _buildInfoRow('Project Linked', s.projectName!),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // SECTION 3: Returned Items & Condition Breakdown
+        Text('Returned Items & Quality Inspection', style: AppTextStyles.h2),
+        const SizedBox(height: 12),
+        ErpDataTable(
+          columns: const [
+            ErpColumn(title: 'SKU / Code'),
+            ErpColumn(title: 'Product Name'),
+            ErpColumn(title: 'Invoiced Qty', isNumeric: true),
+            ErpColumn(title: 'Return Qty', isNumeric: true),
+            ErpColumn(title: 'Unit Rate', isNumeric: true),
+            ErpColumn(title: 'GST %', isNumeric: true),
+            ErpColumn(title: 'Condition & Stock Action'),
+            ErpColumn(title: 'Restock Status'),
+            ErpColumn(title: 'Line Total', isNumeric: true),
+          ],
+          rows: s.items.map((item) {
+            String conditionLabel = 'Resalable (Restock)';
+            Color conditionColor = AppColors.successText;
+            if (item.returnCondition == ReturnCondition.damaged) {
+              conditionLabel = 'Damaged (Damage Stock)';
+              conditionColor = AppColors.warningText;
+            } else if (item.returnCondition == ReturnCondition.scrap) {
+              conditionLabel = 'Scrap (Write-off)';
+              conditionColor = AppColors.dangerText;
+            }
+
+            final isProcessed = s.isProcessed || s.salesReturnStatus == SalesReturnStatus.approved;
+            final stockStatus = isProcessed
+                ? (item.returnCondition == ReturnCondition.resalable ? 'Restocked to FG' : 'Adjusted as Loss')
+                : 'Pending Approval';
+
+            return [
+              InkWell(
+                onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(item.finishedProductId, 'finishedProduct', details.parentSection),
+                child: Text(item.finishedProductCode, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+              ),
+              Text(item.finishedProductName, style: AppTextStyles.bodyMedium),
+              Text('${item.invoicedQuantity?.toInt() ?? item.quantity.toInt()} ${item.unit}', style: AppTextStyles.bodySmall),
+              Text('${item.quantity.toInt()} ${item.unit}', style: AppTextStyles.bodyBold),
+              Text(Formatters.formatCurrency(item.rate), style: AppTextStyles.bodySmall),
+              Text('${item.gstPercent.toInt()}%', style: AppTextStyles.bodySmall),
+              Text(conditionLabel, style: AppTextStyles.bodyBold.copyWith(color: conditionColor)),
+              Text(stockStatus, style: AppTextStyles.bodySmall.copyWith(color: isProcessed ? AppColors.successText : AppColors.textMuted)),
+              Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodyBold),
+            ];
+          }).toList(),
+        ),
+
+        // SECTION 5: Related Transactions Audit Trail
+        const SizedBox(height: 28),
+        Text('Related Transactions Audit Trail', style: AppTextStyles.h2),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: AppRadius.lgBorderRadius,
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (origInvoice != null) ...[
+                    ActionChip(
+                      avatar: const Icon(Icons.receipt_long, size: 14, color: Colors.white),
+                      label: Text('Original Invoice: ${origInvoice.invoiceNumber}', style: const TextStyle(fontSize: 11, color: Colors.white)),
+                      backgroundColor: AppColors.primary,
+                      onPressed: () => ref.read(activeRecordDetailsStackProvider.notifier).push(origInvoice.id, 'invoice', details.parentSection),
+                    ),
+                  ],
+                  if (linkedMovements.isNotEmpty) ...[
+                    ...linkedMovements.map((m) => Chip(
+                          avatar: const Icon(Icons.swap_horiz, size: 14, color: Colors.white),
+                          label: Text('Stock In Movement: ${m.id}', style: const TextStyle(fontSize: 11, color: Colors.white)),
+                          backgroundColor: AppColors.success,
+                        )),
+                  ],
+                  if (linkedAdjustments.isNotEmpty) ...[
+                    ...linkedAdjustments.map((a) => Chip(
+                          avatar: const Icon(Icons.tune, size: 14, color: Colors.white),
+                          label: Text('Stock Adjustment: ${a.adjustmentNumber} (${a.reasonLabel})', style: const TextStyle(fontSize: 11, color: Colors.white)),
+                          backgroundColor: AppColors.warning,
+                        )),
+                  ],
+                  if (linkedPayment != null) ...[
+                    ActionChip(
+                      avatar: const Icon(Icons.payments, size: 14, color: Colors.white),
+                      label: Text('Refund Voucher: ${linkedPayment.paymentNumber}', style: const TextStyle(fontSize: 11, color: Colors.white)),
+                      backgroundColor: AppColors.purple,
+                      onPressed: () => ref.read(activeRecordDetailsStackProvider.notifier).push(linkedPayment.id, 'payment', details.parentSection),
+                    ),
+                  ],
+                  if (s.salesReturnStatus == SalesReturnStatus.approved && linkedMovements.isEmpty && linkedAdjustments.isEmpty && linkedPayment == null)
+                    Text('Direct ledger adjustment recorded on approval.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // Activity Timeline
+        if (s.activityLogs.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Return Activity & Audit History', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: AppRadius.lgBorderRadius,
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: s.activityLogs.map((log) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.history, size: 16, color: AppColors.primary),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(log.action, style: AppTextStyles.bodyBold),
+                                Text(Formatters.formatDateTime(log.timestamp), style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                              ],
+                            ),
+                            if (log.details != null)
+                              Text(log.details!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                            Text('By: ${log.performedBy}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
+  // -----------------------------------------------------------------
+  // 9b. Regular Sales Documents (Invoice, Quotation, Order, Delivery)
+  // -----------------------------------------------------------------
   Widget _buildSaleDetails(BuildContext context, WidgetRef ref, Sale s, MockDatabaseService db) {
-    final payHistory = db.payments.where((p) => p.referenceDocumentId == s.id).toList();
+    final payHistory = db.payments.where((p) => p.referenceDocumentId == s.id || (s.linkedPaymentIds.contains(p.id))).toList();
+    final linkedReturns = db.salesReturns.where((r) => r.originalInvoiceId == s.id).toList();
+    final approvedReturnsTotal = linkedReturns.where((r) => r.salesReturnStatus == SalesReturnStatus.approved).fold(0.0, (sum, r) => sum + r.totalAmount);
+    final netSaleAmount = (s.totalAmount - approvedReturnsTotal).clamp(0.0, double.infinity);
 
     // Fetch customer details
     String customerCode = '-';
@@ -1323,24 +1826,32 @@ class RecordDetailsView extends ConsumerWidget {
     String shippingAddress = '-';
 
     if (s.partyType == PartyType.customer) {
-      final cust = db.customers.firstWhere((c) => c.id == s.partyId, orElse: () => db.customers.first);
-      customerCode = cust.id;
-      customerEmail = cust.email;
-      customerPhone = cust.mobile;
-      billingAddress = cust.address;
-      shippingAddress = cust.address;
+      final cust = db.customers.where((c) => c.id == s.partyId).firstOrNull ?? (db.customers.isNotEmpty ? db.customers.first : null);
+      if (cust != null) {
+        customerCode = cust.id;
+        customerEmail = cust.email;
+        customerPhone = cust.mobile;
+        billingAddress = cust.address;
+        shippingAddress = cust.address;
+      }
     } else {
-      final dlr = db.dealers.firstWhere((d) => d.id == s.partyId, orElse: () => db.dealers.first);
-      customerCode = dlr.id;
-      customerEmail = dlr.email;
-      customerPhone = dlr.mobile;
-      billingAddress = dlr.address;
-      shippingAddress = dlr.address;
+      final dlr = db.dealers.where((d) => d.id == s.partyId).firstOrNull ?? (db.dealers.isNotEmpty ? db.dealers.first : null);
+      if (dlr != null) {
+        customerCode = dlr.id;
+        customerEmail = dlr.email;
+        customerPhone = dlr.mobile;
+        billingAddress = dlr.address;
+        shippingAddress = dlr.address;
+      }
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Linked Document Flow Trail
+        _buildDocumentFlowTrail(context, ref, s, db),
+        const SizedBox(height: 16),
+
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1391,24 +1902,14 @@ class RecordDetailsView extends ConsumerWidget {
                       _buildInfoRow('Validity Valid Until', Formatters.formatDate(s.validUntil!)),
                     if (s.documentType == SalesDocumentType.salesOrder && s.deliveryDate != null)
                       _buildInfoRow('Expected Delivery Date', Formatters.formatDate(s.deliveryDate!)),
-                    
-                    if (s.documentType == SalesDocumentType.salesReturn) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Original Invoice Link:', style: AppTextStyles.bodyMedium),
-                          if (s.originalInvoiceId != null)
-                            InkWell(
-                              onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.originalInvoiceId!, 'invoice', details.parentSection),
-                              child: Text(s.originalInvoiceNumber ?? 'Invoice Ref', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                            )
-                          else
-                            Text(s.originalInvoiceNumber ?? '-', style: AppTextStyles.bodyBold),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      _buildInfoRow('Return Main Reason', s.returnReason ?? '-'),
+                    if (s.documentType == SalesDocumentType.delivery) ...[
+                      _buildInfoRow('Vehicle Registration', s.vehicleNumber ?? 'Not Assigned'),
+                      _buildInfoRow('Driver Contact', s.driverContact ?? 'Direct Dispatch'),
+                      _buildInfoRow('LR / Tracking Number', s.trackingNumber ?? 'Pending'),
+                    ],
+
+                    if (s.documentType == SalesDocumentType.invoice) ...[
+                      _buildInfoRow('Return Status Indicator', s.invoiceReturnStatusLabel),
                     ],
 
                     _buildInfoRow('Payment Terms Remarks', 'Net 30 Days'),
@@ -1433,22 +1934,33 @@ class RecordDetailsView extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Calculated Totals & Actions', style: AppTextStyles.h3),
+                    Text('Financials & Actions', style: AppTextStyles.h3),
                     const Divider(height: 24),
                     _buildInfoRow('Subtotal Amount', Formatters.formatCurrency(s.subtotalAmount)),
                     _buildInfoRow('Discounts Amount', Formatters.formatCurrency(s.discountAmount)),
-                    _buildInfoRow('GST Output Tax (18%)', Formatters.formatCurrency(s.gstAmount)),
+                    _buildInfoRow('GST Output Tax', Formatters.formatCurrency(s.gstAmount)),
                     const Divider(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Grand Total Amount:', style: AppTextStyles.bodyBold),
+                        Text('Grand Total Invoiced:', style: AppTextStyles.bodyBold),
                         Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.h2.copyWith(color: AppColors.primary)),
                       ],
                     ),
+                    if (approvedReturnsTotal > 0) ...[
+                      const SizedBox(height: 6),
+                      _buildInfoRow('Total Sales Returns', '- ${Formatters.formatCurrency(approvedReturnsTotal)}'),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Net Invoice Revenue:', style: AppTextStyles.bodyBold),
+                          Text(Formatters.formatCurrency(netSaleAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     _buildInfoRow('Amount Received / Paid', Formatters.formatCurrency(s.paidAmount)),
-                    _buildInfoRow('Outstanding Receivables', Formatters.formatCurrency(s.pendingAmount)),
+                    _buildInfoRow('Outstanding Balance', Formatters.formatCurrency(s.pendingAmount)),
                     const Divider(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1466,13 +1978,16 @@ class RecordDetailsView extends ConsumerWidget {
                           children: [
                             Expanded(
                               child: ErpButton(
-                                text: 'Approve & Auto-SO',
+                                text: 'Accept & Generate Proforma',
                                 icon: Icons.check_circle_outline,
                                 onPressed: () {
-                                  db.approveQuotation(s.id);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Quotation Approved! Sales Order generated automatically.'), backgroundColor: AppColors.success),
-                                  );
+                                  final pi = db.createProformaFromQuotation(s.id);
+                                  if (pi != null) {
+                                    ref.read(activeRecordDetailsStackProvider.notifier).push(pi.id, 'proformaInvoice', details.parentSection);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Quotation Accepted! Proforma Invoice generated.'), backgroundColor: AppColors.success),
+                                    );
+                                  }
                                 },
                               ),
                             ),
@@ -1483,13 +1998,14 @@ class RecordDetailsView extends ConsumerWidget {
                           children: [
                             Expanded(
                               child: ErpButton(
-                                text: 'Reject Quotation',
+                                text: 'Create Revision',
                                 isOutlined: true,
-                                icon: Icons.cancel_outlined,
+                                icon: Icons.history_edu,
                                 onPressed: () {
-                                  db.rejectQuotation(s.id);
+                                  final rev = db.createQuotationRevision(s.id);
+                                  ref.read(activeRecordDetailsStackProvider.notifier).push(rev.id, 'quotation', details.parentSection);
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Quotation Rejected.'), backgroundColor: AppColors.danger),
+                                    SnackBar(content: Text('Created Revision ${rev.revisionNumber} (${rev.invoiceNumber})'), backgroundColor: AppColors.primary),
                                   );
                                 },
                               ),
@@ -1498,31 +2014,24 @@ class RecordDetailsView extends ConsumerWidget {
                         ),
                         const SizedBox(height: 10),
                       ],
+                    ],
 
-                      // Linked SO Clickable if approved
-                      if (s.salesOrderReferenceId != null) ...[
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: AppRadius.smBorderRadius),
-                          child: InkWell(
-                            onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.salesOrderReferenceId!, 'salesOrder', details.parentSection),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Sales Order Link:', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                                Row(
-                                  children: [
-                                    Text('View Sales Order ', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                                    const Icon(Icons.arrow_right_alt, color: AppColors.primary),
-                                  ],
-                                )
-                              ],
+                    // Proforma Actions
+                    if (s.documentType == SalesDocumentType.proformaInvoice) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ErpButton(
+                              text: 'Record Advance Payment',
+                              icon: Icons.payments_outlined,
+                              onPressed: () {
+                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.proformaInvoices;
+                              },
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
+                        ],
+                      ),
+                      const SizedBox(height: 10),
                     ],
 
                     // Sales Order status changer dropdown
@@ -1543,78 +2052,60 @@ class RecordDetailsView extends ConsumerWidget {
                         },
                       ),
                       const SizedBox(height: 12),
-                      
-                      // Pre-fill Create Invoice option if Sales Order is DONE
-                      if (s.salesOrderStatus == SalesOrderStatus.done && s.salesOrderReferenceId == null) ...[
+                    ],
+
+                    // Invoice actions
+                    if (s.documentType == SalesDocumentType.invoice && s.status != SaleStatus.cancelled) ...[
+                      if (s.invoiceReturnStatus != InvoiceReturnIndicator.fullyReturned) ...[
                         Row(
                           children: [
                             Expanded(
                               child: ErpButton(
-                                text: 'Create Invoice',
-                                icon: Icons.receipt_long,
+                                text: 'Create Sales Return',
+                                isOutlined: true,
+                                icon: Icons.assignment_return_outlined,
                                 onPressed: () {
-                                  // Pre-fill in Riverpod state and navigate to creation page
-                                  ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.invoice;
+                                  ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.salesReturn;
                                   ref.read(salesCreateSourceDocIdProvider.notifier).state = s.id;
-                                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale;
+                                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesReturn;
                                 },
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
+                      ],
+                      if (s.pendingAmount > 0) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ErpButton(
+                                text: 'Record Payment',
+                                icon: Icons.payments_outlined,
+                                onPressed: () {
+                                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments;
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
                       ],
                     ],
 
-                    // Invoice actions
-                    if (s.documentType == SalesDocumentType.invoice && s.status != SaleStatus.cancelled) ...[
+                    // Delivery Actions
+                    if (s.documentType == SalesDocumentType.delivery) ...[
                       Row(
                         children: [
                           Expanded(
                             child: ErpButton(
-                              text: 'Create Sales Return',
-                              isOutlined: true,
-                              icon: Icons.assignment_return_outlined,
+                              text: 'Generate Tax Invoice',
+                              icon: Icons.receipt_long,
                               onPressed: () {
-                                // Pre-fill in Riverpod and redirect to creation
-                                ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.salesReturn;
-                                ref.read(salesCreateSourceDocIdProvider.notifier).state = s.id;
-                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ErpButton(
-                              text: 'Record Payment',
-                              icon: Icons.payments_outlined,
-                              onPressed: () {
-                                // Switch view to customer payments tab to record payment
-                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-
-                    // Sales Return actions
-                    if (s.documentType == SalesDocumentType.salesReturn && s.salesReturnStatus == SalesReturnStatus.requested) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ErpButton(
-                              text: 'Complete & Add Stock',
-                              icon: Icons.check,
-                              onPressed: () {
-                                db.updateSalesReturnStatus(s.id, SalesReturnStatus.completed);
+                                final inv = db.createSalesInvoiceFromDelivery(deliveryId: s.id);
+                                ref.read(activeRecordDetailsStackProvider.notifier).push(inv.id, 'invoice', details.parentSection);
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Sales Return Completed! Stock balances adjusted.'), backgroundColor: AppColors.success),
+                                  SnackBar(content: Text('Tax Invoice ${inv.invoiceNumber} created from delivery!'), backgroundColor: AppColors.success),
                                 );
                               },
                             ),
@@ -1624,93 +2115,22 @@ class RecordDetailsView extends ConsumerWidget {
                       const SizedBox(height: 10),
                     ],
 
-                    // Standard PDF viewing actions
-                    if (s.documentType == SalesDocumentType.quotation || s.documentType == SalesDocumentType.invoice) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ErpButton(
-                              text: 'View PDF / Print',
-                              isOutlined: true,
-                              icon: Icons.picture_as_pdf,
-                              onPressed: () {
-                                if (s.documentType == SalesDocumentType.quotation) {
-                                  QuotationPdfPreviewDialog.show(context, s, db);
-                                } else {
-                                  _showSaleDocumentPdfDialog(context, s, db);
-                                }
-                              },
-                            ),
+                    // Unified PDF Preview
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ErpButton(
+                            text: 'View / Download PDF',
+                            isOutlined: true,
+                            icon: Icons.picture_as_pdf,
+                            onPressed: () {
+                              SalesPdfGeneratorDialog.show(context, s, db);
+                            },
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Standard attachment details view
-                    const SizedBox(height: 12),
-                    Text('Supporting Attachments', style: AppTextStyles.bodyBold),
-                    const SizedBox(height: 8),
-                    StatefulBuilder(
-                      builder: (ctx, setAttachmentState) {
-                        return s.attachmentUrl != null
-                            ? Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceMuted,
-                                  borderRadius: AppRadius.smBorderRadius,
-                                  border: Border.all(color: AppColors.border),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.picture_as_pdf, color: AppColors.danger, size: 28),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(s.attachmentUrl!, style: AppTextStyles.bodyBold.copyWith(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                          Text('Size: 185 KB | Type: PDF Document', style: AppTextStyles.bodySmall),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
-                                      onPressed: () {
-                                        db.sales[db.sales.indexOf(s)] = s.copyWith(attachmentUrl: null);
-                                        db.notifyListeners();
-                                        setAttachmentState(() {});
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : InkWell(
-                                onTap: () {
-                                  db.sales[db.sales.indexOf(s)] = s.copyWith(
-                                    attachmentUrl: 'Signed_Supporting_Doc_${s.invoiceNumber}.pdf',
-                                  );
-                                  db.notifyListeners();
-                                  setAttachmentState(() {});
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: AppColors.border, style: BorderStyle.solid),
-                                    borderRadius: AppRadius.smBorderRadius,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(Icons.cloud_upload_outlined, color: AppColors.primary, size: 18),
-                                      const SizedBox(width: 8),
-                                      Text('Choose File / Upload Document', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                                    ],
-                                  ),
-                                ),
-                              );
-                      },
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 12),
                   ],
                 ),
               ),
@@ -1718,18 +2138,19 @@ class RecordDetailsView extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 24),
-        Text('Items List / Details', style: AppTextStyles.h2),
+
+        Text('Line Items & Fulfillment Tracking', style: AppTextStyles.h2),
         const SizedBox(height: 12),
         ErpDataTable(
           columns: [
-            ErpColumn(title: 'Product SKU'),
-            ErpColumn(title: 'Product Name'),
-            ErpColumn(title: 'Quantity'),
-            ErpColumn(title: 'Rate', isNumeric: true),
-            ErpColumn(title: 'Discount Applied', isNumeric: true),
-            ErpColumn(title: 'GST Tax', isNumeric: true),
-            if (s.documentType == SalesDocumentType.salesReturn) ErpColumn(title: 'Return Condition'),
-            ErpColumn(title: 'Line Total', isNumeric: true),
+            const ErpColumn(title: 'Product SKU'),
+            const ErpColumn(title: 'Product Name'),
+            const ErpColumn(title: 'Invoiced Qty', isNumeric: true),
+            if (s.documentType == SalesDocumentType.invoice) const ErpColumn(title: 'Returned', isNumeric: true),
+            const ErpColumn(title: 'Rate', isNumeric: true),
+            const ErpColumn(title: 'Discount', isNumeric: true),
+            const ErpColumn(title: 'GST Tax', isNumeric: true),
+            const ErpColumn(title: 'Line Total', isNumeric: true),
           ],
           rows: s.items.map((item) {
             return [
@@ -1738,18 +2159,73 @@ class RecordDetailsView extends ConsumerWidget {
                 child: Text(item.finishedProductCode, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
               ),
               Text(item.finishedProductName, style: AppTextStyles.bodyMedium),
-              Text('${item.quantity} ${item.unit}', style: AppTextStyles.bodyMedium),
+              Text('${item.quantity.toInt()} ${item.unit}', style: AppTextStyles.bodyBold),
+              if (s.documentType == SalesDocumentType.invoice)
+                Text('${item.returnedQuantity.toInt()} ${item.unit}', style: AppTextStyles.bodySmall.copyWith(color: item.returnedQuantity > 0 ? AppColors.dangerText : AppColors.textMuted)),
               Text(Formatters.formatCurrency(item.rate), style: AppTextStyles.bodySmall),
               Text(Formatters.formatCurrency(item.discountAmount), style: AppTextStyles.bodySmall),
-              Text('${item.gstPercent}%', style: AppTextStyles.bodySmall),
-              if (s.documentType == SalesDocumentType.salesReturn) Text(item.productCondition ?? 'Good/Saleable', style: AppTextStyles.bodySmall),
+              Text('${item.gstPercent.toInt()}%', style: AppTextStyles.bodySmall),
               Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodyBold),
             ];
           }).toList(),
         ),
+
+        // Document Activity Timeline
+        if (s.activityLogs.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Document Activity & Audit Timeline', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: AppRadius.lgBorderRadius,
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: s.activityLogs.map((log) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.history, size: 16, color: AppColors.primary),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(log.action, style: AppTextStyles.bodyBold),
+                                Text(Formatters.formatDateTime(log.timestamp), style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                              ],
+                            ),
+                            if (log.details != null)
+                              Text(log.details!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                            Text('By: ${log.performedBy}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+
         if (payHistory.isNotEmpty) ...[
           const SizedBox(height: 24),
-          Text('Payments Received against this Invoice', style: AppTextStyles.h2),
+          Text('Payments Received against this Record', style: AppTextStyles.h2),
           const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
@@ -1772,8 +2248,122 @@ class RecordDetailsView extends ConsumerWidget {
               ];
             }).toList(),
           ),
-        ]
+        ],
+
+        if (linkedReturns.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Sales Returns & Credit Notes Linked to this Invoice', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Return No'),
+              ErpColumn(title: 'Date'),
+              ErpColumn(title: 'Return Type'),
+              ErpColumn(title: 'Return Value', isNumeric: true),
+              ErpColumn(title: 'Status'),
+              ErpColumn(title: 'Refund Status'),
+            ],
+            rows: linkedReturns.map((r) {
+              return [
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(r.id, 'salesReturn', details.parentSection),
+                  child: Text(r.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                ),
+                Text(Formatters.formatDate(r.saleDate), style: AppTextStyles.bodySmall),
+                Text(r.returnType == ReturnType.fullReturn ? 'Full' : 'Partial', style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(r.totalAmount), style: AppTextStyles.bodyBold),
+                Text(r.salesReturnStatusLabel.toUpperCase(), style: AppTextStyles.bodySmall),
+                Text(r.refundStatusLabel, style: AppTextStyles.bodySmall),
+              ];
+            }).toList(),
+          ),
+        ],
       ],
+    );
+  }
+
+  Widget _buildDocumentFlowTrail(BuildContext context, WidgetRef ref, Sale s, MockDatabaseService db) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.mdBorderRadius,
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Text('Document Flow:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textMuted)),
+          if (s.parentQuotationNumber != null || s.originalQuotationId != null) ...[
+            ActionChip(
+              avatar: const Icon(Icons.request_quote, size: 14, color: Colors.white),
+              label: Text(s.parentQuotationNumber ?? 'Quotation', style: const TextStyle(fontSize: 11, color: Colors.white)),
+              backgroundColor: AppColors.primaryDark,
+              onPressed: () {
+                final qId = s.parentQuotationId ?? s.originalQuotationId;
+                if (qId != null) ref.read(activeRecordDetailsStackProvider.notifier).push(qId, 'quotation', details.parentSection);
+              },
+            ),
+            const Icon(Icons.arrow_forward, size: 14, color: AppColors.textMuted),
+          ],
+          if (s.proformaNumber != null) ...[
+            ActionChip(
+              avatar: const Icon(Icons.receipt_outlined, size: 14, color: Colors.white),
+              label: Text(s.proformaNumber!, style: const TextStyle(fontSize: 11, color: Colors.white)),
+              backgroundColor: AppColors.warning,
+              onPressed: () {
+                if (s.proformaReferenceId != null) ref.read(activeRecordDetailsStackProvider.notifier).push(s.proformaReferenceId!, 'proformaInvoice', details.parentSection);
+              },
+            ),
+            const Icon(Icons.arrow_forward, size: 14, color: AppColors.textMuted),
+          ],
+          if (s.salesOrderNumber != null) ...[
+            ActionChip(
+              avatar: const Icon(Icons.shopping_bag_outlined, size: 14, color: Colors.white),
+              label: Text(s.salesOrderNumber!, style: const TextStyle(fontSize: 11, color: Colors.white)),
+              backgroundColor: AppColors.info,
+              onPressed: () {
+                if (s.salesOrderReferenceId != null) ref.read(activeRecordDetailsStackProvider.notifier).push(s.salesOrderReferenceId!, 'salesOrder', details.parentSection);
+              },
+            ),
+            const Icon(Icons.arrow_forward, size: 14, color: AppColors.textMuted),
+          ],
+          if (s.linkedProductionOrderIds.isNotEmpty) ...[
+            ...s.linkedProductionOrderIds.map((pId) {
+              final po = db.productionOrders.where((p) => p.id == pId).firstOrNull;
+              return ActionChip(
+                avatar: const Icon(Icons.precision_manufacturing, size: 14, color: Colors.white),
+                label: Text(po?.productionNumber ?? pId, style: const TextStyle(fontSize: 11, color: Colors.white)),
+                backgroundColor: AppColors.purple,
+                onPressed: () {
+                  ref.read(activeRecordDetailsStackProvider.notifier).push(pId, 'production', details.parentSection);
+                },
+              );
+            }),
+            const Icon(Icons.arrow_forward, size: 14, color: AppColors.textMuted),
+          ],
+          if (s.linkedDeliveryIds.isNotEmpty) ...[
+            ...s.linkedDeliveryIds.map((dId) {
+              final del = db.sales.where((x) => x.id == dId).firstOrNull;
+              return ActionChip(
+                avatar: const Icon(Icons.local_shipping, size: 14, color: Colors.white),
+                label: Text(del?.invoiceNumber ?? dId, style: const TextStyle(fontSize: 11, color: Colors.white)),
+                backgroundColor: AppColors.teal,
+                onPressed: () {
+                  ref.read(activeRecordDetailsStackProvider.notifier).push(dId, 'delivery', details.parentSection);
+                },
+              );
+            }),
+            const Icon(Icons.arrow_forward, size: 14, color: AppColors.textMuted),
+          ],
+          Chip(
+            label: Text('${s.documentType.toString().split('.').last.toUpperCase()} (${s.invoiceNumber})', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            backgroundColor: AppColors.primaryLight,
+          ),
+        ],
+      ),
     );
   }
 
@@ -1850,6 +2440,29 @@ class RecordDetailsView extends ConsumerWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotFound(BuildContext context, dynamic stack, String entityName) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 20),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.search_off_rounded, size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Text('$entityName Not Found', style: AppTextStyles.h2),
+          const SizedBox(height: 8),
+          Text('The requested record (ID: ${details.recordId}) does not exist in the active database.', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted)),
+          const SizedBox(height: 24),
+          ErpButton(
+            text: 'Go Back',
+            icon: Icons.arrow_back,
+            onPressed: () => stack.pop(),
+          ),
         ],
       ),
     );
