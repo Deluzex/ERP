@@ -1,39 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/auth/screens/login_screen.dart';
+import '../shared/providers/app_state_providers.dart';
 import 'app_shell.dart';
 import 'constants/app_constants.dart';
 import 'theme/app_theme.dart';
 
-class ErpApplication extends StatefulWidget {
+class ErpApplication extends ConsumerWidget {
   const ErpApplication({super.key});
 
   @override
-  State<ErpApplication> createState() => _ErpApplicationState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isAuthenticated = ref.watch(isAuthenticatedProvider);
 
-class _ErpApplicationState extends State<ErpApplication> {
-  bool _isAuthenticated = true; // Set to true by default for immediate workspace access
-
-  @override
-  Widget build(BuildContext context) {
     return MaterialApp(
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: SelectionArea(
-        child: _isAuthenticated
+        child: isAuthenticated
             ? const AppShell()
             : LoginScreen(
                 onLoginSuccess: () {
-                  setState(() => _isAuthenticated = true);
+                  // State notifier updates isAuthenticatedProvider automatically
                 },
               ),
       ),
     );
   }
 }
-
-
-
-
-

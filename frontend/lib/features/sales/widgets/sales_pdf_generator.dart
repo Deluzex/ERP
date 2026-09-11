@@ -9,6 +9,7 @@ import '../../../core/models/sale_model.dart';
 import '../../../core/utils/file_downloader/file_downloader.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../shared/widgets/share_document_dialog.dart';
 import '../../../shared/services/mock_database_service.dart';
 
 class SalesPdfGeneratorDialog extends StatelessWidget {
@@ -242,8 +243,16 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
                         if (saleDoc.projectName != null) pw.Text('Project: ${saleDoc.projectName}', style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold)),
                         if (saleDoc.architectName != null) pw.Text('Architect: ${saleDoc.architectName}', style: const pw.TextStyle(fontSize: 8.5)),
                         pw.Text('Shipping Address: $shippingAddress', style: const pw.TextStyle(fontSize: 8.5)),
+                        if (saleDoc.courierName != null || saleDoc.trackingNumber != null) ...[
+                          pw.Text('COURIER & TRACKING:', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
+                          if (saleDoc.courierName != null) pw.Text('Courier: ${saleDoc.courierName}', style: const pw.TextStyle(fontSize: 8)),
+                          if (saleDoc.trackingNumber != null) pw.Text('LR / Track No: ${saleDoc.trackingNumber}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                          if (saleDoc.expectedDeliveryDate != null) pw.Text('Expected Delivery: ${Formatters.formatDate(saleDoc.expectedDeliveryDate!)}', style: const pw.TextStyle(fontSize: 7.5)),
+                          if (saleDoc.courierContact != null) pw.Text('Courier Contact: ${saleDoc.courierContact}', style: const pw.TextStyle(fontSize: 7.5)),
+                          if (saleDoc.dispatchNotes != null) pw.Text('Notes: ${saleDoc.dispatchNotes}', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                          pw.SizedBox(height: 4),
+                        ],
                         if (saleDoc.vehicleNumber != null) pw.Text('Vehicle: ${saleDoc.vehicleNumber} | Driver: ${saleDoc.driverContact ?? "-"}', style: const pw.TextStyle(fontSize: 8.5)),
-                        if (saleDoc.trackingNumber != null) pw.Text('LR / Tracking: ${saleDoc.trackingNumber}', style: const pw.TextStyle(fontSize: 8.5)),
                       ],
                     ),
                   ),
@@ -347,9 +356,12 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
                         _buildPdfTotalRow('Subtotal', _cleanPdfText(Formatters.formatCurrency(saleDoc.subtotalAmount))),
                         if (saleDoc.discountAmount > 0) _buildPdfTotalRow('Discount', '- ${_cleanPdfText(Formatters.formatCurrency(saleDoc.discountAmount))}'),
                         _buildPdfTotalRow('Taxable Amount', _cleanPdfText(Formatters.formatCurrency(taxableAmount))),
-                        _buildPdfTotalRow('CGST (${(saleDoc.items.isNotEmpty ? saleDoc.items.first.gstPercent / 2 : 9).toInt()}%)', _cleanPdfText(Formatters.formatCurrency(saleDoc.cgstAmount))),
-                        _buildPdfTotalRow('SGST (${(saleDoc.items.isNotEmpty ? saleDoc.items.first.gstPercent / 2 : 9).toInt()}%)', _cleanPdfText(Formatters.formatCurrency(saleDoc.sgstAmount))),
-                        if (saleDoc.igstAmount > 0) _buildPdfTotalRow('IGST', _cleanPdfText(Formatters.formatCurrency(saleDoc.igstAmount))),
+                        if (!saleDoc.isInterStateTax && saleDoc.igstAmount == 0) ...[
+                          _buildPdfTotalRow('CGST (9%)', _cleanPdfText(Formatters.formatCurrency(saleDoc.cgstAmount))),
+                          _buildPdfTotalRow('SGST (9%)', _cleanPdfText(Formatters.formatCurrency(saleDoc.sgstAmount))),
+                        ] else ...[
+                          _buildPdfTotalRow('IGST (18%)', _cleanPdfText(Formatters.formatCurrency(saleDoc.igstAmount > 0 ? saleDoc.igstAmount : saleDoc.gstAmount))),
+                        ],
                         pw.Divider(thickness: 0.8),
                         _buildPdfTotalRow('Grand Total', _cleanPdfText(Formatters.formatCurrency(saleDoc.totalAmount)), isBold: true),
                         if (saleDoc.paidAmount > 0) ...[
@@ -630,10 +642,30 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
                           if (saleDoc.architectName != null)
                             Text('Architect: ${saleDoc.architectName}', style: TextStyle(color: Colors.grey.shade800, fontSize: 11)),
                           Text('Shipping Address: $shippingAddress', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                          if (saleDoc.courierName != null || saleDoc.trackingNumber != null) ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.06),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('COURIER & TRACKING:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue)),
+                                  if (saleDoc.courierName != null) Text('Courier: ${saleDoc.courierName}', style: const TextStyle(fontSize: 10.5)),
+                                  if (saleDoc.trackingNumber != null) Text('LR / Track No: ${saleDoc.trackingNumber}', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                  if (saleDoc.expectedDeliveryDate != null) Text('Expected Delivery: ${Formatters.formatDate(saleDoc.expectedDeliveryDate!)}', style: const TextStyle(fontSize: 10)),
+                                  if (saleDoc.courierContact != null) Text('Contact: ${saleDoc.courierContact}', style: const TextStyle(fontSize: 10)),
+                                  if (saleDoc.dispatchNotes != null) Text('Notes: ${saleDoc.dispatchNotes}', style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+                                ],
+                              ),
+                            ),
+                          ],
                           if (saleDoc.vehicleNumber != null)
                             Text('Vehicle No: ${saleDoc.vehicleNumber} | Driver: ${saleDoc.driverContact ?? "-"}', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 11)),
-                          if (saleDoc.trackingNumber != null)
-                            Text('LR / Tracking No: ${saleDoc.trackingNumber}', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
                         ],
                       ),
                     ),
@@ -763,10 +795,12 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
                             if (saleDoc.discountAmount > 0)
                               _buildTotalRow('Discount', '- ${Formatters.formatCurrency(saleDoc.discountAmount)}', isDiscount: true),
                             _buildTotalRow('Taxable Amount', Formatters.formatCurrency(taxableAmount)),
-                            _buildTotalRow('CGST (${(saleDoc.items.isNotEmpty ? saleDoc.items.first.gstPercent / 2 : 9).toInt()}%)', Formatters.formatCurrency(saleDoc.cgstAmount)),
-                            _buildTotalRow('SGST (${(saleDoc.items.isNotEmpty ? saleDoc.items.first.gstPercent / 2 : 9).toInt()}%)', Formatters.formatCurrency(saleDoc.sgstAmount)),
-                            if (saleDoc.igstAmount > 0)
-                              _buildTotalRow('IGST', Formatters.formatCurrency(saleDoc.igstAmount)),
+                            if (!saleDoc.isInterStateTax && saleDoc.igstAmount == 0) ...[
+                              _buildTotalRow('CGST (9%)', Formatters.formatCurrency(saleDoc.cgstAmount)),
+                              _buildTotalRow('SGST (9%)', Formatters.formatCurrency(saleDoc.sgstAmount)),
+                            ] else ...[
+                              _buildTotalRow('IGST (18%)', Formatters.formatCurrency(saleDoc.igstAmount > 0 ? saleDoc.igstAmount : saleDoc.gstAmount), color: Colors.purple),
+                            ],
                             const Divider(),
                             _buildTotalRow('Grand Total', Formatters.formatCurrency(saleDoc.totalAmount), isGrandTotal: true),
                             if (saleDoc.paidAmount > 0) ...[
@@ -815,6 +849,12 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
         ),
       ),
       actions: [
+        ErpButton(
+          text: 'Share Document',
+          icon: Icons.share,
+          isOutlined: true,
+          onPressed: () => ShareDocumentDialog.show(context, saleDoc),
+        ),
         ErpButton(
           text: 'Copy PDF Link',
           icon: Icons.link,

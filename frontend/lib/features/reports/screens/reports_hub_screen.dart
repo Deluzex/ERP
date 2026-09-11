@@ -10,6 +10,7 @@ import '../../../core/models/project_model.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/models/purchase_model.dart';
 import '../../../core/models/production_model.dart';
+import '../../../core/models/expense_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/report_pdf_generator.dart';
 import '../../../core/widgets/erp_button.dart';
@@ -35,16 +36,17 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
     'Inventory Reports',
     'Purchase Reports',
     'Production Reports',
-    'Sales Reports',
-    'Project Reports',
+    'Sales & GST Reports',
+    'Project Costing',
+    'Expense Reports',
     'Commission Reports',
-    'Financial Reports',
+    'Financial Balance',
   ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 8, vsync: this);
     if (widget.reportType != null) {
       _tabController.index = _getIndexForSection(widget.reportType!);
     }
@@ -73,10 +75,12 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
         return 3;
       case ErpNavSection.projectReports:
         return 4;
-      case ErpNavSection.commissionReports:
+      case ErpNavSection.expenseList:
         return 5;
-      case ErpNavSection.financialReports:
+      case ErpNavSection.commissionReports:
         return 6;
+      case ErpNavSection.financialReports:
+        return 7;
       default:
         return 0;
     }
@@ -95,22 +99,14 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
       case 4:
         return ErpNavSection.projectReports;
       case 5:
-        return ErpNavSection.commissionReports;
+        return ErpNavSection.expenseList;
       case 6:
+        return ErpNavSection.commissionReports;
+      case 7:
         return ErpNavSection.financialReports;
       default:
         return ErpNavSection.inventoryReports;
     }
-  }
-
-  bool _isReportSection(ErpNavSection section) {
-    return section == ErpNavSection.inventoryReports ||
-        section == ErpNavSection.purchaseReports ||
-        section == ErpNavSection.productionReports ||
-        section == ErpNavSection.salesReports ||
-        section == ErpNavSection.projectReports ||
-        section == ErpNavSection.commissionReports ||
-        section == ErpNavSection.financialReports;
   }
 
   @override
@@ -134,42 +130,23 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
   String _getReportTitle(int index) {
     switch (index) {
       case 0:
-        return 'Inventory Stock Flow & Valuation Audit Statement';
+        return 'Inventory Stock Flow, Source & Valuation Audit Statement';
       case 1:
-        return 'Raw Materials Purchase Orders & Procurement Register';
+        return 'Raw Materials & Finished Product Purchases Register';
       case 2:
         return 'Finished Goods Production Costing & Manufacturing Summary';
       case 3:
-        return 'Sales Revenue, Taxable Turnover & GST Invoice Register';
+        return 'Sales Revenue, Taxable Turnover & GST (CGST/SGST/IGST) Register';
       case 4:
-        return 'Project Commercial Execution & Performance Report';
+        return 'Project Commercial Execution, Purchases, Expenses & Margin Report';
       case 5:
-        return 'Architect Referrals & Commission Payout Ledger';
+        return 'Operating Expenses & Project Overhead Ledger Statement';
       case 6:
+        return 'Architect Referrals & Commission Payout Ledger';
+      case 7:
         return 'ERP Financial Balance Sheet & Working Capital Statement';
       default:
         return 'ERP Business Intelligence Statement';
-    }
-  }
-
-  String _getActionButtonLabel(int index) {
-    switch (index) {
-      case 0:
-        return 'Generate Inventory Report';
-      case 1:
-        return 'Generate Purchase Report';
-      case 2:
-        return 'Generate Production Report';
-      case 3:
-        return 'Generate Sales Report';
-      case 4:
-        return 'Generate Project Report';
-      case 5:
-        return 'Generate Commission Report';
-      case 6:
-        return 'Generate Financial Report';
-      default:
-        return 'Generate Report';
     }
   }
 
@@ -178,10 +155,9 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
       case 0: // Inventory
         return const [
           ErpColumn(title: 'Item Name & SKU'),
-          ErpColumn(title: 'Category / Type'),
+          ErpColumn(title: 'Type / Category'),
+          ErpColumn(title: 'Stock Source'),
           ErpColumn(title: 'Opening Stock', isNumeric: true),
-          ErpColumn(title: 'Inflow', isNumeric: true),
-          ErpColumn(title: 'Outflow', isNumeric: true),
           ErpColumn(title: 'Current Stock', isNumeric: true),
           ErpColumn(title: 'Unit Cost', isNumeric: true),
           ErpColumn(title: 'Total Valuation', isNumeric: true),
@@ -190,9 +166,9 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
         return const [
           ErpColumn(title: 'PO Number'),
           ErpColumn(title: 'Vendor Name'),
+          ErpColumn(title: 'Item Type'),
           ErpColumn(title: 'Order Date'),
-          ErpColumn(title: 'Vendor Invoice'),
-          ErpColumn(title: 'Payment Mode'),
+          ErpColumn(title: 'Tax Mode'),
           ErpColumn(title: 'Total Amount', isNumeric: true),
           ErpColumn(title: 'Pending Due', isNumeric: true),
           ErpColumn(title: 'Status'),
@@ -204,32 +180,42 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ErpColumn(title: 'Produced Qty', isNumeric: true),
           ErpColumn(title: 'Raw Material Cost', isNumeric: true),
           ErpColumn(title: 'Labour & Overheads', isNumeric: true),
-          ErpColumn(title: 'Total Batch Cost', isNumeric: true),
+          ErpColumn(title: 'Total Cost', isNumeric: true),
           ErpColumn(title: 'Unit Cost', isNumeric: true),
           ErpColumn(title: 'Status'),
         ];
-      case 3: // Sales
+      case 3: // Sales & GST
         return const [
           ErpColumn(title: 'Invoice / Doc No'),
-          ErpColumn(title: 'Customer / Dealer'),
-          ErpColumn(title: 'Invoice Date'),
-          ErpColumn(title: 'Doc Type'),
+          ErpColumn(title: 'Customer / Party'),
+          ErpColumn(title: 'Date'),
           ErpColumn(title: 'Taxable Amount', isNumeric: true),
-          ErpColumn(title: 'GST Amount', isNumeric: true),
+          ErpColumn(title: 'CGST (9%)', isNumeric: true),
+          ErpColumn(title: 'SGST (9%)', isNumeric: true),
+          ErpColumn(title: 'IGST (18%)', isNumeric: true),
           ErpColumn(title: 'Grand Total', isNumeric: true),
-          ErpColumn(title: 'Pending Due', isNumeric: true),
         ];
-      case 4: // Projects
+      case 4: // Project Costing
         return const [
           ErpColumn(title: 'Project Name'),
-          ErpColumn(title: 'Customer / Architect'),
-          ErpColumn(title: 'Start Date'),
-          ErpColumn(title: 'Target Date'),
-          ErpColumn(title: 'Project Sales', isNumeric: true),
-          ErpColumn(title: 'Commission', isNumeric: true),
+          ErpColumn(title: 'Client / Architect'),
+          ErpColumn(title: 'Invoiced Revenue', isNumeric: true),
+          ErpColumn(title: 'Direct Purchases', isNumeric: true),
+          ErpColumn(title: 'Expenses / Site', isNumeric: true),
+          ErpColumn(title: 'Estimated Margin', isNumeric: true),
           ErpColumn(title: 'Status'),
         ];
-      case 5: // Commission
+      case 5: // Expenses
+        return const [
+          ErpColumn(title: 'Expense No'),
+          ErpColumn(title: 'Category'),
+          ErpColumn(title: 'Description'),
+          ErpColumn(title: 'Project Linked'),
+          ErpColumn(title: 'Date'),
+          ErpColumn(title: 'Payment Mode'),
+          ErpColumn(title: 'Amount (₹)', isNumeric: true),
+        ];
+      case 6: // Commission
         return const [
           ErpColumn(title: 'Architect / Partner'),
           ErpColumn(title: 'Firm / Contact'),
@@ -239,7 +225,8 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ErpColumn(title: 'Approved', isNumeric: true),
           ErpColumn(title: 'Paid to Date', isNumeric: true),
         ];
-      case 6: // Financial
+      case 7: // Financial
+      default:
         return const [
           ErpColumn(title: 'Ledger Account / Balance Sheet Head'),
           ErpColumn(title: 'Classification'),
@@ -247,78 +234,69 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ErpColumn(title: 'Payable / Liability', isNumeric: true),
           ErpColumn(title: 'Net Position', isNumeric: true),
         ];
-      default:
-        return const [
-          ErpColumn(title: 'Ledger Head'),
-          ErpColumn(title: 'Balance', isNumeric: true),
-        ];
     }
   }
 
   List<List<Widget>> _getReportRows(MockDatabaseService db, int index) {
     switch (index) {
-      case 0: // Inventory Flow & Valuation
+      case 0: // Inventory Flow & Source
         final List<List<Widget>> rows = [];
 
-        // Raw Materials
         for (final rm in db.rawMaterials) {
-          final purchaseIn = db.purchases
-              .where((p) => p.status != PurchaseStatus.draft && p.status != PurchaseStatus.cancelled)
-              .expand((p) => p.items)
-              .where((item) => item.rawMaterialId == rm.id)
-              .fold(0.0, (sum, item) => sum + item.quantity);
-
-          final prodCons = db.productionOrders
-              .where((po) => po.status == ProductionStatus.inProgress || po.status == ProductionStatus.completed)
-              .expand((po) => po.rawMaterialsUsed)
-              .where((usage) => usage.rawMaterialId == rm.id)
-              .fold(0.0, (sum, usage) => sum + usage.quantityUsed);
-
           rows.add([
             Text('${rm.name} (${rm.itemCode})', style: AppTextStyles.bodyBold),
             Text('${rm.categoryName} [RAW]', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
+            const Text('Purchased RM', style: TextStyle(fontSize: 11, color: Colors.blueGrey)),
             Text('${rm.openingStock} ${rm.unit}', style: AppTextStyles.bodySmall),
-            Text('${purchaseIn.toStringAsFixed(1)} ${rm.unit}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
-            Text('${prodCons.toStringAsFixed(1)} ${rm.unit}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.dangerText)),
             Text('${rm.currentStock} ${rm.unit}', style: AppTextStyles.bodyBold.copyWith(color: rm.isLowStock ? AppColors.dangerText : AppColors.textPrimary)),
             Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodySmall),
             Text(Formatters.formatCurrency(rm.totalValuation), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
           ]);
         }
 
-        // Finished Products
         for (final fp in db.finishedProducts) {
-          final prodOut = db.productionOrders
-              .where((po) => po.status == ProductionStatus.completed && po.finishedProductId == fp.id)
-              .fold(0.0, (sum, po) => sum + po.actualQuantityProduced);
-
-          final salesOut = db.sales
-              .where((s) => s.documentType == SalesDocumentType.invoice && s.status != SaleStatus.draft && s.status != SaleStatus.cancelled)
-              .expand((s) => s.items)
-              .where((item) => item.finishedProductId == fp.id)
-              .fold(0.0, (sum, item) => sum + item.quantity);
-
+          final isPurchased = (fp.purchasedStock ?? 0) > (fp.producedStock ?? 0);
           rows.add([
             Text('${fp.name} (${fp.itemCode})', style: AppTextStyles.bodyBold),
             Text('${fp.categoryName} [FG]', style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isPurchased ? Colors.teal.withOpacity(0.1) : Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                isPurchased ? 'Purchased Goods' : 'In-house Produced',
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: isPurchased ? Colors.teal : Colors.blue),
+              ),
+            ),
             Text('${fp.openingStock} ${fp.unit}', style: AppTextStyles.bodySmall),
-            Text('${prodOut.toStringAsFixed(1)} ${fp.unit}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
-            Text('${salesOut.toStringAsFixed(1)} ${fp.unit}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.dangerText)),
             Text('${fp.currentStock} ${fp.unit}', style: AppTextStyles.bodyBold.copyWith(color: fp.isLowStock ? AppColors.dangerText : AppColors.textPrimary)),
             Text(Formatters.formatCurrency(fp.costPrice), style: AppTextStyles.bodySmall),
-            Text(Formatters.formatCurrency(fp.totalValuation), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+            Text(Formatters.formatCurrency(fp.currentStock * fp.costPrice), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
           ]);
         }
         return rows;
 
-      case 1: // Purchase Orders
+      case 1: // Purchases Register
         return db.purchases.map((p) {
+          final isFinished = p.items.any((it) => it.itemType == PurchaseItemType.finishedProduct);
           return [
             Text(p.purchaseNumber, style: AppTextStyles.bodyBold),
             Text(p.vendorName, style: AppTextStyles.bodyMedium),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isFinished ? Colors.teal.withOpacity(0.12) : Colors.blueGrey.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                isFinished ? 'FINISHED GOODS' : 'RAW MATERIAL',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isFinished ? Colors.teal : Colors.blueGrey),
+              ),
+            ),
             Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
-            Text(p.vendorInvoiceNumber.isNotEmpty ? p.vendorInvoiceNumber : '-', style: AppTextStyles.bodySmall),
-            Text(p.paymentMode.name.toUpperCase(), style: AppTextStyles.bodySmall),
+            Text(p.isInterStateTax ? 'IGST (Inter-State)' : 'CGST+SGST', style: TextStyle(fontSize: 11, color: p.isInterStateTax ? Colors.purple : AppColors.textSecondary)),
             Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
             Text(
               Formatters.formatCurrency(p.pendingAmount),
@@ -342,37 +320,63 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ];
         }).toList();
 
-      case 3: // Sales Register
+      case 3: // Sales & GST
         return db.sales.map((s) {
           return [
             Text(s.invoiceNumber, style: AppTextStyles.bodyBold),
             Text(s.partyName, style: AppTextStyles.bodyMedium),
             Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-            Text(s.documentType.name.toUpperCase(), style: AppTextStyles.bodySmall),
-            Text(Formatters.formatCurrency(s.subtotalAmount - s.discountAmount), style: AppTextStyles.bodySmall),
-            Text(Formatters.formatCurrency(s.gstAmount), style: AppTextStyles.bodySmall),
-            Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
+            Text(Formatters.formatCurrency(s.taxableAmount), style: AppTextStyles.bodySmall),
             Text(
-              Formatters.formatCurrency(s.pendingAmount),
-              style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+              !s.isInterStateTax && s.igstAmount == 0 ? Formatters.formatCurrency(s.cgstAmount) : '0.00',
+              style: AppTextStyles.bodySmall,
             ),
+            Text(
+              !s.isInterStateTax && s.igstAmount == 0 ? Formatters.formatCurrency(s.sgstAmount) : '0.00',
+              style: AppTextStyles.bodySmall,
+            ),
+            Text(
+              s.isInterStateTax || s.igstAmount > 0 ? Formatters.formatCurrency(s.igstAmount > 0 ? s.igstAmount : s.gstAmount) : '0.00',
+              style: AppTextStyles.bodySmall.copyWith(color: s.isInterStateTax ? Colors.purple : null),
+            ),
+            Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
           ];
         }).toList();
 
-      case 4: // Projects Report
+      case 4: // Project Costing
         return db.projects.map((pr) {
+          final prPurchases = db.purchases.where((p) => p.projectId == pr.id).fold(0.0, (s, p) => s + p.totalAmount);
+          final prExpenses = db.expenses.where((e) => e.projectId == pr.id).fold(0.0, (s, e) => s + e.amount);
+          final margin = pr.totalSalesAmount - prPurchases - prExpenses;
+
           return [
             Text(pr.name, style: AppTextStyles.bodyBold),
             Text(pr.customerName ?? pr.architectName ?? '-', style: AppTextStyles.bodyMedium),
-            Text(Formatters.formatDate(pr.startDate), style: AppTextStyles.bodySmall),
-            Text(Formatters.formatDate(pr.expectedCompletionDate), style: AppTextStyles.bodySmall),
             Text(Formatters.formatCurrency(pr.totalSalesAmount), style: AppTextStyles.bodyBold),
-            Text(Formatters.formatCurrency(pr.totalCommissionAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
+            Text(Formatters.formatCurrency(prPurchases), style: AppTextStyles.bodySmall),
+            Text(Formatters.formatCurrency(prExpenses), style: AppTextStyles.bodySmall),
+            Text(
+              Formatters.formatCurrency(margin),
+              style: AppTextStyles.bodyBold.copyWith(color: margin >= 0 ? AppColors.successText : AppColors.dangerText),
+            ),
             ErpStatusBadge.neutral(pr.statusLabel),
           ];
         }).toList();
 
-      case 5: // Commission Report
+      case 5: // Expenses
+        return db.expenses.map((exp) {
+          return [
+            Text(exp.expenseNumber, style: AppTextStyles.bodyBold),
+            Text(exp.categoryName, style: AppTextStyles.bodyMedium),
+            Text(exp.description ?? '-', style: AppTextStyles.bodySmall),
+            Text(exp.projectName ?? 'General Overhead', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
+            Text(Formatters.formatDate(exp.expenseDate), style: AppTextStyles.bodySmall),
+            Text(exp.paymentMethod.toUpperCase(), style: AppTextStyles.bodySmall),
+            Text(Formatters.formatCurrency(exp.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText)),
+          ];
+        }).toList();
+
+      case 6: // Commission
         return db.architects.map((a) {
           return [
             Text(a.name, style: AppTextStyles.bodyBold),
@@ -385,7 +389,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ];
         }).toList();
 
-      case 6: // Financial Balance Ledger
+      case 7: // Financial Balance
       default:
         final rawVal = db.rawMaterialStockValue;
         final fgVal = db.finishedProductStockValue;
@@ -415,7 +419,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ],
           [
             Text('Finished Goods Stock Assets', style: AppTextStyles.bodyBold),
-            Text('Inventory Asset (Produced Goods)', style: AppTextStyles.bodySmall),
+            Text('Inventory Asset (Produced & Purchased Goods)', style: AppTextStyles.bodySmall),
             Text(Formatters.formatCurrency(fgVal), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
             const Text('-', style: TextStyle(fontSize: 12)),
             Text(Formatters.formatCurrency(fgVal), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
@@ -461,61 +465,39 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
       case 0:
         final List<List<String>> rows = [];
         for (final rm in db.rawMaterials) {
-          final purchaseIn = db.purchases
-              .where((p) => p.status != PurchaseStatus.draft && p.status != PurchaseStatus.cancelled)
-              .expand((p) => p.items)
-              .where((item) => item.rawMaterialId == rm.id)
-              .fold(0.0, (sum, item) => sum + item.quantity);
-
-          final prodCons = db.productionOrders
-              .where((po) => po.status == ProductionStatus.inProgress || po.status == ProductionStatus.completed)
-              .expand((po) => po.rawMaterialsUsed)
-              .where((usage) => usage.rawMaterialId == rm.id)
-              .fold(0.0, (sum, usage) => sum + usage.quantityUsed);
-
           rows.add([
             '${rm.name} (${rm.itemCode})',
             '${rm.categoryName} [RAW]',
+            'Purchased RM',
             '${rm.openingStock} ${rm.unit}',
-            '${purchaseIn.toStringAsFixed(1)} ${rm.unit}',
-            '${prodCons.toStringAsFixed(1)} ${rm.unit}',
             '${rm.currentStock} ${rm.unit}',
             Formatters.formatCurrency(rm.defaultPurchasePrice),
             Formatters.formatCurrency(rm.totalValuation),
           ]);
         }
         for (final fp in db.finishedProducts) {
-          final prodOut = db.productionOrders
-              .where((po) => po.status == ProductionStatus.completed && po.finishedProductId == fp.id)
-              .fold(0.0, (sum, po) => sum + po.actualQuantityProduced);
-
-          final salesOut = db.sales
-              .where((s) => s.documentType == SalesDocumentType.invoice && s.status != SaleStatus.draft && s.status != SaleStatus.cancelled)
-              .expand((s) => s.items)
-              .where((item) => item.finishedProductId == fp.id)
-              .fold(0.0, (sum, item) => sum + item.quantity);
-
+          final isPurchased = (fp.purchasedStock ?? 0) > (fp.producedStock ?? 0);
           rows.add([
             '${fp.name} (${fp.itemCode})',
             '${fp.categoryName} [FG]',
+            isPurchased ? 'Purchased Goods' : 'In-house Produced',
             '${fp.openingStock} ${fp.unit}',
-            '${prodOut.toStringAsFixed(1)} ${fp.unit}',
-            '${salesOut.toStringAsFixed(1)} ${fp.unit}',
             '${fp.currentStock} ${fp.unit}',
             Formatters.formatCurrency(fp.costPrice),
-            Formatters.formatCurrency(fp.totalValuation),
+            Formatters.formatCurrency(fp.currentStock * fp.costPrice),
           ]);
         }
         return rows;
 
       case 1:
         return db.purchases.map((p) {
+          final isFinished = p.items.any((it) => it.itemType == PurchaseItemType.finishedProduct);
           return [
             p.purchaseNumber,
             p.vendorName,
+            isFinished ? 'FINISHED GOODS' : 'RAW MATERIAL',
             Formatters.formatDate(p.purchaseDate),
-            p.vendorInvoiceNumber.isNotEmpty ? p.vendorInvoiceNumber : '-',
-            p.paymentMode.name.toUpperCase(),
+            p.isInterStateTax ? 'IGST' : 'CGST+SGST',
             Formatters.formatCurrency(p.totalAmount),
             Formatters.formatCurrency(p.pendingAmount),
             p.statusLabel,
@@ -542,28 +524,44 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
             s.invoiceNumber,
             s.partyName,
             Formatters.formatDate(s.saleDate),
-            s.documentType.name.toUpperCase(),
-            Formatters.formatCurrency(s.subtotalAmount - s.discountAmount),
-            Formatters.formatCurrency(s.gstAmount),
+            Formatters.formatCurrency(s.taxableAmount),
+            !s.isInterStateTax && s.igstAmount == 0 ? Formatters.formatCurrency(s.cgstAmount) : '0.00',
+            !s.isInterStateTax && s.igstAmount == 0 ? Formatters.formatCurrency(s.sgstAmount) : '0.00',
+            s.isInterStateTax || s.igstAmount > 0 ? Formatters.formatCurrency(s.igstAmount > 0 ? s.igstAmount : s.gstAmount) : '0.00',
             Formatters.formatCurrency(s.totalAmount),
-            Formatters.formatCurrency(s.pendingAmount),
           ];
         }).toList();
 
       case 4:
         return db.projects.map((pr) {
+          final prPurchases = db.purchases.where((p) => p.projectId == pr.id).fold(0.0, (s, p) => s + p.totalAmount);
+          final prExpenses = db.expenses.where((e) => e.projectId == pr.id).fold(0.0, (s, e) => s + e.amount);
+          final margin = pr.totalSalesAmount - prPurchases - prExpenses;
           return [
             pr.name,
             pr.customerName ?? pr.architectName ?? '-',
-            Formatters.formatDate(pr.startDate),
-            Formatters.formatDate(pr.expectedCompletionDate),
             Formatters.formatCurrency(pr.totalSalesAmount),
-            Formatters.formatCurrency(pr.totalCommissionAmount),
+            Formatters.formatCurrency(prPurchases),
+            Formatters.formatCurrency(prExpenses),
+            Formatters.formatCurrency(margin),
             pr.statusLabel,
           ];
         }).toList();
 
       case 5:
+        return db.expenses.map((exp) {
+          return [
+            exp.expenseNumber,
+            exp.categoryName,
+            exp.description ?? '-',
+            exp.projectName ?? 'General Overhead',
+            Formatters.formatDate(exp.expenseDate),
+            exp.paymentMethod.toUpperCase(),
+            Formatters.formatCurrency(exp.amount),
+          ];
+        }).toList();
+
+      case 6:
         return db.architects.map((a) {
           return [
             a.name,
@@ -576,16 +574,15 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ];
         }).toList();
 
-      case 6:
+      case 7:
       default:
         final rawVal = db.rawMaterialStockValue;
         final fgVal = db.finishedProductStockValue;
-        final totalStock = rawVal + fgVal;
         final custRec = db.pendingCustomerPayments;
         final venPay = db.pendingVendorPayments;
         final commPay = db.pendingCommissionAmount;
         final storeCredits = db.customers.fold(0.0, (sum, c) => sum + c.creditBalance);
-        final totalAssets = totalStock + custRec;
+        final totalAssets = (rawVal + fgVal) + custRec;
         final totalLiabilities = venPay + commPay + storeCredits;
         final netWorkingCap = totalAssets - totalLiabilities;
         return [
@@ -605,7 +602,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ],
           [
             'Finished Goods Stock Assets',
-            'Inventory Asset (Produced Stock)',
+            'Inventory Asset (Produced & Purchased)',
             Formatters.formatCurrency(fgVal),
             '-',
             Formatters.formatCurrency(fgVal),
@@ -684,13 +681,21 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           'Completed Projects': '${db.projects.where((p) => p.status == ProjectStatus.completed || p.status == ProjectStatus.closed).length}',
         };
       case 5:
+        final totalExpenses = db.expenses.fold(0.0, (s, e) => s + e.amount);
+        return {
+          'Total Expenses': Formatters.formatCurrency(totalExpenses),
+          'Expense Records': '${db.expenses.length} Vouchers',
+          'Expense Categories': '${db.expenseCategories.length} Categories',
+          'Project Expenses': Formatters.formatCurrency(db.expenses.where((e) => e.projectId != null).fold(0.0, (s, e) => s + e.amount)),
+        };
+      case 6:
         return {
           'Commission Earned': Formatters.formatCurrency(db.architects.fold(0.0, (s, a) => s + a.totalCommissionEarned)),
           'Pending Dues': Formatters.formatCurrency(db.pendingCommissionAmount),
           'Disbursed to Date': Formatters.formatCurrency(db.architects.fold(0.0, (s, a) => s + a.paidCommission)),
           'Registered Architects': '${db.architects.length} Partners',
         };
-      case 6:
+      case 7:
       default:
         final rawVal = db.rawMaterialStockValue;
         final fgVal = db.finishedProductStockValue;
@@ -749,559 +754,24 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
     final stringRows = _getReportStringRows(db, activeIndex);
     final kpis = _getReportKpisMap(db, activeIndex);
 
-    await ReportPdfGenerator.printOrPreviewReport(
-      title: reportTitle,
-      subtitle: 'Comprehensive Module Statement & Ledger Audit',
-      columnHeaders: headers,
-      dataRows: stringRows,
-      isNumericColumns: isNumeric,
-      summaryKpis: kpis,
-    );
-  }
-
-  void _openPdfPreviewDialog() {
-    final db = ref.read(databaseServiceProvider);
-    final activeIndex = _tabController.index;
-    final reportTitle = _getReportTitle(activeIndex);
-    final columns = _getReportColumns(activeIndex);
-    final rows = _getReportRows(db, activeIndex);
-    final kpis = _getReportKpisMap(db, activeIndex);
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Generated Report Preview - ${_tabLabels[activeIndex]}', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18)),
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.black54),
-                onPressed: () => Navigator.of(ctx).pop(),
-              ),
-            ],
+    try {
+      await ReportPdfGenerator.printOrPreviewReport(
+        title: reportTitle,
+        subtitle: 'Comprehensive Module Statement & Ledger Audit',
+        columnHeaders: headers,
+        dataRows: stringRows,
+        isNumericColumns: isNumeric,
+        summaryKpis: kpis,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Print layout error: $e'),
+            backgroundColor: AppColors.danger,
           ),
-          content: SizedBox(
-            width: 900,
-            height: 640,
-            child: SingleChildScrollView(
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300, width: 2),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Letterhead Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'DELUZEX ERP SYSTEMS PVT. LTD.',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'GSTIN: 27AABCO8890K1Z9 | contact@deluzex.com | +91 22 2890 1234',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                            ),
-                            Text(
-                              'Architectural & High-End Commercial Lighting Solutions, Mumbai, MH',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                            ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'AUDIT REPORT',
-                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Generated: ${Formatters.formatDateTime(DateTime.now())}',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const Divider(color: Colors.black87, thickness: 1.5, height: 24),
-
-                    // Report Title & Subtitle
-                    Center(
-                      child: Column(
-                        children: [
-                          Text(
-                            reportTitle.toUpperCase(),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: 1.1),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Comprehensive Module Statement & Ledger Audit',
-                            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // KPI Summary Cards
-                    if (kpis.isNotEmpty) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: kpis.entries.map((entry) {
-                            return Column(
-                              children: [
-                                Text(entry.key, style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
-                                const SizedBox(height: 3),
-                                Text(entry.value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
-                              ],
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Report Table
-                    Table(
-                      border: TableBorder.all(color: Colors.grey.shade400),
-                      columnWidths: {
-                        for (int i = 0; i < columns.length; i++)
-                          i: i == 0 ? const FlexColumnWidth(2.2) : const FlexColumnWidth(1.2),
-                      },
-                      children: [
-                        // PDF Header Row
-                        TableRow(
-                          decoration: BoxDecoration(color: Colors.grey.shade200),
-                          children: columns.map((col) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-                              child: Text(
-                                col.title,
-                                style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Colors.black87),
-                                textAlign: col.isNumeric ? TextAlign.right : TextAlign.left,
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                        // PDF Data Rows
-                        ...rows.map((row) {
-                          return TableRow(
-                            children: row.asMap().entries.map((entry) {
-                              final idx = entry.key;
-                              final cell = entry.value;
-                              final isNumeric = idx < columns.length && columns[idx].isNumeric;
-                              String txt = '';
-                              if (cell is Text) {
-                                txt = cell.data ?? '';
-                              } else {
-                                txt = cell.toString();
-                              }
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
-                                child: Text(
-                                  txt,
-                                  style: const TextStyle(fontSize: 8.5, color: Colors.black87),
-                                  textAlign: isNumeric ? TextAlign.right : TextAlign.left,
-                                ),
-                              );
-                            }).toList(),
-                          );
-                        }),
-                      ],
-                    ),
-
-                    const SizedBox(height: 40),
-
-                    // PDF Signatures Block
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Prepared & Verified By:',
-                              style: TextStyle(fontSize: 10, color: Colors.black87),
-                            ),
-                            const SizedBox(height: 24),
-                            Container(width: 140, height: 1, color: Colors.black54),
-                            const SizedBox(height: 4),
-                            const Text('ERP Operations Auditor', style: TextStyle(fontSize: 9, color: Colors.black54)),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            const Text(
-                              'For DELUZEX ERP SYSTEMS PVT. LTD.',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87),
-                            ),
-                            const SizedBox(height: 24),
-                            Container(width: 160, height: 1, color: Colors.black54),
-                            const SizedBox(height: 4),
-                            const Text('Authorized Commercial Signatory', style: TextStyle(fontSize: 9, color: Colors.black54)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          actions: [
-            ErpButton(
-              text: 'Print / System PDF',
-              icon: Icons.print,
-              isOutlined: true,
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                _printOrLayoutReport(activeIndex);
-              },
-            ),
-            const SizedBox(width: 8),
-            ErpButton(
-              text: 'Download PDF to PC',
-              icon: Icons.download_rounded,
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                _downloadReportToDevice(activeIndex);
-              },
-            ),
-          ],
         );
-      },
-    );
-  }
-
-  Widget _buildSummaryCards(MockDatabaseService db, int index) {
-    switch (index) {
-      case 0: // Inventory KPIs
-        return Row(
-          children: [
-            Expanded(
-              child: StatCard(
-                title: 'Total Stock Valuation',
-                value: Formatters.formatCurrency(db.totalStockValue),
-                trendText: '${db.rawMaterials.length + db.finishedProducts.length} Total SKUs',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Raw Material Value',
-                value: Formatters.formatCurrency(db.rawMaterialStockValue),
-                trendText: '${db.rawMaterials.length} Raw items',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Finished Goods Value',
-                value: Formatters.formatCurrency(db.finishedProductStockValue),
-                trendText: '${db.finishedProducts.length} Product SKUs',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Low Stock Items',
-                value: '${db.totalLowStockCount} Items',
-                trendText: 'Immediate reorder needed',
-                isPositiveTrend: false,
-              ),
-            ),
-          ],
-        );
-
-      case 1: // Purchase KPIs
-        final totalPurchases = db.purchases.fold(0.0, (s, p) => s + p.totalAmount);
-        return Row(
-          children: [
-            Expanded(
-              child: StatCard(
-                title: 'Total Procurement',
-                value: Formatters.formatCurrency(totalPurchases),
-                trendText: '${db.purchases.length} Purchase Orders',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Vendor Payables Due',
-                value: Formatters.formatCurrency(db.pendingVendorPayments),
-                trendText: 'Outstanding procurement',
-                isPositiveTrend: false,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Active Vendors',
-                value: '${db.vendors.where((v) => !v.isDeleted).length} Vendors',
-                trendText: 'Supplying raw materials',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Average PO Value',
-                value: Formatters.formatCurrency(db.purchases.isNotEmpty ? totalPurchases / db.purchases.length : 0),
-                trendText: 'Per order ticket size',
-                isPositiveTrend: true,
-              ),
-            ),
-          ],
-        );
-
-      case 2: // Production KPIs
-        final totalProdCost = db.productionOrders.fold(0.0, (s, p) => s + p.totalProductionCost);
-        final totalUnits = db.productionOrders.fold(0.0, (s, p) => s + p.actualQuantityProduced).toInt();
-        return Row(
-          children: [
-            Expanded(
-              child: StatCard(
-                title: 'Manufacturing Cost',
-                value: Formatters.formatCurrency(totalProdCost),
-                trendText: 'Materials + Labor + Overheads',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Total Units Produced',
-                value: '$totalUnits Units',
-                trendText: '${db.productionOrders.length} Completed batches',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Avg Batch Cost',
-                value: Formatters.formatCurrency(db.productionOrders.isNotEmpty ? totalProdCost / db.productionOrders.length : 0),
-                trendText: 'Average cost per batch',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Avg Unit Cost',
-                value: Formatters.formatCurrency(totalUnits > 0 ? totalProdCost / totalUnits : 0),
-                trendText: 'Unit manufacturing cost',
-                isPositiveTrend: true,
-              ),
-            ),
-          ],
-        );
-
-      case 3: // Sales KPIs
-        final totalGst = db.sales.fold(0.0, (s, i) => s + i.gstAmount);
-        return Row(
-          children: [
-            Expanded(
-              child: StatCard(
-                title: 'Total Gross Revenue',
-                value: Formatters.formatCurrency(db.totalSalesAmount),
-                trendText: '${db.sales.length} Invoices generated',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Customer Receivables',
-                value: Formatters.formatCurrency(db.pendingCustomerPayments),
-                trendText: 'Pending client collections',
-                isPositiveTrend: false,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'GST Collected',
-                value: Formatters.formatCurrency(totalGst),
-                trendText: 'Tax liability recorded',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Customer Accounts',
-                value: '${db.customers.length + db.dealers.length} Parties',
-                trendText: '${db.customers.length} Cust + ${db.dealers.length} Dealers',
-                isPositiveTrend: true,
-              ),
-            ),
-          ],
-        );
-
-      case 4: // Projects KPIs
-        final totalProjSales = db.projects.fold(0.0, (s, p) => s + p.totalSalesAmount);
-        final totalProjComm = db.projects.fold(0.0, (s, p) => s + p.totalCommissionAmount);
-        return Row(
-          children: [
-            Expanded(
-              child: StatCard(
-                title: 'Active Projects',
-                value: '${db.projects.length} Projects',
-                trendText: 'Commercial lighting pipeline',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Project Sales Value',
-                value: Formatters.formatCurrency(totalProjSales),
-                trendText: 'Total contracted revenue',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Allocated Commission',
-                value: Formatters.formatCurrency(totalProjComm),
-                trendText: 'Architect project share',
-                isPositiveTrend: false,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Completed Projects',
-                value: '${db.projects.where((p) => p.status == ProjectStatus.completed || p.status == ProjectStatus.closed).length}',
-                trendText: 'Fully delivered & closed',
-                isPositiveTrend: true,
-              ),
-            ),
-          ],
-        );
-
-      case 5: // Commission KPIs
-        final totalEarned = db.architects.fold(0.0, (s, a) => s + a.totalCommissionEarned);
-        final totalPaid = db.architects.fold(0.0, (s, a) => s + a.paidCommission);
-        return Row(
-          children: [
-            Expanded(
-              child: StatCard(
-                title: 'Total Commission Earned',
-                value: Formatters.formatCurrency(totalEarned),
-                trendText: '${db.architects.length} Partners enrolled',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Pending Commission Dues',
-                value: Formatters.formatCurrency(db.pendingCommissionAmount),
-                trendText: 'To be approved / disbursed',
-                isPositiveTrend: false,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Disbursed to Date',
-                value: Formatters.formatCurrency(totalPaid),
-                trendText: 'Paid to partners',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Registered Architects',
-                value: '${db.architects.length} Architects',
-                trendText: 'Active referral network',
-                isPositiveTrend: true,
-              ),
-            ),
-          ],
-        );
-
-      case 6: // Financial KPIs
-      default:
-        final rawVal = db.rawMaterialStockValue;
-        final fgVal = db.finishedProductStockValue;
-        final totalAssets = (rawVal + fgVal) + db.pendingCustomerPayments;
-        final totalLiabilities = db.pendingVendorPayments + db.pendingCommissionAmount;
-        final netWorkingCap = totalAssets - totalLiabilities;
-        return Row(
-          children: [
-            Expanded(
-              child: StatCard(
-                title: 'Total Business Assets',
-                value: Formatters.formatCurrency(totalAssets),
-                trendText: 'Stock assets + Receivables',
-                isPositiveTrend: true,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Total Liabilities',
-                value: Formatters.formatCurrency(totalLiabilities),
-                trendText: 'Vendor + Commission dues',
-                isPositiveTrend: false,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Net Working Capital',
-                value: Formatters.formatCurrency(netWorkingCap),
-                trendText: 'Assets minus Liabilities',
-                isPositiveTrend: netWorkingCap >= 0,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: StatCard(
-                title: 'Gross Sales Turnover',
-                value: Formatters.formatCurrency(db.totalSalesAmount),
-                trendText: '${db.sales.length} Cumulative invoices',
-                isPositiveTrend: true,
-              ),
-            ),
-          ],
-        );
+      }
     }
   }
 
@@ -1309,16 +779,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final activeIndex = _tabController.index;
-
-    // Listen to currentNavSectionProvider to sync tab when user clicks from sidebar
-    ref.listen<ErpNavSection>(currentNavSectionProvider, (previous, next) {
-      if (_isReportSection(next)) {
-        final targetIndex = _getIndexForSection(next);
-        if (_tabController.index != targetIndex) {
-          _tabController.animateTo(targetIndex);
-        }
-      }
-    });
+    final kpis = _getReportKpisMap(db, activeIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -1331,23 +792,24 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('ERP Reports & Intelligence', style: AppTextStyles.h1),
+                  Text('Reports & Analytics Hub', style: AppTextStyles.h1),
                   const SizedBox(height: 4),
-                  Text('Cross-module reporting for stock valuation, sales performance, production costing, and financials', style: AppTextStyles.subtitle),
+                  Text('Stock sources, purchase types, expense registers, and GST tax breakup statements',
+                      style: AppTextStyles.subtitle),
                 ],
               ),
               Row(
                 children: [
                   ErpButton(
-                    text: _getActionButtonLabel(activeIndex),
-                    icon: Icons.description_outlined,
-                    onPressed: _openPdfPreviewDialog,
+                    text: 'Print Statement',
+                    icon: Icons.print_outlined,
+                    isOutlined: true,
+                    onPressed: () => _printOrLayoutReport(activeIndex),
                   ),
                   const SizedBox(width: 12),
                   ErpButton(
-                    text: 'Download PDF',
-                    icon: Icons.download_rounded,
-                    isOutlined: true,
+                    text: 'Download PDF Report',
+                    icon: Icons.download_outlined,
                     onPressed: () => _downloadReportToDevice(activeIndex),
                   ),
                 ],
@@ -1356,6 +818,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ),
           const SizedBox(height: 20),
 
+          // Tab Bar
           TabBar(
             controller: _tabController,
             isScrollable: true,
@@ -1363,32 +826,61 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondary,
             indicatorColor: AppColors.primary,
-            onTap: (index) {
-              final targetSection = _getSectionForIndex(index);
-              if (ref.read(currentNavSectionProvider) != targetSection) {
-                ref.read(currentNavSectionProvider.notifier).state = targetSection;
-              }
-            },
-            tabs: _tabLabels.map((label) => Tab(text: label)).toList(),
+            tabs: _tabLabels.map((l) => Tab(text: l)).toList(),
+          ),
+          const SizedBox(height: 20),
+
+          // KPI Summary Cards
+          Row(
+            children: kpis.entries.map((e) {
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: StatCard(
+                    title: e.key,
+                    value: e.value,
+                    icon: const Icon(Icons.analytics_outlined, color: AppColors.primary, size: 20),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
           const SizedBox(height: 24),
 
-          // Dynamic Summary Metrics Cards for Reporting
-          _buildSummaryCards(db, activeIndex),
-          const SizedBox(height: 24),
-
-          // Tab Content - Separate dedicated table data for each report type
-          SizedBox(
-            height: 520,
-            child: TabBarView(
-              controller: _tabController,
-              children: List.generate(7, (i) {
-                return ErpDataTable(
-                  columns: _getReportColumns(i),
-                  rows: _getReportRows(db, i),
-                );
-              }),
+          // Report Statement Title Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: AppRadius.mdBorderRadius,
+              border: Border.all(color: AppColors.border),
             ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.assessment_outlined, color: AppColors.primary, size: 20),
+                    const SizedBox(width: 10),
+                    Text(
+                      _getReportTitle(activeIndex),
+                      style: AppTextStyles.h3.copyWith(fontSize: 15),
+                    ),
+                  ],
+                ),
+                Text(
+                  'As of ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Data Table for Active Tab
+          ErpDataTable(
+            columns: _getReportColumns(activeIndex),
+            rows: _getReportRows(db, activeIndex),
           ),
         ],
       ),

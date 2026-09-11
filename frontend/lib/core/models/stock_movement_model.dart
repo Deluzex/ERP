@@ -50,7 +50,9 @@ class StockMovement {
   String get transactionTypeLabel {
     switch (transactionType) {
       case StockMovementType.purchase:
-        return 'STOCK IN (PURCHASE)';
+        return itemType == ItemType.finishedProduct
+            ? 'STOCK IN (FINISHED PRODUCT PURCHASE)'
+            : 'STOCK IN (RAW MATERIAL PURCHASE)';
       case StockMovementType.productionConsumption:
         return 'STOCK OUT (PRODUCTION)';
       case StockMovementType.productionOutput:
@@ -67,4 +69,16 @@ class StockMovement {
         return stockIn > 0 ? 'STOCK ADJUSTMENT (+)' : 'STOCK ADJUSTMENT (-)';
     }
   }
+
+  String get sourceLabel {
+    if (itemType == ItemType.finishedProduct) {
+      if (transactionType == StockMovementType.productionOutput) return 'Produced';
+      if (transactionType == StockMovementType.purchase) return 'Purchased';
+      return 'Stock Transfer';
+    }
+    return 'Purchased';
+  }
+
+  DateTime get timestamp => date;
+  double get quantityChanged => stockIn > 0 ? stockIn : stockOut;
 }

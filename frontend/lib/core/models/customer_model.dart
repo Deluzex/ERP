@@ -7,6 +7,8 @@ class Customer {
   final String address;
   final double outstandingAmount;
   final double creditBalance;
+  final String? linkedArchitectId;
+  final bool isAlsoArchitect;
   final DateTime createdAt;
 
   Customer({
@@ -18,6 +20,8 @@ class Customer {
     required this.address,
     this.outstandingAmount = 0.0,
     this.creditBalance = 0.0,
+    this.linkedArchitectId,
+    this.isAlsoArchitect = false,
     required this.createdAt,
   });
 
@@ -30,6 +34,8 @@ class Customer {
     String? address,
     double? outstandingAmount,
     double? creditBalance,
+    String? linkedArchitectId,
+    bool? isAlsoArchitect,
     DateTime? createdAt,
   }) {
     return Customer(
@@ -41,6 +47,8 @@ class Customer {
       address: address ?? this.address,
       outstandingAmount: outstandingAmount ?? this.outstandingAmount,
       creditBalance: creditBalance ?? this.creditBalance,
+      linkedArchitectId: linkedArchitectId ?? this.linkedArchitectId,
+      isAlsoArchitect: isAlsoArchitect ?? this.isAlsoArchitect,
       createdAt: createdAt ?? this.createdAt,
     );
   }

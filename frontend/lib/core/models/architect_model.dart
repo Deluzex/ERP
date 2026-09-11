@@ -11,6 +11,8 @@ class Architect {
   final double pendingCommission;
   final double approvedCommission;
   final double paidCommission;
+  final String? linkedCustomerId;
+  final bool isAlsoCustomer;
   final DateTime createdAt;
 
   Architect({
@@ -26,6 +28,8 @@ class Architect {
     this.pendingCommission = 0.0,
     this.approvedCommission = 0.0,
     this.paidCommission = 0.0,
+    this.linkedCustomerId,
+    this.isAlsoCustomer = false,
     required this.createdAt,
   });
 
@@ -42,6 +46,8 @@ class Architect {
     double? pendingCommission,
     double? approvedCommission,
     double? paidCommission,
+    String? linkedCustomerId,
+    bool? isAlsoCustomer,
     DateTime? createdAt,
   }) {
     return Architect(
@@ -57,6 +63,8 @@ class Architect {
       pendingCommission: pendingCommission ?? this.pendingCommission,
       approvedCommission: approvedCommission ?? this.approvedCommission,
       paidCommission: paidCommission ?? this.paidCommission,
+      linkedCustomerId: linkedCustomerId ?? this.linkedCustomerId,
+      isAlsoCustomer: isAlsoCustomer ?? this.isAlsoCustomer,
       createdAt: createdAt ?? this.createdAt,
     );
   }

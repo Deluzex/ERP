@@ -308,7 +308,18 @@ class Sale {
   final String? deliveryNumber;
   final String? vehicleNumber;
   final String? driverContact;
+  final String? courierName;
   final String? trackingNumber;
+  final DateTime? expectedDeliveryDate;
+  final String? courierContact;
+  final String? dispatchNotes;
+  
+  // Architect-Customer dual linkage
+  final bool isArchitectCustomer;
+  final String? linkedArchitectCustomerId;
+  
+  // Inter-State vs Intra-State GST Tax mode
+  final bool isInterStateTax;
   
   final List<String> linkedDeliveryIds;
   final List<String> linkedProductionOrderIds;
@@ -393,7 +404,14 @@ class Sale {
     this.deliveryNumber,
     this.vehicleNumber,
     this.driverContact,
+    this.courierName,
     this.trackingNumber,
+    this.expectedDeliveryDate,
+    this.courierContact,
+    this.dispatchNotes,
+    this.isArchitectCustomer = false,
+    this.linkedArchitectCustomerId,
+    this.isInterStateTax = false,
     this.linkedDeliveryIds = const [],
     this.linkedProductionOrderIds = const [],
     this.linkedPaymentIds = const [],
@@ -421,9 +439,9 @@ class Sale {
     this.attachmentUrl,
     this.activityLogs = const [],
   })  : taxableAmount = taxableAmount ?? (subtotalAmount - discountAmount).clamp(0.0, double.infinity),
-        cgstAmount = cgstAmount ?? (gstAmount / 2),
-        sgstAmount = sgstAmount ?? (gstAmount / 2),
-        igstAmount = igstAmount ?? 0.0;
+        cgstAmount = cgstAmount ?? (isInterStateTax ? 0.0 : gstAmount / 2),
+        sgstAmount = sgstAmount ?? (isInterStateTax ? 0.0 : gstAmount / 2),
+        igstAmount = igstAmount ?? (isInterStateTax ? gstAmount : 0.0);
 
   String get statusLabel {
     switch (documentType) {
@@ -660,7 +678,14 @@ class Sale {
     String? deliveryNumber,
     String? vehicleNumber,
     String? driverContact,
+    String? courierName,
     String? trackingNumber,
+    DateTime? expectedDeliveryDate,
+    String? courierContact,
+    String? dispatchNotes,
+    bool? isArchitectCustomer,
+    String? linkedArchitectCustomerId,
+    bool? isInterStateTax,
     List<String>? linkedDeliveryIds,
     List<String>? linkedProductionOrderIds,
     List<String>? linkedPaymentIds,
@@ -743,7 +768,14 @@ class Sale {
       deliveryNumber: deliveryNumber ?? this.deliveryNumber,
       vehicleNumber: vehicleNumber ?? this.vehicleNumber,
       driverContact: driverContact ?? this.driverContact,
+      courierName: courierName ?? this.courierName,
       trackingNumber: trackingNumber ?? this.trackingNumber,
+      expectedDeliveryDate: expectedDeliveryDate ?? this.expectedDeliveryDate,
+      courierContact: courierContact ?? this.courierContact,
+      dispatchNotes: dispatchNotes ?? this.dispatchNotes,
+      isArchitectCustomer: isArchitectCustomer ?? this.isArchitectCustomer,
+      linkedArchitectCustomerId: linkedArchitectCustomerId ?? this.linkedArchitectCustomerId,
+      isInterStateTax: isInterStateTax ?? this.isInterStateTax,
       linkedDeliveryIds: linkedDeliveryIds ?? this.linkedDeliveryIds,
       linkedProductionOrderIds: linkedProductionOrderIds ?? this.linkedProductionOrderIds,
       linkedPaymentIds: linkedPaymentIds ?? this.linkedPaymentIds,

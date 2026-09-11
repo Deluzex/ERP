@@ -32,7 +32,7 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
           p.vendorInvoiceNumber.toLowerCase().contains(query) ||
           (p.notes != null && p.notes!.toLowerCase().contains(query)) ||
           p.status.toString().toLowerCase().contains(query) ||
-          p.items.any((item) => item.rawMaterialName.toLowerCase().contains(query));
+          p.items.any((item) => item.displayName.toLowerCase().contains(query));
     }).toList();
 
     return SingleChildScrollView(

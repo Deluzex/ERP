@@ -1,32 +1,35 @@
 import 'package:flutter/foundation.dart';
+import '../../app/routes/app_routes.dart';
 import '../../core/models/architect_model.dart';
 import '../../core/models/category_unit_model.dart';
 import '../../core/models/commission_model.dart';
 import '../../core/models/customer_model.dart';
 import '../../core/models/dealer_model.dart';
+import '../../core/models/expense_model.dart';
 import '../../core/models/finished_product_model.dart';
 import '../../core/models/payment_model.dart';
 import '../../core/models/production_model.dart';
 import '../../core/models/project_model.dart';
 import '../../core/models/purchase_model.dart';
 import '../../core/models/raw_material_model.dart';
+import '../../core/models/rbac_models.dart';
 import '../../core/models/sale_model.dart';
 import '../../core/models/stock_adjustment_model.dart';
 import '../../core/models/stock_movement_model.dart';
 import '../../core/models/user_model.dart';
 import '../../core/models/vendor_model.dart';
+import '../../core/models/whatsapp_models.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
+import '../../core/utils/password_security.dart';
 
 class MockDatabaseService extends ChangeNotifier {
-  // Seed User
-  UserModel currentUser = UserModel(
-    id: 'USR-001',
-    name: 'Alex Sterling',
-    email: 'alex.sterling@deluxex.com',
-    role: 'Service Manager',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-  );
+  // Roles & RBAC System
+  List<Role> roles = [];
+  List<AppUser> users = [];
+  late AppUser currentUser;
+  List<TemporaryAccessGrant> temporaryGrants = [];
+  List<AuditLogEntry> auditLogs = [];
 
   // Master Lists
   List<ItemCategory> categories = [];
@@ -47,6 +50,11 @@ class MockDatabaseService extends ChangeNotifier {
   List<ErpPayment> payments = [];
   List<ArchitectCommission> commissions = [];
   List<StockAdjustment> stockAdjustments = [];
+  List<Expense> expenses = [];
+  List<WhatsAppAlertRecipient> alertRecipients = [];
+  List<LowStockAlertRecord> alertHistory = [];
+  List<WhatsAppMessageLog> messageLogs = [];
+  GlobalSupportConfig globalSupportConfig = const GlobalSupportConfig();
 
   // Counters for doc numbering
   int _purchaseCounter = 104;
@@ -60,12 +68,513 @@ class MockDatabaseService extends ChangeNotifier {
   int _paymentCounter = 312;
   int _commissionCounter = 55;
   int _adjCounter = 19;
+  int _expenseCounter = 45;
 
   MockDatabaseService() {
     _seedInitialData();
   }
 
   void _seedInitialData() {
+    // -------------------------------------------------------------
+    // 0. ROLES & PERMISSION MATRIX SEEDING
+    // -------------------------------------------------------------
+    roles = [
+      Role(
+        id: 'admin',
+        name: 'System Administrator',
+        description: 'Complete unrestricted access across all modules, configuration, and security matrices.',
+        isSystemRole: true,
+        isActive: true,
+        defaultDashboardSection: ErpNavSection.dashboard,
+        permissions: {
+          for (final m in ErpModule.values) m: ErpAction.values.toSet(),
+        },
+      ),
+      Role(
+        id: 'inventory_manager',
+        name: 'Inventory Manager',
+        description: 'Warehouse operations, raw material stock, finished goods, movements, and stock adjustments.',
+        isSystemRole: true,
+        isActive: true,
+        defaultDashboardSection: ErpNavSection.inventoryDashboard,
+        permissions: {
+          ErpModule.dashboard: {ErpAction.view},
+          ErpModule.inventory: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+            ErpAction.delete,
+            ErpAction.export,
+            ErpAction.print,
+          },
+          ErpModule.masters: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+            ErpAction.export,
+            ErpAction.print,
+          },
+          ErpModule.reports: {
+            ErpAction.view,
+            ErpAction.export,
+            ErpAction.print,
+          },
+        },
+      ),
+      Role(
+        id: 'purchase_manager',
+        name: 'Purchase Manager',
+        description: 'Vendor management, raw material procurement, purchase orders, and goods receiving logs.',
+        isSystemRole: true,
+        isActive: true,
+        defaultDashboardSection: ErpNavSection.purchaseDashboard,
+        permissions: {
+          ErpModule.dashboard: {ErpAction.view},
+          ErpModule.purchase: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+            ErpAction.approve,
+            ErpAction.cancel,
+            ErpAction.print,
+            ErpAction.export,
+            ErpAction.share,
+          },
+          ErpModule.masters: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+          },
+          ErpModule.payments: {
+            ErpAction.view,
+          },
+          ErpModule.reports: {
+            ErpAction.view,
+            ErpAction.export,
+            ErpAction.print,
+          },
+        },
+      ),
+      Role(
+        id: 'production_manager',
+        name: 'Production Manager',
+        description: 'Shopfloor work orders, raw material consumption tracking, and batch manufacturing costing.',
+        isSystemRole: true,
+        isActive: true,
+        defaultDashboardSection: ErpNavSection.productionDashboard,
+        permissions: {
+          ErpModule.dashboard: {ErpAction.view},
+          ErpModule.production: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+            ErpAction.approve,
+            ErpAction.cancel,
+            ErpAction.print,
+            ErpAction.export,
+          },
+          ErpModule.inventory: {
+            ErpAction.view,
+          },
+          ErpModule.masters: {
+            ErpAction.view,
+          },
+          ErpModule.reports: {
+            ErpAction.view,
+            ErpAction.export,
+            ErpAction.print,
+          },
+        },
+      ),
+      Role(
+        id: 'sales_manager',
+        name: 'Sales Manager',
+        description: 'Sales lifecycle: Quotations, Sales Orders, Tax Invoices, Delivery Challans, and Client Masters.',
+        isSystemRole: true,
+        isActive: true,
+        defaultDashboardSection: ErpNavSection.salesDashboard,
+        permissions: {
+          ErpModule.dashboard: {ErpAction.view},
+          ErpModule.sales: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+            ErpAction.approve,
+            ErpAction.cancel,
+            ErpAction.print,
+            ErpAction.share,
+            ErpAction.export,
+          },
+          ErpModule.masters: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+            ErpAction.print,
+            ErpAction.export,
+          },
+          ErpModule.payments: {
+            ErpAction.view,
+          },
+          ErpModule.reports: {
+            ErpAction.view,
+            ErpAction.export,
+            ErpAction.print,
+          },
+        },
+      ),
+      Role(
+        id: 'accounts_manager',
+        name: 'Accounts / Payment Manager',
+        description: 'Customer receivables, dealer ledger, vendor settlements, expenses, and commission payouts.',
+        isSystemRole: true,
+        isActive: true,
+        defaultDashboardSection: ErpNavSection.paymentsDashboard,
+        permissions: {
+          ErpModule.dashboard: {ErpAction.view},
+          ErpModule.payments: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+            ErpAction.approve,
+            ErpAction.print,
+            ErpAction.export,
+          },
+          ErpModule.sales: {
+            ErpAction.view,
+            ErpAction.print,
+            ErpAction.export,
+          },
+          ErpModule.purchase: {
+            ErpAction.view,
+            ErpAction.print,
+            ErpAction.export,
+          },
+          ErpModule.reports: {
+            ErpAction.view,
+            ErpAction.export,
+            ErpAction.print,
+          },
+        },
+      ),
+      Role(
+        id: 'masters_manager',
+        name: 'Master Data Manager',
+        description: 'Centralized administrator for Customers, Vendors, Dealers, Architects, RM and FG definitions.',
+        isSystemRole: true,
+        isActive: true,
+        defaultDashboardSection: ErpNavSection.mastersDashboard,
+        permissions: {
+          ErpModule.dashboard: {ErpAction.view},
+          ErpModule.masters: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+            ErpAction.delete,
+            ErpAction.export,
+            ErpAction.print,
+          },
+          ErpModule.inventory: {
+            ErpAction.view,
+          },
+          ErpModule.reports: {
+            ErpAction.view,
+            ErpAction.export,
+            ErpAction.print,
+          },
+        },
+      ),
+      Role(
+        id: 'project_manager',
+        name: 'Project Manager',
+        description: 'Architectural project portfolio, site delivery tracking, and material budget consumption.',
+        isSystemRole: true,
+        isActive: true,
+        defaultDashboardSection: ErpNavSection.projectList,
+        permissions: {
+          ErpModule.dashboard: {ErpAction.view},
+          ErpModule.masters: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+            ErpAction.export,
+            ErpAction.print,
+          },
+          ErpModule.sales: {
+            ErpAction.view,
+          },
+          ErpModule.production: {
+            ErpAction.view,
+          },
+          ErpModule.inventory: {
+            ErpAction.view,
+          },
+          ErpModule.reports: {
+            ErpAction.view,
+            ErpAction.export,
+            ErpAction.print,
+          },
+        },
+      ),
+      Role(
+        id: 'report_viewer',
+        name: 'Report Viewer (Auditor)',
+        description: 'Read-only analytics and audit trail access across all ERP departments.',
+        isSystemRole: true,
+        isActive: true,
+        defaultDashboardSection: ErpNavSection.reportsDashboard,
+        permissions: {
+          ErpModule.dashboard: {ErpAction.view},
+          ErpModule.reports: {
+            ErpAction.view,
+            ErpAction.export,
+            ErpAction.print,
+          },
+          ErpModule.inventory: {
+            ErpAction.view,
+            ErpAction.export,
+          },
+          ErpModule.purchase: {
+            ErpAction.view,
+            ErpAction.export,
+          },
+          ErpModule.production: {
+            ErpAction.view,
+            ErpAction.export,
+          },
+          ErpModule.sales: {
+            ErpAction.view,
+            ErpAction.export,
+          },
+          ErpModule.payments: {
+            ErpAction.view,
+            ErpAction.export,
+          },
+          ErpModule.masters: {
+            ErpAction.view,
+            ErpAction.export,
+          },
+        },
+      ),
+      Role(
+        id: 'data_entry',
+        name: 'Data Entry Operator',
+        description: 'Standard input for vouchers, items, and sales records without approval or deletion rights.',
+        isSystemRole: true,
+        isActive: true,
+        defaultDashboardSection: ErpNavSection.salesDashboard,
+        permissions: {
+          ErpModule.sales: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+            ErpAction.print,
+          },
+          ErpModule.inventory: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+          },
+          ErpModule.purchase: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+          },
+          ErpModule.masters: {
+            ErpAction.view,
+            ErpAction.create,
+            ErpAction.edit,
+          },
+        },
+      ),
+    ];
+
+    // -------------------------------------------------------------
+    // 0.1 APP USERS SEEDING (PRE-SEEDED DEMO ACCOUNTS)
+    // -------------------------------------------------------------
+    final saltAdmin = PasswordSecurity.generateSalt();
+    final saltInv = PasswordSecurity.generateSalt();
+    final saltPur = PasswordSecurity.generateSalt();
+    final saltProd = PasswordSecurity.generateSalt();
+    final saltSale = PasswordSecurity.generateSalt();
+    final saltAcc = PasswordSecurity.generateSalt();
+    final saltMast = PasswordSecurity.generateSalt();
+    final saltProj = PasswordSecurity.generateSalt();
+    final saltRep = PasswordSecurity.generateSalt();
+    final saltData = PasswordSecurity.generateSalt();
+
+    users = [
+      AppUser(
+        id: 'USR-001',
+        name: 'Alex Sterling',
+        email: 'admin@deluxex.com',
+        mobile: '+91 98765 00001',
+        passwordHash: PasswordSecurity.hashPassword('admin123', saltAdmin),
+        salt: saltAdmin,
+        primaryRoleId: 'admin',
+        isActive: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        createdAt: DateTime.now().subtract(const Duration(days: 120)),
+      ),
+      AppUser(
+        id: 'USR-002',
+        name: 'Rohan Varma',
+        email: 'inventory@deluxex.com',
+        mobile: '+91 98765 00002',
+        passwordHash: PasswordSecurity.hashPassword('inv123', saltInv),
+        salt: saltInv,
+        primaryRoleId: 'inventory_manager',
+        isActive: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+        createdAt: DateTime.now().subtract(const Duration(days: 90)),
+      ),
+      AppUser(
+        id: 'USR-003',
+        name: 'Vikram Mehta',
+        email: 'purchase@deluxex.com',
+        mobile: '+91 98765 00003',
+        passwordHash: PasswordSecurity.hashPassword('pur123', saltPur),
+        salt: saltPur,
+        primaryRoleId: 'purchase_manager',
+        isActive: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+        createdAt: DateTime.now().subtract(const Duration(days: 85)),
+      ),
+      AppUser(
+        id: 'USR-004',
+        name: 'Ananya Desai',
+        email: 'production@deluxex.com',
+        mobile: '+91 98765 00004',
+        passwordHash: PasswordSecurity.hashPassword('prod123', saltProd),
+        salt: saltProd,
+        primaryRoleId: 'production_manager',
+        isActive: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+        createdAt: DateTime.now().subtract(const Duration(days: 80)),
+      ),
+      AppUser(
+        id: 'USR-005',
+        name: 'Rahul Kapoor',
+        email: 'sales@deluxex.com',
+        mobile: '+91 98765 00005',
+        passwordHash: PasswordSecurity.hashPassword('sale123', saltSale),
+        salt: saltSale,
+        primaryRoleId: 'sales_manager',
+        isActive: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+        createdAt: DateTime.now().subtract(const Duration(days: 75)),
+      ),
+      AppUser(
+        id: 'USR-006',
+        name: 'Pooja Hegde',
+        email: 'accounts@deluxex.com',
+        mobile: '+91 98765 00006',
+        passwordHash: PasswordSecurity.hashPassword('acc123', saltAcc),
+        salt: saltAcc,
+        primaryRoleId: 'accounts_manager',
+        isActive: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
+        createdAt: DateTime.now().subtract(const Duration(days: 70)),
+      ),
+      AppUser(
+        id: 'USR-007',
+        name: 'Gaurav Kulkarni',
+        email: 'masters@deluxex.com',
+        mobile: '+91 98765 00010',
+        passwordHash: PasswordSecurity.hashPassword('mast123', saltMast),
+        salt: saltMast,
+        primaryRoleId: 'masters_manager',
+        isActive: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150',
+        createdAt: DateTime.now().subtract(const Duration(days: 68)),
+      ),
+      AppUser(
+        id: 'USR-008',
+        name: 'Sameer Joshi',
+        email: 'projects@deluxex.com',
+        mobile: '+91 98765 00007',
+        passwordHash: PasswordSecurity.hashPassword('proj123', saltProj),
+        salt: saltProj,
+        primaryRoleId: 'project_manager',
+        isActive: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150',
+        createdAt: DateTime.now().subtract(const Duration(days: 65)),
+      ),
+      AppUser(
+        id: 'USR-009',
+        name: 'Kavita Nair',
+        email: 'reports@deluxex.com',
+        mobile: '+91 98765 00008',
+        passwordHash: PasswordSecurity.hashPassword('rep123', saltRep),
+        salt: saltRep,
+        primaryRoleId: 'report_viewer',
+        isActive: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
+        createdAt: DateTime.now().subtract(const Duration(days: 60)),
+      ),
+      AppUser(
+        id: 'USR-010',
+        name: 'Deepak Sharma',
+        email: 'dataentry@deluxex.com',
+        mobile: '+91 98765 00009',
+        passwordHash: PasswordSecurity.hashPassword('data123', saltData),
+        salt: saltData,
+        primaryRoleId: 'data_entry',
+        isActive: true,
+        avatarUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150',
+        createdAt: DateTime.now().subtract(const Duration(days: 50)),
+      ),
+    ];
+
+    currentUser = users.first;
+
+    // -------------------------------------------------------------
+    // 0.2 SECURITY AUDIT TRAIL LOGS INITIALIZATION
+    // -------------------------------------------------------------
+    auditLogs = [
+      AuditLogEntry(
+        id: 'AUD-001',
+        userId: 'USR-005',
+        userName: 'Rahul Kapoor',
+        userRole: 'Sales Manager',
+        module: ErpModule.purchase,
+        action: ErpAction.view,
+        sectionName: 'Purchase Orders',
+        timestamp: DateTime.now().subtract(const Duration(hours: 3, minutes: 15)),
+        status: 'temporaryGranted',
+        authorizingUserId: 'USR-001',
+        authorizingUserName: 'Alex Sterling',
+        durationMinutes: 30,
+        notes: 'Temporary 30-min access authorized by Alex Sterling (System Administrator)',
+      ),
+      AuditLogEntry(
+        id: 'AUD-002',
+        userId: 'USR-010',
+        userName: 'Deepak Sharma',
+        userRole: 'Data Entry Operator',
+        module: ErpModule.settings,
+        action: ErpAction.view,
+        sectionName: 'System Settings',
+        timestamp: DateTime.now().subtract(const Duration(hours: 5, minutes: 40)),
+        status: 'denied',
+        notes: 'Failed supervisor password verification for restricted module Settings',
+      ),
+      AuditLogEntry(
+        id: 'AUD-003',
+        userId: 'USR-002',
+        userName: 'Rohan Varma',
+        userRole: 'Inventory Manager',
+        module: ErpModule.sales,
+        action: ErpAction.view,
+        sectionName: 'Sales Invoices',
+        timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 2)),
+        status: 'temporaryGranted',
+        authorizingUserId: 'USR-001',
+        authorizingUserName: 'Alex Sterling',
+        durationMinutes: 60,
+        notes: 'Temporary 60-min access authorized by Alex Sterling (System Administrator)',
+      ),
+    ];
+
     // Categories & Units
     categories = [
       ItemCategory(id: 'CAT-1', name: 'Wall Lights & Sconces', description: 'Architectural wall mounted lighting'),
@@ -161,6 +670,18 @@ class MockDatabaseService extends ChangeNotifier {
         outstandingAmount: 125000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 30)),
       ),
+      Customer(
+        id: 'CUST-004',
+        name: 'Sanjay Puri Architectural Residence & Studio',
+        mobile: '+91 98200 12345',
+        email: 'studio@sanjaypuriarchitects.com',
+        gstNumber: '27AABCS5566N1Z1',
+        address: 'Worli Sea Face, Mumbai',
+        outstandingAmount: 65000.0,
+        linkedArchitectId: 'ARCH-001',
+        isAlsoArchitect: true,
+        createdAt: DateTime.now().subtract(const Duration(days: 120)),
+      ),
     ];
 
     // Dealers
@@ -206,6 +727,8 @@ class MockDatabaseService extends ChangeNotifier {
         pendingCommission: 45000.0,
         approvedCommission: 60000.0,
         paidCommission: 80000.0,
+        linkedCustomerId: 'CUST-004',
+        isAlsoCustomer: true,
         createdAt: DateTime.now().subtract(const Duration(days: 150)),
       ),
       Architect(
@@ -550,6 +1073,44 @@ class MockDatabaseService extends ChangeNotifier {
         paymentMode: PaymentMode.bankTransfer,
         status: PurchaseStatus.paid,
         createdAt: now.subtract(const Duration(days: 2)),
+      ),
+      Purchase(
+        id: 'PUR-003',
+        purchaseNumber: 'PO-2026-0104',
+        purchaseDate: now.subtract(const Duration(days: 1)),
+        vendorId: 'VEN-001',
+        vendorName: 'Apex Aluminum Extrusions Ltd',
+        vendorInvoiceNumber: 'APEX/2026/911',
+        invoiceDate: now.subtract(const Duration(days: 1)),
+        purchaseType: PurchaseItemType.finishedProduct,
+        items: [
+          PurchaseLineItem(
+            itemType: PurchaseItemType.finishedProduct,
+            finishedProductId: 'FP-001',
+            finishedProductName: 'Aarix Axis Wall Light',
+            finishedProductCode: 'DLX-WL-001',
+            quantity: 15.0,
+            unit: 'PCS',
+            rate: 2150.0,
+            discountAmount: 750.0,
+            gstPercent: 18.0,
+            lineTotal: 37170.0,
+          ),
+        ],
+        subtotalAmount: 32250.0,
+        discountAmount: 750.0,
+        taxableAmount: 31500.0,
+        cgstAmount: 2835.0,
+        sgstAmount: 2835.0,
+        igstAmount: 0.0,
+        gstAmount: 5670.0,
+        totalAmount: 37170.0,
+        paidAmount: 37170.0,
+        pendingAmount: 0.0,
+        paymentMode: PaymentMode.bankTransfer,
+        status: PurchaseStatus.paid,
+        notes: 'External vendor finished goods direct purchase batch',
+        createdAt: now.subtract(const Duration(days: 1)),
       ),
     ];
 
@@ -1059,6 +1620,214 @@ class MockDatabaseService extends ChangeNotifier {
         createdAt: now.subtract(const Duration(days: 4)),
       ),
     ];
+
+    // Seed Expenses
+    expenses = [
+      Expense(
+        id: 'EXP-001',
+        expenseNumber: 'EXP-2026-0041',
+        expenseDate: now.subtract(const Duration(days: 3)),
+        expenseName: 'Site Freight & Dedicated Crane Delivery',
+        category: ExpenseCategory.transportation,
+        amount: 14500.0,
+        paidBy: 'Alex Sterling',
+        paymentMethod: 'Bank Transfer',
+        vendorPayee: 'QuickMove Logistics LLP',
+        projectId: 'PRJ-001',
+        projectName: 'Sky City Tower C Luxury Penthouses',
+        expenseReference: 'QM/LR/9924',
+        description: 'Chandelier hoisting crane & specialized freight for 1200mm fixtures',
+        paymentStatus: ExpensePaymentStatus.paid,
+        createdBy: 'Alex Sterling',
+        createdAt: now.subtract(const Duration(days: 3)),
+      ),
+      Expense(
+        id: 'EXP-002',
+        expenseNumber: 'EXP-2026-0042',
+        expenseDate: now.subtract(const Duration(days: 2)),
+        expenseName: 'BlueDart Express Document & Sample Couriers',
+        category: ExpenseCategory.courier,
+        amount: 2800.0,
+        paidBy: 'Pooja Verma',
+        paymentMethod: 'UPI',
+        vendorPayee: 'BlueDart Express',
+        projectId: 'PRJ-002',
+        projectName: 'Hyatt Presidential Suite Renovation',
+        expenseReference: 'BD/AWB/449102',
+        description: 'Architect finish approval samples sent to Sanjay Puri Studio',
+        paymentStatus: ExpensePaymentStatus.paid,
+        createdBy: 'Pooja Verma',
+        createdAt: now.subtract(const Duration(days: 2)),
+      ),
+      Expense(
+        id: 'EXP-003',
+        expenseNumber: 'EXP-2026-0043',
+        expenseDate: now.subtract(const Duration(days: 1)),
+        expenseName: 'Contract Electrician Team Installation Allowance',
+        category: ExpenseCategory.labour,
+        amount: 18000.0,
+        paidBy: 'Alex Sterling',
+        paymentMethod: 'Cash',
+        vendorPayee: 'Apex Electricals Contractor',
+        projectId: 'PRJ-001',
+        projectName: 'Sky City Tower C Luxury Penthouses',
+        productionId: 'PRD-001',
+        productionNumber: 'PRD-2026-0087',
+        expenseReference: 'VOUCHER-LAB-881',
+        description: 'Milestone 1 ceiling mounting & driver testing labour charges',
+        paymentStatus: ExpensePaymentStatus.paid,
+        createdBy: 'Alex Sterling',
+        createdAt: now.subtract(const Duration(days: 1)),
+      ),
+      Expense(
+        id: 'EXP-004',
+        expenseNumber: 'EXP-2026-0044',
+        expenseDate: now.subtract(const Duration(hours: 12)),
+        expenseName: 'Assembly Line CNC Laser Cutter Calibration & Service',
+        category: ExpenseCategory.maintenance,
+        amount: 8500.0,
+        paidBy: 'Plant Supervisor',
+        paymentMethod: 'Company Card',
+        vendorPayee: 'TechServ Precision Services',
+        productionId: 'PRD-001',
+        productionNumber: 'PRD-2026-0087',
+        expenseReference: 'TS-INV-3021',
+        description: 'Quarterly optics laser alignment and chiller gas refill',
+        paymentStatus: ExpensePaymentStatus.paid,
+        createdBy: 'Alex Sterling',
+        createdAt: now.subtract(const Duration(hours: 12)),
+      ),
+      Expense(
+        id: 'EXP-005',
+        expenseNumber: 'EXP-2026-0045',
+        expenseDate: now.subtract(const Duration(hours: 4)),
+        expenseName: 'Plant Electricity Bill - Unit 2 Assembly Hub',
+        category: ExpenseCategory.electricity,
+        amount: 32000.0,
+        paidBy: 'Alex Sterling',
+        paymentMethod: 'Bank Transfer',
+        vendorPayee: 'Adani Electricity Mumbai Ltd',
+        expenseReference: 'CA-900214821',
+        description: 'Monthly manufacturing facility utility bill',
+        paymentStatus: ExpensePaymentStatus.paid,
+        createdBy: 'Alex Sterling',
+        createdAt: now.subtract(const Duration(hours: 4)),
+      ),
+    ];
+
+    // Seed WhatsApp Alert Recipients
+    alertRecipients = [
+      WhatsAppAlertRecipient(
+        id: 'REC-001',
+        recipientName: 'Vikram Joshi (Production Head)',
+        mobileNumber: '+91 98200 44551',
+        whatsappNumber: '+919820044551',
+        roleOrDepartment: 'Production & Manufacturing',
+        alertType: WhatsAppAlertType.allLowStock,
+        isActive: true,
+        createdAt: now.subtract(const Duration(days: 60)),
+      ),
+      WhatsAppAlertRecipient(
+        id: 'REC-002',
+        recipientName: 'Sunil Nair (Plant Supervisor)',
+        mobileNumber: '+91 98330 99882',
+        whatsappNumber: '+919833099882',
+        roleOrDepartment: 'Plant Assembly Line A',
+        alertType: WhatsAppAlertType.lowStockRawMaterial,
+        isActive: true,
+        createdAt: now.subtract(const Duration(days: 45)),
+      ),
+      WhatsAppAlertRecipient(
+        id: 'REC-003',
+        recipientName: 'Ramesh Patel (Warehouse & Inventory)',
+        mobileNumber: '+91 98110 33221',
+        whatsappNumber: '+919811033221',
+        roleOrDepartment: 'Stores & Material Inward',
+        alertType: WhatsAppAlertType.allLowStock,
+        isActive: true,
+        createdAt: now.subtract(const Duration(days: 30)),
+      ),
+    ];
+
+    // Seed Low Stock Alerts
+    alertHistory = [
+      LowStockAlertRecord(
+        id: 'ALT-001',
+        itemId: 'RM-003',
+        itemName: 'Tridonic Constant Current LED Driver 40W Dimmable',
+        itemCode: 'RAW-DRV-40W',
+        itemType: 'Raw Material',
+        currentStock: 45.0,
+        minimumStock: 60.0,
+        reorderLevel: 80.0,
+        unit: 'PCS',
+        recipientName: 'Vikram Joshi (Production Head)',
+        recipientWhatsApp: '+919820044551',
+        messageBody: 'Raw Material "Tridonic Constant Current LED Driver 40W Dimmable" [RAW-DRV-40W] is running low.\nCurrent Stock: 45 PCS | Minimum Stock: 60 PCS | Reorder Level: 80 PCS.\nThis may affect upcoming production orders.',
+        status: AlertRecordStatus.sent,
+        triggeredAt: now.subtract(const Duration(hours: 3)),
+      ),
+      LowStockAlertRecord(
+        id: 'ALT-002',
+        itemId: 'RM-005',
+        itemName: 'Brass CNC Machined End Caps (Brushed Gold)',
+        itemCode: 'RAW-BRS-CAP',
+        itemType: 'Raw Material',
+        currentStock: 12.0,
+        minimumStock: 30.0,
+        reorderLevel: 45.0,
+        unit: 'PCS',
+        recipientName: 'Sunil Nair (Plant Supervisor)',
+        recipientWhatsApp: '+919833099882',
+        messageBody: 'Raw Material "Brass CNC Machined End Caps" [RAW-BRS-CAP] is critically low.\nCurrent Stock: 12 PCS | Reorder Level: 45 PCS.\nPlease issue purchase order.',
+        status: AlertRecordStatus.sent,
+        triggeredAt: now.subtract(const Duration(hours: 5)),
+      ),
+      LowStockAlertRecord(
+        id: 'ALT-003',
+        itemId: 'FP-003',
+        itemName: 'Aura Halo Minimalist Ring Light 900mm',
+        itemCode: 'DLX-CH-003',
+        itemType: 'Finished Product',
+        currentStock: 3.0,
+        minimumStock: 6.0,
+        reorderLevel: 8.0,
+        unit: 'PCS',
+        recipientName: 'Vikram Joshi (Production Head)',
+        recipientWhatsApp: '+919820044551',
+        messageBody: 'Finished Product "Aura Halo Minimalist Ring Light 900mm" [DLX-CH-003] is below minimum buffer.\nCurrent Stock: 3 PCS | Min Level: 6 PCS.',
+        status: AlertRecordStatus.sent,
+        triggeredAt: now.subtract(const Duration(hours: 6)),
+      ),
+    ];
+
+    // Seed WhatsApp Message Logs
+    messageLogs = [
+      WhatsAppMessageLog(
+        id: 'WLOG-001',
+        messageType: 'Quotation Sent',
+        recipientName: 'Rahul Oberoi (Oberoi Sky City)',
+        recipientNumber: '+919821011223',
+        relatedEntityType: 'Quotation',
+        relatedEntityId: 'QT-002',
+        relatedEntityNumber: 'DLZ/QT/2026/0103-R2',
+        messageText: 'Dear Rahul Oberoi, please find the revised quotation DLZ/QT/2026/0103-R2 for Sky City Tower C project (Amount: Rs. 3,28,040). Download PDF: https://erp.deluzex.com/docs/QT-002.pdf',
+        sentAt: now.subtract(const Duration(days: 2)),
+        status: 'Delivered',
+      ),
+      WhatsAppMessageLog(
+        id: 'WLOG-002',
+        messageType: 'Dispatch Details',
+        recipientName: 'Oberoi Sky City Site',
+        recipientNumber: '+919821011223',
+        relatedEntityType: 'Delivery',
+        relatedEntityId: 'DLV-001',
+        relatedEntityNumber: 'DLV-2026-0042',
+        messageText: 'Your consignment for SO DLZ/SO/2026/0074 is dispatched via BlueDart Express (Tracking: BDX-990214). Vehicle: MH-04-AZ-8812. Expected delivery: Tomorrow.',
+        sentAt: now.subtract(const Duration(hours: 4)),
+        status: 'Delivered',
+      ),
+    ];
   }
 
   // -------------------------------------------------------------
@@ -1103,30 +1872,61 @@ class MockDatabaseService extends ChangeNotifier {
     purchases.insert(0, purchase);
 
     if (purchase.status != PurchaseStatus.draft && purchase.status != PurchaseStatus.cancelled) {
-      // 1. Increase Raw Material Stock & record ledger
       for (final line in purchase.items) {
-        final rmIndex = rawMaterials.indexWhere((rm) => rm.id == line.rawMaterialId);
-        if (rmIndex != -1) {
-          final rm = rawMaterials[rmIndex];
-          final updatedStock = rm.currentStock + line.quantity;
-          rawMaterials[rmIndex] = rm.copyWith(
-            currentStock: updatedStock,
-            updatedAt: DateTime.now(),
-          );
+        if (purchase.purchaseType == PurchaseItemType.finishedProduct || line.itemType == PurchaseItemType.finishedProduct) {
+          // 1A. Finished Product Purchase: Increase Finished Product Stock
+          final fpIndex = finishedProducts.indexWhere((fp) =>
+              fp.id == line.finishedProductId ||
+              (line.finishedProductCode != null && fp.itemCode == line.finishedProductCode));
+          if (fpIndex != -1) {
+            final fp = finishedProducts[fpIndex];
+            final updatedStock = fp.currentStock + line.quantity;
+            final updatedPurchased = fp.purchasedStock + line.quantity;
+            finishedProducts[fpIndex] = fp.copyWith(
+              currentStock: updatedStock,
+              purchasedStock: updatedPurchased,
+              updatedAt: DateTime.now(),
+            );
 
-          _recordStockTransaction(
-            itemId: rm.id,
-            itemName: rm.name,
-            itemCode: rm.itemCode,
-            itemType: ItemType.rawMaterial,
-            transactionType: StockMovementType.purchase,
-            referenceNumber: purchase.purchaseNumber,
-            stockIn: line.quantity,
-            stockOut: 0.0,
-            newBalance: updatedStock,
-            unit: rm.unit,
-            notes: 'Purchase from ${purchase.vendorName} (Inv: ${purchase.vendorInvoiceNumber})',
-          );
+            _recordStockTransaction(
+              itemId: fp.id,
+              itemName: fp.name,
+              itemCode: fp.itemCode,
+              itemType: ItemType.finishedProduct,
+              transactionType: StockMovementType.purchase,
+              referenceNumber: purchase.purchaseNumber,
+              stockIn: line.quantity,
+              stockOut: 0.0,
+              newBalance: updatedStock,
+              unit: fp.unit,
+              notes: 'Finished Product Purchase from ${purchase.vendorName} (Inv: ${purchase.vendorInvoiceNumber})',
+            );
+          }
+        } else {
+          // 1B. Raw Material Purchase: Increase Raw Material Stock
+          final rmIndex = rawMaterials.indexWhere((rm) => rm.id == line.rawMaterialId);
+          if (rmIndex != -1) {
+            final rm = rawMaterials[rmIndex];
+            final updatedStock = rm.currentStock + line.quantity;
+            rawMaterials[rmIndex] = rm.copyWith(
+              currentStock: updatedStock,
+              updatedAt: DateTime.now(),
+            );
+
+            _recordStockTransaction(
+              itemId: rm.id,
+              itemName: rm.name,
+              itemCode: rm.itemCode,
+              itemType: ItemType.rawMaterial,
+              transactionType: StockMovementType.purchase,
+              referenceNumber: purchase.purchaseNumber,
+              stockIn: line.quantity,
+              stockOut: 0.0,
+              newBalance: updatedStock,
+              unit: rm.unit,
+              notes: 'Raw Material Purchase from ${purchase.vendorName} (Inv: ${purchase.vendorInvoiceNumber})',
+            );
+          }
         }
       }
 
@@ -1149,7 +1949,7 @@ class MockDatabaseService extends ChangeNotifier {
           referenceDocumentNumber: purchase.purchaseNumber,
           amount: purchase.paidAmount,
           paymentMode: purchase.paymentMode,
-          notes: 'Direct payment at purchase creation',
+          notes: 'Direct payment at purchase creation (${purchase.purchaseTypeLabel})',
         );
       }
     }
@@ -2634,6 +3434,7 @@ class MockDatabaseService extends ChangeNotifier {
   void addManualPayment(ErpPayment payment) {
     payments.insert(0, payment);
 
+    // 1. Update Party Balance
     switch (payment.paymentType) {
       case PaymentType.customerPayment:
         final cIndex = customers.indexWhere((c) => c.id == payment.partyId);
@@ -2663,8 +3464,50 @@ class MockDatabaseService extends ChangeNotifier {
         }
         break;
       case PaymentType.commissionPayment:
-        // Handled via approve/pay commission method
         break;
+    }
+
+    // 2. Reconcile Linked Invoice or Document
+    if (payment.referenceDocumentId != null) {
+      final sIndex = sales.indexWhere((s) => s.id == payment.referenceDocumentId);
+      if (sIndex != -1) {
+        final s = sales[sIndex];
+        final newPaid = s.paidAmount + payment.amount;
+        final newPending = (s.totalAmount - newPaid).clamp(0.0, double.infinity);
+        final newStatus = newPending <= 0.01 ? SaleStatus.paid : SaleStatus.partialPaid;
+        final updatedLogs = [
+          DocumentActivityLog(
+            id: IdGenerator.generateId('LOG'),
+            action: payment.isFullPayment ? 'FULL PAYMENT RECEIVED' : 'PARTIAL PAYMENT RECEIVED',
+            performedBy: currentUser.name,
+            timestamp: DateTime.now(),
+            details: 'Recorded ${payment.entryModeLabel} of ${Formatters.formatCurrency(payment.amount)} via ${payment.paymentMode.name.toUpperCase()}. New Balance: ${Formatters.formatCurrency(newPending)}',
+            statusBefore: s.status.name,
+            statusAfter: newStatus.name,
+          ),
+          ...s.activityLogs,
+        ];
+        sales[sIndex] = s.copyWith(
+          paidAmount: newPaid,
+          pendingAmount: newPending,
+          status: newStatus,
+          linkedPaymentIds: [...s.linkedPaymentIds, payment.id],
+          activityLogs: updatedLogs,
+        );
+      }
+
+      final pIndex = purchases.indexWhere((p) => p.id == payment.referenceDocumentId);
+      if (pIndex != -1) {
+        final p = purchases[pIndex];
+        final newPaid = p.paidAmount + payment.amount;
+        final newPending = (p.totalAmount - newPaid).clamp(0.0, double.infinity);
+        final newStatus = newPending <= 0.01 ? PurchaseStatus.paid : PurchaseStatus.partialPaid;
+        purchases[pIndex] = p.copyWith(
+          paidAmount: newPaid,
+          pendingAmount: newPending,
+          status: newStatus,
+        );
+      }
     }
 
     notifyListeners();
@@ -2719,11 +3562,210 @@ class MockDatabaseService extends ChangeNotifier {
         amount: comm.commissionAmount,
         paymentMode: paymentMode,
         transactionReference: ref,
-        notes: 'Commission payout for invoice ${comm.saleInvoiceNumber}',
+        notes: 'Architect Project Commission Payout',
       );
 
       notifyListeners();
     }
+  }
+
+  void disburseCommission(String commissionId, PaymentMode paymentMode, String ref) {
+    payCommission(commissionId: commissionId, paymentMode: paymentMode, ref: ref);
+  }
+
+  void rejectCommission(String commissionId, [String? notes]) {
+    final index = commissions.indexWhere((c) => c.id == commissionId);
+    if (index != -1) {
+      final comm = commissions[index];
+      commissions[index] = comm.copyWith(
+        status: CommissionStatus.rejected,
+        notes: notes ?? 'Rejected by auditor / management',
+      );
+
+      final archIndex = architects.indexWhere((a) => a.id == comm.architectId);
+      if (archIndex != -1) {
+        final a = architects[archIndex];
+        if (comm.status == CommissionStatus.generated) {
+          architects[archIndex] = a.copyWith(
+            pendingCommission: (a.pendingCommission - comm.commissionAmount).clamp(0.0, double.infinity),
+          );
+        } else if (comm.status == CommissionStatus.approved) {
+          architects[archIndex] = a.copyWith(
+            approvedCommission: (a.approvedCommission - comm.commissionAmount).clamp(0.0, double.infinity),
+          );
+        }
+      }
+      notifyListeners();
+    }
+  }
+
+  void updateDeliveryChallan(Sale updatedSale) {
+    final idx = sales.indexWhere((s) => s.id == updatedSale.id);
+    if (idx != -1) {
+      sales[idx] = updatedSale;
+      notifyListeners();
+    }
+  }
+
+  List<ExpenseCategory> get expenseCategories => ExpenseCategory.values;
+
+  // -------------------------------------------------------------
+  // EXPENSE MANAGEMENT
+  // -------------------------------------------------------------
+  void addExpense(Expense expense) {
+    expenses.insert(0, expense);
+    notifyListeners();
+  }
+
+  void updateExpense(Expense expense) {
+    final index = expenses.indexWhere((e) => e.id == expense.id);
+    if (index != -1) {
+      expenses[index] = expense;
+      notifyListeners();
+    }
+  }
+
+  void deleteExpense(String id) {
+    expenses.removeWhere((e) => e.id == id);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // WHATSAPP COMMUNICATION & LOW STOCK ALERTS
+  // -------------------------------------------------------------
+  void addAlertRecipient(WhatsAppAlertRecipient recipient) {
+    alertRecipients.insert(0, recipient);
+    notifyListeners();
+  }
+
+  void updateAlertRecipient(WhatsAppAlertRecipient recipient) {
+    final index = alertRecipients.indexWhere((r) => r.id == recipient.id);
+    if (index != -1) {
+      alertRecipients[index] = recipient;
+      notifyListeners();
+    }
+  }
+
+  void deleteAlertRecipient(String id) {
+    alertRecipients.removeWhere((r) => r.id == id);
+    notifyListeners();
+  }
+
+  void triggerLowStockWhatsAppAlert({
+    required String itemId,
+    required String itemName,
+    required String itemCode,
+    required String itemType,
+    required double currentStock,
+    required double minStock,
+    required double reorderLevel,
+    required String unit,
+    required String recipientName,
+    required String recipientWhatsApp,
+    required String messageBody,
+  }) {
+    // Prevent duplicate alert within same session for same item if already sent today
+    final existingToday = alertHistory.where((a) =>
+        a.itemId == itemId &&
+        a.status == AlertRecordStatus.sent &&
+        a.triggeredAt.day == DateTime.now().day &&
+        a.triggeredAt.month == DateTime.now().month &&
+        a.triggeredAt.year == DateTime.now().year).firstOrNull;
+
+    if (existingToday != null) return;
+
+    final record = LowStockAlertRecord(
+      id: IdGenerator.generateId('ALT'),
+      itemId: itemId,
+      itemName: itemName,
+      itemCode: itemCode,
+      itemType: itemType,
+      currentStock: currentStock,
+      minimumStock: minStock,
+      reorderLevel: reorderLevel,
+      unit: unit,
+      recipientName: recipientName,
+      recipientWhatsApp: recipientWhatsApp,
+      messageBody: messageBody,
+      status: AlertRecordStatus.sent,
+      triggeredAt: DateTime.now(),
+    );
+    alertHistory.insert(0, record);
+
+    // Also log to unified WhatsApp message log
+    logWhatsAppMessage(WhatsAppMessageLog(
+      id: IdGenerator.generateId('WLOG'),
+      messageType: 'Low Stock Alert',
+      recipientName: recipientName,
+      recipientNumber: recipientWhatsApp,
+      relatedEntityType: itemType,
+      relatedEntityId: itemId,
+      relatedEntityNumber: itemCode,
+      messageText: messageBody,
+      sentAt: DateTime.now(),
+      status: 'Delivered',
+    ));
+
+    notifyListeners();
+  }
+
+  void resolveLowStockAlert(String alertId) {
+    final index = alertHistory.indexWhere((a) => a.id == alertId);
+    if (index != -1) {
+      final a = alertHistory[index];
+      alertHistory[index] = LowStockAlertRecord(
+        id: a.id,
+        itemId: a.itemId,
+        itemName: a.itemName,
+        itemCode: a.itemCode,
+        itemType: a.itemType,
+        currentStock: a.currentStock,
+        minimumStock: a.minimumStock,
+        reorderLevel: a.reorderLevel,
+        unit: a.unit,
+        recipientName: a.recipientName,
+        recipientWhatsApp: a.recipientWhatsApp,
+        messageBody: a.messageBody,
+        status: AlertRecordStatus.resolved,
+        triggeredAt: a.triggeredAt,
+        resolvedAt: DateTime.now(),
+      );
+      notifyListeners();
+    }
+  }
+
+  void logWhatsAppMessage(WhatsAppMessageLog log) {
+    messageLogs.insert(0, log);
+    notifyListeners();
+  }
+
+  void updateGlobalSupportConfig(GlobalSupportConfig config) {
+    globalSupportConfig = config;
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // ARCHITECT AS CUSTOMER RELATIONSHIP
+  // -------------------------------------------------------------
+  void linkArchitectAndCustomer({required String customerId, required String architectId}) {
+    final cIndex = customers.indexWhere((c) => c.id == customerId);
+    final aIndex = architects.indexWhere((a) => a.id == architectId);
+
+    if (cIndex != -1) {
+      customers[cIndex] = customers[cIndex].copyWith(
+        linkedArchitectId: architectId,
+        isAlsoArchitect: true,
+      );
+    }
+
+    if (aIndex != -1) {
+      architects[aIndex] = architects[aIndex].copyWith(
+        linkedCustomerId: customerId,
+        isAlsoCustomer: true,
+      );
+    }
+
+    notifyListeners();
   }
 
   // -------------------------------------------------------------
@@ -2823,6 +3865,15 @@ class MockDatabaseService extends ChangeNotifier {
 
   void addCustomer(Customer customer) {
     customers.insert(0, customer);
+    if (customer.linkedArchitectId != null) {
+      final aIndex = architects.indexWhere((a) => a.id == customer.linkedArchitectId);
+      if (aIndex != -1) {
+        architects[aIndex] = architects[aIndex].copyWith(
+          linkedCustomerId: customer.id,
+          isAlsoCustomer: true,
+        );
+      }
+    }
     notifyListeners();
   }
 
@@ -2830,6 +3881,15 @@ class MockDatabaseService extends ChangeNotifier {
     final index = customers.indexWhere((c) => c.id == customer.id);
     if (index != -1) {
       customers[index] = customer;
+      if (customer.linkedArchitectId != null) {
+        final aIndex = architects.indexWhere((a) => a.id == customer.linkedArchitectId);
+        if (aIndex != -1) {
+          architects[aIndex] = architects[aIndex].copyWith(
+            linkedCustomerId: customer.id,
+            isAlsoCustomer: true,
+          );
+        }
+      }
       notifyListeners();
     }
   }
@@ -2849,6 +3909,15 @@ class MockDatabaseService extends ChangeNotifier {
 
   void addArchitect(Architect architect) {
     architects.insert(0, architect);
+    if (architect.linkedCustomerId != null) {
+      final cIndex = customers.indexWhere((c) => c.id == architect.linkedCustomerId);
+      if (cIndex != -1) {
+        customers[cIndex] = customers[cIndex].copyWith(
+          linkedArchitectId: architect.id,
+          isAlsoArchitect: true,
+        );
+      }
+    }
     notifyListeners();
   }
 
@@ -2856,6 +3925,15 @@ class MockDatabaseService extends ChangeNotifier {
     final index = architects.indexWhere((a) => a.id == architect.id);
     if (index != -1) {
       architects[index] = architect;
+      if (architect.linkedCustomerId != null) {
+        final cIndex = customers.indexWhere((c) => c.id == architect.linkedCustomerId);
+        if (cIndex != -1) {
+          customers[cIndex] = customers[cIndex].copyWith(
+            linkedArchitectId: architect.id,
+            isAlsoArchitect: true,
+          );
+        }
+      }
       notifyListeners();
     }
   }
@@ -2949,4 +4027,289 @@ class MockDatabaseService extends ChangeNotifier {
   int get nextDeliveryNumber => ++_deliveryCounter;
   int get nextReturnNumber => ++_returnCounter;
   int get nextAdjustmentNumber => ++_adjCounter;
+  int get nextExpenseNumber => ++_expenseCounter;
+
+  double get totalExpenseAmount => expenses.fold(0.0, (sum, e) => sum + e.amount);
+  double get todayExpenseAmount {
+    final today = DateTime.now();
+    return expenses
+        .where((e) => e.expenseDate.year == today.year && e.expenseDate.month == today.month && e.expenseDate.day == today.day)
+        .fold(0.0, (sum, e) => sum + e.amount);
+  }
+
+  // =============================================================
+  // AUTHENTICATION & RBAC MANAGEMENT
+  // =============================================================
+
+  /// Authenticate user via username/email/mobile and password with optional role verification
+  AppUser? authenticateUser(String identifier, String password, [String? roleId]) {
+    final cleanId = identifier.trim().toLowerCase();
+    final user = users.where((u) {
+      final emailMatch = u.email.toLowerCase() == cleanId;
+      final mobileMatch = u.mobile.replaceAll(RegExp(r'\s+'), '') == cleanId.replaceAll(RegExp(r'\s+'), '');
+      final nameMatch = u.name.toLowerCase() == cleanId;
+      return (emailMatch || mobileMatch || nameMatch) && u.isActive;
+    }).firstOrNull;
+
+    if (user == null) return null;
+
+    final isValidPassword = PasswordSecurity.verifyPassword(password, user.passwordHash, user.salt);
+    if (!isValidPassword) return null;
+
+    // Optional role match check
+    if (roleId != null && roleId.isNotEmpty) {
+      final hasRole = user.primaryRoleId == roleId || user.assignedRoleIds.contains(roleId);
+      if (!hasRole) return null;
+    }
+
+    // Update last login timestamp
+    final userIndex = users.indexWhere((u) => u.id == user.id);
+    if (userIndex != -1) {
+      users[userIndex] = user.copyWith(lastLoginAt: DateTime.now());
+      currentUser = users[userIndex];
+    } else {
+      currentUser = user;
+    }
+
+    notifyListeners();
+    return currentUser;
+  }
+
+  /// Switch or set current authenticated user session
+  void setCurrentUser(AppUser user) {
+    currentUser = user;
+    notifyListeners();
+  }
+
+  /// Add new User
+  void addUser(AppUser user) {
+    users.add(user);
+    notifyListeners();
+  }
+
+  /// Update existing User
+  void updateUser(AppUser updatedUser) {
+    final idx = users.indexWhere((u) => u.id == updatedUser.id);
+    if (idx != -1) {
+      users[idx] = updatedUser;
+      if (currentUser.id == updatedUser.id) {
+        currentUser = updatedUser;
+      }
+      notifyListeners();
+    }
+  }
+
+  /// Activate or deactivate user account
+  void toggleUserStatus(String userId, bool active) {
+    final idx = users.indexWhere((u) => u.id == userId);
+    if (idx != -1) {
+      users[idx] = users[idx].copyWith(isActive: active);
+      notifyListeners();
+    }
+  }
+
+  /// Reset user password
+  void resetUserPassword(String userId, String newPassword) {
+    final idx = users.indexWhere((u) => u.id == userId);
+    if (idx != -1) {
+      final salt = PasswordSecurity.generateSalt();
+      final hash = PasswordSecurity.hashPassword(newPassword, salt);
+      users[idx] = users[idx].copyWith(passwordHash: hash, salt: salt);
+      if (currentUser.id == userId) {
+        currentUser = users[idx];
+      }
+      notifyListeners();
+    }
+  }
+
+  /// Add new custom Role
+  void addRole(Role role) {
+    roles.add(role);
+    notifyListeners();
+  }
+
+  /// Update existing Role & permissions
+  void updateRole(Role updatedRole) {
+    final idx = roles.indexWhere((r) => r.id == updatedRole.id);
+    if (idx != -1) {
+      roles[idx] = updatedRole;
+      notifyListeners();
+    }
+  }
+
+  /// Activate or deactivate role
+  void toggleRoleStatus(String roleId, bool active) {
+    final idx = roles.indexWhere((r) => r.id == roleId);
+    if (idx != -1) {
+      roles[idx] = roles[idx].copyWith(isActive: active);
+      notifyListeners();
+    }
+  }
+
+  /// Get role by ID
+  Role? getRole(String roleId) {
+    return roles.where((r) => r.id == roleId).firstOrNull;
+  }
+
+  /// Get user object by ID
+  AppUser? getUser(String userId) {
+    return users.where((u) => u.id == userId).firstOrNull;
+  }
+
+  /// Get user's primary role object
+  Role getUserRole(AppUser user) {
+    return getRole(user.primaryRoleId) ?? roles.first;
+  }
+
+  // ===================================================================
+  // SECURITY, TEMPORARY ACCESS & AUDIT LOGS
+  // ===================================================================
+
+  /// Record an entry in the system security audit trail
+  void logAccessAttempt({
+    required String userId,
+    required String userName,
+    required String userRole,
+    required ErpModule module,
+    required ErpAction action,
+    String? sectionName,
+    required String status,
+    String? authorizingUserId,
+    String? authorizingUserName,
+    int? durationMinutes,
+    String? notes,
+  }) {
+    final entry = AuditLogEntry(
+      id: 'AUD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+      userId: userId,
+      userName: userName,
+      userRole: userRole,
+      module: module,
+      action: action,
+      sectionName: sectionName ?? module.label,
+      timestamp: DateTime.now(),
+      status: status,
+      authorizingUserId: authorizingUserId,
+      authorizingUserName: authorizingUserName,
+      durationMinutes: durationMinutes,
+      notes: notes,
+    );
+    auditLogs.insert(0, entry);
+    notifyListeners();
+  }
+
+  /// Secure backend verification of supervisor/admin password and temporary access granting
+  ({bool success, String message, String? authorizerName, TemporaryAccessGrant? grant}) verifySupervisorPasswordAndGrantAccess({
+    required AppUser currentUser,
+    required String password,
+    required ErpModule targetModule,
+    ErpAction? targetAction,
+    int durationMinutes = 30,
+    bool isSessionOnly = false,
+  }) {
+    clearExpiredTemporaryGrants();
+
+    // 1. Find all active eligible authorizers (Admin or Users who have permission for this module/action)
+    final eligibleAuthorizers = users.where((u) {
+      if (!u.isActive) return false;
+      if (u.primaryRoleId == 'admin') return true;
+      return u.hasPermission(targetModule, targetAction ?? ErpAction.view, roles);
+    }).toList();
+
+    AppUser? matchedAuthorizer;
+    for (final authorizer in eligibleAuthorizers) {
+      if (PasswordSecurity.verifyPassword(password, authorizer.passwordHash, authorizer.salt)) {
+        matchedAuthorizer = authorizer;
+        break;
+      }
+    }
+
+    final now = DateTime.now();
+
+    if (matchedAuthorizer == null) {
+      // Log failed access attempt
+      logAccessAttempt(
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: getUserRole(currentUser).name,
+        module: targetModule,
+        action: targetAction ?? ErpAction.view,
+        sectionName: targetModule.label,
+        status: 'denied',
+        notes: 'Failed supervisor password verification for restricted module "${targetModule.label}"',
+      );
+      return (
+        success: false,
+        message: 'Invalid authorized password or insufficient permission.',
+        authorizerName: null,
+        grant: null,
+      );
+    }
+
+    // 2. Grant temporary access
+    final grantId = 'TAG-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final expiresAt = isSessionOnly ? null : now.add(Duration(minutes: durationMinutes));
+    final grant = TemporaryAccessGrant(
+      id: grantId,
+      module: targetModule,
+      action: targetAction,
+      grantedToUserId: currentUser.id,
+      grantedByUserId: matchedAuthorizer.id,
+      grantedByName: '${matchedAuthorizer.name} (${getUserRole(matchedAuthorizer).name})',
+      grantedAt: now,
+      expiresAt: expiresAt,
+      isSessionOnly: isSessionOnly,
+    );
+
+    // Remove any existing overlapping grants for this module
+    temporaryGrants.removeWhere((g) => g.grantedToUserId == currentUser.id && g.module == targetModule && g.action == targetAction);
+    temporaryGrants.add(grant);
+
+    // Log successful temporary override
+    logAccessAttempt(
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userRole: getUserRole(currentUser).name,
+      module: targetModule,
+      action: targetAction ?? ErpAction.view,
+      sectionName: targetModule.label,
+      status: 'temporaryGranted',
+      authorizingUserId: matchedAuthorizer.id,
+      authorizingUserName: matchedAuthorizer.name,
+      durationMinutes: isSessionOnly ? null : durationMinutes,
+      notes: isSessionOnly
+          ? 'Temporary session access authorized by ${matchedAuthorizer.name}'
+          : 'Temporary $durationMinutes-minute access authorized by ${matchedAuthorizer.name}',
+    );
+
+    notifyListeners();
+
+    return (
+      success: true,
+      message: 'Access granted by ${matchedAuthorizer.name}.',
+      authorizerName: matchedAuthorizer.name,
+      grant: grant,
+    );
+  }
+
+  /// Remove expired temporary grants
+  void clearExpiredTemporaryGrants() {
+    final initialCount = temporaryGrants.length;
+    temporaryGrants.removeWhere((g) => g.isExpired);
+    if (temporaryGrants.length != initialCount) {
+      notifyListeners();
+    }
+  }
+
+  /// Revoke an active temporary access grant
+  void revokeTemporaryAccess(String grantId) {
+    temporaryGrants.removeWhere((g) => g.id == grantId);
+    notifyListeners();
+  }
+
+  /// Backend permission validator for business logic
+  bool checkUserPermission(AppUser user, ErpModule module, ErpAction action) {
+    clearExpiredTemporaryGrants();
+    return user.hasPermission(module, action, roles, temporaryGrants);
+  }
 }

@@ -6,6 +6,8 @@ class FinishedProduct {
   final String categoryName;
   final String unit;
   final double currentStock;
+  final double purchasedStock;
+  final double producedStock;
   final double reservedStock;
   final double openingStock;
   final double minimumStock;
@@ -24,6 +26,8 @@ class FinishedProduct {
     required this.categoryName,
     required this.unit,
     required this.currentStock,
+    double? purchasedStock,
+    double? producedStock,
     this.reservedStock = 0.0,
     required this.openingStock,
     required this.minimumStock,
@@ -33,7 +37,8 @@ class FinishedProduct {
     required this.gstPercent,
     required this.createdAt,
     required this.updatedAt,
-  });
+  })  : purchasedStock = purchasedStock ?? 0.0,
+        producedStock = producedStock ?? currentStock;
 
   bool get isLowStock => currentStock <= minimumStock;
   double get totalValuation => currentStock * costPrice;
@@ -47,6 +52,8 @@ class FinishedProduct {
     String? categoryName,
     String? unit,
     double? currentStock,
+    double? purchasedStock,
+    double? producedStock,
     double? reservedStock,
     double? openingStock,
     double? minimumStock,
@@ -65,6 +72,8 @@ class FinishedProduct {
       categoryName: categoryName ?? this.categoryName,
       unit: unit ?? this.unit,
       currentStock: currentStock ?? this.currentStock,
+      purchasedStock: purchasedStock ?? this.purchasedStock,
+      producedStock: producedStock ?? this.producedStock,
       reservedStock: reservedStock ?? this.reservedStock,
       openingStock: openingStock ?? this.openingStock,
       minimumStock: minimumStock ?? this.minimumStock,

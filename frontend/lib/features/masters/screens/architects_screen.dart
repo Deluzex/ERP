@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -13,6 +14,7 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
+import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ArchitectsScreen extends ConsumerStatefulWidget {
@@ -48,156 +50,238 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final addrCtrl = TextEditingController(text: existing?.address ?? '');
     final rateCtrl = TextEditingController(text: existing?.defaultCommissionRate.toString() ?? '5.0');
+    String? linkedCustomerId = existing?.linkedCustomerId;
+    bool isAlsoCustomer = existing?.isAlsoCustomer ?? (existing?.linkedCustomerId != null);
     final formKey = GlobalKey<FormState>();
 
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(isEdit ? 'Edit Architect' : 'Add Architect Master', style: AppTextStyles.h2),
-              ErpButton(
-                text: 'Scan & Upload (OCR)',
-                icon: Icons.document_scanner_outlined,
-                isOutlined: true,
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (ocrCtx) => Dialog(
-                      backgroundColor: Colors.transparent,
-                      child: SizedBox(
-                        width: 800,
-                        height: 600,
-                        child: DocumentOcrUploader(
-                          docType: OcrDocType.architectDoc,
-                          onCancel: () => Navigator.of(ocrCtx).pop(),
-                          onConfirm: (data) {
-                            nameCtrl.text = data['Architect Name'] ?? data['Firm Name'] ?? nameCtrl.text;
-                            compCtrl.text = data['Firm Name'] ?? compCtrl.text;
-                            mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
-                            emailCtrl.text = data['Email'] ?? emailCtrl.text;
-                            addrCtrl.text = data['Address'] ?? addrCtrl.text;
-                            Navigator.of(ocrCtx).pop();
-                          },
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            return AlertDialog(
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(isEdit ? 'Edit Architect' : 'Add Architect Master', style: AppTextStyles.h2),
+                  ErpButton(
+                    text: 'Scan & Upload (OCR)',
+                    icon: Icons.document_scanner_outlined,
+                    isOutlined: true,
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (ocrCtx) => Dialog(
+                          backgroundColor: Colors.transparent,
+                          child: SizedBox(
+                            width: 800,
+                            height: 600,
+                            child: DocumentOcrUploader(
+                              docType: OcrDocType.architectDoc,
+                              onCancel: () => Navigator.of(ocrCtx).pop(),
+                              onConfirm: (data) {
+                                nameCtrl.text = data['Architect Name'] ?? data['Firm Name'] ?? nameCtrl.text;
+                                compCtrl.text = data['Firm Name'] ?? compCtrl.text;
+                                mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
+                                emailCtrl.text = data['Email'] ?? emailCtrl.text;
+                                addrCtrl.text = data['Address'] ?? addrCtrl.text;
+                                Navigator.of(ocrCtx).pop();
+                              },
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  );
-                },
+                      );
+                    },
+                  ),
+                ],
               ),
-            ],
-          ),
-          content: SizedBox(
-            width: 520,
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: nameCtrl,
-                      validator: (v) => Validators.requiredField(v, 'Architect name required'),
-                      decoration: const InputDecoration(labelText: 'Architect Name *', hintText: 'E.g., Ar. Sanjay Puri'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: compCtrl,
-                      decoration: const InputDecoration(labelText: 'Studio / Company Name', hintText: 'E.g., Sanjay Puri Architects'),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
+              content: SizedBox(
+                width: 520,
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: mobileCtrl,
-                            validator: Validators.mobile,
-                            decoration: const InputDecoration(labelText: 'Mobile Number *'),
+                        TextFormField(
+                          controller: nameCtrl,
+                          validator: (v) => Validators.requiredField(v, 'Architect name required'),
+                          decoration: const InputDecoration(
+                            labelText: 'Architect Name *',
+                            hintText: 'E.g., Ar. Sanjay Puri',
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: emailCtrl,
-                            validator: Validators.email,
-                            decoration: const InputDecoration(labelText: 'Email Address'),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: compCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Studio / Company Name',
+                            hintText: 'E.g., Sanjay Puri Architects',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: mobileCtrl,
+                                validator: Validators.mobile,
+                                decoration: const InputDecoration(labelText: 'Mobile Number *'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: emailCtrl,
+                                validator: Validators.email,
+                                decoration: const InputDecoration(labelText: 'Email Address'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: gstCtrl,
+                                decoration: const InputDecoration(labelText: 'GST Number'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: rateCtrl,
+                                keyboardType: TextInputType.number,
+                                validator: Validators.nonNegativeNumber,
+                                decoration: const InputDecoration(labelText: 'Default Commission Rate (%) *'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: addrCtrl,
+                          maxLines: 2,
+                          decoration: const InputDecoration(labelText: 'Studio Address'),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Dual Entity: Architect as Customer
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Checkbox(
+                                    value: isAlsoCustomer || linkedCustomerId != null,
+                                    activeColor: Colors.purple,
+                                    onChanged: (val) {
+                                      setDlgState(() {
+                                        isAlsoCustomer = val ?? false;
+                                        if (!isAlsoCustomer) linkedCustomerId = null;
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Architect-Customer Linkage (Dual Entity)',
+                                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.purple)),
+                                        Text('Link this Architect with a Customer account for unified billing, quotations, and projects',
+                                            style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (isAlsoCustomer || linkedCustomerId != null) ...[
+                                const SizedBox(height: 10),
+                                DropdownButtonFormField<String?>(
+                                  value: linkedCustomerId,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Architect-Customer Name (Customer Master)',
+                                    hintText: 'Select existing Customer account',
+                                  ),
+                                  items: [
+                                    const DropdownMenuItem(value: null, child: Text('(Not Linked / Separate Entity)')),
+                                    ...db.customers.map((c) => DropdownMenuItem(
+                                          value: c.id,
+                                          child: Text('${c.name} (${c.mobile})'),
+                                        )),
+                                  ],
+                                  onChanged: (val) => setDlgState(() {
+                                    linkedCustomerId = val;
+                                    isAlsoCustomer = val != null;
+                                  }),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: gstCtrl,
-                            decoration: const InputDecoration(labelText: 'GST Number'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: rateCtrl,
-                            keyboardType: TextInputType.number,
-                            validator: Validators.nonNegativeNumber,
-                            decoration: const InputDecoration(labelText: 'Default Commission Rate (%) *'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: addrCtrl,
-                      maxLines: 2,
-                      decoration: const InputDecoration(labelText: 'Studio Address'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-          actions: [
-            ErpButton(
-              text: 'Cancel',
-              isOutlined: true,
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ErpButton(
-              text: isEdit ? 'Update Architect' : 'Save Architect',
-              onPressed: () {
-                if (!formKey.currentState!.validate()) return;
-                final rateVal = double.tryParse(rateCtrl.text.trim()) ?? 5.0;
+              actions: [
+                ErpButton(
+                  text: 'Cancel',
+                  isOutlined: true,
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+                ErpButton(
+                  text: isEdit ? 'Update Architect' : 'Save Architect',
+                  onPressed: () {
+                    if (!formKey.currentState!.validate()) return;
+                    final rateVal = double.tryParse(rateCtrl.text.trim()) ?? 5.0;
+                    final archId = isEdit ? existing.id : IdGenerator.generateId('ARCH');
 
-                if (isEdit) {
-                  db.updateArchitect(existing.copyWith(
-                    name: nameCtrl.text.trim(),
-                    companyName: compCtrl.text.trim(),
-                    mobile: mobileCtrl.text.trim(),
-                    email: emailCtrl.text.trim(),
-                    gstNumber: gstCtrl.text.trim(),
-                    address: addrCtrl.text.trim(),
-                    defaultCommissionRate: rateVal,
-                  ));
-                } else {
-                  final newArch = Architect(
-                    id: IdGenerator.generateId('ARCH'),
-                    name: nameCtrl.text.trim(),
-                    companyName: compCtrl.text.trim(),
-                    mobile: mobileCtrl.text.trim(),
-                    email: emailCtrl.text.trim(),
-                    gstNumber: gstCtrl.text.trim(),
-                    address: addrCtrl.text.trim(),
-                    defaultCommissionRate: rateVal,
-                    createdAt: DateTime.now(),
-                  );
-                  db.addArchitect(newArch);
-                }
-                Navigator.of(ctx).pop();
-              },
-            ),
-          ],
+                    final architect = Architect(
+                      id: archId,
+                      name: nameCtrl.text.trim(),
+                      companyName: compCtrl.text.trim(),
+                      mobile: mobileCtrl.text.trim(),
+                      email: emailCtrl.text.trim(),
+                      gstNumber: gstCtrl.text.trim(),
+                      address: addrCtrl.text.trim(),
+                      defaultCommissionRate: rateVal,
+                      isAlsoCustomer: isAlsoCustomer || linkedCustomerId != null,
+                      linkedCustomerId: linkedCustomerId,
+                      totalCommissionEarned: existing?.totalCommissionEarned ?? 0.0,
+                      pendingCommission: existing?.pendingCommission ?? 0.0,
+                      approvedCommission: existing?.approvedCommission ?? 0.0,
+                      paidCommission: existing?.paidCommission ?? 0.0,
+                      createdAt: existing?.createdAt ?? DateTime.now(),
+                    );
+
+                    if (isEdit) {
+                      db.updateArchitect(architect);
+                    } else {
+                      db.addArchitect(architect);
+                    }
+
+                    // Bi-directional link sync
+                    if (isAlsoCustomer && linkedCustomerId != null) {
+                      db.linkArchitectAndCustomer(architectId: archId, customerId: linkedCustomerId!);
+                    }
+
+                    Navigator.of(ctx).pop();
+                  },
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -295,7 +379,8 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                 children: [
                   Text('Architects & Commission Hub', style: AppTextStyles.h1),
                   const SizedBox(height: 4),
-                  Text('Architect profiles, associated project sales, and commission lifecycle (Generated → Review → Approved → Paid)', style: AppTextStyles.subtitle),
+                  Text('Architect profiles, dual Architect-Customer entities, and commission lifecycle (Generated → Review → Approved → Paid)',
+                      style: AppTextStyles.subtitle),
                 ],
               ),
               ErpButton(
@@ -343,6 +428,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                       child: ErpDataTable(
                         columns: const [
                           ErpColumn(title: 'Architect Name'),
+                          ErpColumn(title: 'Architect-Customer Name'),
                           ErpColumn(title: 'Studio / Company'),
                           ErpColumn(title: 'Contact'),
                           ErpColumn(title: 'Default Rate (%)', isNumeric: true),
@@ -353,19 +439,106 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           ErpColumn(title: 'Actions'),
                         ],
                         rows: architects.map((a) {
+                          final linkedCust = a.linkedCustomerId != null
+                              ? db.customers.where((c) => c.id == a.linkedCustomerId).firstOrNull
+                              : null;
+
                           return [
-                            Text(a.name, style: AppTextStyles.bodyBold),
-                            Text(a.companyName, style: AppTextStyles.bodyMedium),
+                            // 1. Architect Name (Clickable -> Architect Detail Page)
+                            InkWell(
+                              onTap: () {
+                                ref.read(activeRecordDetailsStackProvider.notifier).push(a.id, 'architect', ErpNavSection.architects);
+                              },
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    a.name,
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      color: AppColors.primary,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                  Text('ID: ${a.id}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                ],
+                              ),
+                            ),
+                            // 2. Architect-Customer Name (Clickable -> Customer Detail Page or Not Linked)
+                            linkedCust != null
+                                ? InkWell(
+                                    onTap: () {
+                                      ref.read(activeRecordDetailsStackProvider.notifier).push(linkedCust.id, 'customer', ErpNavSection.customers);
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.purple.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.purple.withValues(alpha: 0.25)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.link, size: 12, color: Colors.purple),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              linkedCust.name,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.purple,
+                                                decoration: TextDecoration.underline,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text('Not Linked', style: TextStyle(fontSize: 10.5, color: Colors.grey)),
+                                  ),
+                            Text(a.companyName.isNotEmpty ? a.companyName : '-', style: AppTextStyles.bodyMedium),
                             Text(a.mobile, style: AppTextStyles.bodySmall),
                             Text('${a.defaultCommissionRate}%', style: AppTextStyles.bodyMedium),
                             Text(Formatters.formatCurrency(a.totalCommissionEarned), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
                             Text(Formatters.formatCurrency(a.pendingCommission), style: AppTextStyles.bodySmall.copyWith(color: AppColors.warningText)),
                             Text(Formatters.formatCurrency(a.approvedCommission), style: AppTextStyles.bodySmall.copyWith(color: AppColors.infoText)),
                             Text(Formatters.formatCurrency(a.paidCommission), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              tooltip: 'Edit Architect',
-                              onPressed: () => _openAddEditArchitectDialog(a),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                                  tooltip: 'View Complete Architect Detail Page',
+                                  onPressed: () {
+                                    ref.read(activeRecordDetailsStackProvider.notifier).push(a.id, 'architect', ErpNavSection.architects);
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.chat, color: Colors.green, size: 18),
+                                  tooltip: 'Quick WhatsApp Message',
+                                  onPressed: () => WhatsAppQuickChatDialog.showArchitectQuickChat(
+                                    context,
+                                    architectName: a.name,
+                                    architectPhone: a.mobile,
+                                    firmName: a.companyName,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, size: 18),
+                                  tooltip: 'Edit Architect',
+                                  onPressed: () => _openAddEditArchitectDialog(a),
+                                ),
+                              ],
                             ),
                           ];
                         }).toList(),

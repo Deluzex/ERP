@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -60,28 +61,77 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                             Expanded(
                               child: DropdownButtonFormField<String?>(
                                 value: selectedCustomerId,
-                                decoration: const InputDecoration(labelText: 'Customer'),
+                                isExpanded: true,
+                                decoration: const InputDecoration(labelText: 'Customer Account'),
                                 items: [
-                                  const DropdownMenuItem(value: null, child: Text('None')),
+                                  const DropdownMenuItem(value: null, child: Text('(No Customer Linked)')),
                                   ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                                 ],
-                                onChanged: (val) => setDlgState(() => selectedCustomerId = val),
+                                onChanged: (val) {
+                                  setDlgState(() {
+                                    selectedCustomerId = val;
+                                    if (val != null) {
+                                      final c = db.customers.firstWhere((cust) => cust.id == val);
+                                      if (c.linkedArchitectId != null && selectedArchitectId == null) {
+                                        selectedArchitectId = c.linkedArchitectId;
+                                      }
+                                    }
+                                  });
+                                },
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: DropdownButtonFormField<String?>(
                                 value: selectedArchitectId,
-                                decoration: const InputDecoration(labelText: 'Architect'),
+                                isExpanded: true,
+                                decoration: const InputDecoration(labelText: 'Architect Partner'),
                                 items: [
-                                  const DropdownMenuItem(value: null, child: Text('None')),
+                                  const DropdownMenuItem(value: null, child: Text('(No Architect Linked)')),
                                   ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
                                 ],
-                                onChanged: (val) => setDlgState(() => selectedArchitectId = val),
+                                onChanged: (val) {
+                                  setDlgState(() {
+                                    selectedArchitectId = val;
+                                    if (val != null) {
+                                      final a = db.architects.firstWhere((arch) => arch.id == val);
+                                      if (a.linkedCustomerId != null && selectedCustomerId == null) {
+                                        selectedCustomerId = a.linkedCustomerId;
+                                      }
+                                    }
+                                  });
+                                },
                               ),
                             ),
                           ],
                         ),
+                        if (selectedCustomerId != null && selectedArchitectId != null) ...[
+                          Builder(builder: (_) {
+                            final c = db.customers.where((cust) => cust.id == selectedCustomerId).firstOrNull;
+                            final a = db.architects.where((arch) => arch.id == selectedArchitectId).firstOrNull;
+                            final isLinked = (c?.linkedArchitectId == a?.id) || (a?.linkedCustomerId == c?.id);
+                            if (!isLinked) return const SizedBox.shrink();
+                            return Container(
+                              margin: const EdgeInsets.only(top: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.link, size: 14, color: Colors.purple),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Dual Entity: Architect "${a?.name}" is linked as Customer "${c?.name}"',
+                                    style: const TextStyle(fontSize: 11.5, color: Colors.purple, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
                         const SizedBox(height: 12),
                         Row(
                           children: [
@@ -280,7 +330,18 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
               }
 
               return [
-                Text(p.name, style: AppTextStyles.bodyBold),
+                InkWell(
+                  onTap: () {
+                    ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'project', ErpNavSection.projectList);
+                  },
+                  child: Text(
+                    p.name,
+                    style: AppTextStyles.bodyBold.copyWith(
+                      color: AppColors.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
                 Text(p.customerName ?? 'Direct Client', style: AppTextStyles.bodyMedium),
                 Text(p.architectName ?? 'No Architect Linked', style: AppTextStyles.bodySmall.copyWith(color: AppColors.purple)),
                 Text(Formatters.formatDate(p.startDate), style: AppTextStyles.bodySmall),
@@ -290,6 +351,13 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    IconButton(
+                      icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                      tooltip: 'View 10-Section Project Breakdown',
+                      onPressed: () {
+                        ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'project', ErpNavSection.projectList);
+                      },
+                    ),
                     IconButton(
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       tooltip: 'Edit Project',

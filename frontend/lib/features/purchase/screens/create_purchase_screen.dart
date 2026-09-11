@@ -21,9 +21,10 @@ class CreatePurchaseScreen extends ConsumerStatefulWidget {
 }
 
 class _LineItemDraft {
-  String rawMaterialId;
-  String rawMaterialName;
-  String rawMaterialCode;
+  PurchaseItemType itemType;
+  String itemId; // rawMaterialId or finishedProductId
+  String itemName;
+  String itemCode;
   String unit;
   double quantity;
   double rate;
@@ -31,15 +32,18 @@ class _LineItemDraft {
   double gstPercent;
 
   _LineItemDraft({
-    required this.rawMaterialId,
-    required this.rawMaterialName,
-    required this.rawMaterialCode,
+    this.itemType = PurchaseItemType.rawMaterial,
+    required this.itemId,
+    required this.itemName,
+    required this.itemCode,
     required this.unit,
     this.quantity = 1.0,
     this.rate = 100.0,
     this.discount = 0.0,
     this.gstPercent = 18.0,
   });
+
+  double get subtotal => (quantity * rate) - discount;
 
   double get lineTotal => PurchaseLineItem.calculateLineTotal(
         quantity: quantity,
@@ -56,9 +60,11 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   final _notesCtrl = TextEditingController();
 
   String? _selectedVendorId;
+  String? _selectedProjectId;
   DateTime _purchaseDate = DateTime.now();
   DateTime _invoiceDate = DateTime.now();
   PaymentMode _paymentMode = PaymentMode.bankTransfer;
+  bool _isInterStateTax = false; // False = Intra-State (CGST + SGST), True = Inter-State (IGST)
   final List<_LineItemDraft> _items = [];
   String? _attachmentName;
   String? _attachmentSize;
@@ -95,9 +101,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     if (db.rawMaterials.isNotEmpty) {
       final firstRm = db.rawMaterials.first;
       _items.add(_LineItemDraft(
-        rawMaterialId: firstRm.id,
-        rawMaterialName: firstRm.name,
-        rawMaterialCode: firstRm.itemCode,
+        itemType: PurchaseItemType.rawMaterial,
+        itemId: firstRm.id,
+        itemName: firstRm.name,
+        itemCode: firstRm.itemCode,
         unit: firstRm.unit,
         quantity: 100.0,
         rate: firstRm.defaultPurchasePrice,
@@ -107,20 +114,39 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     }
   }
 
-  void _addNewLineItem() {
+  void _addNewLineItem({PurchaseItemType itemType = PurchaseItemType.rawMaterial}) {
     final db = ref.read(databaseServiceProvider);
-    if (db.rawMaterials.isEmpty) return;
-    final firstRm = db.rawMaterials.first;
-    setState(() {
-      _items.add(_LineItemDraft(
-        rawMaterialId: firstRm.id,
-        rawMaterialName: firstRm.name,
-        rawMaterialCode: firstRm.itemCode,
-        unit: firstRm.unit,
-        quantity: 10.0,
-        rate: firstRm.defaultPurchasePrice,
-      ));
-    });
+    if (itemType == PurchaseItemType.rawMaterial) {
+      if (db.rawMaterials.isEmpty) return;
+      final firstRm = db.rawMaterials.first;
+      setState(() {
+        _items.add(_LineItemDraft(
+          itemType: PurchaseItemType.rawMaterial,
+          itemId: firstRm.id,
+          itemName: firstRm.name,
+          itemCode: firstRm.itemCode,
+          unit: firstRm.unit,
+          quantity: 10.0,
+          rate: firstRm.defaultPurchasePrice,
+          gstPercent: firstRm.gstPercent,
+        ));
+      });
+    } else {
+      if (db.finishedProducts.isEmpty) return;
+      final firstFp = db.finishedProducts.first;
+      setState(() {
+        _items.add(_LineItemDraft(
+          itemType: PurchaseItemType.finishedProduct,
+          itemId: firstFp.id,
+          itemName: firstFp.name,
+          itemCode: firstFp.itemCode,
+          unit: firstFp.unit,
+          quantity: 10.0,
+          rate: firstFp.costPrice,
+          gstPercent: firstFp.gstPercent,
+        ));
+      });
+    }
   }
 
   void _removeLineItem(int index) {
@@ -130,6 +156,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   }
 
   double get _totalAmount => _items.fold(0.0, (sum, item) => sum + item.lineTotal);
+  double get _subtotalAmount => _items.fold(0.0, (sum, item) => sum + item.subtotal);
+  double get _totalTaxAmount => _totalAmount - _subtotalAmount;
+  double get _cgstAmount => _isInterStateTax ? 0.0 : (_totalTaxAmount / 2.0);
+  double get _sgstAmount => _isInterStateTax ? 0.0 : (_totalTaxAmount / 2.0);
+  double get _igstAmount => _isInterStateTax ? _totalTaxAmount : 0.0;
+
   double get _paidAmount => double.tryParse(_paidAmountCtrl.text.trim()) ?? 0.0;
   double get _pendingAmount => (_totalAmount - _paidAmount).clamp(0.0, double.infinity);
 
@@ -138,16 +170,33 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     final db = ref.read(databaseServiceProvider);
     final vendor = db.vendors.firstWhere((v) => v.id == _selectedVendorId, orElse: () => db.vendors.first);
 
+    final project = _selectedProjectId != null
+        ? db.projects.where((p) => p.id == _selectedProjectId).firstOrNull
+        : null;
+
     final purchaseItems = _items.map((draft) {
+      final sub = draft.subtotal;
+      final taxAmt = draft.lineTotal - sub;
+      final cgst = _isInterStateTax ? 0.0 : (taxAmt / 2.0);
+      final sgst = _isInterStateTax ? 0.0 : (taxAmt / 2.0);
+      final igst = _isInterStateTax ? taxAmt : 0.0;
+
       return PurchaseLineItem(
-        rawMaterialId: draft.rawMaterialId,
-        rawMaterialName: draft.rawMaterialName,
-        rawMaterialCode: draft.rawMaterialCode,
+        itemType: draft.itemType,
+        rawMaterialId: draft.itemType == PurchaseItemType.rawMaterial ? draft.itemId : null,
+        rawMaterialName: draft.itemType == PurchaseItemType.rawMaterial ? draft.itemName : null,
+        rawMaterialCode: draft.itemType == PurchaseItemType.rawMaterial ? draft.itemCode : null,
+        finishedProductId: draft.itemType == PurchaseItemType.finishedProduct ? draft.itemId : null,
+        finishedProductName: draft.itemType == PurchaseItemType.finishedProduct ? draft.itemName : null,
+        finishedProductCode: draft.itemType == PurchaseItemType.finishedProduct ? draft.itemCode : null,
         quantity: draft.quantity,
         unit: draft.unit,
         rate: draft.rate,
         discountAmount: draft.discount,
         gstPercent: draft.gstPercent,
+        cgstAmount: cgst,
+        sgstAmount: sgst,
+        igstAmount: igst,
         lineTotal: draft.lineTotal,
       );
     }).toList();
@@ -169,7 +218,9 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       purchaseDate: _purchaseDate,
       vendorId: vendor.id,
       vendorName: vendor.name,
-      vendorInvoiceNumber: _vendorInvoiceCtrl.text.trim().isNotEmpty ? _vendorInvoiceCtrl.text.trim() : 'INV-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+      vendorInvoiceNumber: _vendorInvoiceCtrl.text.trim().isNotEmpty
+          ? _vendorInvoiceCtrl.text.trim()
+          : 'INV-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
       invoiceDate: _invoiceDate,
       items: purchaseItems,
       totalAmount: _totalAmount,
@@ -178,14 +229,30 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       paymentMode: _paymentMode,
       status: status,
       notes: _notesCtrl.text.trim(),
+      projectId: project?.id,
+      projectName: project?.name,
+      cgstAmount: _cgstAmount,
+      sgstAmount: _sgstAmount,
+      igstAmount: _igstAmount,
       createdAt: DateTime.now(),
     );
 
     db.createPurchase(purchase);
 
+    final containsFinished = purchaseItems.any((it) => it.itemType == PurchaseItemType.finishedProduct);
+    final containsRaw = purchaseItems.any((it) => it.itemType == PurchaseItemType.rawMaterial);
+    String stockMsg = 'Stock updated!';
+    if (containsFinished && containsRaw) {
+      stockMsg = 'Raw Material & Finished Goods stock successfully updated!';
+    } else if (containsFinished) {
+      stockMsg = 'Finished Goods stock inwarded directly to Finished Inventory!';
+    } else {
+      stockMsg = 'Raw Material stock inwarded to Raw Materials inventory!';
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(isDraft ? 'Draft Purchase Order Saved' : 'Purchase Saved & Raw Material Stock Updated Successfully!'),
+        content: Text(isDraft ? 'Draft Purchase Order Saved' : 'Purchase Saved! $stockMsg'),
         backgroundColor: AppColors.success,
       ),
     );
@@ -212,7 +279,8 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                   children: [
                     Text('Create Purchase Order', style: AppTextStyles.h1),
                     const SizedBox(height: 4),
-                    Text('Inward raw materials, record vendor invoice, and update stock ledger', style: AppTextStyles.subtitle),
+                    Text('Inward Raw Materials or Finished Goods directly into stock with GST tax breakup',
+                        style: AppTextStyles.subtitle),
                   ],
                 ),
                 Row(
@@ -251,11 +319,71 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Vendor & Invoice Details', style: AppTextStyles.h3),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Vendor & Invoice Details', style: AppTextStyles.h3),
+                      // GST Tax Region Selector
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _isInterStateTax ? Colors.purple.withOpacity(0.08) : Colors.blue.withOpacity(0.08),
+                          borderRadius: AppRadius.smBorderRadius,
+                          border: Border.all(
+                            color: _isInterStateTax ? Colors.purple.withOpacity(0.3) : Colors.blue.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _isInterStateTax ? Icons.map_outlined : Icons.location_on_outlined,
+                              size: 16,
+                              color: _isInterStateTax ? Colors.purple : Colors.blue,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Tax Mode:',
+                              style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 8),
+                            ChoiceChip(
+                              label: const Text('Intra-State (CGST + SGST)'),
+                              selected: !_isInterStateTax,
+                              selectedColor: AppColors.primary.withOpacity(0.15),
+                              labelStyle: TextStyle(
+                                fontSize: 12,
+                                fontWeight: !_isInterStateTax ? FontWeight.bold : FontWeight.normal,
+                                color: !_isInterStateTax ? AppColors.primary : AppColors.textMuted,
+                              ),
+                              onSelected: (val) {
+                                if (val) setState(() => _isInterStateTax = false);
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            ChoiceChip(
+                              label: const Text('Inter-State (IGST)'),
+                              selected: _isInterStateTax,
+                              selectedColor: Colors.purple.withOpacity(0.15),
+                              labelStyle: TextStyle(
+                                fontSize: 12,
+                                fontWeight: _isInterStateTax ? FontWeight.bold : FontWeight.normal,
+                                color: _isInterStateTax ? Colors.purple : AppColors.textMuted,
+                              ),
+                              onSelected: (val) {
+                                if (val) setState(() => _isInterStateTax = true);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
+                        flex: 2,
                         child: DropdownButtonFormField<String>(
                           value: _selectedVendorId,
                           isExpanded: true,
@@ -264,7 +392,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                             return DropdownMenuItem(
                               value: v.id,
                               child: Text(
-                                v.name,
+                                '${v.name} (${v.mobile})',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -275,6 +403,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       ),
                       const SizedBox(width: 16),
                       Expanded(
+                        flex: 2,
                         child: TextFormField(
                           controller: _vendorInvoiceCtrl,
                           validator: (v) => Validators.requiredField(v, 'Vendor invoice number required'),
@@ -282,6 +411,26 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                             labelText: 'Vendor Invoice Number *',
                             hintText: 'E.g. APEX/2026/901',
                           ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 2,
+                        child: DropdownButtonFormField<String?>(
+                          value: _selectedProjectId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Link to Project (Optional)',
+                            hintText: 'General / No Project',
+                          ),
+                          items: [
+                            const DropdownMenuItem(value: null, child: Text('General Inventory (No Project)')),
+                            ...db.projects.map((p) => DropdownMenuItem(
+                                  value: p.id,
+                                  child: Text(p.name),
+                                )),
+                          ],
+                          onChanged: (val) => setState(() => _selectedProjectId = val),
                         ),
                       ),
                     ],
@@ -293,7 +442,8 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                         child: TextFormField(
                           readOnly: true,
                           controller: TextEditingController(text: Formatters.formatDate(_purchaseDate)),
-                          decoration: const InputDecoration(labelText: 'Purchase Date', suffixIcon: Icon(Icons.calendar_today, size: 16)),
+                          decoration: const InputDecoration(
+                              labelText: 'Purchase Date', suffixIcon: Icon(Icons.calendar_today, size: 16)),
                           onTap: () async {
                             final date = await showDatePicker(
                               context: context,
@@ -310,7 +460,8 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                         child: TextFormField(
                           readOnly: true,
                           controller: TextEditingController(text: Formatters.formatDate(_invoiceDate)),
-                          decoration: const InputDecoration(labelText: 'Vendor Invoice Date', suffixIcon: Icon(Icons.calendar_today, size: 16)),
+                          decoration: const InputDecoration(
+                              labelText: 'Vendor Invoice Date', suffixIcon: Icon(Icons.calendar_today, size: 16)),
                           onTap: () async {
                             final date = await showDatePicker(
                               context: context,
@@ -360,12 +511,31 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Raw Materials Ordered', style: AppTextStyles.h3),
-                      ErpButton(
-                        text: 'Add Raw Material',
-                        icon: Icons.add,
-                        isOutlined: true,
-                        onPressed: _addNewLineItem,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Items Ordered (Raw Materials & Finished Goods)', style: AppTextStyles.h3),
+                          const SizedBox(height: 4),
+                          Text('Direct Finished Product purchases are added to Finished Goods stock directly',
+                              style: AppTextStyles.caption.copyWith(color: AppColors.textMuted)),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          ErpButton(
+                            text: 'Add Raw Material',
+                            icon: Icons.grain,
+                            isOutlined: true,
+                            onPressed: () => _addNewLineItem(itemType: PurchaseItemType.rawMaterial),
+                          ),
+                          const SizedBox(width: 10),
+                          ErpButton(
+                            text: 'Add Finished Good',
+                            icon: Icons.inventory_2,
+                            isOutlined: true,
+                            onPressed: () => _addNewLineItem(itemType: PurchaseItemType.finishedProduct),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -374,48 +544,69 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                     scrollDirection: Axis.horizontal,
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
-                        minWidth: MediaQuery.of(context).size.width < 1100 ? 980 : MediaQuery.of(context).size.width - 320,
+                        minWidth: MediaQuery.of(context).size.width < 1200 ? 1050 : MediaQuery.of(context).size.width - 320,
                       ),
                       child: Column(
                         children: List.generate(_items.length, (index) {
                           final item = _items[index];
+                          final isFp = item.itemType == PurchaseItemType.finishedProduct;
+
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceMuted,
+                              color: isFp ? Colors.teal.withOpacity(0.04) : AppColors.surfaceMuted,
                               borderRadius: AppRadius.smBorderRadius,
-                              border: Border.all(color: AppColors.border),
+                              border: Border.all(
+                                color: isFp ? Colors.teal.withOpacity(0.2) : AppColors.border,
+                              ),
                             ),
                             child: Row(
                               children: [
-                                // Material Dropdown
+                                // Type badge / toggle
                                 SizedBox(
-                                  width: 280,
-                                  child: DropdownButtonFormField<String>(
-                                    value: item.rawMaterialId,
+                                  width: 130,
+                                  child: DropdownButtonFormField<PurchaseItemType>(
+                                    value: item.itemType,
                                     isExpanded: true,
-                                    decoration: const InputDecoration(labelText: 'Raw Material'),
-                                    items: db.rawMaterials.map((rm) {
-                                      return DropdownMenuItem(
-                                        value: rm.id,
-                                        child: Text(
-                                          '${rm.itemCode} - ${rm.name}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      );
-                                    }).toList(),
-                                    onChanged: (val) {
-                                      if (val != null) {
-                                        final rm = db.rawMaterials.firstWhere((r) => r.id == val);
+                                    decoration: InputDecoration(
+                                      labelText: 'Item Type',
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                      fillColor: isFp ? Colors.teal.withOpacity(0.1) : null,
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: PurchaseItemType.rawMaterial,
+                                        child: Text('Raw Mat', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: PurchaseItemType.finishedProduct,
+                                        child: Text('Fin Good', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal)),
+                                      ),
+                                    ],
+                                    onChanged: (newType) {
+                                      if (newType == null || newType == item.itemType) return;
+                                      if (newType == PurchaseItemType.rawMaterial && db.rawMaterials.isNotEmpty) {
+                                        final rm = db.rawMaterials.first;
                                         setState(() {
-                                          item.rawMaterialId = rm.id;
-                                          item.rawMaterialName = rm.name;
-                                          item.rawMaterialCode = rm.itemCode;
+                                          item.itemType = PurchaseItemType.rawMaterial;
+                                          item.itemId = rm.id;
+                                          item.itemName = rm.name;
+                                          item.itemCode = rm.itemCode;
                                           item.unit = rm.unit;
                                           item.rate = rm.defaultPurchasePrice;
                                           item.gstPercent = rm.gstPercent;
+                                        });
+                                      } else if (newType == PurchaseItemType.finishedProduct && db.finishedProducts.isNotEmpty) {
+                                        final fp = db.finishedProducts.first;
+                                        setState(() {
+                                          item.itemType = PurchaseItemType.finishedProduct;
+                                          item.itemId = fp.id;
+                                          item.itemName = fp.name;
+                                          item.itemCode = fp.itemCode;
+                                          item.unit = fp.unit;
+                                          item.rate = fp.costPrice;
+                                          item.gstPercent = fp.gstPercent;
                                         });
                                       }
                                     },
@@ -423,9 +614,72 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 ),
                                 const SizedBox(width: 10),
 
+                                // Material/Product Dropdown
+                                SizedBox(
+                                  width: 250,
+                                  child: isFp
+                                      ? DropdownButtonFormField<String>(
+                                          value: item.itemId,
+                                          isExpanded: true,
+                                          decoration: const InputDecoration(labelText: 'Finished Product *'),
+                                          items: db.finishedProducts.map((fp) {
+                                            return DropdownMenuItem(
+                                              value: fp.id,
+                                              child: Text(
+                                                '${fp.itemCode} - ${fp.name}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            );
+                                          }).toList(),
+                                          onChanged: (val) {
+                                            if (val != null) {
+                                              final fp = db.finishedProducts.firstWhere((f) => f.id == val);
+                                              setState(() {
+                                                item.itemId = fp.id;
+                                                item.itemName = fp.name;
+                                                item.itemCode = fp.itemCode;
+                                                item.unit = fp.unit;
+                                                item.rate = fp.costPrice;
+                                                item.gstPercent = fp.gstPercent;
+                                              });
+                                            }
+                                          },
+                                        )
+                                      : DropdownButtonFormField<String>(
+                                          value: item.itemId,
+                                          isExpanded: true,
+                                          decoration: const InputDecoration(labelText: 'Raw Material *'),
+                                          items: db.rawMaterials.map((rm) {
+                                            return DropdownMenuItem(
+                                              value: rm.id,
+                                              child: Text(
+                                                '${rm.itemCode} - ${rm.name}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            );
+                                          }).toList(),
+                                          onChanged: (val) {
+                                            if (val != null) {
+                                              final rm = db.rawMaterials.firstWhere((r) => r.id == val);
+                                              setState(() {
+                                                item.itemId = rm.id;
+                                                item.itemName = rm.name;
+                                                item.itemCode = rm.itemCode;
+                                                item.unit = rm.unit;
+                                                item.rate = rm.defaultPurchasePrice;
+                                                item.gstPercent = rm.gstPercent;
+                                              });
+                                            }
+                                          },
+                                        ),
+                                ),
+                                const SizedBox(width: 10),
+
                                 // Quantity
                                 SizedBox(
-                                  width: 110,
+                                  width: 100,
                                   child: TextFormField(
                                     initialValue: item.quantity.toString(),
                                     keyboardType: TextInputType.number,
@@ -441,7 +695,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
 
                                 // Rate
                                 SizedBox(
-                                  width: 110,
+                                  width: 100,
                                   child: TextFormField(
                                     initialValue: item.rate.toString(),
                                     keyboardType: TextInputType.number,
@@ -457,12 +711,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
 
                                 // Discount
                                 SizedBox(
-                                  width: 110,
+                                  width: 90,
                                   child: TextFormField(
                                     initialValue: item.discount.toString(),
                                     keyboardType: TextInputType.number,
                                     validator: Validators.nonNegativeNumber,
-                                    decoration: const InputDecoration(labelText: 'Discount (₹)'),
+                                    decoration: const InputDecoration(labelText: 'Disc (₹)'),
                                     onChanged: (v) {
                                       final num = double.tryParse(v) ?? 0.0;
                                       setState(() => item.discount = num);
@@ -538,7 +792,8 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       children: [
                         Text('Invoice / Proof Attachment', style: AppTextStyles.h3),
                         const SizedBox(height: 6),
-                        Text('Attach bill or vendor document from device storage', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                        Text('Attach bill or vendor document from device storage',
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
                         const SizedBox(height: 16),
                         _attachmentName != null
                             ? Container(
@@ -556,8 +811,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(_attachmentName!, style: AppTextStyles.bodyBold, overflow: TextOverflow.ellipsis),
-                                          Text('Size: ${_attachmentSize ?? 'Uploaded File'}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                          Text(_attachmentName!,
+                                              style: AppTextStyles.bodyBold, overflow: TextOverflow.ellipsis),
+                                          Text('Size: ${_attachmentSize ?? 'Uploaded File'}',
+                                              style: const TextStyle(fontSize: 10, color: Colors.grey)),
                                         ],
                                       ),
                                     ),
@@ -589,13 +846,23 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                         children: [
                                           const Icon(Icons.cloud_upload_outlined, color: AppColors.primary),
                                           const SizedBox(width: 10),
-                                          Text('Click to Upload from Storage', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                                          Text('Click to Upload from Storage',
+                                              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
                                         ],
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _notesCtrl,
+                          maxLines: 2,
+                          decoration: const InputDecoration(
+                            labelText: 'Purchase Notes / Remarks',
+                            hintText: 'Enter any vendor comments or inward instructions',
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -613,13 +880,52 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Financial Summary', style: AppTextStyles.h3),
+                        Text('Financial & Tax Summary', style: AppTextStyles.h3),
                         const SizedBox(height: 14),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Total Amount:', style: AppTextStyles.bodyMedium),
-                            Text(Formatters.formatCurrency(_totalAmount), style: AppTextStyles.h2),
+                            Text('Taxable Subtotal:', style: AppTextStyles.bodyMedium),
+                            Text(Formatters.formatCurrency(_subtotalAmount), style: AppTextStyles.bodyBold),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (!_isInterStateTax) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('CGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                              Text(Formatters.formatCurrency(_cgstAmount),
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('SGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                              Text(Formatters.formatCurrency(_sgstAmount),
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                            ],
+                          ),
+                        ] else ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('IGST (Inter-State Tax):',
+                                  style: AppTextStyles.bodySmall.copyWith(color: Colors.purple)),
+                              Text(Formatters.formatCurrency(_igstAmount),
+                                  style: AppTextStyles.bodySmall.copyWith(color: Colors.purple, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ],
+                        const Divider(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Grand Total:', style: AppTextStyles.h3),
+                            Text(Formatters.formatCurrency(_totalAmount),
+                                style: AppTextStyles.h2.copyWith(color: AppColors.primary)),
                           ],
                         ),
                         const SizedBox(height: 12),

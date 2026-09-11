@@ -44,6 +44,8 @@ class ProductionOrder {
   final ProductionStatus status;
   final String? salesOrderId;
   final String? salesOrderNumber;
+  final String? projectId;
+  final String? projectName;
   final String? notes;
   final DateTime createdAt;
   final bool isDeleted;
@@ -69,12 +71,18 @@ class ProductionOrder {
     required this.status,
     this.salesOrderId,
     this.salesOrderNumber,
+    this.projectId,
+    this.projectName,
     this.notes,
     required this.createdAt,
     this.isDeleted = false,
     this.deletedReason,
     this.deletedAt,
   });
+
+  DateTime get orderDate => productionDate;
+  double get targetQuantity => plannedQuantity;
+  double get producedQuantity => actualQuantityProduced;
 
   String get statusLabel {
     switch (status) {

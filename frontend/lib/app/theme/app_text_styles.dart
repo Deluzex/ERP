@@ -63,6 +63,8 @@ class AppTextStyles {
         color: AppColors.textMuted,
       );
 
+  static TextStyle get caption => bodySmall;
+
   static TextStyle get label => GoogleFonts.plusJakartaSans(
         fontSize: 12,
         fontWeight: FontWeight.w600,

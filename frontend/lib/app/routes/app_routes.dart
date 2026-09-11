@@ -1,19 +1,24 @@
 enum ErpNavSection {
   dashboard,
+  // 1. Inventory Module
   inventoryDashboard,
   rawMaterialStock,
   finishedProductStock,
   stockMovement,
   stockAdjustments,
+  // 2. Purchase Module
+  purchaseDashboard,
   purchaseList,
   createPurchase,
   purchaseHistory,
   vendorPayments,
+  // 3. Production Module
+  productionDashboard,
   productionOrders,
   createProduction,
   productionHistory,
   productionCosting,
-  // Sales Module
+  // 4. Sales Module
   salesDashboard,
   quotations,
   createQuotation,
@@ -28,12 +33,15 @@ enum ErpNavSection {
   // Projects
   projectList,
   createProject,
-  // Payments
+  // 5. Payments & Expenses
+  paymentsDashboard,
   customerPayments,
   dealerPayments,
   vendorPaymentsSection,
   commissionPayments,
-  // Masters
+  expenseList,
+  // 6. Masters
+  mastersDashboard,
   categoriesUnits,
   vendors,
   customers,
@@ -41,7 +49,8 @@ enum ErpNavSection {
   architects,
   rawMaterials,
   finishedProducts,
-  // Reports
+  // 7. Reports
+  reportsDashboard,
   inventoryReports,
   purchaseReports,
   productionReports,

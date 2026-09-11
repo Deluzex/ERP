@@ -78,6 +78,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   String? _selectedPartyId;
   String? _selectedProjectId;
   String _salesExecutive = 'Alex Sterling';
+  bool _isInterStateTax = false; // Intra-State (CGST+SGST) vs Inter-State (IGST)
 
   // Customer autofill controllers
   final _contactPersonCtrl = TextEditingController();
@@ -675,6 +676,10 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     }
 
     final lineItems = _items.map((i) {
+      final cgst = _isInterStateTax ? 0.0 : (i.gstAmount / 2);
+      final sgst = _isInterStateTax ? 0.0 : (i.gstAmount / 2);
+      final igst = _isInterStateTax ? i.gstAmount : 0.0;
+
       return SaleLineItem(
         finishedProductId: i.finishedProductId,
         finishedProductName: i.finishedProductName,
@@ -686,9 +691,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         discountAmount: i.discount,
         gstPercent: i.gstPercent,
         taxableAmount: i.taxableAmount,
-        cgstAmount: i.gstAmount / 2,
-        sgstAmount: i.gstAmount / 2,
-        igstAmount: 0.0,
+        cgstAmount: cgst,
+        sgstAmount: sgst,
+        igstAmount: igst,
         lineTotal: i.lineTotal,
       );
     }).toList();
@@ -722,9 +727,10 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       subtotalAmount: _subtotalAmount,
       discountAmount: _totalDiscount,
       taxableAmount: _totalTaxable,
-      cgstAmount: _totalGst / 2,
-      sgstAmount: _totalGst / 2,
-      igstAmount: 0.0,
+      cgstAmount: _isInterStateTax ? 0.0 : (_totalGst / 2),
+      sgstAmount: _isInterStateTax ? 0.0 : (_totalGst / 2),
+      igstAmount: _isInterStateTax ? _totalGst : 0.0,
+      isInterStateTax: _isInterStateTax,
       gstAmount: _totalGst,
       totalAmount: _grandTotal,
       paidAmount: 0.0,
@@ -1310,14 +1316,29 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Quotation Totals', style: AppTextStyles.h3),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Quotation Totals', style: AppTextStyles.h3),
+                            ChoiceChip(
+                              label: Text(_isInterStateTax ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST+SGST)', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                              selected: _isInterStateTax,
+                              selectedColor: Colors.purple.withOpacity(0.15),
+                              onSelected: (val) => setState(() => _isInterStateTax = val),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 16),
                         _buildSummaryRow('Subtotal Amount', Formatters.formatCurrency(_subtotalAmount)),
                         if (_totalDiscount > 0)
                           _buildSummaryRow('Total Discount', '- ${Formatters.formatCurrency(_totalDiscount)}', color: AppColors.dangerText),
                         _buildSummaryRow('Taxable Amount', Formatters.formatCurrency(_totalTaxable)),
-                        _buildSummaryRow('CGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
-                        _buildSummaryRow('SGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
+                        if (!_isInterStateTax) ...[
+                          _buildSummaryRow('CGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
+                          _buildSummaryRow('SGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
+                        ] else ...[
+                          _buildSummaryRow('IGST (18%)', Formatters.formatCurrency(_totalGst), color: Colors.purple),
+                        ],
                         const Divider(height: 20),
                         _buildSummaryRow('Grand Total', Formatters.formatCurrency(_grandTotal), isBold: true, fontSize: 16, color: AppColors.primary),
                         const SizedBox(height: 16),

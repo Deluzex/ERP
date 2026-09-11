@@ -23,6 +23,11 @@ class ErpPayment {
   final DateTime createdAt;
   final String? paymentStatus;
   final String? attachmentUrl;
+  final bool isFullPayment;
+  final double? totalDocumentAmount;
+  final double? remainingAmount;
+  final String? projectId;
+  final String? projectName;
 
   ErpPayment({
     required this.id,
@@ -40,6 +45,11 @@ class ErpPayment {
     required this.createdAt,
     this.paymentStatus,
     this.attachmentUrl,
+    this.isFullPayment = false,
+    this.totalDocumentAmount,
+    this.remainingAmount,
+    this.projectId,
+    this.projectName,
   });
 
   String get typeLabel {
@@ -54,4 +64,6 @@ class ErpPayment {
         return 'Commission Payout';
     }
   }
+
+  String get entryModeLabel => isFullPayment ? 'Full Payment' : 'Partial Payment';
 }
