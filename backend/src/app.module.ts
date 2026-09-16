@@ -12,6 +12,7 @@ import { ResponseEnvelopeInterceptor } from './core/interceptors/response-envelo
 import { AppLogger } from './core/logging/logger.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { IdentityModule } from './modules/identity/identity.module';
+import { MastersModule } from './modules/masters/masters.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { IdentityModule } from './modules/identity/identity.module';
     CoreAuthModule,
     AuthModule,
     IdentityModule,
+    MastersModule,
   ],
   providers: [
     AppLogger,

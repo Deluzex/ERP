@@ -11,6 +11,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
@@ -32,6 +33,10 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadArchitects();
+      ref.read(databaseServiceProvider).loadCustomers();
+    });
   }
 
   @override
@@ -54,11 +59,15 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     bool isAlsoCustomer = existing?.isAlsoCustomer ?? (existing?.linkedCustomerId != null);
     final formKey = GlobalKey<FormState>();
 
+    bool isSubmitting = false;
+    String? serverError;
+
     showDialog(
       context: context,
+      barrierDismissible: !isSubmitting,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setDlgState) {
+          builder: (dlgCtx, setDlgState) {
             return AlertDialog(
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -68,7 +77,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                     text: 'Scan & Upload (OCR)',
                     icon: Icons.document_scanner_outlined,
                     isOutlined: true,
-                    onPressed: () {
+                    onPressed: isSubmitting ? null : () {
                       showDialog(
                         context: context,
                         builder: (ocrCtx) => Dialog(
@@ -103,6 +112,26 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (serverError != null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(serverError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         TextFormField(
                           controller: nameCtrl,
                           validator: (v) => Validators.requiredField(v, 'Architect name required'),
@@ -145,7 +174,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                             Expanded(
                               child: TextFormField(
                                 controller: gstCtrl,
-                                decoration: const InputDecoration(labelText: 'GST Number'),
+                                validator: Validators.gst,
+                                decoration: const InputDecoration(
+                                  labelText: 'GST Number (Optional, 15 chars)',
+                                  hintText: '24AAAAA0000A1Z5',
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -163,7 +196,8 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                         TextFormField(
                           controller: addrCtrl,
                           maxLines: 2,
-                          decoration: const InputDecoration(labelText: 'Studio Address'),
+                          validator: (v) => Validators.requiredField(v, 'Studio address required'),
+                          decoration: const InputDecoration(labelText: 'Studio Address *'),
                         ),
                         const SizedBox(height: 16),
 
@@ -183,7 +217,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                   Checkbox(
                                     value: isAlsoCustomer || linkedCustomerId != null,
                                     activeColor: Colors.purple,
-                                    onChanged: (val) {
+                                    onChanged: isSubmitting ? null : (val) {
                                       setDlgState(() {
                                         isAlsoCustomer = val ?? false;
                                         if (!isAlsoCustomer) linkedCustomerId = null;
@@ -215,12 +249,12 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                   ),
                                   items: [
                                     const DropdownMenuItem(value: null, child: Text('(Not Linked / Separate Entity)')),
-                                    ...db.customers.map((c) => DropdownMenuItem(
+                                    ...db.customers.where((c) => !c.isDeleted).map((c) => DropdownMenuItem(
                                           value: c.id,
                                           child: Text('${c.name} (${c.mobile})'),
                                         )),
                                   ],
-                                  onChanged: (val) => setDlgState(() {
+                                  onChanged: isSubmitting ? null : (val) => setDlgState(() {
                                     linkedCustomerId = val;
                                     isAlsoCustomer = val != null;
                                   }),
@@ -238,49 +272,110 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                 ErpButton(
                   text: 'Cancel',
                   isOutlined: true,
-                  onPressed: () => Navigator.of(ctx).pop(),
+                  onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
                 ),
                 ErpButton(
                   text: isEdit ? 'Update Architect' : 'Save Architect',
-                  onPressed: () {
-                    if (!formKey.currentState!.validate()) return;
-                    final rateVal = double.tryParse(rateCtrl.text.trim()) ?? 5.0;
-                    final archId = isEdit ? existing.id : IdGenerator.generateId('ARCH');
+                  isLoading: isSubmitting,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDlgState(() {
+                            isSubmitting = true;
+                            serverError = null;
+                          });
 
-                    final architect = Architect(
-                      id: archId,
-                      name: nameCtrl.text.trim(),
-                      companyName: compCtrl.text.trim(),
-                      mobile: mobileCtrl.text.trim(),
-                      email: emailCtrl.text.trim(),
-                      gstNumber: gstCtrl.text.trim(),
-                      address: addrCtrl.text.trim(),
-                      defaultCommissionRate: rateVal,
-                      isAlsoCustomer: isAlsoCustomer || linkedCustomerId != null,
-                      linkedCustomerId: linkedCustomerId,
-                      totalCommissionEarned: existing?.totalCommissionEarned ?? 0.0,
-                      pendingCommission: existing?.pendingCommission ?? 0.0,
-                      approvedCommission: existing?.approvedCommission ?? 0.0,
-                      paidCommission: existing?.paidCommission ?? 0.0,
-                      createdAt: existing?.createdAt ?? DateTime.now(),
-                    );
+                          final rateVal = double.tryParse(rateCtrl.text.trim()) ?? 5.0;
+                          final archId = isEdit ? existing.id : IdGenerator.generateId('ARCH');
 
-                    if (isEdit) {
-                      db.updateArchitect(architect);
-                    } else {
-                      db.addArchitect(architect);
-                    }
+                          final architect = Architect(
+                            id: archId,
+                            name: nameCtrl.text.trim(),
+                            companyName: compCtrl.text.trim(),
+                            mobile: mobileCtrl.text.trim(),
+                            email: emailCtrl.text.trim(),
+                            gstNumber: gstCtrl.text.trim(),
+                            address: addrCtrl.text.trim(),
+                            defaultCommissionRate: rateVal,
+                            isAlsoCustomer: isAlsoCustomer || linkedCustomerId != null,
+                            linkedCustomerId: linkedCustomerId,
+                            totalCommissionEarned: existing?.totalCommissionEarned ?? 0.0,
+                            pendingCommission: existing?.pendingCommission ?? 0.0,
+                            approvedCommission: existing?.approvedCommission ?? 0.0,
+                            paidCommission: existing?.paidCommission ?? 0.0,
+                            createdAt: existing?.createdAt ?? DateTime.now(),
+                          );
 
-                    // Bi-directional link sync
-                    if (isAlsoCustomer && linkedCustomerId != null) {
-                      db.linkArchitectAndCustomer(architectId: archId, customerId: linkedCustomerId!);
-                    }
+                          try {
+                            Architect saved;
+                            if (isEdit) {
+                              saved = await db.updateArchitectAsync(architect);
+                            } else {
+                              saved = await db.addArchitectAsync(architect);
+                            }
 
-                    Navigator.of(ctx).pop();
-                  },
+                            // Bi-directional link sync
+                            if (isAlsoCustomer && linkedCustomerId != null) {
+                              await db.linkArchitectAndCustomerAsync(architectId: saved.id, customerId: linkedCustomerId!);
+                            }
+
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Architect "${architect.name}" ${isEdit ? "updated" : "saved"} successfully!'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDlgState(() {
+                              serverError = e.toString().replaceFirst('Exception: ', '');
+                              isSubmitting = false;
+                            });
+                          }
+                        },
                 ),
               ],
             );
+          },
+        );
+      },
+    );
+  }
+
+  void _confirmDeleteArchitect(Architect architect) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return ErpConfirmDeleteDialog(
+          title: 'Delete Architect Record',
+          message: 'Are you sure you want to deactivate and archive this architect? A mandatory audit reason is required.',
+          itemName: '${architect.name} (${architect.id})',
+          requireReason: true,
+          onConfirm: (reason) async {
+            final db = ref.read(databaseServiceProvider);
+            try {
+              await db.deleteArchitectAsync(architectId: architect.id, reason: reason);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Architect "${architect.name}" archived with audit reason: $reason'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Delete failed: ${e.toString().replaceFirst("Exception: ", "")}'),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+              }
+            }
           },
         );
       },
@@ -357,6 +452,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final architects = db.architects.where((a) {
+      if (a.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
       return query.isEmpty ||
           a.name.toLowerCase().contains(query) ||

@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'web_url_launcher.dart';
 
 enum SharePlatform {
   whatsApp,
@@ -29,11 +28,7 @@ class DocumentSharingService {
 
   static void openUrl(String url) {
     if (kIsWeb) {
-      try {
-        html.window.open(url, '_blank');
-      } catch (e) {
-        debugPrint('Error opening URL on web: $e');
-      }
+      openWebWindow(url);
     } else {
       debugPrint('Launch URL: $url');
     }

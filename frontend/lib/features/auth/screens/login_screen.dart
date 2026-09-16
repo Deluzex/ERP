@@ -110,21 +110,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
-  void _handleLogin() {
-    if (!_formKey.currentState!.validate()) return;
+  bool _isLoading = false;
 
-    setState(() => _errorMessage = null);
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate() || _isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
     final identifier = _identifierCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
 
-    final success = ref.read(authStateProvider.notifier).login(identifier, password, _selectedRoleId);
-
-    if (success) {
-      widget.onLoginSuccess();
-    } else {
+    try {
+      final success = await ref.read(authStateProvider.notifier).loginAsync(identifier, password, _selectedRoleId);
+      if (success) {
+        widget.onLoginSuccess();
+      } else {
+        setState(() {
+          _errorMessage = 'Invalid username/password or selected role does not match assigned permissions.';
+        });
+      }
+    } catch (e) {
       setState(() {
-        _errorMessage = 'Invalid username/password or selected role does not match assigned permissions.';
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -260,6 +275,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       // Role Dropdown Selector (Optional / Auto-identified)
                       DropdownButtonFormField<String?>(
                         value: _selectedRoleId,
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Assigned Role Verification',
                           prefixIcon: Icon(Icons.shield_outlined, size: 18),
@@ -280,9 +296,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         width: double.infinity,
                         height: 48,
                         child: ErpButton(
-                          text: 'Sign In to Workspace',
-                          icon: Icons.login_rounded,
-                          onPressed: _handleLogin,
+                          text: _isLoading ? 'Signing In...' : 'Sign In to Workspace',
+                          icon: _isLoading ? null : Icons.login_rounded,
+                          isLoading: _isLoading,
+                          onPressed: _isLoading ? null : _handleLogin,
                         ),
                       ),
                       const SizedBox(height: 24),

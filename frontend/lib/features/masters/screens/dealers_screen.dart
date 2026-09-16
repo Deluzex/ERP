@@ -8,6 +8,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -22,6 +23,14 @@ class DealersScreen extends ConsumerStatefulWidget {
 class _DealersScreenState extends ConsumerState<DealersScreen> {
   String _searchQuery = '';
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadDealers();
+    });
+  }
+
   void _openAddEditDealerDialog([Dealer? existing]) {
     final db = ref.read(databaseServiceProvider);
     final isEdit = existing != null;
@@ -34,154 +43,247 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
     final addrCtrl = TextEditingController(text: existing?.address ?? '');
     final formKey = GlobalKey<FormState>();
 
+    bool isSubmitting = false;
+    String? serverError;
+
+    showDialog(
+      context: context,
+      barrierDismissible: !isSubmitting,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dlgCtx, setDlgState) {
+            return AlertDialog(
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(isEdit ? 'Edit Dealer' : 'Add Dealer Master', style: AppTextStyles.h2),
+                  ErpButton(
+                    text: 'Scan & Upload (OCR)',
+                    icon: Icons.document_scanner_outlined,
+                    isOutlined: true,
+                    onPressed: isSubmitting ? null : () {
+                      showDialog(
+                        context: context,
+                        builder: (ocrCtx) => Dialog(
+                          backgroundColor: Colors.transparent,
+                          child: SizedBox(
+                            width: 800,
+                            height: 600,
+                            child: DocumentOcrUploader(
+                              docType: OcrDocType.customerDoc,
+                              onCancel: () => Navigator.of(ocrCtx).pop(),
+                              onConfirm: (data) {
+                                nameCtrl.text = data['Customer Name'] ?? data['Company Name'] ?? nameCtrl.text;
+                                compCtrl.text = data['Company Name'] ?? compCtrl.text;
+                                contactCtrl.text = data['Contact Person'] ?? contactCtrl.text;
+                                mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
+                                emailCtrl.text = data['Email'] ?? emailCtrl.text;
+                                addrCtrl.text = data['Address'] ?? addrCtrl.text;
+                                Navigator.of(ocrCtx).pop();
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 520,
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (serverError != null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(serverError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        TextFormField(
+                          controller: nameCtrl,
+                          validator: (v) => Validators.requiredField(v, 'Dealer trading name required'),
+                          decoration: const InputDecoration(labelText: 'Dealer Trading Name *', hintText: 'E.g., Luxe Lightings & Decor Studio'),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: compCtrl,
+                                decoration: const InputDecoration(labelText: 'Registered Entity Name'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: contactCtrl,
+                                validator: (v) => Validators.requiredField(v, 'Contact person required'),
+                                decoration: const InputDecoration(labelText: 'Contact Person *'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: mobileCtrl,
+                                validator: Validators.mobile,
+                                decoration: const InputDecoration(labelText: 'Mobile Number *'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: emailCtrl,
+                                validator: Validators.email,
+                                decoration: const InputDecoration(labelText: 'Email Address'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: gstCtrl,
+                          validator: Validators.gst,
+                          decoration: const InputDecoration(
+                            labelText: 'GST Number (Optional, 15 chars)',
+                            hintText: '24AAAAA0000A1Z5',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: addrCtrl,
+                          maxLines: 2,
+                          validator: (v) => Validators.requiredField(v, 'Showroom / Business address required'),
+                          decoration: const InputDecoration(labelText: 'Showroom / Business Address *'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                ErpButton(
+                  text: 'Cancel',
+                  isOutlined: true,
+                  onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+                ),
+                ErpButton(
+                  text: isEdit ? 'Update Dealer' : 'Save Dealer',
+                  isLoading: isSubmitting,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDlgState(() {
+                            isSubmitting = true;
+                            serverError = null;
+                          });
+
+                          try {
+                            if (isEdit) {
+                              await db.updateDealerAsync(existing.copyWith(
+                                name: nameCtrl.text.trim(),
+                                companyName: compCtrl.text.trim(),
+                                contactPerson: contactCtrl.text.trim(),
+                                mobile: mobileCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                                gstNumber: gstCtrl.text.trim(),
+                                address: addrCtrl.text.trim(),
+                              ));
+                            } else {
+                              final newDealer = Dealer(
+                                id: IdGenerator.generateId('DLR'),
+                                name: nameCtrl.text.trim(),
+                                companyName: compCtrl.text.trim(),
+                                contactPerson: contactCtrl.text.trim(),
+                                mobile: mobileCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                                gstNumber: gstCtrl.text.trim(),
+                                address: addrCtrl.text.trim(),
+                                outstandingAmount: 0.0,
+                                createdAt: DateTime.now(),
+                              );
+                              await db.addDealerAsync(newDealer);
+                            }
+
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Dealer "${nameCtrl.text.trim()}" ${isEdit ? "updated" : "saved"} successfully!'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDlgState(() {
+                              serverError = e.toString().replaceFirst('Exception: ', '');
+                              isSubmitting = false;
+                            });
+                          }
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _confirmDeleteDealer(Dealer dealer) {
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(isEdit ? 'Edit Dealer' : 'Add Dealer Master', style: AppTextStyles.h2),
-              ErpButton(
-                text: 'Scan & Upload (OCR)',
-                icon: Icons.document_scanner_outlined,
-                isOutlined: true,
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (ocrCtx) => Dialog(
-                      backgroundColor: Colors.transparent,
-                      child: SizedBox(
-                        width: 800,
-                        height: 600,
-                        child: DocumentOcrUploader(
-                          docType: OcrDocType.customerDoc,
-                          onCancel: () => Navigator.of(ocrCtx).pop(),
-                          onConfirm: (data) {
-                            nameCtrl.text = data['Customer Name'] ?? data['Company Name'] ?? nameCtrl.text;
-                            compCtrl.text = data['Company Name'] ?? compCtrl.text;
-                            contactCtrl.text = data['Contact Person'] ?? contactCtrl.text;
-                            mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
-                            emailCtrl.text = data['Email'] ?? emailCtrl.text;
-                            addrCtrl.text = data['Address'] ?? addrCtrl.text;
-                            Navigator.of(ocrCtx).pop();
-                          },
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 520,
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: nameCtrl,
-                      validator: (v) => Validators.requiredField(v, 'Dealer trading name required'),
-                      decoration: const InputDecoration(labelText: 'Dealer Trading Name *', hintText: 'E.g., Luxe Lightings & Decor Studio'),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: compCtrl,
-                            decoration: const InputDecoration(labelText: 'Registered Entity Name'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: contactCtrl,
-                            validator: (v) => Validators.requiredField(v, 'Contact person required'),
-                            decoration: const InputDecoration(labelText: 'Contact Person *'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: mobileCtrl,
-                            validator: Validators.mobile,
-                            decoration: const InputDecoration(labelText: 'Mobile Number *'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: emailCtrl,
-                            validator: Validators.email,
-                            decoration: const InputDecoration(labelText: 'Email Address'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: gstCtrl,
-                      decoration: const InputDecoration(labelText: 'GST Number'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: addrCtrl,
-                      maxLines: 2,
-                      decoration: const InputDecoration(labelText: 'Showroom / Business Address'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          actions: [
-            ErpButton(
-              text: 'Cancel',
-              isOutlined: true,
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ErpButton(
-              text: isEdit ? 'Update Dealer' : 'Save Dealer',
-              onPressed: () {
-                if (!formKey.currentState!.validate()) return;
-
-                if (isEdit) {
-                  db.updateDealer(existing.copyWith(
-                    name: nameCtrl.text.trim(),
-                    companyName: compCtrl.text.trim(),
-                    contactPerson: contactCtrl.text.trim(),
-                    mobile: mobileCtrl.text.trim(),
-                    email: emailCtrl.text.trim(),
-                    gstNumber: gstCtrl.text.trim(),
-                    address: addrCtrl.text.trim(),
-                  ));
-                } else {
-                  final newDealer = Dealer(
-                    id: IdGenerator.generateId('DLR'),
-                    name: nameCtrl.text.trim(),
-                    companyName: compCtrl.text.trim(),
-                    contactPerson: contactCtrl.text.trim(),
-                    mobile: mobileCtrl.text.trim(),
-                    email: emailCtrl.text.trim(),
-                    gstNumber: gstCtrl.text.trim(),
-                    address: addrCtrl.text.trim(),
-                    outstandingAmount: 0.0,
-                    createdAt: DateTime.now(),
-                  );
-                  db.addDealer(newDealer);
-                }
-                Navigator.of(ctx).pop();
-              },
-            ),
-          ],
+        return ErpConfirmDeleteDialog(
+          title: 'Delete Dealer Record',
+          message: 'Are you sure you want to deactivate and archive this dealer? A mandatory audit reason is required.',
+          itemName: '${dealer.name} (${dealer.id})',
+          requireReason: true,
+          onConfirm: (reason) async {
+            final db = ref.read(databaseServiceProvider);
+            try {
+              await db.deleteDealerAsync(dealerId: dealer.id, reason: reason);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Dealer "${dealer.name}" archived with audit reason: $reason'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Delete failed: ${e.toString().replaceFirst("Exception: ", "")}'),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+              }
+            }
+          },
         );
       },
     );
@@ -191,6 +293,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final dealers = db.dealers.where((d) {
+      if (d.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
       return query.isEmpty ||
           d.name.toLowerCase().contains(query) ||
@@ -269,10 +372,20 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                     color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  tooltip: 'Edit Dealer',
-                  onPressed: () => _openAddEditDealerDialog(d),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      tooltip: 'Edit Dealer',
+                      onPressed: () => _openAddEditDealerDialog(d),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                      tooltip: 'Delete Dealer',
+                      onPressed: () => _confirmDeleteDealer(d),
+                    ),
+                  ],
                 ),
               ];
             }).toList(),

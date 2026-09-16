@@ -21,6 +21,19 @@ class RawMaterialMasterScreen extends ConsumerStatefulWidget {
 
 class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScreen> {
   String _searchQuery = '';
+  String? _selectedCategoryFilter;
+  bool _lowStockOnly = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadRawMaterials();
+      ref.read(databaseServiceProvider).loadCategories();
+      ref.read(databaseServiceProvider).loadUnits();
+      ref.read(databaseServiceProvider).loadVendors();
+    });
+  }
 
   void _openAddEditDialog([RawMaterial? existing]) {
     final db = ref.read(databaseServiceProvider);
@@ -40,15 +53,19 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
     );
 
     String selectedCategory = existing?.categoryId ?? (db.categories.isNotEmpty ? db.categories.first.id : '');
-    String selectedUnit = existing?.unit ?? (db.units.isNotEmpty ? db.units.first.symbol : 'PCS');
+    String selectedUnitId = existing?.unitId ?? (db.units.isNotEmpty ? db.units.first.id : '');
     String? selectedVendorId = existing?.preferredVendorIds.isNotEmpty == true ? existing!.preferredVendorIds.first : null;
     final formKey = GlobalKey<FormState>();
 
+    bool isSubmitting = false;
+    String? serverError;
+
     showDialog(
       context: context,
+      barrierDismissible: !isSubmitting,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setDlgState) {
+          builder: (dlgCtx, setDlgState) {
             return AlertDialog(
               title: Text(isEdit ? 'Edit Raw Material' : 'Raw Material Entry', style: AppTextStyles.h2),
               content: SizedBox(
@@ -59,6 +76,26 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (serverError != null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(serverError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         Row(
                           children: [
                             Expanded(
@@ -97,7 +134,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                 items: db.categories.map((c) {
                                   return DropdownMenuItem(value: c.id, child: Text(c.name));
                                 }).toList(),
-                                onChanged: (val) {
+                                onChanged: isSubmitting ? null : (val) {
                                   if (val != null) setDlgState(() => selectedCategory = val);
                                 },
                               ),
@@ -105,13 +142,13 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                             const SizedBox(width: 12),
                             Expanded(
                               child: DropdownButtonFormField<String>(
-                                initialValue: selectedUnit,
+                                initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
                                 decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
                                 items: db.units.map((u) {
-                                  return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
+                                  return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
                                 }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) setDlgState(() => selectedUnit = val);
+                                onChanged: isSubmitting ? null : (val) {
+                                  if (val != null) setDlgState(() => selectedUnitId = val);
                                 },
                               ),
                             ),
@@ -138,9 +175,9 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                 controller: stockCtrl,
                                 keyboardType: TextInputType.number,
                                 validator: Validators.nonNegativeNumber,
-                                decoration: InputDecoration(
-                                  labelText: isEdit ? 'Current Stock *' : 'Opening Stock *',
-                                  hintText: 'Initial stock units',
+                                decoration: const InputDecoration(
+                                  labelText: 'Current Stock *',
+                                  hintText: 'Available inventory count',
                                 ),
                               ),
                             ),
@@ -151,8 +188,8 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                 keyboardType: TextInputType.number,
                                 validator: Validators.nonNegativeNumber,
                                 decoration: const InputDecoration(
-                                  labelText: 'Minimum Alert Stock *',
-                                  hintText: 'Reorder alert threshold',
+                                  labelText: 'Min Level *',
+                                  hintText: 'Threshold trigger',
                                 ),
                               ),
                             ),
@@ -165,17 +202,15 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                           initialValue: selectedVendorId,
                           decoration: const InputDecoration(
                             labelText: 'Preferred Supplier / Vendor',
-                            hintText: 'Select supplier or leave unassigned',
+                            hintText: 'Select default procurement source',
                           ),
                           items: [
-                            const DropdownMenuItem(value: null, child: Text('None / Unassigned')),
+                            const DropdownMenuItem(value: null, child: Text('No Preferred Vendor Assigned')),
                             ...db.vendors.where((v) => !v.isDeleted).map((v) {
-                              return DropdownMenuItem(value: v.id, child: Text('${v.name} (${v.mobile})'));
+                              return DropdownMenuItem(value: v.id, child: Text('${v.name} (${v.id})'));
                             }),
                           ],
-                          onChanged: (val) {
-                            setDlgState(() => selectedVendorId = val);
-                          },
+                          onChanged: isSubmitting ? null : (val) => setDlgState(() => selectedVendorId = val),
                         ),
                       ],
                     ),
@@ -186,68 +221,92 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                 ErpButton(
                   text: 'Cancel',
                   isOutlined: true,
-                  onPressed: () => Navigator.of(ctx).pop(),
+                  onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
                 ),
                 ErpButton(
                   text: isEdit ? 'Update Material' : 'Save Material',
-                  onPressed: () {
-                    if (!formKey.currentState!.validate()) return;
-                    final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
-                    final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
-                    final priceVal = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
-                    final catObj = db.categories.firstWhere(
-                      (c) => c.id == selectedCategory,
-                      orElse: () => db.categories.first,
-                    );
-                    final prefVendor = selectedVendorId != null
-                        ? db.vendors.firstWhere((v) => v.id == selectedVendorId)
-                        : null;
-                    final prefVendorIds = prefVendor != null ? [prefVendor.id] : <String>[];
-                    final prefVendorNames = prefVendor != null ? [prefVendor.name] : <String>[];
+                  isLoading: isSubmitting,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDlgState(() {
+                            isSubmitting = true;
+                            serverError = null;
+                          });
 
-                    if (isEdit) {
-                      db.updateRawMaterial(existing.copyWith(
-                        name: nameCtrl.text.trim(),
-                        itemCode: codeCtrl.text.trim(),
-                        categoryId: catObj.id,
-                        categoryName: catObj.name,
-                        unit: selectedUnit,
-                        currentStock: stockVal,
-                        minimumStock: minVal,
-                        defaultPurchasePrice: priceVal,
-                        preferredVendorIds: prefVendorIds,
-                        preferredVendorNames: prefVendorNames,
-                        updatedAt: DateTime.now(),
-                      ));
-                    } else {
-                      final newRm = RawMaterial(
-                        id: IdGenerator.generateId('RM'),
-                        name: nameCtrl.text.trim(),
-                        itemCode: codeCtrl.text.trim(),
-                        categoryId: catObj.id,
-                        categoryName: catObj.name,
-                        unit: selectedUnit,
-                        currentStock: stockVal,
-                        openingStock: stockVal,
-                        minimumStock: minVal,
-                        reorderLevel: minVal * 1.5,
-                        defaultPurchasePrice: priceVal,
-                        gstPercent: 18.0,
-                        preferredVendorIds: prefVendorIds,
-                        preferredVendorNames: prefVendorNames,
-                        createdAt: DateTime.now(),
-                        updatedAt: DateTime.now(),
-                      );
-                      db.addRawMaterial(newRm);
-                    }
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(isEdit ? 'Raw material updated successfully!' : 'Raw material created successfully!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
-                  },
+                          final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
+                          final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
+                          final priceVal = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
+                          final catObj = db.categories.firstWhere(
+                            (c) => c.id == selectedCategory,
+                            orElse: () => db.categories.first,
+                          );
+                          final unitObj = db.units.firstWhere(
+                            (u) => u.id == selectedUnitId,
+                            orElse: () => db.units.first,
+                          );
+                          final prefVendor = selectedVendorId != null
+                              ? db.vendors.firstWhere((v) => v.id == selectedVendorId)
+                              : null;
+                          final prefVendorIds = prefVendor != null ? [prefVendor.id] : <String>[];
+                          final prefVendorNames = prefVendor != null ? [prefVendor.name] : <String>[];
+
+                          try {
+                            if (isEdit) {
+                              await db.updateRawMaterialAsync(existing.copyWith(
+                                name: nameCtrl.text.trim(),
+                                itemCode: codeCtrl.text.trim(),
+                                categoryId: catObj.id,
+                                categoryName: catObj.name,
+                                unitId: unitObj.id,
+                                unit: unitObj.symbol,
+                                currentStock: stockVal,
+                                minimumStock: minVal,
+                                defaultPurchasePrice: priceVal,
+                                preferredVendorIds: prefVendorIds,
+                                preferredVendorNames: prefVendorNames,
+                                updatedAt: DateTime.now(),
+                              ));
+                            } else {
+                              final newRm = RawMaterial(
+                                id: IdGenerator.generateId('RM'),
+                                name: nameCtrl.text.trim(),
+                                itemCode: codeCtrl.text.trim(),
+                                categoryId: catObj.id,
+                                categoryName: catObj.name,
+                                unitId: unitObj.id,
+                                unit: unitObj.symbol,
+                                currentStock: stockVal,
+                                openingStock: stockVal,
+                                minimumStock: minVal,
+                                reorderLevel: minVal * 1.5,
+                                defaultPurchasePrice: priceVal,
+                                gstPercent: 18.0,
+                                preferredVendorIds: prefVendorIds,
+                                preferredVendorNames: prefVendorNames,
+                                createdAt: DateTime.now(),
+                                updatedAt: DateTime.now(),
+                              );
+                              await db.addRawMaterialAsync(newRm);
+                            }
+
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(isEdit ? 'Raw material updated successfully!' : 'Raw material created successfully!'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDlgState(() {
+                              serverError = e.toString().replaceFirst('Exception: ', '');
+                              isSubmitting = false;
+                            });
+                          }
+                        },
                 ),
               ],
             );

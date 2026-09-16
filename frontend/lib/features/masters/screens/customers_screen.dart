@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
@@ -24,6 +25,15 @@ class CustomersScreen extends ConsumerStatefulWidget {
 class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   String _searchQuery = '';
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadCustomers();
+      ref.read(databaseServiceProvider).loadArchitects();
+    });
+  }
+
   void _openAddEditCustomerDialog([Customer? existing]) {
     final db = ref.read(databaseServiceProvider);
     final isEdit = existing != null;
@@ -36,11 +46,15 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     bool isAlsoArchitect = existing?.isAlsoArchitect ?? (existing?.linkedArchitectId != null);
     final formKey = GlobalKey<FormState>();
 
+    bool isSubmitting = false;
+    String? serverError;
+
     showDialog(
       context: context,
+      barrierDismissible: !isSubmitting,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setDlgState) {
+          builder: (dlgCtx, setDlgState) {
             return AlertDialog(
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -50,7 +64,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                     text: 'Scan & Upload (OCR)',
                     icon: Icons.document_scanner_outlined,
                     isOutlined: true,
-                    onPressed: () {
+                    onPressed: isSubmitting ? null : () {
                       showDialog(
                         context: context,
                         builder: (ocrCtx) => Dialog(
@@ -84,6 +98,26 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (serverError != null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(serverError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         TextFormField(
                           controller: nameCtrl,
                           validator: (v) => Validators.requiredField(v, 'Customer name required'),
@@ -115,13 +149,18 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: gstCtrl,
-                          decoration: const InputDecoration(labelText: 'GST Number'),
+                          validator: Validators.gst,
+                          decoration: const InputDecoration(
+                            labelText: 'GST Number (Optional, 15 chars)',
+                            hintText: '24AAAAA0000A1Z5',
+                          ),
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: addressCtrl,
                           maxLines: 2,
-                          decoration: const InputDecoration(labelText: 'Site / Billing Address'),
+                          validator: (v) => Validators.requiredField(v, 'Site / Billing Address required'),
+                          decoration: const InputDecoration(labelText: 'Site / Billing Address *'),
                         ),
                         const SizedBox(height: 16),
 
@@ -129,9 +168,9 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.purple.withOpacity(0.04),
+                            color: Colors.purple.withValues(alpha: 0.04),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.purple.withOpacity(0.2)),
+                            border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,7 +180,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                                   Checkbox(
                                     value: isAlsoArchitect,
                                     activeColor: Colors.purple,
-                                    onChanged: (val) {
+                                    onChanged: isSubmitting ? null : (val) {
                                       setDlgState(() {
                                         isAlsoArchitect = val ?? false;
                                         if (!isAlsoArchitect) linkedArchitectId = null;
@@ -173,12 +212,12 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                                   ),
                                   items: [
                                     const DropdownMenuItem(value: null, child: Text('(Auto-create / sync with Architect Master)')),
-                                    ...db.architects.map((a) => DropdownMenuItem(
+                                    ...db.architects.where((a) => !a.isDeleted).map((a) => DropdownMenuItem(
                                           value: a.id,
                                           child: Text('${a.name} (${a.companyName.isNotEmpty ? a.companyName : "Independent"})'),
                                         )),
                                   ],
-                                  onChanged: (val) => setDlgState(() => linkedArchitectId = val),
+                                  onChanged: isSubmitting ? null : (val) => setDlgState(() => linkedArchitectId = val),
                                 ),
                               ],
                             ],
@@ -193,43 +232,103 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                 ErpButton(
                   text: 'Cancel',
                   isOutlined: true,
-                  onPressed: () => Navigator.of(ctx).pop(),
+                  onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
                 ),
                 ErpButton(
                   text: isEdit ? 'Update Customer' : 'Save Customer',
-                  onPressed: () {
-                    if (!formKey.currentState!.validate()) return;
+                  isLoading: isSubmitting,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDlgState(() {
+                            isSubmitting = true;
+                            serverError = null;
+                          });
 
-                    final custId = isEdit ? existing.id : IdGenerator.generateId('CUST');
-                    final customer = Customer(
-                      id: custId,
-                      name: nameCtrl.text.trim(),
-                      mobile: mobileCtrl.text.trim(),
-                      email: emailCtrl.text.trim(),
-                      gstNumber: gstCtrl.text.trim(),
-                      address: addressCtrl.text.trim(),
-                      outstandingAmount: existing?.outstandingAmount ?? 0.0,
-                      isAlsoArchitect: isAlsoArchitect,
-                      linkedArchitectId: linkedArchitectId,
-                      createdAt: existing?.createdAt ?? DateTime.now(),
-                    );
+                          final custId = isEdit ? existing.id : IdGenerator.generateId('CUST');
+                          final customer = Customer(
+                            id: custId,
+                            name: nameCtrl.text.trim(),
+                            mobile: mobileCtrl.text.trim(),
+                            email: emailCtrl.text.trim(),
+                            gstNumber: gstCtrl.text.trim(),
+                            address: addressCtrl.text.trim(),
+                            outstandingAmount: existing?.outstandingAmount ?? 0.0,
+                            isAlsoArchitect: isAlsoArchitect,
+                            linkedArchitectId: linkedArchitectId,
+                            createdAt: existing?.createdAt ?? DateTime.now(),
+                          );
 
-                    if (isEdit) {
-                      db.updateCustomer(customer);
-                    } else {
-                      db.addCustomer(customer);
-                    }
+                          try {
+                            Customer saved;
+                            if (isEdit) {
+                              saved = await db.updateCustomerAsync(customer);
+                            } else {
+                              saved = await db.addCustomerAsync(customer);
+                            }
 
-                    // Bi-directional link sync
-                    if (isAlsoArchitect && linkedArchitectId != null) {
-                      db.linkArchitectAndCustomer(architectId: linkedArchitectId!, customerId: custId);
-                    }
+                            // Bi-directional link sync
+                            if (isAlsoArchitect && linkedArchitectId != null) {
+                              await db.linkArchitectAndCustomerAsync(architectId: linkedArchitectId!, customerId: saved.id);
+                            }
 
-                    Navigator.of(ctx).pop();
-                  },
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Customer "${customer.name}" ${isEdit ? "updated" : "saved"} successfully!'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDlgState(() {
+                              serverError = e.toString().replaceFirst('Exception: ', '');
+                              isSubmitting = false;
+                            });
+                          }
+                        },
                 ),
               ],
             );
+          },
+        );
+      },
+    );
+  }
+
+  void _confirmDeleteCustomer(Customer customer) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return ErpConfirmDeleteDialog(
+          title: 'Delete Customer Record',
+          message: 'Are you sure you want to deactivate and archive this customer? A mandatory audit reason is required.',
+          itemName: '${customer.name} (${customer.id})',
+          requireReason: true,
+          onConfirm: (reason) async {
+            final db = ref.read(databaseServiceProvider);
+            try {
+              await db.deleteCustomerAsync(customerId: customer.id, reason: reason);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Customer "${customer.name}" archived with audit reason: $reason'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Delete failed: ${e.toString().replaceFirst("Exception: ", "")}'),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+              }
+            }
           },
         );
       },
@@ -240,6 +339,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final customers = db.customers.where((c) {
+      if (c.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
       return query.isEmpty ||
           c.name.toLowerCase().contains(query) ||
@@ -395,6 +495,11 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       tooltip: 'Edit Customer',
                       onPressed: () => _openAddEditCustomerDialog(c),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                      tooltip: 'Delete Customer',
+                      onPressed: () => _confirmDeleteCustomer(c),
                     ),
                   ],
                 ),

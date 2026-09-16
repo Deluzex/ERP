@@ -19,6 +19,11 @@ import '../../core/models/stock_movement_model.dart';
 import '../../core/models/user_model.dart';
 import '../../core/models/vendor_model.dart';
 import '../../core/models/whatsapp_models.dart';
+import '../../core/api/categories_units_api_service.dart';
+import '../../core/api/finished_products_api_service.dart';
+import '../../core/api/parties_api_service.dart';
+import '../../core/api/raw_materials_api_service.dart';
+import '../../core/api/vendors_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
@@ -3836,6 +3841,390 @@ class MockDatabaseService extends ChangeNotifier {
   void deleteFinishedProduct(String id) {
     finishedProducts.removeWhere((item) => item.id == id);
     notifyListeners();
+  }
+
+  final VendorsApiService _vendorsApi = VendorsApiService();
+  final CategoriesUnitsApiService _categoriesUnitsApi = CategoriesUnitsApiService();
+  final RawMaterialsApiService _rawMaterialsApi = RawMaterialsApiService();
+  final FinishedProductsApiService _finishedProductsApi = FinishedProductsApiService();
+  final PartiesApiService _partiesApi = PartiesApiService();
+
+  bool _isLoadingVendors = false;
+  bool get isLoadingVendors => _isLoadingVendors;
+  bool _isLoadingMasters = false;
+  bool get isLoadingMasters => _isLoadingMasters;
+
+  /// Loads all Phase 1 masters from NestJS live backend
+  Future<void> loadAllMasters({bool forceRefresh = false}) async {
+    if (_isLoadingMasters) return;
+    _isLoadingMasters = true;
+    try {
+      await Future.wait([
+        loadCategories(forceRefresh: forceRefresh),
+        loadUnits(forceRefresh: forceRefresh),
+        loadVendors(forceRefresh: forceRefresh),
+        loadRawMaterials(forceRefresh: forceRefresh),
+        loadFinishedProducts(forceRefresh: forceRefresh),
+        loadCustomers(forceRefresh: forceRefresh),
+        loadDealers(forceRefresh: forceRefresh),
+        loadArchitects(forceRefresh: forceRefresh),
+      ]);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] Note: loadAllMasters error: $e');
+      }
+    } finally {
+      _isLoadingMasters = false;
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Categories Live API
+  // -------------------------------------------------------------
+  Future<void> loadCategories({bool forceRefresh = false}) async {
+    try {
+      final remote = await _categoriesUnitsApi.getCategories();
+      if (remote.isNotEmpty || forceRefresh) {
+        categories = remote;
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadCategories fallback: $e');
+    }
+  }
+
+  Future<ItemCategory> addCategoryAsync({required String name, String? description}) async {
+    final saved = await _categoriesUnitsApi.createCategory(name: name, description: description);
+    categories.insert(0, saved);
+    notifyListeners();
+    return saved;
+  }
+
+  Future<ItemCategory> updateCategoryAsync({required String id, required String name, String? description}) async {
+    final updated = await _categoriesUnitsApi.updateCategory(id: id, name: name, description: description);
+    final idx = categories.indexWhere((c) => c.id == id);
+    if (idx != -1) {
+      categories[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<void> deleteCategoryAsync(String id) async {
+    await _categoriesUnitsApi.deleteCategory(id);
+    categories.removeWhere((c) => c.id == id);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Units Live API
+  // -------------------------------------------------------------
+  Future<void> loadUnits({bool forceRefresh = false}) async {
+    try {
+      final remote = await _categoriesUnitsApi.getUnits();
+      if (remote.isNotEmpty || forceRefresh) {
+        units = remote;
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadUnits fallback: $e');
+    }
+  }
+
+  Future<MeasurementUnit> addUnitAsync({required String name, required String symbol}) async {
+    final saved = await _categoriesUnitsApi.createUnit(name: name, symbol: symbol);
+    units.insert(0, saved);
+    notifyListeners();
+    return saved;
+  }
+
+  Future<void> deleteUnitAsync(String id) async {
+    await _categoriesUnitsApi.deleteUnit(id);
+    units.removeWhere((u) => u.id == id);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Raw Materials Live API
+  // -------------------------------------------------------------
+  Future<void> loadRawMaterials({bool forceRefresh = false}) async {
+    try {
+      final remote = await _rawMaterialsApi.getRawMaterials(includeDeleted: true);
+      if (remote.isNotEmpty || forceRefresh) {
+        rawMaterials = remote;
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadRawMaterials fallback: $e');
+    }
+  }
+
+  Future<RawMaterial> addRawMaterialAsync(RawMaterial rm) async {
+    final saved = await _rawMaterialsApi.createRawMaterial(rm);
+    rawMaterials.insert(0, saved);
+    notifyListeners();
+    return saved;
+  }
+
+  Future<RawMaterial> updateRawMaterialAsync(RawMaterial rm) async {
+    final updated = await _rawMaterialsApi.updateRawMaterial(rm);
+    final idx = rawMaterials.indexWhere((item) => item.id == rm.id);
+    if (idx != -1) {
+      rawMaterials[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<void> deleteRawMaterialAsync(String id) async {
+    await _rawMaterialsApi.deleteRawMaterial(id);
+    final idx = rawMaterials.indexWhere((item) => item.id == id);
+    if (idx != -1) {
+      rawMaterials[idx] = rawMaterials[idx].copyWith(isDeleted: true, deletedAt: DateTime.now());
+      notifyListeners();
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Finished Products Live API
+  // -------------------------------------------------------------
+  Future<void> loadFinishedProducts({bool forceRefresh = false}) async {
+    try {
+      final remote = await _finishedProductsApi.getFinishedProducts(includeDeleted: true);
+      if (remote.isNotEmpty || forceRefresh) {
+        finishedProducts = remote;
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadFinishedProducts fallback: $e');
+    }
+  }
+
+  Future<FinishedProduct> addFinishedProductAsync(FinishedProduct fp) async {
+    final saved = await _finishedProductsApi.createFinishedProduct(fp);
+    finishedProducts.insert(0, saved);
+    notifyListeners();
+    return saved;
+  }
+
+  Future<FinishedProduct> updateFinishedProductAsync(FinishedProduct fp) async {
+    final updated = await _finishedProductsApi.updateFinishedProduct(fp);
+    final idx = finishedProducts.indexWhere((item) => item.id == fp.id);
+    if (idx != -1) {
+      finishedProducts[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<void> deleteFinishedProductAsync(String id) async {
+    await _finishedProductsApi.deleteFinishedProduct(id);
+    final idx = finishedProducts.indexWhere((item) => item.id == id);
+    if (idx != -1) {
+      finishedProducts[idx] = finishedProducts[idx].copyWith(isDeleted: true, deletedAt: DateTime.now());
+      notifyListeners();
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Customers Live API
+  // -------------------------------------------------------------
+  Future<void> loadCustomers({bool forceRefresh = false}) async {
+    try {
+      final remote = await _partiesApi.getCustomers(includeDeleted: true);
+      if (remote.isNotEmpty || forceRefresh) {
+        customers = remote;
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadCustomers fallback: $e');
+    }
+  }
+
+  Future<Customer> addCustomerAsync(Customer customer) async {
+    final saved = await _partiesApi.createCustomer(customer);
+    customers.insert(0, saved);
+    notifyListeners();
+    return saved;
+  }
+
+  Future<Customer> updateCustomerAsync(Customer customer) async {
+    final updated = await _partiesApi.updateCustomer(customer);
+    final idx = customers.indexWhere((c) => c.id == customer.id);
+    if (idx != -1) {
+      customers[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<void> deleteCustomerAsync({required String customerId, required String reason}) async {
+    await _partiesApi.deleteCustomer(customerId, reason);
+    final idx = customers.indexWhere((c) => c.id == customerId);
+    if (idx != -1) {
+      customers[idx] = customers[idx].copyWith(isDeleted: true, deletedAt: DateTime.now());
+      notifyListeners();
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Dealers Live API
+  // -------------------------------------------------------------
+  Future<void> loadDealers({bool forceRefresh = false}) async {
+    try {
+      final remote = await _partiesApi.getDealers(includeDeleted: true);
+      if (remote.isNotEmpty || forceRefresh) {
+        dealers = remote;
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadDealers fallback: $e');
+    }
+  }
+
+  Future<Dealer> addDealerAsync(Dealer dealer) async {
+    final saved = await _partiesApi.createDealer(dealer);
+    dealers.insert(0, saved);
+    notifyListeners();
+    return saved;
+  }
+
+  Future<Dealer> updateDealerAsync(Dealer dealer) async {
+    final updated = await _partiesApi.updateDealer(dealer);
+    final idx = dealers.indexWhere((d) => d.id == dealer.id);
+    if (idx != -1) {
+      dealers[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<void> deleteDealerAsync({required String dealerId, required String reason}) async {
+    await _partiesApi.deleteDealer(dealerId, reason);
+    final idx = dealers.indexWhere((d) => d.id == dealerId);
+    if (idx != -1) {
+      dealers[idx] = dealers[idx].copyWith(isDeleted: true, deletedAt: DateTime.now());
+      notifyListeners();
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Architects & Dual Linking Live API
+  // -------------------------------------------------------------
+  Future<void> loadArchitects({bool forceRefresh = false}) async {
+    try {
+      final remote = await _partiesApi.getArchitects(includeDeleted: true);
+      if (remote.isNotEmpty || forceRefresh) {
+        architects = remote;
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadArchitects fallback: $e');
+    }
+  }
+
+  Future<Architect> addArchitectAsync(Architect architect) async {
+    final saved = await _partiesApi.createArchitect(architect);
+    architects.insert(0, saved);
+    notifyListeners();
+    return saved;
+  }
+
+  Future<Architect> updateArchitectAsync(Architect architect) async {
+    final updated = await _partiesApi.updateArchitect(architect);
+    final idx = architects.indexWhere((a) => a.id == architect.id);
+    if (idx != -1) {
+      architects[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<void> deleteArchitectAsync({required String architectId, required String reason}) async {
+    await _partiesApi.deleteArchitect(architectId, reason);
+    final idx = architects.indexWhere((a) => a.id == architectId);
+    if (idx != -1) {
+      architects[idx] = architects[idx].copyWith(isDeleted: true, deletedAt: DateTime.now());
+      notifyListeners();
+    }
+  }
+
+  Future<void> linkArchitectAndCustomerAsync({required String architectId, required String customerId}) async {
+    await _partiesApi.linkArchitectAndCustomer(architectId: architectId, customerId: customerId);
+    linkArchitectAndCustomer(customerId: customerId, architectId: architectId);
+  }
+
+  /// Loads vendors from NestJS live backend. Falls back to seeded list if offline.
+  Future<void> loadVendors({bool forceRefresh = false}) async {
+    if (_isLoadingVendors) return;
+    _isLoadingVendors = true;
+    try {
+      final remoteVendors = await _vendorsApi.getVendors(includeDeleted: true);
+      if (remoteVendors.isNotEmpty || forceRefresh) {
+        vendors = remoteVendors;
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] Note: loadVendors falling back to local list ($e)');
+      }
+    } finally {
+      _isLoadingVendors = false;
+    }
+  }
+
+  /// Async Vendor creation talking to live backend
+  Future<Vendor> addVendorAsync(Vendor vendor) async {
+    try {
+      final saved = await _vendorsApi.createVendor(vendor);
+      vendors.insert(0, saved);
+      notifyListeners();
+      return saved;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] createVendor API failed: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Async Vendor update talking to live backend
+  Future<Vendor> updateVendorAsync(Vendor vendor) async {
+    try {
+      final updated = await _vendorsApi.updateVendor(vendor);
+      final index = vendors.indexWhere((v) => v.id == vendor.id);
+      if (index != -1) {
+        vendors[index] = updated;
+        notifyListeners();
+      }
+      return updated;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] updateVendor API failed: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Async Vendor delete talking to live backend
+  Future<void> deleteVendorAsync({required String vendorId, required String reason}) async {
+    try {
+      await _vendorsApi.deleteVendor(vendorId, reason);
+      final index = vendors.indexWhere((v) => v.id == vendorId);
+      if (index != -1) {
+        vendors[index] = vendors[index].copyWith(
+          isDeleted: true,
+          deleteReason: reason,
+          deletedAt: DateTime.now(),
+        );
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] deleteVendor API failed: $e');
+      }
+      rethrow;
+    }
   }
 
   void addVendor(Vendor vendor) {

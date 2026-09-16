@@ -68,4 +68,42 @@ class Vendor {
       createdAt: createdAt ?? this.createdAt,
     );
   }
+
+  factory Vendor.fromJson(Map<String, dynamic> json) {
+    return Vendor(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      contactPerson: json['contactPerson']?.toString() ?? json['contact_person']?.toString() ?? '',
+      mobile: json['mobile']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      gstNumber: json['gstNumber']?.toString() ?? json['gst_number']?.toString() ?? '',
+      panNumber: json['panNumber']?.toString() ?? json['pan_number']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      paymentTerms: json['paymentTerms']?.toString() ?? json['payment_terms']?.toString() ?? 'Net 30 Days',
+      creditLimit: double.tryParse(json['creditLimit']?.toString() ?? json['credit_limit']?.toString() ?? '0') ?? 0.0,
+      outstandingBalance: double.tryParse(json['outstandingBalance']?.toString() ?? json['outstanding_balance']?.toString() ?? '0') ?? 0.0,
+      isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
+      deleteReason: json['deleteReason']?.toString() ?? json['delete_reason']?.toString(),
+      deletedAt: json['deletedAt'] != null
+          ? DateTime.tryParse(json['deletedAt'].toString())
+          : (json['deleted_at'] != null ? DateTime.tryParse(json['deleted_at'].toString()) : null),
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
+          : (json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now() : DateTime.now()),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'contactPerson': contactPerson,
+      'mobile': mobile,
+      'email': email,
+      'gstNumber': gstNumber,
+      'panNumber': panNumber,
+      'address': address,
+      'paymentTerms': paymentTerms,
+      'creditLimit': creditLimit,
+    };
+  }
 }

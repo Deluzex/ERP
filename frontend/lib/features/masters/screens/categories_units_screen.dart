@@ -20,58 +20,115 @@ class CategoriesUnitsScreen extends ConsumerStatefulWidget {
 class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
   String _searchQuery = '';
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadCategories();
+      ref.read(databaseServiceProvider).loadUnits();
+    });
+  }
+
   void _openAddCategoryDialog() {
     final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? serverError;
 
     showDialog(
       context: context,
+      barrierDismissible: !isSubmitting,
       builder: (ctx) {
-        return AlertDialog(
-          title: Text('Add Item Category', style: AppTextStyles.h2),
-          content: SizedBox(
-            width: 440,
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: nameCtrl,
-                    validator: (v) => Validators.requiredField(v, 'Category name required'),
-                    decoration: const InputDecoration(labelText: 'Category Name *', hintText: 'E.g., Chandeliers & Pendants'),
+        return StatefulBuilder(
+          builder: (dlgCtx, setDlgState) {
+            return AlertDialog(
+              title: Text('Add Item Category', style: AppTextStyles.h2),
+              content: SizedBox(
+                width: 440,
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (serverError != null) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.danger.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(serverError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      TextFormField(
+                        controller: nameCtrl,
+                        validator: (v) => Validators.requiredField(v, 'Category name required'),
+                        decoration: const InputDecoration(labelText: 'Category Name *', hintText: 'E.g., Chandeliers & Pendants'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: descCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(labelText: 'Description', hintText: 'Category scope and details'),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: descCtrl,
-                    maxLines: 2,
-                    decoration: const InputDecoration(labelText: 'Description', hintText: 'Category scope and details'),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-          actions: [
-            ErpButton(
-              text: 'Cancel',
-              isOutlined: true,
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ErpButton(
-              text: 'Save Category',
-              onPressed: () {
-                if (!formKey.currentState!.validate()) return;
-                final db = ref.read(databaseServiceProvider);
-                db.addCategory(ItemCategory(
-                  id: IdGenerator.generateId('CAT'),
-                  name: nameCtrl.text.trim(),
-                  description: descCtrl.text.trim(),
-                ));
-                Navigator.of(ctx).pop();
-              },
-            ),
-          ],
+              actions: [
+                ErpButton(
+                  text: 'Cancel',
+                  isOutlined: true,
+                  onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+                ),
+                ErpButton(
+                  text: 'Save Category',
+                  isLoading: isSubmitting,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDlgState(() {
+                            isSubmitting = true;
+                            serverError = null;
+                          });
+                          final db = ref.read(databaseServiceProvider);
+                          try {
+                            await db.addCategoryAsync(
+                              name: nameCtrl.text.trim(),
+                              description: descCtrl.text.trim(),
+                            );
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Category "${nameCtrl.text.trim()}" created successfully!'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDlgState(() {
+                              serverError = e.toString().replaceFirst('Exception: ', '');
+                              isSubmitting = false;
+                            });
+                          }
+                        },
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -81,54 +138,103 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
     final nameCtrl = TextEditingController();
     final symbolCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? serverError;
 
     showDialog(
       context: context,
+      barrierDismissible: !isSubmitting,
       builder: (ctx) {
-        return AlertDialog(
-          title: Text('Add Measurement Unit', style: AppTextStyles.h2),
-          content: SizedBox(
-            width: 440,
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: nameCtrl,
-                    validator: (v) => Validators.requiredField(v, 'Unit name required'),
-                    decoration: const InputDecoration(labelText: 'Unit Name *', hintText: 'E.g., Meters / Pieces / Kilograms'),
+        return StatefulBuilder(
+          builder: (dlgCtx, setDlgState) {
+            return AlertDialog(
+              title: Text('Add Measurement Unit', style: AppTextStyles.h2),
+              content: SizedBox(
+                width: 440,
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (serverError != null) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.danger.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(serverError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      TextFormField(
+                        controller: nameCtrl,
+                        validator: (v) => Validators.requiredField(v, 'Unit name required'),
+                        decoration: const InputDecoration(labelText: 'Unit Name *', hintText: 'E.g., Meters / Pieces / Kilograms'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: symbolCtrl,
+                        validator: (v) => Validators.requiredField(v, 'Symbol required'),
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: const InputDecoration(labelText: 'Symbol *', hintText: 'E.g., MTR / PCS / KG'),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: symbolCtrl,
-                    validator: (v) => Validators.requiredField(v, 'Symbol required'),
-                    decoration: const InputDecoration(labelText: 'Symbol *', hintText: 'E.g., MTR / PCS / KG'),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-          actions: [
-            ErpButton(
-              text: 'Cancel',
-              isOutlined: true,
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ErpButton(
-              text: 'Save Unit',
-              onPressed: () {
-                if (!formKey.currentState!.validate()) return;
-                final db = ref.read(databaseServiceProvider);
-                db.addUnit(MeasurementUnit(
-                  id: IdGenerator.generateId('U'),
-                  name: nameCtrl.text.trim(),
-                  symbol: symbolCtrl.text.trim().toUpperCase(),
-                ));
-                Navigator.of(ctx).pop();
-              },
-            ),
-          ],
+              actions: [
+                ErpButton(
+                  text: 'Cancel',
+                  isOutlined: true,
+                  onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+                ),
+                ErpButton(
+                  text: 'Save Unit',
+                  isLoading: isSubmitting,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDlgState(() {
+                            isSubmitting = true;
+                            serverError = null;
+                          });
+                          final db = ref.read(databaseServiceProvider);
+                          try {
+                            await db.addUnitAsync(
+                              name: nameCtrl.text.trim(),
+                              symbol: symbolCtrl.text.trim().toUpperCase(),
+                            );
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Unit "${symbolCtrl.text.trim().toUpperCase()}" created successfully!'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDlgState(() {
+                              serverError = e.toString().replaceFirst('Exception: ', '');
+                              isSubmitting = false;
+                            });
+                          }
+                        },
+                ),
+              ],
+            );
+          },
         );
       },
     );

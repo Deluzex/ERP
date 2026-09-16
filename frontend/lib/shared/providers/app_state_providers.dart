@@ -3,6 +3,7 @@ import '../../app/routes/app_routes.dart';
 import '../../core/models/rbac_models.dart';
 import '../../core/models/sale_model.dart';
 import '../../core/models/stock_movement_model.dart';
+import '../../core/api/auth_api_service.dart';
 import '../services/mock_database_service.dart';
 
 // Database Singleton Provider
@@ -14,6 +15,35 @@ final databaseServiceProvider = ChangeNotifierProvider<MockDatabaseService>((ref
 class AuthStateNotifier extends StateNotifier<AppUser?> {
   final Ref ref;
   AuthStateNotifier(this.ref) : super(null);
+
+  final AuthApiService _authApi = AuthApiService();
+
+  Future<bool> loginAsync(String identifier, String password, [String? roleId]) async {
+    try {
+      final authRes = await _authApi.login(identifier, password);
+      final user = authRes.user;
+      final db = ref.read(databaseServiceProvider);
+      db.setCurrentUser(user);
+      state = user;
+
+      final role = db.getUserRole(user);
+      ref.read(currentNavSectionProvider.notifier).state = role.defaultDashboardSection;
+      ref.read(activeRecordDetailsStackProvider.notifier).clear();
+      return true;
+    } catch (e) {
+      // Fallback to local mock database if backend network is unreachable or for demo users
+      final db = ref.read(databaseServiceProvider);
+      final user = db.authenticateUser(identifier, password, roleId);
+      if (user != null) {
+        state = user;
+        final role = db.getUserRole(user);
+        ref.read(currentNavSectionProvider.notifier).state = role.defaultDashboardSection;
+        ref.read(activeRecordDetailsStackProvider.notifier).clear();
+        return true;
+      }
+      rethrow;
+    }
+  }
 
   bool login(String identifier, String password, [String? roleId]) {
     final db = ref.read(databaseServiceProvider);
@@ -39,6 +69,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
   }
 
   void logout() {
+    _authApi.logout();
     state = null;
     ref.read(activeRecordDetailsStackProvider.notifier).clear();
   }

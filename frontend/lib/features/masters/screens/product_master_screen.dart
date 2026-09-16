@@ -22,6 +22,16 @@ class ProductMasterScreen extends ConsumerStatefulWidget {
 class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
   String _searchQuery = '';
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadFinishedProducts();
+      ref.read(databaseServiceProvider).loadCategories();
+      ref.read(databaseServiceProvider).loadUnits();
+    });
+  }
+
   void _openAddEditDialog([FinishedProduct? existing]) {
     final db = ref.read(databaseServiceProvider);
     final isEdit = existing != null;
@@ -46,14 +56,18 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
     );
 
     String selectedCategory = existing?.categoryId ?? (db.categories.isNotEmpty ? db.categories.first.id : '');
-    String selectedUnit = existing?.unit ?? (db.units.isNotEmpty ? db.units.first.symbol : 'PCS');
+    String selectedUnitId = existing?.unitId ?? (db.units.isNotEmpty ? db.units.first.id : '');
     final formKey = GlobalKey<FormState>();
+
+    bool isSubmitting = false;
+    String? serverError;
 
     showDialog(
       context: context,
+      barrierDismissible: !isSubmitting,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setDlgState) {
+          builder: (dlgCtx, setDlgState) {
             return AlertDialog(
               title: Text(isEdit ? 'Edit Product Item' : 'Product / Item Entry', style: AppTextStyles.h2),
               content: SizedBox(
@@ -64,6 +78,26 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (serverError != null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(serverError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         Row(
                           children: [
                             Expanded(
@@ -102,7 +136,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                 items: db.categories.map((c) {
                                   return DropdownMenuItem(value: c.id, child: Text(c.name));
                                 }).toList(),
-                                onChanged: (val) {
+                                onChanged: isSubmitting ? null : (val) {
                                   if (val != null) setDlgState(() => selectedCategory = val);
                                 },
                               ),
@@ -110,13 +144,13 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: DropdownButtonFormField<String>(
-                                initialValue: selectedUnit,
+                                initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
                                 decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
                                 items: db.units.map((u) {
-                                  return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
+                                  return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
                                 }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) setDlgState(() => selectedUnit = val);
+                                onChanged: isSubmitting ? null : (val) {
+                                  if (val != null) setDlgState(() => selectedUnitId = val);
                                 },
                               ),
                             ),
@@ -201,64 +235,88 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                 ErpButton(
                   text: 'Cancel',
                   isOutlined: true,
-                  onPressed: () => Navigator.of(ctx).pop(),
+                  onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
                 ),
                 ErpButton(
                   text: isEdit ? 'Update Product' : 'Save Product',
-                  onPressed: () {
-                    if (!formKey.currentState!.validate()) return;
-                    final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
-                    final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
-                    final costVal = double.tryParse(costCtrl.text.trim()) ?? 0.0;
-                    final dealerVal = double.tryParse(dealerCtrl.text.trim()) ?? 0.0;
-                    final custVal = double.tryParse(custCtrl.text.trim()) ?? 0.0;
-                    final catObj = db.categories.firstWhere(
-                      (c) => c.id == selectedCategory,
-                      orElse: () => db.categories.first,
-                    );
+                  isLoading: isSubmitting,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDlgState(() {
+                            isSubmitting = true;
+                            serverError = null;
+                          });
 
-                    if (isEdit) {
-                      db.updateFinishedProduct(existing.copyWith(
-                        name: nameCtrl.text.trim(),
-                        itemCode: codeCtrl.text.trim(),
-                        categoryId: catObj.id,
-                        categoryName: catObj.name,
-                        unit: selectedUnit,
-                        currentStock: stockVal,
-                        minimumStock: minVal,
-                        costPrice: costVal,
-                        dealerSellingPrice: dealerVal,
-                        customerSellingPrice: custVal,
-                        updatedAt: DateTime.now(),
-                      ));
-                    } else {
-                      final newFp = FinishedProduct(
-                        id: IdGenerator.generateId('FP'),
-                        name: nameCtrl.text.trim(),
-                        itemCode: codeCtrl.text.trim(),
-                        categoryId: catObj.id,
-                        categoryName: catObj.name,
-                        unit: selectedUnit,
-                        currentStock: stockVal,
-                        openingStock: stockVal,
-                        minimumStock: minVal,
-                        costPrice: costVal,
-                        dealerSellingPrice: dealerVal,
-                        customerSellingPrice: custVal,
-                        gstPercent: 18.0,
-                        createdAt: DateTime.now(),
-                        updatedAt: DateTime.now(),
-                      );
-                      db.addFinishedProduct(newFp);
-                    }
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(isEdit ? 'Product updated successfully!' : 'Product created successfully!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
-                  },
+                          final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
+                          final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
+                          final costVal = double.tryParse(costCtrl.text.trim()) ?? 0.0;
+                          final dealerVal = double.tryParse(dealerCtrl.text.trim()) ?? 0.0;
+                          final custVal = double.tryParse(custCtrl.text.trim()) ?? 0.0;
+                          final catObj = db.categories.firstWhere(
+                            (c) => c.id == selectedCategory,
+                            orElse: () => db.categories.first,
+                          );
+                          final unitObj = db.units.firstWhere(
+                            (u) => u.id == selectedUnitId,
+                            orElse: () => db.units.first,
+                          );
+
+                          try {
+                            if (isEdit) {
+                              await db.updateFinishedProductAsync(existing.copyWith(
+                                name: nameCtrl.text.trim(),
+                                itemCode: codeCtrl.text.trim(),
+                                categoryId: catObj.id,
+                                categoryName: catObj.name,
+                                unitId: unitObj.id,
+                                unit: unitObj.symbol,
+                                currentStock: stockVal,
+                                minimumStock: minVal,
+                                costPrice: costVal,
+                                dealerSellingPrice: dealerVal,
+                                customerSellingPrice: custVal,
+                                updatedAt: DateTime.now(),
+                              ));
+                            } else {
+                              final newFp = FinishedProduct(
+                                id: IdGenerator.generateId('FP'),
+                                name: nameCtrl.text.trim(),
+                                itemCode: codeCtrl.text.trim(),
+                                categoryId: catObj.id,
+                                categoryName: catObj.name,
+                                unitId: unitObj.id,
+                                unit: unitObj.symbol,
+                                currentStock: stockVal,
+                                openingStock: stockVal,
+                                minimumStock: minVal,
+                                costPrice: costVal,
+                                dealerSellingPrice: dealerVal,
+                                customerSellingPrice: custVal,
+                                gstPercent: 18.0,
+                                createdAt: DateTime.now(),
+                                updatedAt: DateTime.now(),
+                              );
+                              await db.addFinishedProductAsync(newFp);
+                            }
+
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(isEdit ? 'Product updated successfully!' : 'Product created successfully!'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDlgState(() {
+                              serverError = e.toString().replaceFirst('Exception: ', '');
+                              isSubmitting = false;
+                            });
+                          }
+                        },
                 ),
               ],
             );
@@ -269,36 +327,59 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
   }
 
   void _confirmDelete(FinishedProduct fp) {
+    bool isDeleting = false;
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: Text('Delete Product Item', style: AppTextStyles.h2),
-          content: Text(
-            'Are you sure you want to delete "${fp.name}" (${fp.itemCode})? This cannot be undone.',
-            style: AppTextStyles.bodyMedium,
-          ),
-          actions: [
-            ErpButton(
-              text: 'Cancel',
-              isOutlined: true,
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ErpButton(
-              text: 'Delete',
-              isDanger: true,
-              onPressed: () {
-                ref.read(databaseServiceProvider).deleteFinishedProduct(fp.id);
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Product "${fp.name}" deleted successfully!'),
-                    backgroundColor: AppColors.danger,
-                  ),
-                );
-              },
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            return AlertDialog(
+              title: Text('Delete Product Item', style: AppTextStyles.h2),
+              content: Text(
+                'Are you sure you want to delete "${fp.name}" (${fp.itemCode})? This cannot be undone.',
+                style: AppTextStyles.bodyMedium,
+              ),
+              actions: [
+                ErpButton(
+                  text: 'Cancel',
+                  isOutlined: true,
+                  onPressed: isDeleting ? null : () => Navigator.of(ctx).pop(),
+                ),
+                ErpButton(
+                  text: 'Delete',
+                  isDanger: true,
+                  isLoading: isDeleting,
+                  onPressed: isDeleting
+                      ? null
+                      : () async {
+                          setDlgState(() => isDeleting = true);
+                          try {
+                            await ref.read(databaseServiceProvider).deleteFinishedProductAsync(fp.id);
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Product "${fp.name}" deleted successfully!'),
+                                  backgroundColor: AppColors.danger,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDlgState(() => isDeleting = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to delete: $e'),
+                                  backgroundColor: AppColors.danger,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -308,6 +389,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final products = db.finishedProducts.where((fp) {
+      if (fp.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
       return query.isEmpty ||
           fp.name.toLowerCase().contains(query) ||
