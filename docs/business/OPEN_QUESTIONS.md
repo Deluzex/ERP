@@ -17,72 +17,16 @@ Questions are prioritised by **impact on design**, not by phase.
 
 ## ✅ Closed — do not re-ask
 
-**Q-01, Q-02, Q-03, Q-05, Q-05a, Q-09, Q-15, Q-19, Q-22** are **closed**. See Part B, and
-`Client Doc/FINAL_BUSINESS_DECISIONS.md` for the last four with their design consequences.
+**Q-01, Q-02, Q-03, Q-05, Q-05a, Q-06, Q-07, Q-08, Q-09, Q-13, Q-15, Q-19, Q-22, Q-23** are **closed**. See Part B, and
+`Client Doc/FINAL_BUSINESS_DECISIONS.md` for earlier closing decisions.
 
-**The database schema is fully unblocked.** Every question that determined column shape is answered.
+**The database schema is fully unblocked.** Every question that determined column shape and constraints is answered.
 
 ---
 
 # PART A — Open Questions
 
 ## HIGH — affects a constraint or a required field
-
-### Q-23 · HSN/SAC codes 🆕
-**Impact:** HIGH · **Ref:** `Client Doc/046 Hotel Winsome, Ahmedabad.pdf`, ADR-015, BR-CALC-016
-
-The client sample invoice carries an **HSN/SAC code per line** (`7013`) and an **HSN-wise tax summary**
-(Taxable Value / Central Tax / State Tax per HSN). The business source document never mentions HSN at all,
-so no HSN column exists in the current design.
-
-This is a **GST-invoice requirement**, not an optional extra — a compliant tax invoice in India must carry
-HSN/SAC.
-
-**Questions:**
-1. Confirm `hsn_sac_code` is required on Raw Materials and Finished Products.
-2. Is it mandatory on every item, or only above a turnover threshold?
-3. Is the HSN-wise tax summary required on printed purchase documents too, or only on sales invoices?
-
-**Recommendation:** add `hsn_sac_code` to both item masters now. It is one nullable column today and an
-awkward retrofit once documents are posted.
-
-**Discovered from the client's own document** — this is the kind of gap a sample bill surfaces and a
-requirements list does not.
-
----
-
-### Q-06 · Item code reuse after deletion
-**Impact:** HIGH · **Ref:** ADR-012
-
-After soft-deleting a raw material with code `RM-1001`, may a new material reuse that code?
-
-**Recommendation:** No — codes are permanent, so historical documents stay unambiguous. Determines whether
-the unique constraint includes `is_deleted`.
-
----
-
-### Q-07 · Document numbering format and reset policy
-**Impact:** HIGH · **Ref:** `DATABASE_RULES.md` §13
-
-The client sample invoice is numbered simply **`046`** — a short running number, not a prefixed pattern.
-
-1. Confirm the format: a plain running number like `046`, or a prefixed pattern (`PUR-2026-0105`)?
-2. Does the sequence reset each **financial year**?
-3. Separate sequences for Purchase vs Sales documents?
-4. Are gaps acceptable? (They are unavoidable with concurrent transactions and cancelled drafts.)
-
-Now that Q-22 is closed (one legal entity), numbering is organization-wide — the remaining question is only
-format and reset.
-
----
-
-### Q-08 · Financial year definition
-**Impact:** HIGH · **Ref:** source document §12.2
-
-Confirm 1 April – 31 March. Affects document numbering (Q-07), commission (Phase 4) and every year-based
-report. Asked now though commission is Phase 4, per the governing rule.
-
----
 
 ### Q-11 · Purchase Return, Damage and Adjustment — no defined flows
 **Impact:** HIGH · **Ref:** source document §8
@@ -94,14 +38,6 @@ Defined transaction types with reports, but no screen or flow for creating them.
 3. Is "Damage" the same as "Wastage" in the production reports?
 
 Approval adds columns (state, approver, timestamp) — hence HIGH.
-
----
-
-### Q-13 · Credit limit enforcement
-**Impact:** HIGH · **Ref:** source document §5.1
-
-Enforced (block), a warning, or informational? If enforced, who may override, and is the override audited?
-An override implies a permission and an audit trail.
 
 ---
 
@@ -195,10 +131,15 @@ Low risk, but it is a printing requirement nobody has listed.
 | **Q-03** | Branch and Warehouse | **Both optional.** All three shapes supported; `warehouse_id` never assumed mandatory — **ADR-013** | 2026-08-29 |
 | **Q-05** | Discount, GST, tax and rounding | **Confirmed — ADR-015.** Discount **before** GST (₹1,000 − ₹100 → GST on ₹900); within Gujarat → CGST+SGST, outside → IGST, determined per transaction; round-off shown separately | 2026-08-29 |
 | **Q-05a** | Round-off behaviour | **Closed by the client sample invoice** (`Client Doc/046 Hotel Winsome, Ahmedabad.pdf`). Round-off is a separate, **entered**, signed amount applied after GST: −₹93.50 takes ₹1,00,093.50 → ₹1,00,000.00. **Not** an automatic `ROUND()` | 2026-08-29 |
+| **Q-06** | Item code reuse after deletion | **Confirmed.** Item code **can be reused** after soft-deletion. Unique index is partial: `UNIQUE (item_code) WHERE is_deleted = false` | 2026-09-16 |
+| **Q-07** | Document numbering format | **Confirmed.** Use prefixed format: `PUR-2026-0046`, `INV-2026-0046`. Add prefix for identification | 2026-09-16 |
+| **Q-08** | Number sequence reset | **Confirmed.** Reset is **not needed**; continue running sequence continuously across financial years | 2026-09-16 |
 | **Q-09** | Roles and permissions | **No fixed or default role list.** Configurable roles, granular permissions, full CRUD — **ADR-004** | 2026-08-29 |
+| **Q-13** | Credit limit enforcement | **Confirmed.** When credit limit is exceeded, system will **issue a warning** (not hard-block) | 2026-09-16 |
 | **Q-15** | Unit / unit conversion | **Dedicated Unit Master.** Products reference the applicable unit. **No unit-conversion functionality** unless explicitly required later | 2026-08-29 |
 | **Q-19** | Inter-location stock transfer | **NOT required**, not part of the approved Stock Management scope. **Eight transaction types only — no `TRANSFER`.** Do not implement unless explicitly required later | 2026-08-29 |
 | **Q-22** | Number of legal entities | **ONE legal entity only.** The ERP is built for this single legally registered business. No `company_id` on documents, masters or unique constraints | 2026-08-29 |
+| **Q-23** | HSN/SAC codes | **Confirmed.** Add nullable `hsn_sac_code` to `raw_materials` and `finished_products` in Phase 1 schema now | 2026-09-16 |
 
 ### Closed by the scope change (ADR-014)
 
@@ -213,13 +154,13 @@ Low risk, but it is a printing requirement nobody has listed.
 
 | Status | Count | IDs |
 | --- | --- | --- |
-| **Answered** | 9 | Q-01, Q-02, Q-03, Q-05, Q-05a, Q-09, Q-15, Q-19, Q-22 |
-| **Open — HIGH** | 8 | **Q-23 (new)**, Q-06, Q-07, Q-08, Q-11, Q-13, Q-16, Q-18 |
-| **Open — MEDIUM** | 9 | **Q-24 (new)**, **Q-25 (new)**, Q-04, Q-10, Q-12, Q-14, Q-17, Q-20, Q-21 |
+| **Answered** | 14 | Q-01, Q-02, Q-03, Q-05, Q-05a, Q-06, Q-07, Q-08, Q-09, Q-13, Q-15, Q-19, Q-22, Q-23 |
+| **Open — HIGH** | 3 | Q-11, Q-16, Q-18 |
+| **Open — MEDIUM** | 9 | **Q-24 (pending confirmation)**, **Q-25**, Q-04, Q-10, Q-12, Q-14, Q-17, Q-20, Q-21 |
 
-**Nothing blocks the database schema.** The one item worth settling before the migration is **Q-23**
-(HSN/SAC) — it adds a column to both item masters, and it is a GST-compliance requirement rather than a
-preference.
-
-Three questions (**Q-23, Q-24, Q-25**) were **discovered from the client's sample invoice**, not from the
-requirements document. That is the value of having the real artefact in `Client Doc/`.
+**The database schema and constraint specifications are fully settled.**
+- `hsn_sac_code` is added as nullable text to both item masters.
+- Unique constraints on item codes allow reuse after deletion (`WHERE is_deleted = false`).
+- Document numbering follows continuous prefixed sequence (`PUR-2026-0046`).
+- Credit limit violations issue a warning.
+- **Q-24 (Consignee vs Buyer state for place of supply determination)** remains pending.

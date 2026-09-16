@@ -21,7 +21,7 @@
 | BR-VEN-005 | A soft-deleted vendor remains resolvable on historical purchases | [ENG] ADR-012 |
 | BR-VEN-006 | Vendor outstanding is **derived** (confirmed purchases − payments), never directly editable | [ENG] |
 | BR-VEN-007 | Email, when supplied, must be a valid address | [ENG] |
-| BR-VEN-008 ⚠️ | Credit limit behaviour when exceeded — block, warn, or informational | **Q-13** |
+| BR-VEN-008 | When vendor or customer credit limit is exceeded, the system **issues a warning** (not a hard block) | ✅ Client-confirmed (Q-13, 2026-09-16) |
 | BR-VEN-009 ⚠️ | GST Number format validation, and whether it is mandatory (needed for BR-CALC-014) | **open** |
 
 ---
@@ -31,14 +31,14 @@
 | Id | Rule | Source |
 | --- | --- | --- |
 | BR-RM-001 | Material Name, Item Code and Unit are mandatory | §5.5 |
-| BR-RM-002 | Item Code is unique **across the organization** | [ENG] ADR-014 |
+| BR-RM-002 | Item Code is unique among active records (`WHERE is_deleted = false`); codes can be reused after soft-deletion | ✅ Client-confirmed (Q-06, 2026-09-16) |
 | BR-RM-003 | Opening Stock is recorded as an `ADJUSTMENT` stock transaction with reason "Opening Stock" — it is never a stored balance | [ENG] ADR-005 |
 | BR-RM-004 | Minimum Stock and Reorder Level are **distinct** fields and must not be merged | §5.5 |
 | BR-RM-005 | An item is **low stock** when current balance < Minimum Stock | §4, §5.5 |
 | BR-RM-006 | Default Purchase Price pre-fills a purchase line but is always editable | §5.5 |
 | BR-RM-007 | A raw material with any stock transaction can never be hard-deleted | [ENG] ADR-012 |
 | BR-RM-008 | Quantity is stored with 4 decimal places (`kg` and `sq feet` are divisible) | [ENG] ADR-011 |
-| BR-RM-009 ⚠️ | Whether an Item Code may be reused after deletion | **Q-06** |
+| BR-RM-009 | An Item Code **can be reused** after soft-deletion | ✅ Client-confirmed (Q-06, 2026-09-16) |
 | BR-RM-010 | An item references **exactly one** unit from the Unit Master. **No unit conversion** — a purchase unit and a consumption unit are always the same | ✅ Client-confirmed (Q-15) |
 
 ---
@@ -60,7 +60,7 @@
 
 | Id | Rule | Source |
 | --- | --- | --- |
-| BR-PUR-001 | Purchase Number is auto-generated **server-side**, unique across the organization | §6, [ENG] |
+| BR-PUR-001 | Purchase Number is auto-generated **server-side** with a prefixed continuous format (`PUR-2026-0046`), unique across the organization | §6, [ENG], Q-07 |
 | BR-PUR-002 | A purchase must have at least one line | [ENG] |
 | BR-PUR-003 | Quantity > 0 and Rate ≥ 0 on every line | [ENG] |
 | BR-PUR-004 | Only active (not soft-deleted) raw materials may be purchased | [ENG] |
@@ -74,7 +74,7 @@
 | BR-PUR-012 | The same Vendor Invoice Number may not be recorded twice for the same vendor | [ENG] duplicate-bill protection |
 | BR-PUR-013 | Calculation order for discount, GST and rounding | ✅ **Client-confirmed — see `BR-CALC-*`** (ADR-015) |
 | BR-PUR-014 ⚠️ | Whether a confirmed purchase may be edited, and how stock is corrected if so | **Q-12** |
-| BR-PUR-015 ⚠️ | Purchase Number format and financial-year reset | **Q-07** |
+| BR-PUR-015 | Purchase Number format: continuous prefixed pattern (`PUR-2026-0046`), **no financial-year reset** | ✅ Client-confirmed (Q-07, Q-08, 2026-09-16) |
 
 ---
 
@@ -100,7 +100,7 @@ Gross Amount → Discount → Taxable Amount → GST → Round Off → Grand Tot
 | BR-CALC-013 | CGST/SGST and IGST are **mutually exclusive** on a document and on a line | [ENG] — enforced by check constraint |
 | BR-CALC-014 | A vendor or customer without place-of-supply information **cannot have its GST determined** — validation rejects the transaction rather than defaulting to intra-state | [ENG] ADR-015 |
 | BR-CALC-015 | The organization has **one GSTIN and one registered state** (Gujarat). GST type compares the counterparty state against that single state | ✅ Q-22 — one legal entity |
-| BR-CALC-016 ⚠️ | **HSN/SAC code** per item, and an HSN-wise tax summary on the invoice — present on the client sample but absent from the source document | **Q-23 (new)** |
+| BR-CALC-016 | **HSN/SAC code** per item is a nullable field on Raw Materials and Finished Products; tax invoices print HSN code and HSN tax summary | ✅ Client-confirmed (Q-23, 2026-09-16) |
 | **BR-CALC-020** | **Round-off is shown separately** on the bill/invoice | Client-confirmed, ADR-015 §3 |
 | BR-CALC-021 | The round-off value is **never hidden inside** an item amount or a tax amount | Client-confirmed |
 | BR-CALC-022 | The **Total is the payable amount after** round-off | ✅ Client sample invoice |
@@ -184,14 +184,16 @@ Gross Amount → Discount → Taxable Amount → GST → Round Off → Grand Tot
 
 These **must** be answered before the corresponding implementation starts:
 
-| Rule | Question | Blocks |
-| --- | --- | --- |
-| ~~BR-PUR-013~~ | ~~Q-05~~ | ✅ Closed — ADR-015, see `BR-CALC-*` |
-| ~~BR-CALC-023~~ | ~~Q-05a~~ | ✅ Closed — client sample invoice, ADR-015 §3 |
-| ~~BR-STK-008~~ | ~~Q-03~~ | ✅ Closed 2026-08-29 — ADR-013 |
-| BR-PUR-014 | Q-12 — editing confirmed documents | Purchase edit UX |
-| BR-ADJ-005 | Q-11 — adjustment approval | Stock adjustment |
-| BR-VEN-008 | Q-13 — credit limit | Purchase confirmation |
-| BR-RM-009 | Q-06 — item code reuse | Unique constraint definition |
-| ~~BR-RM-010~~ | ~~Q-15~~ | ✅ Closed — dedicated Unit Master, no conversion |
-| BR-STK-013 | negative stock | Ledger validation |
+| Rule | Question | Blocks | Status |
+| --- | --- | --- | --- |
+| ~~BR-PUR-013~~ | ~~Q-05~~ | ~~Tax calculation~~ | ✅ Closed — ADR-015, see `BR-CALC-*` |
+| ~~BR-CALC-023~~ | ~~Q-05a~~ | ~~Round-off entered~~ | ✅ Closed — client sample invoice, ADR-015 §3 |
+| ~~BR-STK-008~~ | ~~Q-03~~ | ~~Stock scope location~~ | ✅ Closed 2026-08-29 — ADR-013 |
+| ~~BR-VEN-008~~ | ~~Q-13~~ | ~~Credit limit behaviour~~ | ✅ Closed 2026-09-16 — System issues warning |
+| ~~BR-RM-009~~ | ~~Q-06~~ | ~~Item code reuse~~ | ✅ Closed 2026-09-16 — Reusable after deletion |
+| ~~BR-RM-010~~ | ~~Q-15~~ | ~~Unit conversion~~ | ✅ Closed — dedicated Unit Master, no conversion |
+| ~~BR-PUR-015~~ | ~~Q-07, Q-08~~ | ~~Document numbering~~ | ✅ Closed 2026-09-16 — Prefixed continuous sequence |
+| ~~BR-CALC-016~~ | ~~Q-23~~ | ~~HSN/SAC codes~~ | ✅ Closed 2026-09-16 — Nullable `hsn_sac_code` on items |
+| BR-PUR-014 | Q-12 — editing confirmed documents | Purchase edit UX | Open |
+| BR-ADJ-005 | Q-11 — adjustment approval | Stock adjustment | Open |
+| BR-STK-013 | negative stock | Ledger validation | Open |

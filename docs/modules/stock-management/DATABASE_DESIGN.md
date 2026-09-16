@@ -174,6 +174,7 @@ CREATE TABLE raw_materials (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name                  text NOT NULL,
   item_code             text NOT NULL,
+  hsn_sac_code          text NULL,              -- GST requirement (Q-23 closed 2026-09-16)
   unit_id               uuid NOT NULL,
   minimum_stock         numeric(18,4) NULL,
   reorder_level         numeric(18,4) NULL,     -- distinct from minimum_stock (BR-RM-004)
@@ -184,13 +185,16 @@ CREATE TABLE raw_materials (
   deleted_at timestamptz NULL, deleted_by uuid NULL, delete_reason text NULL,
   -- audit columns
 
-  CONSTRAINT uq_raw_materials__item_code UNIQUE (item_code),   -- reuse after delete: Q-06
   CONSTRAINT fk_raw_materials__units
     FOREIGN KEY (unit_id) REFERENCES units (id),
   CONSTRAINT ck_raw_materials__minimum_stock CHECK (minimum_stock IS NULL OR minimum_stock >= 0),
   CONSTRAINT ck_raw_materials__delete_reason
     CHECK (is_deleted = false OR delete_reason IS NOT NULL)
 );
+
+-- Partial index allows code reuse after soft deletion (Q-06 closed 2026-09-16)
+CREATE UNIQUE INDEX uq_raw_materials__item_code 
+  ON raw_materials (item_code) WHERE is_deleted = false;
 ```
 
 **No `opening_stock` column, and no `current_stock` column.** Opening stock is posted as an `ADJUSTMENT`
@@ -213,12 +217,15 @@ CREATE TABLE preferred_vendors (
 Same shape as `raw_materials`, plus the three prices from §5.6:
 
 ```sql
+  hsn_sac_code           text NULL,              -- GST requirement (Q-23 closed 2026-09-16)
   cost_price             numeric(18,2) NULL,
   dealer_selling_price   numeric(18,2) NULL,
   customer_selling_price numeric(18,2) NULL,
 ```
 
 `item_code` is nullable pending **Q-06 / open** — the source document does not mark it required.
+Where provided, code reuse after deletion uses a partial unique index:
+`CREATE UNIQUE INDEX uq_finished_products__item_code ON finished_products (item_code) WHERE is_deleted = false AND item_code IS NOT NULL;`
 
 ---
 
@@ -483,28 +490,25 @@ ORDER BY occurred_at DESC;
 | ~~Warehouse scoping~~ | ~~Q-03~~ | ~~Whether `warehouse_id` exists on the ledger~~ | ✅ **Closed 2026-08-29** — ADR-013, `stock_location_id` |
 | ~~Calculation and rounding~~ | ~~Q-05~~ | ~~Tax columns and round-off~~ | ✅ **Closed 2026-08-29** — ADR-015: discount before GST; CGST/SGST vs IGST by place of supply; separate `round_off_amount` |
 | ~~Round-off direction~~ | ~~Q-05a~~ | ~~The rounding arithmetic~~ | ✅ **Closed 2026-08-29** — client sample invoice committed to `Client Doc/`; round-off is an **entered** signed amount |
-| Item code reuse | **Q-06** | Whether the unique constraint includes `is_deleted` | Open |
-| Numbering format | **Q-07** | The sequence design; whether numbering is per organization or per branch/location | Open |
+| ~~Item code reuse~~ | ~~Q-06~~ | ~~Whether the unique constraint includes `is_deleted`~~ | ✅ **Closed 2026-09-16** — Code can be reused after deletion; partial index `WHERE is_deleted = false` |
+| ~~Numbering format~~ | ~~Q-07~~ | ~~The sequence design~~ | ✅ **Closed 2026-09-16** — Prefixed continuous sequence (`PUR-2026-0046`); no FY reset |
+| ~~HSN/SAC columns~~ | ~~Q-23~~ | ~~HSN/SAC codes on item masters~~ | ✅ **Closed 2026-09-16** — Nullable `hsn_sac_code` added to item masters |
 | Negative stock | BR-STK-013 | Whether `ck_stock_balances__non_negative` stays | Open |
 | ~~Unit conversion~~ | ~~Q-15~~ | ~~Base-unit quantity on the ledger~~ | ✅ **Closed** — dedicated Unit Master, **no conversion** |
 | ~~Inter-location transfer~~ | ~~Q-19~~ | ~~A ninth transaction type~~ | ✅ **Closed** — **not required**, not in scope. Eight types only |
 
-**The schema is settled.** Every question that determined column shape is now closed:
+**The schema is completely settled.** Every question that determined column shape, constraints, and numbering is now closed:
 
 | Settled | Outcome |
 | --- | --- |
 | Q-03 | Stock references `stock_location_id`; branch/warehouse optional (ADR-013) |
 | Q-05 | Discount before GST; CGST/SGST vs IGST by place of supply (ADR-015) |
 | Q-05a | `round_off_amount` is a separate **entered** signed column, never `ROUND()` |
+| Q-06 | Item code can be reused after deletion (`WHERE is_deleted = false`) |
+| Q-07 & Q-08 | Prefixed continuous numbering (`PUR-2026-0046`), no yearly reset |
 | Q-15 | One unit per item, **no conversion columns** |
 | Q-19 | Eight transaction types, **no `TRANSFER`** |
 | Q-22 | One legal entity — **no `company_id`** on documents, masters or unique keys |
+| Q-23 | Nullable `hsn_sac_code` column on `raw_materials` and `finished_products` |
 
-Still open, but each affects a single constraint rather than the table shape: **Q-06** (item-code reuse →
-whether the unique key includes `is_deleted`), **Q-07** (numbering sequence), **BR-STK-013** (whether
-`ck_stock_balances__non_negative` stays), and **Q-23** (HSN/SAC columns — see below).
-
-> **⚠️ Q-23 — HSN/SAC.** The client sample invoice carries an **HSN/SAC code per line** (`7013`) and an
-> **HSN-wise tax summary**. The business source document never mentions it, so it is not yet in the tables
-> above. It is a GST-invoice requirement, not an optional extra — confirm and add `hsn_sac_code` to the item
-> masters before the migration is written.
+Remaining open for stock ledger: **BR-STK-013** (whether `ck_stock_balances__non_negative` stays).
