@@ -14,6 +14,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { MastersModule } from './modules/masters/masters.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { PurchasesModule } from './modules/purchases/purchases.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
     IdentityModule,
     MastersModule,
     InventoryModule,
+    PurchasesModule,
   ],
   providers: [
     AppLogger,

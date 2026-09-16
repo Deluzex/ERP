@@ -68,6 +68,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   final List<_LineItemDraft> _items = [];
   String? _attachmentName;
   String? _attachmentSize;
+  bool _isSubmitting = false;
 
   Future<void> _pickAttachmentFile() async {
     try {
@@ -155,18 +156,24 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     }
   }
 
-  double get _totalAmount => _items.fold(0.0, (sum, item) => sum + item.lineTotal);
-  double get _subtotalAmount => _items.fold(0.0, (sum, item) => sum + item.subtotal);
-  double get _totalTaxAmount => _totalAmount - _subtotalAmount;
-  double get _cgstAmount => _isInterStateTax ? 0.0 : (_totalTaxAmount / 2.0);
-  double get _sgstAmount => _isInterStateTax ? 0.0 : (_totalTaxAmount / 2.0);
-  double get _igstAmount => _isInterStateTax ? _totalTaxAmount : 0.0;
-
+  double get _subtotalAmount => _items.fold(0.0, (sum, i) => sum + i.subtotal);
+  double get _cgstAmount => _isInterStateTax ? 0.0 : _items.fold(0.0, (sum, i) => sum + ((i.subtotal * (i.gstPercent / 2.0)) / 100.0));
+  double get _sgstAmount => _isInterStateTax ? 0.0 : _items.fold(0.0, (sum, i) => sum + ((i.subtotal * (i.gstPercent / 2.0)) / 100.0));
+  double get _igstAmount => _isInterStateTax ? _items.fold(0.0, (sum, i) => sum + ((i.subtotal * i.gstPercent) / 100.0)) : 0.0;
+  double get _gstTotal => _cgstAmount + _sgstAmount + _igstAmount;
+  double get _totalAmount => _subtotalAmount + _gstTotal;
   double get _paidAmount => double.tryParse(_paidAmountCtrl.text.trim()) ?? 0.0;
   double get _pendingAmount => (_totalAmount - _paidAmount).clamp(0.0, double.infinity);
 
-  void _savePurchase(bool isDraft) {
+  Future<void> _savePurchase(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add at least one line item to purchase order')),
+      );
+      return;
+    }
+
     final db = ref.read(databaseServiceProvider);
     final vendor = db.vendors.firstWhere((v) => v.id == _selectedVendorId, orElse: () => db.vendors.first);
 
@@ -237,27 +244,45 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       createdAt: DateTime.now(),
     );
 
-    db.createPurchase(purchase);
+    setState(() => _isSubmitting = true);
+    try {
+      await db.createPurchaseAsync(purchase);
 
-    final containsFinished = purchaseItems.any((it) => it.itemType == PurchaseItemType.finishedProduct);
-    final containsRaw = purchaseItems.any((it) => it.itemType == PurchaseItemType.rawMaterial);
-    String stockMsg = 'Stock updated!';
-    if (containsFinished && containsRaw) {
-      stockMsg = 'Raw Material & Finished Goods stock successfully updated!';
-    } else if (containsFinished) {
-      stockMsg = 'Finished Goods stock inwarded directly to Finished Inventory!';
-    } else {
-      stockMsg = 'Raw Material stock inwarded to Raw Materials inventory!';
+      if (mounted) {
+        final containsFinished = purchaseItems.any((it) => it.itemType == PurchaseItemType.finishedProduct);
+        final containsRaw = purchaseItems.any((it) => it.itemType == PurchaseItemType.rawMaterial);
+        String stockMsg = 'Stock updated!';
+        if (containsFinished && containsRaw) {
+          stockMsg = 'Raw Material & Finished Goods stock successfully updated!';
+        } else if (containsFinished) {
+          stockMsg = 'Finished Goods stock inwarded directly to Finished Inventory!';
+        } else {
+          stockMsg = 'Raw Material stock inwarded to Raw Materials inventory!';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isDraft ? 'Draft Purchase Order Saved' : 'Purchase Saved! $stockMsg'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+
+        ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving purchase: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isDraft ? 'Draft Purchase Order Saved' : 'Purchase Saved! $stockMsg'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-
-    ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
   }
 
   @override
@@ -288,19 +313,21 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                     ErpButton(
                       text: 'Cancel',
                       isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
                     ),
                     const SizedBox(width: 12),
                     ErpButton(
                       text: 'Save Draft',
                       isOutlined: true,
-                      onPressed: () => _savePurchase(true),
+                      onPressed: _isSubmitting ? null : () => _savePurchase(true),
                     ),
                     const SizedBox(width: 12),
                     ErpButton(
-                      text: 'Save & Inward Stock',
-                      icon: Icons.check,
-                      onPressed: () => _savePurchase(false),
+                      text: _isSubmitting ? 'Saving & Inwarding...' : 'Save & Inward Stock',
+                      icon: _isSubmitting ? null : Icons.check,
+                      onPressed: _isSubmitting ? null : () => _savePurchase(false),
                     ),
                   ],
                 ),

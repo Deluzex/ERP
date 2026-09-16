@@ -303,7 +303,7 @@ export class FinishedProductsService {
       unitId: r.unit_id,
       unit: r.unit_symbol,
       hsnSacCode: r.hsn_sac_code,
-      currentStock: Money.formatQuantity(r.opening_stock),
+      currentStock: Money.formatQuantity(r.current_stock ?? r.opening_stock),
       openingStock: Money.formatQuantity(r.opening_stock),
       minimumStock: Money.formatQuantity(r.minimum_stock),
       costPrice: Money.format(r.cost_price),

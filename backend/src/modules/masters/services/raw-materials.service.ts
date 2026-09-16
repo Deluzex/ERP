@@ -301,7 +301,7 @@ export class RawMaterialsService {
   }
 
   private mapRow(r: any): RawMaterialRecord {
-    const openingStock = parseFloat(r.opening_stock) || 0;
+    const currentStock = parseFloat(r.current_stock ?? r.opening_stock) || 0;
     const minStock = parseFloat(r.minimum_stock) || 0;
 
     return {
@@ -313,14 +313,14 @@ export class RawMaterialsService {
       unitId: r.unit_id,
       unit: r.unit_symbol,
       hsnSacCode: r.hsn_sac_code,
-      currentStock: Money.formatQuantity(r.opening_stock),
+      currentStock: Money.formatQuantity(r.current_stock ?? r.opening_stock),
       openingStock: Money.formatQuantity(r.opening_stock),
       minimumStock: Money.formatQuantity(r.minimum_stock),
       reorderLevel: Money.formatQuantity(r.reorder_level),
       defaultPurchasePrice: Money.format(r.default_purchase_price),
       gstPercent: parseFloat(r.gst_percent) || 18.0,
       preferredVendorIds: r.preferred_vendor_ids || [],
-      isLowStock: openingStock <= minStock,
+      isLowStock: currentStock <= minStock,
       isDeleted: r.is_deleted,
       deletedAt: r.deleted_at,
       createdAt: r.created_at,

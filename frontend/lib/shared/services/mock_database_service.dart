@@ -27,6 +27,7 @@ import '../../core/api/roles_api_service.dart';
 import '../../core/api/users_api_service.dart';
 import '../../core/api/vendors_api_service.dart';
 import '../../core/api/inventory_api_service.dart';
+import '../../core/api/purchases_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
@@ -3854,6 +3855,7 @@ class MockDatabaseService extends ChangeNotifier {
   final RolesApiService _rolesApi = RolesApiService();
   final UsersApiService _usersApi = UsersApiService();
   final InventoryApiService _inventoryApi = InventoryApiService();
+  final PurchasesApiService _purchasesApi = PurchasesApiService();
 
   bool _isLoadingVendors = false;
   bool get isLoadingVendors => _isLoadingVendors;
@@ -3879,6 +3881,7 @@ class MockDatabaseService extends ChangeNotifier {
         loadStockMovements(forceRefresh: forceRefresh),
         loadStockAdjustments(forceRefresh: forceRefresh),
         loadLowStockAlerts(forceRefresh: forceRefresh),
+        loadPurchases(forceRefresh: forceRefresh),
       ]);
     } catch (e) {
       if (kDebugMode) {
@@ -4945,5 +4948,86 @@ class MockDatabaseService extends ChangeNotifier {
   bool checkUserPermission(AppUser user, ErpModule module, ErpAction action) {
     clearExpiredTemporaryGrants();
     return user.hasPermission(module, action, roles, temporaryGrants);
+  }
+
+  // -------------------------------------------------------------
+  // Purchases Live API
+  // -------------------------------------------------------------
+  bool _isLoadingPurchases = false;
+  bool get isLoadingPurchases => _isLoadingPurchases;
+
+  Future<void> loadPurchases({
+    bool forceRefresh = false,
+    String? search,
+    String? status,
+    String? purchaseType,
+    String? vendorId,
+  }) async {
+    _isLoadingPurchases = true;
+    try {
+      final res = await _purchasesApi.getPurchases(
+        search: search,
+        status: status,
+        purchaseType: purchaseType,
+        vendorId: vendorId,
+      );
+      final List<Purchase> remote = res['purchases'] as List<Purchase>? ?? [];
+      purchases = remote;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadPurchases fallback: $e');
+    } finally {
+      _isLoadingPurchases = false;
+    }
+  }
+
+  Future<Purchase> createPurchaseAsync(Purchase purchase) async {
+    try {
+      final created = await _purchasesApi.createPurchase(purchase);
+      purchases.removeWhere((p) => p.id == created.id);
+      purchases.insert(0, created);
+      // Refresh masters, vendors, inventory and movements
+      await Future.wait([
+        loadVendors(forceRefresh: true),
+        loadRawMaterials(forceRefresh: true),
+        loadFinishedProducts(forceRefresh: true),
+        loadStockMovements(forceRefresh: true),
+      ]);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] createPurchaseAsync remote failed, fallback to local: $e');
+      createPurchase(purchase);
+      return purchase;
+    }
+  }
+
+  Future<Purchase> updatePurchaseStatusAsync(
+    String id, {
+    required String status,
+    String? cancelReason,
+  }) async {
+    try {
+      final updated = await _purchasesApi.updatePurchaseStatus(
+        id,
+        status: status,
+        cancelReason: cancelReason,
+      );
+      final idx = purchases.indexWhere((p) => p.id == id);
+      if (idx != -1) {
+        purchases[idx] = updated;
+      }
+      await Future.wait([
+        loadVendors(forceRefresh: true),
+        loadRawMaterials(forceRefresh: true),
+        loadFinishedProducts(forceRefresh: true),
+        loadStockMovements(forceRefresh: true),
+      ]);
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updatePurchaseStatusAsync remote failed: $e');
+      rethrow;
+    }
   }
 }

@@ -124,6 +124,50 @@ class PurchaseLineItem {
       lineTotal: lineTotal ?? this.lineTotal,
     );
   }
+
+  factory PurchaseLineItem.fromJson(Map<String, dynamic> json) {
+    return PurchaseLineItem(
+      itemType: _parsePurchaseItemType(json['itemType'] ?? json['item_type']),
+      rawMaterialId: json['rawMaterialId']?.toString() ?? json['raw_material_id']?.toString(),
+      rawMaterialName: json['rawMaterialName']?.toString() ?? json['raw_material_name']?.toString(),
+      rawMaterialCode: json['rawMaterialCode']?.toString() ?? json['raw_material_code']?.toString(),
+      finishedProductId: json['finishedProductId']?.toString() ?? json['finished_product_id']?.toString(),
+      finishedProductName: json['finishedProductName']?.toString() ?? json['finished_product_name']?.toString(),
+      finishedProductCode: json['finishedProductCode']?.toString() ?? json['finished_product_code']?.toString(),
+      quantity: double.tryParse(json['quantity']?.toString() ?? '0') ?? 0.0,
+      unit: json['unit']?.toString() ?? 'kg',
+      rate: double.tryParse(json['rate']?.toString() ?? '0') ?? 0.0,
+      discountAmount: double.tryParse(json['discountAmount']?.toString() ?? json['discount_amount']?.toString() ?? '0') ?? 0.0,
+      gstPercent: double.tryParse(json['gstPercent']?.toString() ?? json['gst_percent']?.toString() ?? '18') ?? 18.0,
+      taxableAmount: double.tryParse(json['taxableAmount']?.toString() ?? json['taxable_amount']?.toString() ?? '0'),
+      cgstAmount: double.tryParse(json['cgstAmount']?.toString() ?? json['cgst_amount']?.toString() ?? '0'),
+      sgstAmount: double.tryParse(json['sgstAmount']?.toString() ?? json['sgst_amount']?.toString() ?? '0'),
+      igstAmount: double.tryParse(json['igstAmount']?.toString() ?? json['igst_amount']?.toString() ?? '0'),
+      lineTotal: double.tryParse(json['lineTotal']?.toString() ?? json['line_total']?.toString() ?? '0') ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'itemType': itemType.name,
+      if (rawMaterialId != null) 'rawMaterialId': rawMaterialId,
+      if (rawMaterialName != null) 'rawMaterialName': rawMaterialName,
+      if (rawMaterialCode != null) 'rawMaterialCode': rawMaterialCode,
+      if (finishedProductId != null) 'finishedProductId': finishedProductId,
+      if (finishedProductName != null) 'finishedProductName': finishedProductName,
+      if (finishedProductCode != null) 'finishedProductCode': finishedProductCode,
+      'quantity': quantity,
+      'unit': unit,
+      'rate': rate,
+      'discountAmount': discountAmount,
+      'gstPercent': gstPercent,
+      'taxableAmount': taxableAmount,
+      'cgstAmount': cgstAmount,
+      'sgstAmount': sgstAmount,
+      'igstAmount': igstAmount,
+      'lineTotal': lineTotal,
+    };
+  }
 }
 
 class Purchase {
@@ -270,5 +314,125 @@ class Purchase {
       projectName: projectName ?? this.projectName,
       createdAt: createdAt ?? this.createdAt,
     );
+  }
+
+  factory Purchase.fromJson(Map<String, dynamic> json) {
+    var rawItems = json['items'] as List<dynamic>? ?? [];
+    List<PurchaseLineItem> parsedItems = rawItems
+        .map((i) => PurchaseLineItem.fromJson(i as Map<String, dynamic>))
+        .toList();
+
+    return Purchase(
+      id: json['id']?.toString() ?? '',
+      purchaseNumber: json['purchaseNumber']?.toString() ?? json['purchase_number']?.toString() ?? '',
+      purchaseDate: json['purchaseDate'] != null
+          ? DateTime.tryParse(json['purchaseDate'].toString()) ?? DateTime.now()
+          : (json['purchase_date'] != null ? DateTime.tryParse(json['purchase_date'].toString()) ?? DateTime.now() : DateTime.now()),
+      vendorId: json['vendorId']?.toString() ?? json['vendor_id']?.toString() ?? '',
+      vendorName: json['vendorName']?.toString() ?? json['vendor_name']?.toString() ?? '',
+      vendorCompanyName: json['vendorCompanyName']?.toString() ?? json['vendor_company_name']?.toString(),
+      vendorInvoiceNumber: json['vendorInvoiceNumber']?.toString() ?? json['vendor_invoice_number']?.toString() ?? '',
+      invoiceDate: json['invoiceDate'] != null
+          ? DateTime.tryParse(json['invoiceDate'].toString()) ?? DateTime.now()
+          : (json['invoice_date'] != null ? DateTime.tryParse(json['invoice_date'].toString()) ?? DateTime.now() : DateTime.now()),
+      purchaseType: _parsePurchaseItemType(json['purchaseType'] ?? json['purchase_type']),
+      items: parsedItems,
+      subtotalAmount: double.tryParse(json['subtotalAmount']?.toString() ?? json['subtotal_amount']?.toString() ?? '0'),
+      discountAmount: double.tryParse(json['discountAmount']?.toString() ?? json['discount_amount']?.toString() ?? '0') ?? 0.0,
+      taxableAmount: double.tryParse(json['taxableAmount']?.toString() ?? json['taxable_amount']?.toString() ?? '0'),
+      cgstAmount: double.tryParse(json['cgstAmount']?.toString() ?? json['cgst_amount']?.toString() ?? '0'),
+      sgstAmount: double.tryParse(json['sgstAmount']?.toString() ?? json['sgst_amount']?.toString() ?? '0'),
+      igstAmount: double.tryParse(json['igstAmount']?.toString() ?? json['igst_amount']?.toString() ?? '0'),
+      gstAmount: double.tryParse(json['gstAmount']?.toString() ?? json['gst_amount']?.toString() ?? '0'),
+      totalAmount: double.tryParse(json['totalAmount']?.toString() ?? json['total_amount']?.toString() ?? '0') ?? 0.0,
+      paidAmount: double.tryParse(json['paidAmount']?.toString() ?? json['paid_amount']?.toString() ?? '0') ?? 0.0,
+      pendingAmount: double.tryParse(json['pendingAmount']?.toString() ?? json['pending_amount']?.toString() ?? '0') ?? 0.0,
+      paymentMode: _parsePaymentMode(json['paymentMode'] ?? json['payment_mode']),
+      status: _parsePurchaseStatus(json['status']),
+      notes: json['notes']?.toString(),
+      attachmentUrl: json['attachmentUrl']?.toString() ?? json['attachment_url']?.toString(),
+      projectId: json['projectId']?.toString() ?? json['project_id']?.toString(),
+      projectName: json['projectName']?.toString() ?? json['project_name']?.toString(),
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
+          : (json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now() : DateTime.now()),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'vendorId': vendorId,
+      'vendorName': vendorName,
+      'vendorInvoiceNumber': vendorInvoiceNumber,
+      'purchaseDate': purchaseDate.toIso8601String(),
+      'invoiceDate': invoiceDate.toIso8601String(),
+      'purchaseType': purchaseType.name,
+      'items': items.map((i) => i.toJson()).toList(),
+      'subtotalAmount': subtotalAmount,
+      'discountAmount': discountAmount,
+      'taxableAmount': taxableAmount,
+      'cgstAmount': cgstAmount,
+      'sgstAmount': sgstAmount,
+      'igstAmount': igstAmount,
+      'gstAmount': gstAmount,
+      'totalAmount': totalAmount,
+      'paidAmount': paidAmount,
+      'pendingAmount': pendingAmount,
+      'paymentMode': paymentMode.name,
+      'status': status.name,
+      if (notes != null) 'notes': notes,
+      if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
+      if (projectId != null) 'projectId': projectId,
+      if (projectName != null) 'projectName': projectName,
+    };
+  }
+}
+
+PurchaseStatus _parsePurchaseStatus(dynamic val) {
+  final str = val?.toString();
+  switch (str) {
+    case 'draft':
+      return PurchaseStatus.draft;
+    case 'saved':
+      return PurchaseStatus.saved;
+    case 'partialPaid':
+      return PurchaseStatus.partialPaid;
+    case 'paid':
+      return PurchaseStatus.paid;
+    case 'cancelled':
+      return PurchaseStatus.cancelled;
+    default:
+      return PurchaseStatus.saved;
+  }
+}
+
+PurchaseItemType _parsePurchaseItemType(dynamic val) {
+  final str = val?.toString();
+  switch (str) {
+    case 'finishedProduct':
+      return PurchaseItemType.finishedProduct;
+    case 'rawMaterial':
+    default:
+      return PurchaseItemType.rawMaterial;
+  }
+}
+
+PaymentMode _parsePaymentMode(dynamic val) {
+  final str = val?.toString();
+  switch (str) {
+    case 'cash':
+      return PaymentMode.cash;
+    case 'bankTransfer':
+      return PaymentMode.bankTransfer;
+    case 'cheque':
+      return PaymentMode.cheque;
+    case 'upi':
+      return PaymentMode.upi;
+    case 'credit':
+      return PaymentMode.credit;
+    case 'creditNote':
+      return PaymentMode.creditNote;
+    default:
+      return PaymentMode.credit;
   }
 }
