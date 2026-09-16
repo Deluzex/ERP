@@ -26,6 +26,7 @@ import '../../core/api/raw_materials_api_service.dart';
 import '../../core/api/roles_api_service.dart';
 import '../../core/api/users_api_service.dart';
 import '../../core/api/vendors_api_service.dart';
+import '../../core/api/inventory_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
@@ -3852,13 +3853,14 @@ class MockDatabaseService extends ChangeNotifier {
   final PartiesApiService _partiesApi = PartiesApiService();
   final RolesApiService _rolesApi = RolesApiService();
   final UsersApiService _usersApi = UsersApiService();
+  final InventoryApiService _inventoryApi = InventoryApiService();
 
   bool _isLoadingVendors = false;
   bool get isLoadingVendors => _isLoadingVendors;
   bool _isLoadingMasters = false;
   bool get isLoadingMasters => _isLoadingMasters;
 
-  /// Loads all Phase 1 masters and RBAC identity from NestJS live backend
+  /// Loads all Phase 1 masters and Phase 2 inventory from NestJS live backend
   Future<void> loadAllMasters({bool forceRefresh = false}) async {
     if (_isLoadingMasters) return;
     _isLoadingMasters = true;
@@ -3874,6 +3876,9 @@ class MockDatabaseService extends ChangeNotifier {
         loadCustomers(forceRefresh: forceRefresh),
         loadDealers(forceRefresh: forceRefresh),
         loadArchitects(forceRefresh: forceRefresh),
+        loadStockMovements(forceRefresh: forceRefresh),
+        loadStockAdjustments(forceRefresh: forceRefresh),
+        loadLowStockAlerts(forceRefresh: forceRefresh),
       ]);
     } catch (e) {
       if (kDebugMode) {
@@ -4324,6 +4329,146 @@ class MockDatabaseService extends ChangeNotifier {
         debugPrint('[MockDatabaseService] deleteVendor API failed: $e');
       }
       rethrow;
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Inventory & Stock Movement Live API
+  // -------------------------------------------------------------
+  Future<void> loadStockMovements({
+    String? itemId,
+    ItemType? itemType,
+    StockMovementType? transactionType,
+    String? search,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      final remote = await _inventoryApi.getStockMovements(
+        itemId: itemId,
+        itemType: itemType,
+        transactionType: transactionType,
+        search: search,
+      );
+      stockMovements = remote;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadStockMovements fallback: $e');
+    }
+  }
+
+  Future<void> loadStockAdjustments({bool forceRefresh = false}) async {
+    try {
+      final remote = await _inventoryApi.getStockAdjustments();
+      stockAdjustments = remote;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadStockAdjustments fallback: $e');
+    }
+  }
+
+  Future<StockAdjustment> performStockAdjustmentAsync(StockAdjustment adj) async {
+    try {
+      final created = await _inventoryApi.performStockAdjustment(
+        itemId: adj.itemId,
+        itemType: adj.itemType,
+        adjustedStockAfter: adj.adjustedStockAfter,
+        reason: adj.reason,
+        remarks: adj.remarks,
+      );
+      stockAdjustments.insert(0, created);
+
+      // Synchronize local item balance
+      if (created.itemType == ItemType.rawMaterial) {
+        final rmIdx = rawMaterials.indexWhere((r) => r.id == created.itemId);
+        if (rmIdx != -1) {
+          rawMaterials[rmIdx] = rawMaterials[rmIdx].copyWith(
+            currentStock: created.adjustedStockAfter,
+            updatedAt: DateTime.now(),
+          );
+        }
+      } else {
+        final fpIdx = finishedProducts.indexWhere((f) => f.id == created.itemId);
+        if (fpIdx != -1) {
+          finishedProducts[fpIdx] = finishedProducts[fpIdx].copyWith(
+            currentStock: created.adjustedStockAfter,
+            updatedAt: DateTime.now(),
+          );
+        }
+      }
+
+      // Refresh stock movements to sync the new audit ledger entry
+      await loadStockMovements();
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] performStockAdjustment API failed: $e');
+      // Local fallback in offline mode
+      performStockAdjustment(adj);
+      return adj;
+    }
+  }
+
+  Future<void> loadLowStockAlerts({bool forceRefresh = false}) async {
+    try {
+      final remote = await _inventoryApi.getLowStockAlerts();
+      alertHistory = remote;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadLowStockAlerts fallback: $e');
+    }
+  }
+
+  Future<void> triggerLowStockAlertAsync({
+    required String itemId,
+    required ItemType itemType,
+    String? recipientId,
+    String? recipientName,
+    String? recipientWhatsApp,
+    String? customMessage,
+  }) async {
+    try {
+      await _inventoryApi.triggerLowStockAlert(
+        itemId: itemId,
+        itemType: itemType,
+        recipientId: recipientId,
+        recipientName: recipientName,
+        recipientWhatsApp: recipientWhatsApp,
+        customMessage: customMessage,
+      );
+      await loadLowStockAlerts(forceRefresh: true);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] triggerLowStockAlert fallback: $e');
+    }
+  }
+
+  Future<void> resolveLowStockAlertAsync(String alertId) async {
+    try {
+      await _inventoryApi.resolveLowStockAlert(alertId);
+      final idx = alertHistory.indexWhere((a) => a.id == alertId);
+      if (idx != -1) {
+        final cur = alertHistory[idx];
+        alertHistory[idx] = LowStockAlertRecord(
+          id: cur.id,
+          itemId: cur.itemId,
+          itemName: cur.itemName,
+          itemCode: cur.itemCode,
+          itemType: cur.itemType,
+          currentStock: cur.currentStock,
+          minimumStock: cur.minimumStock,
+          reorderLevel: cur.reorderLevel,
+          unit: cur.unit,
+          recipientName: cur.recipientName,
+          recipientWhatsApp: cur.recipientWhatsApp,
+          messageBody: cur.messageBody,
+          status: AlertRecordStatus.resolved,
+          triggeredAt: cur.triggeredAt,
+          resolvedAt: DateTime.now(),
+        );
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] resolveLowStockAlert fallback: $e');
+      resolveLowStockAlert(alertId);
     }
   }
 

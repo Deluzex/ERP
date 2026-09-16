@@ -28,6 +28,14 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
   StockLedgerCategory _selectedCategory = StockLedgerCategory.all;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadStockMovements();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
 

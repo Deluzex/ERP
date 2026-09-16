@@ -22,6 +22,14 @@ class StockAdjustmentScreen extends ConsumerStatefulWidget {
 class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
   String _searchQuery = '';
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadStockAdjustments();
+    });
+  }
+
   void _openCreateAdjustmentDialog() {
     final db = ref.read(databaseServiceProvider);
     ItemType selectedItemType = ItemType.finishedProduct;
@@ -223,7 +231,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                       createdAt: DateTime.now(),
                     );
 
-                    db.performStockAdjustment(adjustment);
+                    db.performStockAdjustmentAsync(adjustment);
                     Navigator.of(ctx).pop();
                   },
                 ),

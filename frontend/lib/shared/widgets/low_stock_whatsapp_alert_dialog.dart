@@ -5,6 +5,7 @@ import '../../app/theme/app_radius.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/models/finished_product_model.dart';
 import '../../core/models/raw_material_model.dart';
+import '../../core/models/stock_movement_model.dart';
 import '../../core/models/whatsapp_models.dart';
 import '../../core/utils/document_sharing_service.dart';
 import '../../core/utils/id_generator.dart';
@@ -74,6 +75,15 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
       recipientName: recipient.recipientName,
       recipientWhatsApp: recipient.whatsappNumber,
       messageBody: message,
+    );
+
+    db.triggerLowStockAlertAsync(
+      itemId: item.id as String,
+      itemType: isRawMaterial ? ItemType.rawMaterial : ItemType.finishedProduct,
+      recipientId: recipient.id,
+      recipientName: recipient.recipientName,
+      recipientWhatsApp: recipient.whatsappNumber,
+      customMessage: message,
     );
 
     DocumentSharingService.shareToWhatsApp(
@@ -441,7 +451,7 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
             if (a.status == AlertRecordStatus.sent)
               TextButton(
                 child: const Text('Mark Resolved', style: TextStyle(fontSize: 11)),
-                onPressed: () => db.resolveLowStockAlert(a.id),
+                onPressed: () => db.resolveLowStockAlertAsync(a.id),
               )
             else
               const Text('Restored', style: TextStyle(fontSize: 11, color: AppColors.success)),

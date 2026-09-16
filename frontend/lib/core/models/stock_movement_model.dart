@@ -81,4 +81,51 @@ class StockMovement {
 
   DateTime get timestamp => date;
   double get quantityChanged => stockIn > 0 ? stockIn : stockOut;
+
+  factory StockMovement.fromJson(Map<String, dynamic> json) {
+    final itemTypeStr = json['itemType'] as String? ?? 'rawMaterial';
+    final txTypeStr = json['transactionType'] as String? ?? 'adjustment';
+
+    return StockMovement(
+      id: json['id'] as String? ?? '',
+      date: json['date'] != null ? DateTime.tryParse(json['date'] as String) ?? DateTime.now() : DateTime.now(),
+      itemId: json['itemId'] as String? ?? '',
+      itemName: json['itemName'] as String? ?? '',
+      itemCode: json['itemCode'] as String? ?? '',
+      itemType: ItemType.values.firstWhere(
+        (e) => e.name == itemTypeStr,
+        orElse: () => ItemType.rawMaterial,
+      ),
+      transactionType: StockMovementType.values.firstWhere(
+        (e) => e.name == txTypeStr,
+        orElse: () => StockMovementType.adjustment,
+      ),
+      referenceNumber: json['referenceNumber'] as String? ?? '',
+      stockIn: (json['stockIn'] as num?)?.toDouble() ?? 0.0,
+      stockOut: (json['stockOut'] as num?)?.toDouble() ?? 0.0,
+      currentBalance: (json['currentBalance'] as num?)?.toDouble() ?? 0.0,
+      unit: json['unit'] as String? ?? 'PCS',
+      notes: json['notes'] as String?,
+      performedBy: json['performedBy'] as String? ?? 'System',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'date': date.toIso8601String(),
+      'itemId': itemId,
+      'itemName': itemName,
+      'itemCode': itemCode,
+      'itemType': itemType.name,
+      'transactionType': transactionType.name,
+      'referenceNumber': referenceNumber,
+      'stockIn': stockIn,
+      'stockOut': stockOut,
+      'currentBalance': currentBalance,
+      'unit': unit,
+      'notes': notes,
+      'performedBy': performedBy,
+    };
+  }
 }

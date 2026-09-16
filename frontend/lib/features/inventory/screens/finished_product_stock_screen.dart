@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/finished_product_model.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
@@ -24,6 +22,14 @@ class FinishedProductStockScreen extends ConsumerStatefulWidget {
 class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStockScreen> {
   String _searchQuery = '';
   bool _showOnlyLowStock = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadFinishedProducts();
+    });
+  }
 
   void _openEditDialog(FinishedProduct existing) {
     final db = ref.read(databaseServiceProvider);
@@ -171,7 +177,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                     final custVal = double.tryParse(custCtrl.text.trim()) ?? 0.0;
                     final catObj = db.categories.firstWhere((c) => c.id == selectedCategory, orElse: () => db.categories.first);
 
-                    db.updateFinishedProduct(existing.copyWith(
+                    db.updateFinishedProductAsync(existing.copyWith(
                       name: nameCtrl.text.trim(),
                       itemCode: codeCtrl.text.trim(),
                       categoryId: catObj.id,

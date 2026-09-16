@@ -23,6 +23,14 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
   String _searchQuery = '';
   bool _showOnlyLowStock = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadRawMaterials();
+    });
+  }
+
   void _openAddEditDialog([RawMaterial? existing]) {
     final db = ref.read(databaseServiceProvider);
     final isEdit = existing != null;
@@ -167,7 +175,7 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                     final prefVendorNames = prefVendor != null ? [prefVendor.name] : <String>[];
 
                     if (isEdit) {
-                      db.updateRawMaterial(existing.copyWith(
+                      db.updateRawMaterialAsync(existing.copyWith(
                         name: nameCtrl.text.trim(),
                         itemCode: codeCtrl.text.trim(),
                         categoryId: catObj.id,
@@ -192,12 +200,12 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                         reorderLevel: minVal * 1.5,
                         defaultPurchasePrice: priceVal,
                         gstPercent: 18.0,
-                        preferredVendorIds: [],
-                        preferredVendorNames: [],
+                        preferredVendorIds: prefVendorIds,
+                        preferredVendorNames: prefVendorNames,
                         createdAt: DateTime.now(),
                         updatedAt: DateTime.now(),
                       );
-                      db.addRawMaterial(newRm);
+                      db.addRawMaterialAsync(newRm);
                     }
                     Navigator.of(ctx).pop();
                   },

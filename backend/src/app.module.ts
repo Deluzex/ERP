@@ -13,6 +13,7 @@ import { AppLogger } from './core/logging/logger.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { MastersModule } from './modules/masters/masters.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { MastersModule } from './modules/masters/masters.module';
     AuthModule,
     IdentityModule,
     MastersModule,
+    InventoryModule,
   ],
   providers: [
     AppLogger,
