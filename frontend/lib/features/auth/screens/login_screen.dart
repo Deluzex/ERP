@@ -18,84 +18,84 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _identifierCtrl = TextEditingController(text: 'admin@deluxex.com');
-  final _passwordCtrl = TextEditingController(text: 'admin123');
+  final _identifierCtrl = TextEditingController(text: 'admin@deluzex.com');
+  final _passwordCtrl = TextEditingController(text: 'Admin@123');
   String? _selectedRoleId = 'admin';
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
   String? _errorMessage;
 
-  // Demo Preset Role Credentials
+  // Demo Preset Role Credentials matching Live PostgreSQL Seeds
   final List<Map<String, String>> _demoRoles = [
     {
       'roleId': 'admin',
       'roleName': 'Admin',
-      'email': 'admin@deluxex.com',
-      'pass': 'admin123',
+      'email': 'admin@deluzex.com',
+      'pass': 'Admin@123',
       'color': '0xFF1E3A8A',
       'icon': 'shield',
     },
     {
       'roleId': 'sales_manager',
       'roleName': 'Sales Manager',
-      'email': 'sales@deluxex.com',
-      'pass': 'sale123',
+      'email': 'sales@deluzex.com',
+      'pass': 'Admin@123',
       'color': '0xFF16A34A',
       'icon': 'point_of_sale',
     },
     {
       'roleId': 'inventory_manager',
       'roleName': 'Inventory Mgr',
-      'email': 'inventory@deluxex.com',
-      'pass': 'inv123',
+      'email': 'inventory@deluzex.com',
+      'pass': 'Admin@123',
       'color': '0xFF2563EB',
       'icon': 'inventory_2',
     },
     {
       'roleId': 'purchase_manager',
       'roleName': 'Purchase Mgr',
-      'email': 'purchase@deluxex.com',
-      'pass': 'pur123',
+      'email': 'purchase@deluzex.com',
+      'pass': 'Admin@123',
       'color': '0xFF9333EA',
       'icon': 'shopping_bag',
     },
     {
       'roleId': 'production_manager',
       'roleName': 'Production Mgr',
-      'email': 'production@deluxex.com',
-      'pass': 'prod123',
+      'email': 'production@deluzex.com',
+      'pass': 'Admin@123',
       'color': '0xFF4F46E5',
       'icon': 'precision_manufacturing',
     },
     {
       'roleId': 'accounts_manager',
       'roleName': 'Accounts / Finance',
-      'email': 'accounts@deluxex.com',
-      'pass': 'acc123',
+      'email': 'accounts@deluzex.com',
+      'pass': 'Admin@123',
       'color': '0xFF0D9488',
       'icon': 'payments',
     },
     {
       'roleId': 'project_manager',
       'roleName': 'Project Manager',
-      'email': 'projects@deluxex.com',
-      'pass': 'proj123',
+      'email': 'projects@deluzex.com',
+      'pass': 'Admin@123',
       'color': '0xFF7C3AED',
       'icon': 'apartment',
     },
     {
       'roleId': 'report_viewer',
       'roleName': 'Auditor / Reports',
-      'email': 'reports@deluxex.com',
-      'pass': 'rep123',
+      'email': 'reports@deluzex.com',
+      'pass': 'Admin@123',
       'color': '0xFFD97706',
       'icon': 'analytics',
     },
     {
       'roleId': 'data_entry',
       'roleName': 'Data Entry Clerk',
-      'email': 'dataentry@deluxex.com',
-      'pass': 'data123',
+      'email': 'dataentry@deluzex.com',
+      'pass': 'Admin@123',
       'color': '0xFF475569',
       'icon': 'keyboard',
     },

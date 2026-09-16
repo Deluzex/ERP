@@ -52,9 +52,16 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
       text: existing?.minimumStock.toString() ?? '10',
     );
 
-    String selectedCategory = existing?.categoryId ?? (db.categories.isNotEmpty ? db.categories.first.id : '');
-    String selectedUnitId = existing?.unitId ?? (db.units.isNotEmpty ? db.units.first.id : '');
-    String? selectedVendorId = existing?.preferredVendorIds.isNotEmpty == true ? existing!.preferredVendorIds.first : null;
+    String selectedCategory = (existing?.categoryId != null && db.categories.any((c) => c.id == existing!.categoryId))
+        ? existing!.categoryId
+        : (db.categories.isNotEmpty ? db.categories.first.id : '');
+    String selectedUnitId = (existing?.unitId != null && db.units.any((u) => u.id == existing!.unitId))
+        ? existing!.unitId!
+        : (db.units.isNotEmpty ? db.units.first.id : '');
+    String? selectedVendorId = (existing?.preferredVendorIds.isNotEmpty == true &&
+            db.vendors.any((v) => v.id == existing!.preferredVendorIds.first))
+        ? existing!.preferredVendorIds.first
+        : null;
     final formKey = GlobalKey<FormState>();
 
     bool isSubmitting = false;

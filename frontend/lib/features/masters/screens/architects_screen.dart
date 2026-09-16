@@ -55,7 +55,10 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final addrCtrl = TextEditingController(text: existing?.address ?? '');
     final rateCtrl = TextEditingController(text: existing?.defaultCommissionRate.toString() ?? '5.0');
-    String? linkedCustomerId = existing?.linkedCustomerId;
+    String? linkedCustomerId = (existing?.linkedCustomerId != null &&
+            db.customers.any((c) => c.id == existing!.linkedCustomerId))
+        ? existing!.linkedCustomerId
+        : null;
     bool isAlsoCustomer = existing?.isAlsoCustomer ?? (existing?.linkedCustomerId != null);
     final formKey = GlobalKey<FormState>();
 

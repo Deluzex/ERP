@@ -42,7 +42,10 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     final emailCtrl = TextEditingController(text: existing?.email ?? '');
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final addressCtrl = TextEditingController(text: existing?.address ?? '');
-    String? linkedArchitectId = existing?.linkedArchitectId;
+    String? linkedArchitectId = (existing?.linkedArchitectId != null &&
+            db.architects.any((a) => a.id == existing!.linkedArchitectId))
+        ? existing!.linkedArchitectId
+        : null;
     bool isAlsoArchitect = existing?.isAlsoArchitect ?? (existing?.linkedArchitectId != null);
     final formKey = GlobalKey<FormState>();
 

@@ -23,6 +23,8 @@ import '../../core/api/categories_units_api_service.dart';
 import '../../core/api/finished_products_api_service.dart';
 import '../../core/api/parties_api_service.dart';
 import '../../core/api/raw_materials_api_service.dart';
+import '../../core/api/roles_api_service.dart';
+import '../../core/api/users_api_service.dart';
 import '../../core/api/vendors_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
@@ -3848,18 +3850,22 @@ class MockDatabaseService extends ChangeNotifier {
   final RawMaterialsApiService _rawMaterialsApi = RawMaterialsApiService();
   final FinishedProductsApiService _finishedProductsApi = FinishedProductsApiService();
   final PartiesApiService _partiesApi = PartiesApiService();
+  final RolesApiService _rolesApi = RolesApiService();
+  final UsersApiService _usersApi = UsersApiService();
 
   bool _isLoadingVendors = false;
   bool get isLoadingVendors => _isLoadingVendors;
   bool _isLoadingMasters = false;
   bool get isLoadingMasters => _isLoadingMasters;
 
-  /// Loads all Phase 1 masters from NestJS live backend
+  /// Loads all Phase 1 masters and RBAC identity from NestJS live backend
   Future<void> loadAllMasters({bool forceRefresh = false}) async {
     if (_isLoadingMasters) return;
     _isLoadingMasters = true;
     try {
       await Future.wait([
+        loadRoles(forceRefresh: forceRefresh),
+        loadUsers(forceRefresh: forceRefresh),
         loadCategories(forceRefresh: forceRefresh),
         loadUnits(forceRefresh: forceRefresh),
         loadVendors(forceRefresh: forceRefresh),
@@ -3879,15 +3885,123 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
+  // Roles Live API
+  // -------------------------------------------------------------
+  Future<void> loadRoles({bool forceRefresh = false}) async {
+    try {
+      final remote = await _rolesApi.getRoles();
+      roles = remote;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadRoles fallback: $e');
+    }
+  }
+
+  Future<Role> addRoleAsync({
+    required String id,
+    required String name,
+    required String description,
+    required List<String> permissions,
+    String? defaultDashboardSection,
+  }) async {
+    final saved = await _rolesApi.createRole(
+      id: id,
+      name: name,
+      description: description,
+      permissions: permissions,
+      defaultDashboardSection: defaultDashboardSection,
+    );
+    roles.add(saved);
+    notifyListeners();
+    return saved;
+  }
+
+  Future<void> updateRolePermissionsAsync(String roleId, List<String> permissions) async {
+    await _rolesApi.updateRolePermissions(roleId, permissions);
+    await loadRoles(forceRefresh: true);
+  }
+
+  Future<void> deleteRoleAsync(String roleId) async {
+    await _rolesApi.deleteRole(roleId);
+    roles.removeWhere((r) => r.id == roleId);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Users Live API
+  // -------------------------------------------------------------
+  Future<void> loadUsers({bool forceRefresh = false}) async {
+    try {
+      final remote = await _usersApi.getUsers();
+      users = remote;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadUsers fallback: $e');
+    }
+  }
+
+  Future<AppUser> addUserAsync({
+    required String name,
+    required String email,
+    required String mobile,
+    required String password,
+    required String primaryRoleId,
+    List<String>? assignedRoleIds,
+  }) async {
+    final saved = await _usersApi.createUser(
+      name: name,
+      email: email,
+      mobile: mobile,
+      password: password,
+      primaryRoleId: primaryRoleId,
+      assignedRoleIds: assignedRoleIds,
+    );
+    users.insert(0, saved);
+    notifyListeners();
+    return saved;
+  }
+
+  Future<AppUser> updateUserAsync(
+    String id, {
+    String? name,
+    String? mobile,
+    String? primaryRoleId,
+    List<String>? assignedRoleIds,
+    bool? isActive,
+  }) async {
+    final updated = await _usersApi.updateUser(
+      id,
+      name: name,
+      mobile: mobile,
+      primaryRoleId: primaryRoleId,
+      assignedRoleIds: assignedRoleIds,
+      isActive: isActive,
+    );
+    final idx = users.indexWhere((u) => u.id == id);
+    if (idx != -1) {
+      users[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<void> deleteUserAsync(String id) async {
+    await _usersApi.deleteUser(id);
+    final idx = users.indexWhere((u) => u.id == id);
+    if (idx != -1) {
+      users[idx] = users[idx].copyWith(isActive: false);
+      notifyListeners();
+    }
+  }
+
+  // -------------------------------------------------------------
   // Categories Live API
   // -------------------------------------------------------------
   Future<void> loadCategories({bool forceRefresh = false}) async {
     try {
       final remote = await _categoriesUnitsApi.getCategories();
-      if (remote.isNotEmpty || forceRefresh) {
-        categories = remote;
-        notifyListeners();
-      }
+      categories = remote;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadCategories fallback: $e');
     }
@@ -3922,10 +4036,8 @@ class MockDatabaseService extends ChangeNotifier {
   Future<void> loadUnits({bool forceRefresh = false}) async {
     try {
       final remote = await _categoriesUnitsApi.getUnits();
-      if (remote.isNotEmpty || forceRefresh) {
-        units = remote;
-        notifyListeners();
-      }
+      units = remote;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadUnits fallback: $e');
     }
@@ -3950,10 +4062,8 @@ class MockDatabaseService extends ChangeNotifier {
   Future<void> loadRawMaterials({bool forceRefresh = false}) async {
     try {
       final remote = await _rawMaterialsApi.getRawMaterials(includeDeleted: true);
-      if (remote.isNotEmpty || forceRefresh) {
-        rawMaterials = remote;
-        notifyListeners();
-      }
+      rawMaterials = remote;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadRawMaterials fallback: $e');
     }
@@ -3991,10 +4101,8 @@ class MockDatabaseService extends ChangeNotifier {
   Future<void> loadFinishedProducts({bool forceRefresh = false}) async {
     try {
       final remote = await _finishedProductsApi.getFinishedProducts(includeDeleted: true);
-      if (remote.isNotEmpty || forceRefresh) {
-        finishedProducts = remote;
-        notifyListeners();
-      }
+      finishedProducts = remote;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadFinishedProducts fallback: $e');
     }
@@ -4032,10 +4140,8 @@ class MockDatabaseService extends ChangeNotifier {
   Future<void> loadCustomers({bool forceRefresh = false}) async {
     try {
       final remote = await _partiesApi.getCustomers(includeDeleted: true);
-      if (remote.isNotEmpty || forceRefresh) {
-        customers = remote;
-        notifyListeners();
-      }
+      customers = remote;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadCustomers fallback: $e');
     }
@@ -4073,10 +4179,8 @@ class MockDatabaseService extends ChangeNotifier {
   Future<void> loadDealers({bool forceRefresh = false}) async {
     try {
       final remote = await _partiesApi.getDealers(includeDeleted: true);
-      if (remote.isNotEmpty || forceRefresh) {
-        dealers = remote;
-        notifyListeners();
-      }
+      dealers = remote;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadDealers fallback: $e');
     }
@@ -4114,10 +4218,8 @@ class MockDatabaseService extends ChangeNotifier {
   Future<void> loadArchitects({bool forceRefresh = false}) async {
     try {
       final remote = await _partiesApi.getArchitects(includeDeleted: true);
-      if (remote.isNotEmpty || forceRefresh) {
-        architects = remote;
-        notifyListeners();
-      }
+      architects = remote;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadArchitects fallback: $e');
     }
@@ -4154,16 +4256,14 @@ class MockDatabaseService extends ChangeNotifier {
     linkArchitectAndCustomer(customerId: customerId, architectId: architectId);
   }
 
-  /// Loads vendors from NestJS live backend. Falls back to seeded list if offline.
+  /// Loads vendors from NestJS live backend.
   Future<void> loadVendors({bool forceRefresh = false}) async {
     if (_isLoadingVendors) return;
     _isLoadingVendors = true;
     try {
       final remoteVendors = await _vendorsApi.getVendors(includeDeleted: true);
-      if (remoteVendors.isNotEmpty || forceRefresh) {
-        vendors = remoteVendors;
-        notifyListeners();
-      }
+      vendors = remoteVendors;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[MockDatabaseService] Note: loadVendors falling back to local list ($e)');

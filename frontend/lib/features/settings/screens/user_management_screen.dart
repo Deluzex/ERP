@@ -12,6 +12,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/api/roles_api_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class UserManagementScreen extends ConsumerStatefulWidget {
@@ -32,6 +33,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadUsers();
+      ref.read(databaseServiceProvider).loadRoles();
+    });
   }
 
   @override
@@ -174,43 +179,46 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                 ErpButton(
                   text: isEdit ? 'Save Changes' : 'Create User',
                   icon: isEdit ? Icons.save : Icons.add,
-                  onPressed: () {
+                  onPressed: () async {
                     if (formKey.currentState!.validate()) {
-                      if (isEdit) {
-                        final updated = existing.copyWith(
-                          name: nameCtrl.text.trim(),
-                          email: emailCtrl.text.trim(),
-                          mobile: mobileCtrl.text.trim(),
-                          primaryRoleId: selectedPrimaryRoleId,
-                          assignedRoleIds: assignedRoleIds,
-                          isActive: isActive,
-                        );
-                        db.updateUser(updated);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('User ${updated.name} updated successfully!'), backgroundColor: AppColors.success),
-                        );
-                      } else {
-                        final salt = PasswordSecurity.generateSalt();
-                        final hash = PasswordSecurity.hashPassword(passwordCtrl.text.trim(), salt);
-                        final newUser = AppUser(
-                          id: 'USR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-                          name: nameCtrl.text.trim(),
-                          email: emailCtrl.text.trim(),
-                          mobile: mobileCtrl.text.trim(),
-                          passwordHash: hash,
-                          salt: salt,
-                          primaryRoleId: selectedPrimaryRoleId,
-                          assignedRoleIds: assignedRoleIds,
-                          isActive: isActive,
-                          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-                          createdAt: DateTime.now(),
-                        );
-                        db.addUser(newUser);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('New User ${newUser.name} created!'), backgroundColor: AppColors.success),
-                        );
+                      try {
+                        if (isEdit) {
+                          await db.updateUserAsync(
+                            existing.id,
+                            name: nameCtrl.text.trim(),
+                            mobile: mobileCtrl.text.trim(),
+                            primaryRoleId: selectedPrimaryRoleId,
+                            assignedRoleIds: assignedRoleIds,
+                            isActive: isActive,
+                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('User ${nameCtrl.text.trim()} updated successfully!'), backgroundColor: AppColors.success),
+                            );
+                          }
+                        } else {
+                          await db.addUserAsync(
+                            name: nameCtrl.text.trim(),
+                            email: emailCtrl.text.trim(),
+                            mobile: mobileCtrl.text.trim(),
+                            password: passwordCtrl.text.trim(),
+                            primaryRoleId: selectedPrimaryRoleId,
+                            assignedRoleIds: assignedRoleIds,
+                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('New User ${nameCtrl.text.trim()} created!'), backgroundColor: AppColors.success),
+                            );
+                          }
+                        }
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.danger),
+                          );
+                        }
                       }
-                      Navigator.of(ctx).pop();
                     }
                   },
                 ),
@@ -495,36 +503,40 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                             ErpButton(
                               text: isEdit ? 'Save Role Changes' : 'Create Role',
                               icon: Icons.check,
-                              onPressed: () {
+                              onPressed: () async {
                                 if (formKey.currentState!.validate()) {
-                                  if (isEdit) {
-                                    final updated = existing.copyWith(
-                                      name: nameCtrl.text.trim(),
-                                      description: descCtrl.text.trim(),
-                                      defaultDashboardSection: selectedDashboard,
-                                      isActive: isActive,
-                                      permissions: permMatrix,
-                                    );
-                                    db.updateRole(updated);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Role "${updated.name}" updated!'), backgroundColor: AppColors.success),
-                                    );
-                                  } else {
-                                    final newRole = Role(
-                                      id: 'role_${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-                                      name: nameCtrl.text.trim(),
-                                      description: descCtrl.text.trim(),
-                                      isSystemRole: false,
-                                      isActive: isActive,
-                                      defaultDashboardSection: selectedDashboard,
-                                      permissions: permMatrix,
-                                    );
-                                    db.addRole(newRole);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('New Role "${newRole.name}" created!'), backgroundColor: AppColors.success),
-                                    );
+                                  try {
+                                    final permStrings = RolesApiService.permissionMapToStrings(permMatrix);
+                                    if (isEdit) {
+                                      await db.updateRolePermissionsAsync(existing.id, permStrings);
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('Role "${existing.name}" permissions updated!'), backgroundColor: AppColors.success),
+                                        );
+                                      }
+                                    } else {
+                                      final roleId = 'role_${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+                                      await db.addRoleAsync(
+                                        id: roleId,
+                                        name: nameCtrl.text.trim(),
+                                        description: descCtrl.text.trim(),
+                                        permissions: permStrings,
+                                        defaultDashboardSection: selectedDashboard.name,
+                                      );
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('New Role "${nameCtrl.text.trim()}" created!'), backgroundColor: AppColors.success),
+                                        );
+                                      }
+                                    }
+                                    if (ctx.mounted) Navigator.of(ctx).pop();
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Role operation failed: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.danger),
+                                      );
+                                    }
                                   }
-                                  Navigator.of(ctx).pop();
                                 }
                               },
                             ),

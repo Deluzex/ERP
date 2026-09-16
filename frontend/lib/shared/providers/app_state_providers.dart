@@ -25,6 +25,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final db = ref.read(databaseServiceProvider);
       db.setCurrentUser(user);
       state = user;
+      db.loadAllMasters(forceRefresh: true);
 
       final role = db.getUserRole(user);
       ref.read(currentNavSectionProvider.notifier).state = role.defaultDashboardSection;

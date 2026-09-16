@@ -55,8 +55,12 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
       text: existing?.customerSellingPrice.toString() ?? '3200',
     );
 
-    String selectedCategory = existing?.categoryId ?? (db.categories.isNotEmpty ? db.categories.first.id : '');
-    String selectedUnitId = existing?.unitId ?? (db.units.isNotEmpty ? db.units.first.id : '');
+    String selectedCategory = (existing?.categoryId != null && db.categories.any((c) => c.id == existing!.categoryId))
+        ? existing!.categoryId
+        : (db.categories.isNotEmpty ? db.categories.first.id : '');
+    String selectedUnitId = (existing?.unitId != null && db.units.any((u) => u.id == existing!.unitId))
+        ? existing!.unitId!
+        : (db.units.isNotEmpty ? db.units.first.id : '');
     final formKey = GlobalKey<FormState>();
 
     bool isSubmitting = false;
