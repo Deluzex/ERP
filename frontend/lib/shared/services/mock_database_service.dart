@@ -28,6 +28,7 @@ import '../../core/api/users_api_service.dart';
 import '../../core/api/vendors_api_service.dart';
 import '../../core/api/inventory_api_service.dart';
 import '../../core/api/purchases_api_service.dart';
+import '../../core/api/production_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
@@ -3856,11 +3857,14 @@ class MockDatabaseService extends ChangeNotifier {
   final UsersApiService _usersApi = UsersApiService();
   final InventoryApiService _inventoryApi = InventoryApiService();
   final PurchasesApiService _purchasesApi = PurchasesApiService();
+  final ProductionApiService _productionApi = ProductionApiService();
 
   bool _isLoadingVendors = false;
   bool get isLoadingVendors => _isLoadingVendors;
   bool _isLoadingMasters = false;
   bool get isLoadingMasters => _isLoadingMasters;
+  bool _isLoadingProductionOrders = false;
+  bool get isLoadingProductionOrders => _isLoadingProductionOrders;
 
   /// Loads all Phase 1 masters and Phase 2 inventory from NestJS live backend
   Future<void> loadAllMasters({bool forceRefresh = false}) async {
@@ -3882,6 +3886,7 @@ class MockDatabaseService extends ChangeNotifier {
         loadStockAdjustments(forceRefresh: forceRefresh),
         loadLowStockAlerts(forceRefresh: forceRefresh),
         loadPurchases(forceRefresh: forceRefresh),
+        loadProductionOrders(forceRefresh: forceRefresh),
       ]);
     } catch (e) {
       if (kDebugMode) {
@@ -5029,5 +5034,101 @@ class MockDatabaseService extends ChangeNotifier {
       if (kDebugMode) debugPrint('[MockDatabaseService] updatePurchaseStatusAsync remote failed: $e');
       rethrow;
     }
+  }
+
+  // -------------------------------------------------------------
+  // Production Orders Live API
+  // -------------------------------------------------------------
+  Future<void> loadProductionOrders({bool forceRefresh = false}) async {
+    if (_isLoadingProductionOrders && !forceRefresh) return;
+    _isLoadingProductionOrders = true;
+    try {
+      final res = await _productionApi.getProductionOrders(limit: 100);
+      final remoteOrders = res['orders'] as List<ProductionOrder>? ?? [];
+      productionOrders = remoteOrders;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadProductionOrders fallback to local: $e');
+    } finally {
+      _isLoadingProductionOrders = false;
+    }
+  }
+
+  Future<ProductionOrder> completeProductionOrderAsync(ProductionOrder order) async {
+    try {
+      final payload = {
+        'productionNumber': order.productionNumber,
+        'finishedProductId': order.finishedProductId,
+        'plannedQuantity': order.plannedQuantity,
+        'actualQuantityProduced': order.actualQuantityProduced > 0 ? order.actualQuantityProduced : order.plannedQuantity,
+        'status': 'completed',
+        'rawMaterialCost': order.rawMaterialCost,
+        'labourCost': order.labourCost,
+        'otherExpenses': order.otherExpenses,
+        'productionDate': order.productionDate.toIso8601String(),
+        'salesOrderId': order.salesOrderId,
+        'projectId': order.projectId,
+        'notes': order.notes,
+        'rawMaterials': order.rawMaterialsUsed.map((m) => {
+          'rawMaterialId': m.rawMaterialId,
+          'quantityUsed': m.quantityUsed,
+          'unitCost': m.unitCost,
+        }).toList(),
+      };
+
+      final created = await _productionApi.createOrder(payload);
+      productionOrders.removeWhere((o) => o.id == created.id);
+      productionOrders.insert(0, created);
+
+      // Refresh raw materials, finished products, and stock movements
+      await Future.wait([
+        loadRawMaterials(forceRefresh: true),
+        loadFinishedProducts(forceRefresh: true),
+        loadStockMovements(forceRefresh: true),
+      ]);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] completeProductionOrderAsync remote failed, fallback: $e');
+      completeProductionOrder(order);
+      return order;
+    }
+  }
+
+  Future<ProductionOrder> deleteProductionOrderAsync({
+    required String orderId,
+    required String reason,
+  }) async {
+    try {
+      final cancelled = await _productionApi.cancelOrder(orderId, reason: reason);
+      final idx = productionOrders.indexWhere((o) => o.id == orderId);
+      if (idx != -1) {
+        productionOrders[idx] = cancelled;
+      }
+      // Refresh inventory & movements after rollback
+      await Future.wait([
+        loadRawMaterials(forceRefresh: true),
+        loadFinishedProducts(forceRefresh: true),
+        loadStockMovements(forceRefresh: true),
+      ]);
+      notifyListeners();
+      return cancelled;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] deleteProductionOrderAsync remote failed, fallback: $e');
+      deleteProductionOrder(orderId: orderId, reason: reason);
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getBomAsync(String finishedProductId) async {
+    return _productionApi.getBom(finishedProductId);
+  }
+
+  Future<Map<String, dynamic>> saveBomAsync(
+    String finishedProductId,
+    List<Map<String, dynamic>> items, {
+    String? notes,
+  }) async {
+    return _productionApi.saveBom(finishedProductId, items, notes: notes);
   }
 }

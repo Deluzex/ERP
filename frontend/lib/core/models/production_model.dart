@@ -23,6 +23,30 @@ class ProductionRawMaterialUsage {
     required this.unitCost,
     required this.totalCost,
   });
+
+  factory ProductionRawMaterialUsage.fromJson(Map<String, dynamic> json) {
+    return ProductionRawMaterialUsage(
+      rawMaterialId: json['rawMaterialId'] ?? json['raw_material_id'] ?? '',
+      rawMaterialName: json['rawMaterialName'] ?? json['raw_material_name'] ?? '',
+      rawMaterialCode: json['rawMaterialCode'] ?? json['raw_material_code'] ?? '',
+      quantityUsed: (json['quantityUsed'] ?? json['quantity_used'] ?? 0).toDouble(),
+      unit: json['unit'] ?? '',
+      unitCost: (json['unitCost'] ?? json['unit_cost'] ?? 0).toDouble(),
+      totalCost: (json['totalCost'] ?? json['total_cost'] ?? 0).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'rawMaterialId': rawMaterialId,
+      'rawMaterialName': rawMaterialName,
+      'rawMaterialCode': rawMaterialCode,
+      'quantityUsed': quantityUsed,
+      'unit': unit,
+      'unitCost': unitCost,
+      'totalCost': totalCost,
+    };
+  }
 }
 
 class ProductionOrder {
@@ -95,6 +119,90 @@ class ProductionOrder {
       case ProductionStatus.cancelled:
         return 'Cancelled';
     }
+  }
+
+  factory ProductionOrder.fromJson(Map<String, dynamic> json) {
+    var rawMaterialsList = <ProductionRawMaterialUsage>[];
+    final materialsRaw = json['rawMaterials'] ?? json['rawMaterialsUsed'];
+    if (materialsRaw is List) {
+      rawMaterialsList = materialsRaw
+          .map((item) => ProductionRawMaterialUsage.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+
+    ProductionStatus parsedStatus = ProductionStatus.planned;
+    final statusStr = (json['status'] ?? '').toString().toLowerCase();
+    if (statusStr == 'inprogress' || statusStr == 'in_progress') {
+      parsedStatus = ProductionStatus.inProgress;
+    } else if (statusStr == 'completed') {
+      parsedStatus = ProductionStatus.completed;
+    } else if (statusStr == 'cancelled') {
+      parsedStatus = ProductionStatus.cancelled;
+    }
+
+    return ProductionOrder(
+      id: json['id'] ?? '',
+      productionNumber: json['productionNumber'] ?? json['production_number'] ?? '',
+      finishedProductId: json['finishedProductId'] ?? json['finished_product_id'] ?? '',
+      finishedProductName: json['finishedProductName'] ?? json['finished_product_name'] ?? '',
+      finishedProductCode: json['finishedProductCode'] ?? json['finished_product_code'] ?? '',
+      unit: json['unit'] ?? 'Pcs',
+      plannedQuantity: (json['plannedQuantity'] ?? json['planned_quantity'] ?? 0).toDouble(),
+      actualQuantityProduced: (json['actualQuantityProduced'] ?? json['actual_quantity_produced'] ?? 0).toDouble(),
+      rawMaterialsUsed: rawMaterialsList,
+      rawMaterialCost: (json['rawMaterialCost'] ?? json['raw_material_cost'] ?? 0).toDouble(),
+      labourCost: (json['labourCost'] ?? json['labour_cost'] ?? 0).toDouble(),
+      otherExpenses: (json['otherExpenses'] ?? json['other_expenses'] ?? 0).toDouble(),
+      totalProductionCost: (json['totalProductionCost'] ?? json['total_production_cost'] ?? 0).toDouble(),
+      costPerUnit: (json['costPerUnit'] ?? json['cost_per_unit'] ?? 0).toDouble(),
+      productionDate: json['productionDate'] != null
+          ? DateTime.tryParse(json['productionDate'].toString()) ?? DateTime.now()
+          : (json['production_date'] != null
+              ? DateTime.tryParse(json['production_date'].toString()) ?? DateTime.now()
+              : DateTime.now()),
+      status: parsedStatus,
+      salesOrderId: json['salesOrderId'] ?? json['sales_order_id'],
+      salesOrderNumber: json['salesOrderNumber'] ?? json['sales_order_number'],
+      projectId: json['projectId'] ?? json['project_id'],
+      projectName: json['projectName'] ?? json['project_name'],
+      notes: json['notes'],
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
+      deletedReason: json['deletedReason'] ?? json['deleted_reason'],
+      deletedAt: json['deletedAt'] != null ? DateTime.tryParse(json['deletedAt'].toString()) : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'productionNumber': productionNumber,
+      'finishedProductId': finishedProductId,
+      'finishedProductName': finishedProductName,
+      'finishedProductCode': finishedProductCode,
+      'unit': unit,
+      'plannedQuantity': plannedQuantity,
+      'actualQuantityProduced': actualQuantityProduced,
+      'rawMaterials': rawMaterialsUsed.map((m) => m.toJson()).toList(),
+      'rawMaterialCost': rawMaterialCost,
+      'labourCost': labourCost,
+      'otherExpenses': otherExpenses,
+      'totalProductionCost': totalProductionCost,
+      'costPerUnit': costPerUnit,
+      'productionDate': productionDate.toIso8601String(),
+      'status': status.name,
+      'salesOrderId': salesOrderId,
+      'salesOrderNumber': salesOrderNumber,
+      'projectId': projectId,
+      'projectName': projectName,
+      'notes': notes,
+      'createdAt': createdAt.toIso8601String(),
+      'isDeleted': isDeleted,
+      'deletedReason': deletedReason,
+      'deletedAt': deletedAt?.toIso8601String(),
+    };
   }
 
   ProductionOrder copyWith({

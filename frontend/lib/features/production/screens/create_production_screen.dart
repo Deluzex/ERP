@@ -146,7 +146,10 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
   double get _actualQty => double.tryParse(_actualQtyCtrl.text.trim()) ?? 1.0;
   double get _costPerUnit => _actualQty > 0 ? _totalProductionCost / _actualQty : 0.0;
 
-  void _completeProduction() {
+  bool _isSubmitting = false;
+
+  Future<void> _completeProduction() async {
+    if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
     final db = ref.read(databaseServiceProvider);
     final fp = db.finishedProducts.firstWhere((p) => p.id == _selectedFinishedProductId, orElse: () => db.finishedProducts.first);
@@ -198,16 +201,30 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
       createdAt: DateTime.now(),
     );
 
-    db.completeProductionOrder(order);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Production Completed! ${Formatters.formatNumber(_actualQty)} ${fp.unit} added to Finished Goods stock.'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-
-    ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders;
+    setState(() => _isSubmitting = true);
+    try {
+      await db.completeProductionOrderAsync(order);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Production Completed! ${Formatters.formatNumber(_actualQty)} ${fp.unit} added to Finished Goods stock.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error completing production: $e'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override

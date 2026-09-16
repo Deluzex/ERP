@@ -15,6 +15,7 @@ import { IdentityModule } from './modules/identity/identity.module';
 import { MastersModule } from './modules/masters/masters.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { PurchasesModule } from './modules/purchases/purchases.module';
+import { ProductionModule } from './modules/production/production.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { PurchasesModule } from './modules/purchases/purchases.module';
     MastersModule,
     InventoryModule,
     PurchasesModule,
+    ProductionModule,
   ],
   providers: [
     AppLogger,

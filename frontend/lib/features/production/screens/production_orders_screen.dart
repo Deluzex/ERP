@@ -21,6 +21,14 @@ class ProductionOrdersScreen extends ConsumerStatefulWidget {
 class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen> {
   String _searchQuery = '';
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadProductionOrders();
+    });
+  }
+
   void _confirmDelete(ProductionOrder o) {
     showDialog(
       context: context,
@@ -34,13 +42,23 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () {
+            onPressed: () async {
               final db = ref.read(databaseServiceProvider);
-              db.deleteProductionOrder(orderId: o.id, reason: 'Draft deletion');
               Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Order ${o.productionNumber} deleted successfully.')),
-              );
+              try {
+                await db.deleteProductionOrderAsync(orderId: o.id, reason: 'Draft deletion');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Order ${o.productionNumber} deleted successfully.')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error deleting order: $e'), backgroundColor: AppColors.danger),
+                  );
+                }
+              }
             },
             child: const Text('Delete'),
           ),
@@ -82,14 +100,25 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () {
+            onPressed: () async {
               if (!formKey.currentState!.validate()) return;
+              final reason = reasonCtrl.text.trim();
               final db = ref.read(databaseServiceProvider);
-              db.deleteProductionOrder(orderId: o.id, reason: reasonCtrl.text.trim());
               Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Order ${o.productionNumber} cancelled & soft-deleted.')),
-              );
+              try {
+                await db.deleteProductionOrderAsync(orderId: o.id, reason: reason);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Order ${o.productionNumber} cancelled & soft-deleted.')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error cancelling order: $e'), backgroundColor: AppColors.danger),
+                  );
+                }
+              }
             },
             child: const Text('Confirm Cancellation'),
           ),
@@ -128,10 +157,21 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                   Text('Manufacturing work orders, raw material consumption, and unit costing', style: AppTextStyles.subtitle),
                 ],
               ),
-              ErpButton(
-                text: 'New Production Order',
-                icon: Icons.precision_manufacturing_outlined,
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
+              Row(
+                children: [
+                  ErpButton(
+                    text: 'Refresh',
+                    icon: Icons.refresh,
+                    isOutlined: true,
+                    onPressed: () => ref.read(databaseServiceProvider).loadProductionOrders(forceRefresh: true),
+                  ),
+                  const SizedBox(width: 8),
+                  ErpButton(
+                    text: 'New Production Order',
+                    icon: Icons.precision_manufacturing_outlined,
+                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
+                  ),
+                ],
               ),
             ],
           ),
