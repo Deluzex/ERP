@@ -10,11 +10,14 @@ import {
 import { Ctx } from '../../core/auth/ctx.decorator';
 import { RequestContext } from '../../core/auth/request-context';
 import { RequirePermission } from '../../core/auth/require-permission.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserScopesDto } from './dto/update-user-scopes.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
+@ApiTags('Identity - Users')
+@ApiBearerAuth('JWT-auth')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

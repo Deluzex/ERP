@@ -10,9 +10,12 @@ import {
 import { Ctx } from '../../../core/auth/ctx.decorator';
 import { RequestContext } from '../../../core/auth/request-context';
 import { RequirePermission } from '../../../core/auth/require-permission.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CreateCategoryDto, UpdateCategoryDto } from '../dto/category.dto';
 import { CategoriesService } from '../services/categories.service';
 
+@ApiTags('Masters - Categories')
+@ApiBearerAuth('JWT-auth')
 @Controller('masters/categories')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}

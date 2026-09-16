@@ -11,12 +11,15 @@ import {
 import { Ctx } from '../../../core/auth/ctx.decorator';
 import { RequestContext } from '../../../core/auth/request-context';
 import { RequirePermission } from '../../../core/auth/require-permission.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   CreateRawMaterialDto,
   UpdateRawMaterialDto,
 } from '../dto/raw-material.dto';
 import { RawMaterialsService } from '../services/raw-materials.service';
 
+@ApiTags('Masters - Raw Materials')
+@ApiBearerAuth('JWT-auth')
 @Controller('masters/raw-materials')
 export class RawMaterialsController {
   constructor(private readonly rawMaterialsService: RawMaterialsService) {}

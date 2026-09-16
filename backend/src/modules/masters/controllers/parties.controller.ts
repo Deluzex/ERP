@@ -11,6 +11,7 @@ import {
 import { Ctx } from '../../../core/auth/ctx.decorator';
 import { RequestContext } from '../../../core/auth/request-context';
 import { RequirePermission } from '../../../core/auth/require-permission.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   CreateArchitectDto,
   LinkArchitectCustomerDto,
@@ -20,6 +21,8 @@ import { CreateCustomerDto, UpdateCustomerDto } from '../dto/customer.dto';
 import { CreateDealerDto, UpdateDealerDto } from '../dto/dealer.dto';
 import { PartiesService } from '../services/parties.service';
 
+@ApiTags('Masters - Parties (Customers, Dealers, Architects)')
+@ApiBearerAuth('JWT-auth')
 @Controller('masters')
 export class PartiesController {
   constructor(private readonly partiesService: PartiesService) {}

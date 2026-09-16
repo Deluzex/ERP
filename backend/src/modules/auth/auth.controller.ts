@@ -10,12 +10,14 @@ import {
 import { Request } from 'express';
 import { AllowAuthenticated } from '../../core/auth/allow-authenticated.decorator';
 import { Ctx } from '../../core/auth/ctx.decorator';
-import { Public } from '../../core/auth/public.decorator';
 import { RequestContext } from '../../core/auth/request-context';
+import { Public } from '../../core/auth/public.decorator';
+import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 
+@ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

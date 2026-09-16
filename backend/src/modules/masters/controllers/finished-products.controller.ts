@@ -11,12 +11,15 @@ import {
 import { Ctx } from '../../../core/auth/ctx.decorator';
 import { RequestContext } from '../../../core/auth/request-context';
 import { RequirePermission } from '../../../core/auth/require-permission.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   CreateFinishedProductDto,
   UpdateFinishedProductDto,
 } from '../dto/finished-product.dto';
 import { FinishedProductsService } from '../services/finished-products.service';
 
+@ApiTags('Masters - Finished Products')
+@ApiBearerAuth('JWT-auth')
 @Controller('masters/finished-products')
 export class FinishedProductsController {
   constructor(

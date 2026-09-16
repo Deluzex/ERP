@@ -11,6 +11,7 @@ import {
 import { Ctx } from '../../../core/auth/ctx.decorator';
 import { RequestContext } from '../../../core/auth/request-context';
 import { RequirePermission } from '../../../core/auth/require-permission.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   CreateVendorDto,
   DeleteVendorDto,
@@ -18,6 +19,8 @@ import {
 } from '../dto/vendor.dto';
 import { VendorsService } from '../services/vendors.service';
 
+@ApiTags('Masters - Vendors')
+@ApiBearerAuth('JWT-auth')
 @Controller('masters/vendors')
 export class VendorsController {
   constructor(private readonly vendorsService: VendorsService) {}

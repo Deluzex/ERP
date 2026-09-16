@@ -2,10 +2,13 @@ import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { Ctx } from '../../core/auth/ctx.decorator';
 import { RequestContext } from '../../core/auth/request-context';
 import { RequirePermission } from '../../core/auth/require-permission.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRolePermissionsDto } from './dto/update-role-permissions.dto';
 import { RolesService } from './roles.service';
 
+@ApiTags('Identity - Roles')
+@ApiBearerAuth('JWT-auth')
 @Controller('roles')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}

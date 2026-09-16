@@ -9,9 +9,12 @@ import {
 import { Ctx } from '../../../core/auth/ctx.decorator';
 import { RequestContext } from '../../../core/auth/request-context';
 import { RequirePermission } from '../../../core/auth/require-permission.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CreateUnitDto } from '../dto/unit.dto';
 import { UnitsService } from '../services/units.service';
 
+@ApiTags('Masters - Units')
+@ApiBearerAuth('JWT-auth')
 @Controller('masters/units')
 export class UnitsController {
   constructor(private readonly unitsService: UnitsService) {}
