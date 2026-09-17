@@ -72,10 +72,7 @@ export class RolesService {
       isSystemRole: r.is_system_role,
       isActive: r.is_active,
       defaultDashboardSection: r.default_dashboard_section,
-      permissions:
-        r.id === 'admin'
-          ? CANONICAL_PERMISSIONS.map((p) => p.id)
-          : permMap.get(r.id) || [],
+      permissions: permMap.get(r.id) || [],
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -98,16 +95,11 @@ export class RolesService {
       throw new NotFoundError('Role', id);
     }
 
-    let permissions: string[] = [];
-    if (role.id === 'admin') {
-      permissions = CANONICAL_PERMISSIONS.map((p) => p.id);
-    } else {
-      const permRes = await this.db.query<{ permission_id: string }>(
-        'SELECT permission_id FROM role_permissions WHERE role_id = $1',
-        [id],
-      );
-      permissions = permRes.rows.map((p) => p.permission_id);
-    }
+    const permRes = await this.db.query<{ permission_id: string }>(
+      'SELECT permission_id FROM role_permissions WHERE role_id = $1',
+      [id],
+    );
+    const permissions = permRes.rows.map((p) => p.permission_id);
 
     return {
       id: role.id,

@@ -3968,6 +3968,9 @@ class MockDatabaseService extends ChangeNotifier {
     final idx = roles.indexWhere((r) => r.id == roleId);
     if (idx != -1) {
       roles[idx] = roles[idx].copyWith(permissions: permMap);
+      if (currentUser.primaryRoleId == roleId) {
+        currentUser = currentUser.copyWith(customPermissionOverrides: permMap);
+      }
       notifyListeners();
     }
   }

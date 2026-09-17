@@ -180,20 +180,22 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                 padding: const EdgeInsets.only(top: 8, bottom: 16),
                 children: [
                   // 1. Main Dashboard
-                  _buildNavItem(
-                    icon: Icons.home_outlined,
-                    title: 'Dashboard',
-                    isRestricted: !canAccessDashboard,
-                    isSelected: currentSection == ErpNavSection.dashboard,
-                    onTap: () {
-                      _handleNavigation(context, userRole.defaultDashboardSection, ErpModule.dashboard);
-                    },
-                  ),
+                  if (canAccessDashboard)
+                    _buildNavItem(
+                      icon: Icons.home_outlined,
+                      title: 'Dashboard',
+                      isRestricted: !canAccessDashboard,
+                      isSelected: currentSection == ErpNavSection.dashboard,
+                      onTap: () {
+                        _handleNavigation(context, userRole.defaultDashboardSection, ErpModule.dashboard);
+                      },
+                    ),
 
                   // 2. Inventory (Group)
-                  _buildNavGroup(
-                    groupTitle: 'Inventory',
-                    icon: Icons.inventory_2_outlined,
+                  if (canAccessInventory)
+                    _buildNavGroup(
+                      groupTitle: 'Inventory',
+                      icon: Icons.inventory_2_outlined,
                     isRestricted: !canAccessInventory,
                     isExpanded: _expandedGroups['Inventory'] ?? false,
                     onGroupTap: () => _toggleGroup('Inventory'),
@@ -232,36 +234,38 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                   ),
 
                   // 3. Purchase (Group)
-                  _buildNavGroup(
-                    groupTitle: 'Purchase',
-                    icon: Icons.shopping_bag_outlined,
-                    isRestricted: !canAccessPurchase,
-                    isExpanded: _expandedGroups['Purchase'] ?? false,
-                    onGroupTap: () => _toggleGroup('Purchase'),
-                    children: [
-                      _buildSubNavItem(
-                        title: 'Purchase Dashboard',
-                        isRestricted: !canAccessPurchase,
-                        isSelected: currentSection == ErpNavSection.purchaseDashboard,
-                        onTap: () => _handleNavigation(context, ErpNavSection.purchaseDashboard, ErpModule.purchase),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Purchase Orders',
-                        isRestricted: !canAccessPurchase,
-                        isSelected: currentSection == ErpNavSection.purchaseList,
-                        onTap: () => _handleNavigation(context, ErpNavSection.purchaseList, ErpModule.purchase),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Create Purchase',
-                        isRestricted: !canAccessPurchase,
-                        isSelected: currentSection == ErpNavSection.createPurchase,
-                        onTap: () => _handleNavigation(context, ErpNavSection.createPurchase, ErpModule.purchase, ErpAction.create),
-                      ),
-                    ],
-                  ),
+                  if (canAccessPurchase)
+                    _buildNavGroup(
+                      groupTitle: 'Purchase',
+                      icon: Icons.shopping_bag_outlined,
+                      isRestricted: !canAccessPurchase,
+                      isExpanded: _expandedGroups['Purchase'] ?? false,
+                      onGroupTap: () => _toggleGroup('Purchase'),
+                      children: [
+                        _buildSubNavItem(
+                          title: 'Purchase Dashboard',
+                          isRestricted: !canAccessPurchase,
+                          isSelected: currentSection == ErpNavSection.purchaseDashboard,
+                          onTap: () => _handleNavigation(context, ErpNavSection.purchaseDashboard, ErpModule.purchase),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Purchase Orders',
+                          isRestricted: !canAccessPurchase,
+                          isSelected: currentSection == ErpNavSection.purchaseList,
+                          onTap: () => _handleNavigation(context, ErpNavSection.purchaseList, ErpModule.purchase),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Create Purchase',
+                          isRestricted: !canAccessPurchase,
+                          isSelected: currentSection == ErpNavSection.createPurchase,
+                          onTap: () => _handleNavigation(context, ErpNavSection.createPurchase, ErpModule.purchase, ErpAction.create),
+                        ),
+                      ],
+                    ),
 
                   // 4. Production (Group)
-                  _buildNavGroup(
+                  if (canAccessProduction)
+                    _buildNavGroup(
                     groupTitle: 'Production',
                     icon: Icons.precision_manufacturing_outlined,
                     isRestricted: !canAccessProduction,
@@ -290,237 +294,242 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                   ),
 
                   // 5. Sales (Group)
-                  _buildNavGroup(
-                    groupTitle: 'Sales',
-                    icon: Icons.point_of_sale_outlined,
-                    isRestricted: !canAccessSales,
-                    isExpanded: _expandedGroups['Sales'] ?? false,
-                    onGroupTap: () => _toggleGroup('Sales'),
-                    children: [
-                      _buildSubNavItem(
-                        title: 'Sales Dashboard',
-                        isRestricted: !canAccessSales,
-                        isSelected: currentSection == ErpNavSection.salesDashboard,
-                        onTap: () => _handleNavigation(context, ErpNavSection.salesDashboard, ErpModule.sales),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Quotations',
-                        isRestricted: !canAccessSales,
-                        isSelected: currentSection == ErpNavSection.quotations || currentSection == ErpNavSection.createQuotation,
-                        onTap: () => _handleNavigation(context, ErpNavSection.quotations, ErpModule.sales),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Proforma Invoices',
-                        isRestricted: !canAccessSales,
-                        isSelected: currentSection == ErpNavSection.proformaInvoices,
-                        onTap: () => _handleNavigation(context, ErpNavSection.proformaInvoices, ErpModule.sales),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Sales Orders',
-                        isRestricted: !canAccessSales,
-                        isSelected: currentSection == ErpNavSection.salesOrders || currentSection == ErpNavSection.createSalesOrder,
-                        onTap: () => _handleNavigation(context, ErpNavSection.salesOrders, ErpModule.sales),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Deliveries & Dispatch',
-                        isRestricted: !canAccessSales,
-                        isSelected: currentSection == ErpNavSection.salesDeliveries,
-                        onTap: () => _handleNavigation(context, ErpNavSection.salesDeliveries, ErpModule.sales),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Sales Invoices',
-                        isRestricted: !canAccessSales,
-                        isSelected: currentSection == ErpNavSection.salesInvoiceList,
-                        onTap: () => _handleNavigation(context, ErpNavSection.salesInvoiceList, ErpModule.sales),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Create Direct Sale',
-                        isRestricted: !canAccessSales,
-                        isSelected: currentSection == ErpNavSection.createSale,
-                        onTap: () => _handleNavigation(context, ErpNavSection.createSale, ErpModule.sales, ErpAction.create),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Sales Returns',
-                        isRestricted: !canAccessSales,
-                        isSelected: currentSection == ErpNavSection.salesReturns || currentSection == ErpNavSection.createSalesReturn,
-                        onTap: () => _handleNavigation(context, ErpNavSection.salesReturns, ErpModule.sales),
-                      ),
-                    ],
-                  ),
+                  if (canAccessSales)
+                    _buildNavGroup(
+                      groupTitle: 'Sales',
+                      icon: Icons.point_of_sale_outlined,
+                      isRestricted: !canAccessSales,
+                      isExpanded: _expandedGroups['Sales'] ?? false,
+                      onGroupTap: () => _toggleGroup('Sales'),
+                      children: [
+                        _buildSubNavItem(
+                          title: 'Sales Dashboard',
+                          isRestricted: !canAccessSales,
+                          isSelected: currentSection == ErpNavSection.salesDashboard,
+                          onTap: () => _handleNavigation(context, ErpNavSection.salesDashboard, ErpModule.sales),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Quotations',
+                          isRestricted: !canAccessSales,
+                          isSelected: currentSection == ErpNavSection.quotations || currentSection == ErpNavSection.createQuotation,
+                          onTap: () => _handleNavigation(context, ErpNavSection.quotations, ErpModule.sales),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Proforma Invoices',
+                          isRestricted: !canAccessSales,
+                          isSelected: currentSection == ErpNavSection.proformaInvoices,
+                          onTap: () => _handleNavigation(context, ErpNavSection.proformaInvoices, ErpModule.sales),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Sales Orders',
+                          isRestricted: !canAccessSales,
+                          isSelected: currentSection == ErpNavSection.salesOrders || currentSection == ErpNavSection.createSalesOrder,
+                          onTap: () => _handleNavigation(context, ErpNavSection.salesOrders, ErpModule.sales),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Deliveries & Dispatch',
+                          isRestricted: !canAccessSales,
+                          isSelected: currentSection == ErpNavSection.salesDeliveries,
+                          onTap: () => _handleNavigation(context, ErpNavSection.salesDeliveries, ErpModule.sales),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Sales Invoices',
+                          isRestricted: !canAccessSales,
+                          isSelected: currentSection == ErpNavSection.salesInvoiceList,
+                          onTap: () => _handleNavigation(context, ErpNavSection.salesInvoiceList, ErpModule.sales),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Create Direct Sale',
+                          isRestricted: !canAccessSales,
+                          isSelected: currentSection == ErpNavSection.createSale,
+                          onTap: () => _handleNavigation(context, ErpNavSection.createSale, ErpModule.sales, ErpAction.create),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Sales Returns',
+                          isRestricted: !canAccessSales,
+                          isSelected: currentSection == ErpNavSection.salesReturns || currentSection == ErpNavSection.createSalesReturn,
+                          onTap: () => _handleNavigation(context, ErpNavSection.salesReturns, ErpModule.sales),
+                        ),
+                      ],
+                    ),
 
                   // 6. Payments (Group)
-                  _buildNavGroup(
-                    groupTitle: 'Payments',
-                    icon: Icons.payments_outlined,
-                    isRestricted: !canAccessPayments,
-                    isExpanded: _expandedGroups['Payments'] ?? false,
-                    onGroupTap: () => _toggleGroup('Payments'),
-                    children: [
-                      _buildSubNavItem(
-                        title: 'Payments Dashboard',
-                        isRestricted: !canAccessPayments,
-                        isSelected: currentSection == ErpNavSection.paymentsDashboard,
-                        onTap: () => _handleNavigation(context, ErpNavSection.paymentsDashboard, ErpModule.payments),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Customer Payments',
-                        isRestricted: !canAccessPayments,
-                        isSelected: currentSection == ErpNavSection.customerPayments,
-                        onTap: () => _handleNavigation(context, ErpNavSection.customerPayments, ErpModule.payments),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Dealer Payments',
-                        isRestricted: !canAccessPayments,
-                        isSelected: currentSection == ErpNavSection.dealerPayments,
-                        onTap: () => _handleNavigation(context, ErpNavSection.dealerPayments, ErpModule.payments),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Vendor Payments',
-                        isRestricted: !canAccessPayments,
-                        isSelected: currentSection == ErpNavSection.vendorPaymentsSection,
-                        onTap: () => _handleNavigation(context, ErpNavSection.vendorPaymentsSection, ErpModule.payments),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Commission Payouts',
-                        isRestricted: !canAccessPayments,
-                        isSelected: currentSection == ErpNavSection.commissionPayments,
-                        onTap: () => _handleNavigation(context, ErpNavSection.commissionPayments, ErpModule.payments),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Expense Management',
-                        isRestricted: !canAccessPayments,
-                        isSelected: currentSection == ErpNavSection.expenseList,
-                        onTap: () => _handleNavigation(context, ErpNavSection.expenseList, ErpModule.payments),
-                      ),
-                    ],
-                  ),
+                  if (canAccessPayments)
+                    _buildNavGroup(
+                      groupTitle: 'Payments',
+                      icon: Icons.payments_outlined,
+                      isRestricted: !canAccessPayments,
+                      isExpanded: _expandedGroups['Payments'] ?? false,
+                      onGroupTap: () => _toggleGroup('Payments'),
+                      children: [
+                        _buildSubNavItem(
+                          title: 'Payments Dashboard',
+                          isRestricted: !canAccessPayments,
+                          isSelected: currentSection == ErpNavSection.paymentsDashboard,
+                          onTap: () => _handleNavigation(context, ErpNavSection.paymentsDashboard, ErpModule.payments),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Customer Payments',
+                          isRestricted: !canAccessPayments,
+                          isSelected: currentSection == ErpNavSection.customerPayments,
+                          onTap: () => _handleNavigation(context, ErpNavSection.customerPayments, ErpModule.payments),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Dealer Payments',
+                          isRestricted: !canAccessPayments,
+                          isSelected: currentSection == ErpNavSection.dealerPayments,
+                          onTap: () => _handleNavigation(context, ErpNavSection.dealerPayments, ErpModule.payments),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Vendor Payments',
+                          isRestricted: !canAccessPayments,
+                          isSelected: currentSection == ErpNavSection.vendorPaymentsSection,
+                          onTap: () => _handleNavigation(context, ErpNavSection.vendorPaymentsSection, ErpModule.payments),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Commission Payouts',
+                          isRestricted: !canAccessPayments,
+                          isSelected: currentSection == ErpNavSection.commissionPayments,
+                          onTap: () => _handleNavigation(context, ErpNavSection.commissionPayments, ErpModule.payments),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Expense Management',
+                          isRestricted: !canAccessPayments,
+                          isSelected: currentSection == ErpNavSection.expenseList,
+                          onTap: () => _handleNavigation(context, ErpNavSection.expenseList, ErpModule.payments),
+                        ),
+                      ],
+                    ),
 
                   // 7. Masters (Group)
-                  _buildNavGroup(
-                    groupTitle: 'Masters',
-                    icon: Icons.dataset_outlined,
-                    isRestricted: !canAccessMasters,
-                    isExpanded: _expandedGroups['Masters'] ?? false,
-                    onGroupTap: () => _toggleGroup('Masters'),
-                    children: [
-                      _buildSubNavItem(
-                        title: 'Masters Dashboard',
-                        isRestricted: !canAccessMasters,
-                        isSelected: currentSection == ErpNavSection.mastersDashboard,
-                        onTap: () => _handleNavigation(context, ErpNavSection.mastersDashboard, ErpModule.masters),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Customers',
-                        isRestricted: !canAccessMasters,
-                        isSelected: currentSection == ErpNavSection.customers,
-                        onTap: () => _handleNavigation(context, ErpNavSection.customers, ErpModule.masters),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Vendors',
-                        isRestricted: !canAccessMasters,
-                        isSelected: currentSection == ErpNavSection.vendors,
-                        onTap: () => _handleNavigation(context, ErpNavSection.vendors, ErpModule.masters),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Dealers',
-                        isRestricted: !canAccessMasters,
-                        isSelected: currentSection == ErpNavSection.dealers,
-                        onTap: () => _handleNavigation(context, ErpNavSection.dealers, ErpModule.masters),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Architects & Commission',
-                        isRestricted: !canAccessMasters,
-                        isSelected: currentSection == ErpNavSection.architects,
-                        onTap: () => _handleNavigation(context, ErpNavSection.architects, ErpModule.masters),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Raw Material Master',
-                        isRestricted: !canAccessMasters,
-                        isSelected: currentSection == ErpNavSection.rawMaterials,
-                        onTap: () => _handleNavigation(context, ErpNavSection.rawMaterials, ErpModule.masters),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Product Master',
-                        isRestricted: !canAccessMasters,
-                        isSelected: currentSection == ErpNavSection.finishedProducts,
-                        onTap: () => _handleNavigation(context, ErpNavSection.finishedProducts, ErpModule.masters),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Categories & Units',
-                        isRestricted: !canAccessMasters,
-                        isSelected: currentSection == ErpNavSection.categoriesUnits,
-                        onTap: () => _handleNavigation(context, ErpNavSection.categoriesUnits, ErpModule.masters),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Projects',
-                        isRestricted: !canAccessMasters,
-                        isSelected: currentSection == ErpNavSection.projectList,
-                        onTap: () => _handleNavigation(context, ErpNavSection.projectList, ErpModule.masters),
-                      ),
-                    ],
-                  ),
+                  if (canAccessMasters)
+                    _buildNavGroup(
+                      groupTitle: 'Masters',
+                      icon: Icons.dataset_outlined,
+                      isRestricted: !canAccessMasters,
+                      isExpanded: _expandedGroups['Masters'] ?? false,
+                      onGroupTap: () => _toggleGroup('Masters'),
+                      children: [
+                        _buildSubNavItem(
+                          title: 'Masters Dashboard',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.mastersDashboard,
+                          onTap: () => _handleNavigation(context, ErpNavSection.mastersDashboard, ErpModule.masters),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Customers',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.customers,
+                          onTap: () => _handleNavigation(context, ErpNavSection.customers, ErpModule.masters),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Vendors',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.vendors,
+                          onTap: () => _handleNavigation(context, ErpNavSection.vendors, ErpModule.masters),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Dealers',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.dealers,
+                          onTap: () => _handleNavigation(context, ErpNavSection.dealers, ErpModule.masters),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Architects & Commission',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.architects,
+                          onTap: () => _handleNavigation(context, ErpNavSection.architects, ErpModule.masters),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Raw Material Master',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.rawMaterials,
+                          onTap: () => _handleNavigation(context, ErpNavSection.rawMaterials, ErpModule.masters),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Product Master',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.finishedProducts,
+                          onTap: () => _handleNavigation(context, ErpNavSection.finishedProducts, ErpModule.masters),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Categories & Units',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.categoriesUnits,
+                          onTap: () => _handleNavigation(context, ErpNavSection.categoriesUnits, ErpModule.masters),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Projects',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.projectList,
+                          onTap: () => _handleNavigation(context, ErpNavSection.projectList, ErpModule.masters),
+                        ),
+                      ],
+                    ),
 
                   // 8. Reports (Group)
-                  _buildNavGroup(
-                    groupTitle: 'Reports',
-                    icon: Icons.bar_chart_rounded,
-                    isRestricted: !canAccessReports,
-                    isExpanded: _expandedGroups['Reports'] ?? false,
-                    onGroupTap: () => _toggleGroup('Reports'),
-                    children: [
-                      _buildSubNavItem(
-                        title: 'Reports Hub & Analytics',
-                        isRestricted: !canAccessReports,
-                        isSelected: currentSection == ErpNavSection.reportsDashboard,
-                        onTap: () => _handleNavigation(context, ErpNavSection.reportsDashboard, ErpModule.reports),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Inventory Reports',
-                        isRestricted: !canAccessReports,
-                        isSelected: currentSection == ErpNavSection.inventoryReports,
-                        onTap: () => _handleNavigation(context, ErpNavSection.inventoryReports, ErpModule.reports),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Purchase Reports',
-                        isRestricted: !canAccessReports,
-                        isSelected: currentSection == ErpNavSection.purchaseReports,
-                        onTap: () => _handleNavigation(context, ErpNavSection.purchaseReports, ErpModule.reports),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Production Reports',
-                        isRestricted: !canAccessReports,
-                        isSelected: currentSection == ErpNavSection.productionReports,
-                        onTap: () => _handleNavigation(context, ErpNavSection.productionReports, ErpModule.reports),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Sales Reports',
-                        isRestricted: !canAccessReports,
-                        isSelected: currentSection == ErpNavSection.salesReports,
-                        onTap: () => _handleNavigation(context, ErpNavSection.salesReports, ErpModule.reports),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Project Reports',
-                        isRestricted: !canAccessReports,
-                        isSelected: currentSection == ErpNavSection.projectReports,
-                        onTap: () => _handleNavigation(context, ErpNavSection.projectReports, ErpModule.reports),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Financial Reports',
-                        isRestricted: !canAccessReports,
-                        isSelected: currentSection == ErpNavSection.financialReports,
-                        onTap: () => _handleNavigation(context, ErpNavSection.financialReports, ErpModule.reports),
-                      ),
-                    ],
-                  ),
+                  if (canAccessReports)
+                    _buildNavGroup(
+                      groupTitle: 'Reports',
+                      icon: Icons.bar_chart_rounded,
+                      isRestricted: !canAccessReports,
+                      isExpanded: _expandedGroups['Reports'] ?? false,
+                      onGroupTap: () => _toggleGroup('Reports'),
+                      children: [
+                        _buildSubNavItem(
+                          title: 'Reports Hub & Analytics',
+                          isRestricted: !canAccessReports,
+                          isSelected: currentSection == ErpNavSection.reportsDashboard,
+                          onTap: () => _handleNavigation(context, ErpNavSection.reportsDashboard, ErpModule.reports),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Inventory Reports',
+                          isRestricted: !canAccessReports,
+                          isSelected: currentSection == ErpNavSection.inventoryReports,
+                          onTap: () => _handleNavigation(context, ErpNavSection.inventoryReports, ErpModule.reports),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Purchase Reports',
+                          isRestricted: !canAccessReports,
+                          isSelected: currentSection == ErpNavSection.purchaseReports,
+                          onTap: () => _handleNavigation(context, ErpNavSection.purchaseReports, ErpModule.reports),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Production Reports',
+                          isRestricted: !canAccessReports,
+                          isSelected: currentSection == ErpNavSection.productionReports,
+                          onTap: () => _handleNavigation(context, ErpNavSection.productionReports, ErpModule.reports),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Sales Reports',
+                          isRestricted: !canAccessReports,
+                          isSelected: currentSection == ErpNavSection.salesReports,
+                          onTap: () => _handleNavigation(context, ErpNavSection.salesReports, ErpModule.reports),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Project Reports',
+                          isRestricted: !canAccessReports,
+                          isSelected: currentSection == ErpNavSection.projectReports,
+                          onTap: () => _handleNavigation(context, ErpNavSection.projectReports, ErpModule.reports),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Financial Reports',
+                          isRestricted: !canAccessReports,
+                          isSelected: currentSection == ErpNavSection.financialReports,
+                          onTap: () => _handleNavigation(context, ErpNavSection.financialReports, ErpModule.reports),
+                        ),
+                      ],
+                    ),
 
                   // 9. Settings
-                  _buildNavItem(
-                    icon: Icons.settings_outlined,
-                    title: 'Settings',
-                    isRestricted: !canAccessSettings,
-                    isSelected: currentSection == ErpNavSection.settings,
-                    onTap: () => _handleNavigation(context, ErpNavSection.settings, ErpModule.settings),
-                  ),
+                  if (canAccessSettings)
+                    _buildNavItem(
+                      icon: Icons.settings_outlined,
+                      title: 'Settings',
+                      isRestricted: !canAccessSettings,
+                      isSelected: currentSection == ErpNavSection.settings,
+                      onTap: () => _handleNavigation(context, ErpNavSection.settings, ErpModule.settings),
+                    ),
                 ],
               ),
             ),

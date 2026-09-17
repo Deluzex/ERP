@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { CANONICAL_PERMISSIONS } from '../../core/access/permission-catalogue';
 import { AuditService } from '../../core/audit/audit.service';
 import { Argon2Service } from '../../core/auth/argon2.service';
 import { TokenService } from '../../core/auth/token.service';
@@ -265,21 +264,16 @@ export class AuthService {
       };
 
     // Permissions
-    let permissions: string[] = [];
-    if (primaryRole.id === 'admin') {
-      permissions = CANONICAL_PERMISSIONS.map((p) => p.id);
-    } else {
-      const permRes = await this.db.query<{ id: string }>(
-        `SELECT DISTINCT p.id
-         FROM role_permissions rp
-         JOIN permissions p ON p.id = rp.permission_id
-         WHERE rp.role_id IN (
-           SELECT role_id FROM user_roles WHERE user_id = $1
-         )`,
-        [userId],
-      );
-      permissions = permRes.rows.map((p) => p.id);
-    }
+    const permRes = await this.db.query<{ id: string }>(
+      `SELECT DISTINCT p.id
+       FROM role_permissions rp
+       JOIN permissions p ON p.id = rp.permission_id
+       WHERE rp.role_id IN (
+         SELECT role_id FROM user_roles WHERE user_id = $1
+       )`,
+      [userId],
+    );
+    const permissions = permRes.rows.map((p) => p.id);
 
     // Branch scopes
     const branchRes = await this.db.query<{ branch_id: string }>(

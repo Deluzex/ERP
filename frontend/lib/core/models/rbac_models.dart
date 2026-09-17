@@ -275,9 +275,6 @@ class AppUser {
   ]) {
     if (!isActive) return false;
 
-    // Super Admin has universal access
-    if (primaryRoleId == 'admin') return true;
-
     // Check active temporary grants
     if (temporaryGrants != null) {
       for (final grant in temporaryGrants) {
@@ -395,6 +392,35 @@ class AppUser {
     if (!isActive) return false;
     final module = mapSectionToModule(section);
     return canAccessModule(module, allRoles, temporaryGrants);
+  }
+
+  /// Returns the first section accessible by this user, preferring the primary role's defaultDashboardSection
+  ErpNavSection getAccessibleLandingSection(List<Role> allRoles) {
+    final primaryRole = allRoles.where((r) => r.id == primaryRoleId).firstOrNull;
+    final defaultSection = primaryRole?.defaultDashboardSection ?? ErpNavSection.dashboard;
+    if (canAccessSection(defaultSection, allRoles)) {
+      return defaultSection;
+    }
+
+    const candidateSections = [
+      ErpNavSection.dashboard,
+      ErpNavSection.inventoryDashboard,
+      ErpNavSection.purchaseDashboard,
+      ErpNavSection.productionDashboard,
+      ErpNavSection.salesDashboard,
+      ErpNavSection.paymentsDashboard,
+      ErpNavSection.mastersDashboard,
+      ErpNavSection.reportsDashboard,
+      ErpNavSection.settings,
+    ];
+
+    for (final sec in candidateSections) {
+      if (canAccessSection(sec, allRoles)) {
+        return sec;
+      }
+    }
+
+    return defaultSection;
   }
 
   AppUser copyWith({

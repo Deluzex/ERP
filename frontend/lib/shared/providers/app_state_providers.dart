@@ -25,10 +25,11 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final db = ref.read(databaseServiceProvider);
       db.setCurrentUser(user);
       state = user;
+      await db.loadRoles(forceRefresh: true);
       db.loadAllMasters(forceRefresh: true);
 
-      final role = db.getUserRole(user);
-      ref.read(currentNavSectionProvider.notifier).state = role.defaultDashboardSection;
+      final landingSection = user.getAccessibleLandingSection(db.roles);
+      ref.read(currentNavSectionProvider.notifier).state = landingSection;
       ref.read(activeRecordDetailsStackProvider.notifier).clear();
       return true;
     } catch (e) {
@@ -37,8 +38,8 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final user = db.authenticateUser(identifier, password, roleId);
       if (user != null) {
         state = user;
-        final role = db.getUserRole(user);
-        ref.read(currentNavSectionProvider.notifier).state = role.defaultDashboardSection;
+        final landingSection = user.getAccessibleLandingSection(db.roles);
+        ref.read(currentNavSectionProvider.notifier).state = landingSection;
         ref.read(activeRecordDetailsStackProvider.notifier).clear();
         return true;
       }
@@ -51,9 +52,9 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     final user = db.authenticateUser(identifier, password, roleId);
     if (user != null) {
       state = user;
-      // Set default landing dashboard based on the user's role
-      final role = db.getUserRole(user);
-      ref.read(currentNavSectionProvider.notifier).state = role.defaultDashboardSection;
+      // Set default landing dashboard based on the user's accessible sections
+      final landingSection = user.getAccessibleLandingSection(db.roles);
+      ref.read(currentNavSectionProvider.notifier).state = landingSection;
       ref.read(activeRecordDetailsStackProvider.notifier).clear();
       return true;
     }
@@ -64,9 +65,15 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     final db = ref.read(databaseServiceProvider);
     db.setCurrentUser(user);
     state = user;
-    final role = db.getUserRole(user);
-    ref.read(currentNavSectionProvider.notifier).state = role.defaultDashboardSection;
+    final landingSection = user.getAccessibleLandingSection(db.roles);
+    ref.read(currentNavSectionProvider.notifier).state = landingSection;
     ref.read(activeRecordDetailsStackProvider.notifier).clear();
+  }
+
+  void refreshUserPermissions(String roleId, Map<ErpModule, Set<ErpAction>> permissions) {
+    if (state != null && state!.primaryRoleId == roleId) {
+      state = state!.copyWith(customPermissionOverrides: permissions);
+    }
   }
 
   void logout() {

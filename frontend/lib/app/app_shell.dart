@@ -345,7 +345,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   icon: Icons.home_outlined,
                   isOutlined: true,
                   onPressed: () {
-                    ref.read(currentNavSectionProvider.notifier).state = role.defaultDashboardSection;
+                    ref.read(currentNavSectionProvider.notifier).state = user.getAccessibleLandingSection(db.roles);
                   },
                 ),
                 ErpButton(

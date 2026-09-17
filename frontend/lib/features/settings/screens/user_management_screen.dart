@@ -519,6 +519,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                     final permStrings = RolesApiService.permissionMapToStrings(permMatrix);
                                     if (isEdit) {
                                       await db.updateRolePermissionsAsync(existing.id, permStrings);
+                                      ref.read(authStateProvider.notifier).refreshUserPermissions(existing.id, permMatrix);
                                       if (mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(content: Text('Role "${existing.name}" permissions updated!'), backgroundColor: AppColors.success),
