@@ -44,7 +44,7 @@ describe('PermissionGuard', () => {
     expect(() => guard.canActivate(context)).toThrow(ForbiddenError);
   });
 
-  it('should allow Super Administrator unrestricted access to any protected endpoint', () => {
+  it('should deny Super Administrator if the required permission was stripped from their role', () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
       if (key === IS_PUBLIC_KEY) return false;
       if (key === REQUIRED_PERMISSIONS_KEY) return ['purchase.delete'];
@@ -59,7 +59,7 @@ describe('PermissionGuard', () => {
       },
     });
 
-    expect(guard.canActivate(context)).toBe(true);
+    expect(() => guard.canActivate(context)).toThrow(ForbiddenError);
   });
 
   it('should allow user possessing the required permission', () => {

@@ -49,11 +49,6 @@ export class PermissionGuard implements CanActivate {
       throw new ForbiddenError('Endpoint is protected but declares no required permissions');
     }
 
-    // Super Administrator has universal access
-    if (ctx.roleId === 'admin') {
-      return true;
-    }
-
     // Verify caller possesses ALL required permissions for the action
     for (const permission of requiredPermissions) {
       if (!ctx.permissions.has(permission)) {

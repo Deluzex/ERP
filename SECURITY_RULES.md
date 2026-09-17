@@ -50,6 +50,13 @@ Every protected operation verifies, in this order:
 Skipping any of these because "the UI only shows what they're allowed" is the exact mistake that causes a
 breach. **The client is not a security boundary.** Hiding a button is UX; the API is the control.
 
+### 2.1 Zero Hardcoded Superuser Bypasses (CWE-285 Prevention)
+**Never** write hardcoded superuser shortcuts in backend services, guards, token issues, or frontend models:
+- ❌ `if (user.roleId === 'admin') return true;`
+- ❌ `permissions: role.id === 'admin' ? ALL_CANONICAL : ...`
+- ✅ All privileges—including those of the System Administrator—must be read dynamically from the database `role_permissions` table.
+- ✅ De-privileging must immediately take effect upon subsequent token generation and API authorization checks.
+
 ---
 
 ## 3. Never Trust the Client

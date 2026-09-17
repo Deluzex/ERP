@@ -4904,10 +4904,9 @@ class MockDatabaseService extends ChangeNotifier {
   }) {
     clearExpiredTemporaryGrants();
 
-    // 1. Find all active eligible authorizers (Admin or Users who have permission for this module/action)
+    // 1. Find all active eligible authorizers (Users who have permission for this module/action)
     final eligibleAuthorizers = users.where((u) {
       if (!u.isActive) return false;
-      if (u.primaryRoleId == 'admin') return true;
       return u.hasPermission(targetModule, targetAction ?? ErpAction.view, roles);
     }).toList();
 

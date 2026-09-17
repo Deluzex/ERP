@@ -54,3 +54,18 @@ Every feature must have tests covering three dimensions:
 - **Frontend Web User Simulation**: **Playwright**
   - Automates real browser interactions on the compiled Flutter Web application.
   - Tests user clicks, form typing, responsive layouts, data tables, and PDF previews.
+
+---
+
+## 6. Anti-God-Mode & Dynamic RBAC Governance (Strictly Enforced)
+1. **Zero Hardcoded Bypasses**:
+   - NEVER write `if (role === 'admin') return true;`, `if (r.id === 'admin') ? ALL_PERMS : ...`, or any role-name shortcut in controllers, services, guards, or frontend models.
+   - All authorization decisions (for super admins, managers, and clerks alike) MUST derive dynamically from the database `role_permissions` matrix and user active roles.
+2. **De-Privileging Negative Test Coverage**:
+   - Every RBAC test suite MUST include a de-privileging test case: removing permissions from high-privilege roles and asserting that subsequent access attempts return `403 Forbidden` (`PERMISSION_DENIED`).
+3. **Session Freshness & Token Reflection**:
+   - Changing a role's permissions or user assignments MUST be tested across the entire lifecycle:
+     `Edit Permissions -> Save (200 OK) -> Invalidate / Re-login -> Assert Token & /auth/me -> Assert Endpoint Guard Enforcement`.
+4. **UI Navigation Guarding**:
+   - If a user lacks `view` permission for a module, the module MUST be completely hidden from navigation (sidebars/drawers) unless explicitly documented as a locked preview item.
+

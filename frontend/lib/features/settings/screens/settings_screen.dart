@@ -37,7 +37,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
     final db = ref.watch(databaseServiceProvider);
     final user = ref.watch(currentUserProvider) ?? db.currentUser;
     final role = db.getUserRole(user);
-    final isAdminOrManager = user.primaryRoleId == 'admin' || user.hasPermission(ErpModule.settings, ErpAction.edit, db.roles);
+    final isAdminOrManager = user.hasPermission(ErpModule.settings, ErpAction.edit, db.roles);
 
     return Column(
       children: [

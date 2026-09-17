@@ -73,6 +73,8 @@ Before writing implementation code, write the test cases. Cover every applicable
 | Database constraints | FK violation surfaces as a domain error, not a raw driver error |
 | Business rule violations | Cannot post stock for a soft-deleted raw material |
 | **Transaction rollback** | If stock posting fails, the purchase is not persisted |
+| **Role de-privileging (Negative)** | Removing permissions from a role immediately restricts access, drops from `/auth/me`, and returns 403 on API |
+| **Lifecycle persistence & UI hide** | Saved permission changes persist across re-login and dynamically hide restricted UI navigation modules |
 | Edge cases | Zero-line purchase, very large quantity, boundary of credit limit |
 | Important calculations | Line total, discount, GST, purchase total, pending amount |
 
