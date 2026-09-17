@@ -11,6 +11,7 @@ import { Ctx } from '../../core/auth/ctx.decorator';
 import { RequestContext } from '../../core/auth/request-context';
 import { RequirePermission } from '../../core/auth/require-permission.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserScopesDto } from './dto/update-user-scopes.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -58,6 +59,21 @@ export class UsersController {
     @Ctx() ctx: RequestContext,
   ) {
     return this.usersService.updateScopes(id, dto, ctx.userId, ctx.correlationId);
+  }
+
+  @Post(':id/reset-password')
+  @RequirePermission('userManagement.edit')
+  resetPassword(
+    @Param('id') id: string,
+    @Body() dto: AdminResetPasswordDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.usersService.resetPassword(
+      id,
+      dto,
+      ctx.userId,
+      ctx.correlationId,
+    );
   }
 
   @Delete(':id')

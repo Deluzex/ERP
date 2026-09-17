@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   CANONICAL_PERMISSIONS,
   CanonicalPermission,
@@ -9,6 +9,7 @@ import { UnitOfWork } from '../../core/database/unit-of-work';
 import { ConflictError } from '../../core/errors/conflict.error';
 import { NotFoundError } from '../../core/errors/not-found.error';
 import { CreateRoleDto } from './dto/create-role.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 import { UpdateRolePermissionsDto } from './dto/update-role-permissions.dto';
 
 export interface RoleWithPermissions {
@@ -219,6 +220,104 @@ export class RolesService {
         permissions: dto.permissions,
         updatedAt: new Date(),
       };
+    });
+  }
+
+  async update(
+    id: string,
+    dto: UpdateRoleDto,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<RoleWithPermissions> {
+    const role = await this.findById(id);
+
+    if (role.isSystemRole && dto.isActive === false) {
+      throw new BadRequestException('System roles cannot be deactivated');
+    }
+
+    await this.uow.runInTransaction(async (client) => {
+      const updates: string[] = [];
+      const values: unknown[] = [];
+      let idx = 1;
+
+      if (dto.name !== undefined) {
+        updates.push(`name = $${idx++}`);
+        values.push(dto.name);
+      }
+      if (dto.description !== undefined) {
+        updates.push(`description = $${idx++}`);
+        values.push(dto.description);
+      }
+      if (dto.defaultDashboardSection !== undefined) {
+        updates.push(`default_dashboard_section = $${idx++}`);
+        values.push(dto.defaultDashboardSection);
+      }
+      if (dto.isActive !== undefined && !role.isSystemRole) {
+        updates.push(`is_active = $${idx++}`);
+        values.push(dto.isActive);
+      }
+
+      if (updates.length > 0) {
+        updates.push(`updated_at = NOW()`);
+        values.push(id);
+        await client.query(
+          `UPDATE roles SET ${updates.join(', ')} WHERE id = $${idx}`,
+          values,
+        );
+      }
+
+      await this.auditService.log({
+        userId,
+        userName: 'Admin',
+        action: 'ROLE_UPDATE',
+        entityType: 'ROLE',
+        entityId: id,
+        beforeSnapshot: { ...role },
+        afterSnapshot: { ...dto },
+        correlationId,
+      });
+    });
+
+    return this.findById(id);
+  }
+
+  async delete(
+    id: string,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<{ success: boolean }> {
+    const role = await this.findById(id);
+
+    if (role.isSystemRole) {
+      throw new BadRequestException('System roles cannot be deleted');
+    }
+
+    const assignedCheck = await this.db.query<{ count: string }>(
+      'SELECT COUNT(*)::text as count FROM user_roles WHERE role_id = $1',
+      [id],
+    );
+    const assignedCount = parseInt(assignedCheck.rows[0]?.count || '0', 10);
+    if (assignedCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete role "${role.name}": it is currently assigned to ${assignedCount} user(s)`,
+      );
+    }
+
+    return this.uow.runInTransaction(async (client) => {
+      await client.query('DELETE FROM role_permissions WHERE role_id = $1', [id]);
+      await client.query('DELETE FROM roles WHERE id = $1', [id]);
+
+      await this.auditService.log({
+        userId,
+        userName: 'Admin',
+        action: 'ROLE_DELETE',
+        entityType: 'ROLE',
+        entityId: id,
+        beforeSnapshot: { ...role },
+        correlationId,
+      });
+
+      return { success: true };
     });
   }
 }

@@ -53,6 +53,7 @@ class UsersApiService {
           'mobile': mobile.trim(),
           'password': password,
           'roleId': primaryRoleId,
+          if (assignedRoleIds != null) 'assignedRoleIds': assignedRoleIds,
         },
       );
       final data = _client.unwrap<Map<String, dynamic>>(response);
@@ -71,17 +72,31 @@ class UsersApiService {
     bool? isActive,
   }) async {
     try {
-      final response = await _client.dio.patch(
+      final response = await _client.dio.put(
         '/users/$id',
         data: {
           if (name != null) 'name': name.trim(),
           if (mobile != null) 'mobile': mobile.trim(),
           if (primaryRoleId != null) 'roleId': primaryRoleId,
+          if (assignedRoleIds != null) 'assignedRoleIds': assignedRoleIds,
           if (isActive != null) 'isActive': isActive,
         },
       );
       final data = _client.unwrap<Map<String, dynamic>>(response);
       return _mapToAppUser(data);
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
+  Future<void> resetPassword(String id, String newPassword) async {
+    try {
+      await _client.dio.post(
+        '/users/$id/reset-password',
+        data: {
+          'newPassword': newPassword,
+        },
+      );
     } catch (e) {
       throw _client.handleDioError(e);
     }
@@ -97,7 +112,9 @@ class UsersApiService {
 
   AppUser _mapToAppUser(Map<String, dynamic> json) {
     final roleId = json['roleId']?.toString() ?? json['primaryRoleId']?.toString() ?? 'data_entry';
-    final rawRoles = (json['roles'] as List?)?.map((r) => r.toString()).toList() ?? [roleId];
+    final rawRoles = (json['assignedRoleIds'] as List?)?.map((r) => r.toString()).toList() ??
+        (json['roles'] as List?)?.map((r) => r.toString()).toList() ??
+        [roleId];
 
     return AppUser(
       id: json['id']?.toString() ?? '',

@@ -34,12 +34,19 @@ export class AuditService {
       )
     `;
 
+    const isUuid = (val: string | null | undefined): boolean => {
+      if (!val) return false;
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    };
+
+    const safeEntityId = isUuid(options.entityId) ? options.entityId : null;
+
     const params = [
       options.userId || null,
       options.userName || null,
       options.action,
       options.entityType,
-      options.entityId || null,
+      safeEntityId,
       options.beforeSnapshot ? JSON.stringify(options.beforeSnapshot) : null,
       options.afterSnapshot ? JSON.stringify(options.afterSnapshot) : null,
       options.reason || null,

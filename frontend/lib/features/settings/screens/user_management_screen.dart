@@ -7,7 +7,6 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/rbac_models.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../core/utils/password_security.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
@@ -264,13 +263,23 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
           ErpButton(text: 'Cancel', isOutlined: true, onPressed: () => Navigator.of(ctx).pop()),
           ErpButton(
             text: 'Reset Password',
-            onPressed: () {
+            onPressed: () async {
               if (formKey.currentState!.validate()) {
-                db.resetUserPassword(user.id, pwdCtrl.text.trim());
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Password for ${user.name} reset successfully!'), backgroundColor: AppColors.success),
-                );
+                try {
+                  await db.resetUserPasswordAsync(user.id, pwdCtrl.text.trim());
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Password for ${user.name} reset successfully!'), backgroundColor: AppColors.success),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to reset password: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.danger),
+                    );
+                  }
+                }
               }
             },
           ),
@@ -554,6 +563,67 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
     );
   }
 
+  void _confirmDeleteRole(Role role) {
+    if (role.isSystemRole) return;
+    final db = ref.read(databaseServiceProvider);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete Role "${role.name}"?', style: AppTextStyles.h2),
+        content: Text(
+          'Are you sure you want to permanently delete the custom role "${role.name}" (${role.id})? This cannot be undone.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          ErpButton(text: 'Cancel', isOutlined: true, onPressed: () => Navigator.of(ctx).pop()),
+          ErpButton(
+            text: 'Delete Role',
+            isDanger: true,
+            onPressed: () async {
+              try {
+                await db.deleteRoleAsync(role.id);
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Role "${role.name}" deleted successfully!'), backgroundColor: AppColors.success),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete role: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.danger),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleUserStatus(AppUser user) async {
+    final db = ref.read(databaseServiceProvider);
+    final willBeActive = !user.isActive;
+    try {
+      await db.toggleUserStatusAsync(user.id, willBeActive);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('User "${user.name}" ${willBeActive ? "reactivated" : "deactivated"} successfully!'),
+            backgroundColor: willBeActive ? AppColors.success : AppColors.warning,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update status: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -729,7 +799,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                 IconButton(
                                   icon: Icon(u.isActive ? Icons.block : Icons.check_circle_outline, size: 18, color: u.isActive ? Colors.red : Colors.green),
                                   tooltip: u.isActive ? 'Deactivate User Account' : 'Reactivate User Account',
-                                  onPressed: () => db.toggleUserStatus(u.id, !u.isActive),
+                                  onPressed: () => _toggleUserStatus(u),
                                 ),
                               ],
                             ),
@@ -800,6 +870,12 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                   tooltip: 'Configure Permissions & Matrix',
                                   onPressed: () => _openAddEditRoleDialog(r),
                                 ),
+                                if (!r.isSystemRole)
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.danger),
+                                    tooltip: 'Delete Role',
+                                    onPressed: () => _confirmDeleteRole(r),
+                                  ),
                               ],
                             ),
                           ];

@@ -31,6 +31,11 @@ export class CreateUserDto {
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
+  assignedRoleIds?: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
   branchIds?: string[];
 
   @IsArray()

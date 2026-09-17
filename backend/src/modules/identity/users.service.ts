@@ -5,6 +5,7 @@ import { DatabasePool } from '../../core/database/connection';
 import { UnitOfWork } from '../../core/database/unit-of-work';
 import { ConflictError } from '../../core/errors/conflict.error';
 import { NotFoundError } from '../../core/errors/not-found.error';
+import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserScopesDto } from './dto/update-user-scopes.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -18,6 +19,7 @@ export interface UserSummary {
   isActive: boolean;
   roleId: string;
   roleName: string;
+  assignedRoleIds: string[];
   branchIds: string[];
   stockLocationIds: string[];
   createdAt: Date;
@@ -63,6 +65,10 @@ export class UsersService {
       user_id: string;
       stock_location_id: string;
     }>('SELECT user_id, stock_location_id FROM user_stock_location_access');
+    const rolesRes = await this.db.query<{
+      user_id: string;
+      role_id: string;
+    }>('SELECT user_id, role_id FROM user_roles');
 
     const branchMap = new Map<string, string[]>();
     for (const b of branchRes.rows) {
@@ -78,6 +84,13 @@ export class UsersService {
       locMap.set(l.user_id, arr);
     }
 
+    const roleMap = new Map<string, string[]>();
+    for (const r of rolesRes.rows) {
+      const arr = roleMap.get(r.user_id) || [];
+      arr.push(r.role_id);
+      roleMap.set(r.user_id, arr);
+    }
+
     return res.rows.map((u) => ({
       id: u.id,
       name: u.name,
@@ -87,6 +100,7 @@ export class UsersService {
       isActive: u.is_active,
       roleId: u.role_id,
       roleName: u.role_name,
+      assignedRoleIds: roleMap.get(u.id) || (u.role_id ? [u.role_id] : []),
       branchIds: branchMap.get(u.id) || [],
       stockLocationIds: locMap.get(u.id) || [],
       createdAt: u.created_at,
@@ -131,6 +145,10 @@ export class UsersService {
       'SELECT stock_location_id FROM user_stock_location_access WHERE user_id = $1',
       [id],
     );
+    const rolesRes = await this.db.query<{ role_id: string }>(
+      'SELECT role_id FROM user_roles WHERE user_id = $1',
+      [id],
+    );
 
     return {
       id: user.id,
@@ -141,6 +159,7 @@ export class UsersService {
       isActive: user.is_active,
       roleId: user.role_id,
       roleName: user.role_name,
+      assignedRoleIds: rolesRes.rows.map((r) => r.role_id),
       branchIds: branches.rows.map((b) => b.branch_id),
       stockLocationIds: locations.rows.map((l) => l.stock_location_id),
       createdAt: user.created_at,
@@ -186,6 +205,20 @@ export class UsersService {
         [userId, dto.roleId],
       );
 
+      // Assign secondary roles if provided
+      if (dto.assignedRoleIds && dto.assignedRoleIds.length > 0) {
+        for (const rId of dto.assignedRoleIds) {
+          if (rId !== dto.roleId) {
+            await client.query(
+              `INSERT INTO user_roles (user_id, role_id, is_primary)
+               VALUES ($1, $2, false)
+               ON CONFLICT (user_id, role_id) DO NOTHING`,
+              [userId, rId],
+            );
+          }
+        }
+      }
+
       // Assign branch scopes
       if (dto.branchIds && dto.branchIds.length > 0) {
         for (const branchId of dto.branchIds) {
@@ -218,6 +251,7 @@ export class UsersService {
           name: dto.name,
           email: dto.email,
           roleId: dto.roleId,
+          assignedRoleIds: dto.assignedRoleIds,
           branchIds: dto.branchIds,
           stockLocationIds: dto.stockLocationIds,
         },
@@ -233,6 +267,7 @@ export class UsersService {
         isActive: true,
         roleId: dto.roleId,
         roleName: dto.roleId,
+        assignedRoleIds: dto.assignedRoleIds || [dto.roleId],
         branchIds: dto.branchIds || [],
         stockLocationIds: dto.stockLocationIds || [],
         createdAt: userRes.rows[0].created_at,
@@ -280,7 +315,25 @@ export class UsersService {
         );
       }
 
-      if (dto.roleId && dto.roleId !== existing.roleId) {
+      const newPrimaryRoleId = dto.roleId ?? existing.roleId;
+
+      if (dto.assignedRoleIds !== undefined) {
+        await client.query('DELETE FROM user_roles WHERE user_id = $1', [id]);
+        await client.query(
+          `INSERT INTO user_roles (user_id, role_id, is_primary) VALUES ($1, $2, true)`,
+          [id, newPrimaryRoleId],
+        );
+        for (const rId of dto.assignedRoleIds) {
+          if (rId !== newPrimaryRoleId) {
+            await client.query(
+              `INSERT INTO user_roles (user_id, role_id, is_primary)
+               VALUES ($1, $2, false)
+               ON CONFLICT (user_id, role_id) DO NOTHING`,
+              [id, rId],
+            );
+          }
+        }
+      } else if (dto.roleId && dto.roleId !== existing.roleId) {
         await client.query(
           `INSERT INTO user_roles (user_id, role_id, is_primary)
            VALUES ($1, $2, true)
@@ -306,14 +359,7 @@ export class UsersService {
         correlationId,
       });
 
-      return {
-        ...existing,
-        name: dto.name ?? existing.name,
-        mobile: dto.mobile ?? existing.mobile,
-        avatarUrl: dto.avatarUrl ?? existing.avatarUrl,
-        isActive: dto.isActive ?? existing.isActive,
-        roleId: dto.roleId ?? existing.roleId,
-      };
+      return this.findById(id);
     });
   }
 
@@ -404,5 +450,38 @@ export class UsersService {
     });
 
     return { success: true };
+  }
+
+  async resetPassword(
+    id: string,
+    dto: AdminResetPasswordDto,
+    currentUserId?: string,
+    correlationId?: string,
+  ): Promise<{ success: boolean; message: string }> {
+    await this.findById(id);
+
+    const newHash = await this.argon2.hash(dto.newPassword);
+
+    return this.uow.runInTransaction(async (client) => {
+      await client.query(
+        'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+        [newHash, id],
+      );
+      await client.query(
+        'UPDATE refresh_tokens SET is_revoked = true WHERE user_id = $1',
+        [id],
+      );
+
+      await this.auditService.log({
+        userId: currentUserId,
+        userName: 'Admin',
+        action: 'USER_PASSWORD_RESET',
+        entityType: 'USER',
+        entityId: id,
+        correlationId,
+      });
+
+      return { success: true, message: 'Password reset successfully' };
+    });
   }
 }

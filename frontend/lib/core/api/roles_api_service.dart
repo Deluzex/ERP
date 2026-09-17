@@ -54,12 +54,36 @@ class RolesApiService {
     }
   }
 
+  Future<Role> updateRole(
+    String roleId, {
+    String? name,
+    String? description,
+    String? defaultDashboardSection,
+    bool? isActive,
+  }) async {
+    try {
+      final response = await _client.dio.put(
+        '/roles/$roleId',
+        data: {
+          if (name != null) 'name': name,
+          if (description != null) 'description': description,
+          if (defaultDashboardSection != null) 'defaultDashboardSection': defaultDashboardSection,
+          if (isActive != null) 'isActive': isActive,
+        },
+      );
+      final data = _client.unwrap<Map<String, dynamic>>(response);
+      return _mapToRole(data);
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
   Future<void> updateRolePermissions(String roleId, List<String> permissions) async {
     try {
       await _client.dio.put(
         '/roles/$roleId/permissions',
         data: {
-          'permissionIds': permissions,
+          'permissions': permissions,
         },
       );
     } catch (e) {

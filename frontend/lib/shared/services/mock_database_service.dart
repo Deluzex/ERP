@@ -3929,9 +3929,47 @@ class MockDatabaseService extends ChangeNotifier {
     return saved;
   }
 
-  Future<void> updateRolePermissionsAsync(String roleId, List<String> permissions) async {
-    await _rolesApi.updateRolePermissions(roleId, permissions);
-    await loadRoles(forceRefresh: true);
+  Future<Role> updateRoleAsync(
+    String roleId, {
+    String? name,
+    String? description,
+    String? defaultDashboardSection,
+    bool? isActive,
+  }) async {
+    final updated = await _rolesApi.updateRole(
+      roleId,
+      name: name,
+      description: description,
+      defaultDashboardSection: defaultDashboardSection,
+      isActive: isActive,
+    );
+    final idx = roles.indexWhere((r) => r.id == roleId);
+    if (idx != -1) {
+      roles[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<void> updateRolePermissionsAsync(String roleId, dynamic permissions) async {
+    List<String> permStrings;
+    Map<ErpModule, Set<ErpAction>> permMap;
+    if (permissions is List<String>) {
+      permStrings = permissions;
+      permMap = RolesApiService.permissionStringsToMap(permissions);
+    } else if (permissions is Map<ErpModule, Set<ErpAction>>) {
+      permStrings = RolesApiService.permissionMapToStrings(permissions);
+      permMap = permissions;
+    } else {
+      throw ArgumentError('Permissions must be List<String> or Map<ErpModule, Set<ErpAction>>');
+    }
+
+    await _rolesApi.updateRolePermissions(roleId, permStrings);
+    final idx = roles.indexWhere((r) => r.id == roleId);
+    if (idx != -1) {
+      roles[idx] = roles[idx].copyWith(permissions: permMap);
+      notifyListeners();
+    }
   }
 
   Future<void> deleteRoleAsync(String roleId) async {
@@ -3943,9 +3981,9 @@ class MockDatabaseService extends ChangeNotifier {
   // -------------------------------------------------------------
   // Users Live API
   // -------------------------------------------------------------
-  Future<void> loadUsers({bool forceRefresh = false}) async {
+  Future<void> loadUsers({bool forceRefresh = false, String? search, String? roleId}) async {
     try {
-      final remote = await _usersApi.getUsers();
+      final remote = await _usersApi.getUsers(search: search, roleId: roleId);
       users = remote;
       notifyListeners();
     } catch (e) {
@@ -3993,6 +4031,9 @@ class MockDatabaseService extends ChangeNotifier {
     final idx = users.indexWhere((u) => u.id == id);
     if (idx != -1) {
       users[idx] = updated;
+      if (currentUser.id == id) {
+        currentUser = updated;
+      }
       notifyListeners();
     }
     return updated;
@@ -4005,6 +4046,15 @@ class MockDatabaseService extends ChangeNotifier {
       users[idx] = users[idx].copyWith(isActive: false);
       notifyListeners();
     }
+  }
+
+  Future<void> toggleUserStatusAsync(String userId, bool active) async {
+    await updateUserAsync(userId, isActive: active);
+  }
+
+  Future<void> resetUserPasswordAsync(String userId, String newPassword) async {
+    await _usersApi.resetPassword(userId, newPassword);
+    resetUserPassword(userId, newPassword);
   }
 
   // -------------------------------------------------------------
@@ -5132,3 +5182,4 @@ class MockDatabaseService extends ChangeNotifier {
     return _productionApi.saveBom(finishedProductId, items, notes: notes);
   }
 }
+

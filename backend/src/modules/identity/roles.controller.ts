@@ -1,9 +1,18 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { Ctx } from '../../core/auth/ctx.decorator';
 import { RequestContext } from '../../core/auth/request-context';
 import { RequirePermission } from '../../core/auth/require-permission.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CreateRoleDto } from './dto/create-role.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 import { UpdateRolePermissionsDto } from './dto/update-role-permissions.dto';
 import { RolesService } from './roles.service';
 
@@ -35,6 +44,22 @@ export class RolesController {
   @RequirePermission('settings.edit')
   create(@Body() dto: CreateRoleDto, @Ctx() ctx: RequestContext) {
     return this.rolesService.create(dto, ctx.userId, ctx.correlationId);
+  }
+
+  @Put(':id')
+  @RequirePermission('settings.edit')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateRoleDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.rolesService.update(id, dto, ctx.userId, ctx.correlationId);
+  }
+
+  @Delete(':id')
+  @RequirePermission('settings.edit')
+  delete(@Param('id') id: string, @Ctx() ctx: RequestContext) {
+    return this.rolesService.delete(id, ctx.userId, ctx.correlationId);
   }
 
   @Put(':id/permissions')

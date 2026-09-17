@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/models/architect_model.dart';
-import 'package:frontend/core/models/category_unit_model.dart';
 import 'package:frontend/core/models/customer_model.dart';
 import 'package:frontend/core/models/dealer_model.dart';
 import 'package:frontend/core/models/finished_product_model.dart';
@@ -8,8 +7,6 @@ import 'package:frontend/core/models/raw_material_model.dart';
 import 'package:frontend/core/models/rbac_models.dart';
 import 'package:frontend/core/models/vendor_model.dart';
 import 'package:frontend/core/api/roles_api_service.dart';
-import 'package:frontend/core/api/users_api_service.dart';
-import 'package:frontend/app/routes/app_routes.dart';
 
 void main() {
   group('Full-Stack Masters & RBAC Integration Test Suite', () {
