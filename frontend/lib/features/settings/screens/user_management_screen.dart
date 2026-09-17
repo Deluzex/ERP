@@ -642,53 +642,59 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('User & Role Access Management (RBAC)', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Manage ERP operators, primary & multi-department roles, and granular permission matrices', style: AppTextStyles.subtitle),
-                ],
-              ),
-              TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabs: [
-                  Tab(
-                    child: Row(
-                      children: [
-                        const Icon(Icons.people_alt_outlined, size: 16),
-                        const SizedBox(width: 8),
-                        Text('Users Directory (${db.users.length})'),
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      children: [
-                        const Icon(Icons.security_rounded, size: 16),
-                        const SizedBox(width: 8),
-                        Text('Roles & Permission Matrix (${db.roles.length})'),
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      children: [
-                        const Icon(Icons.history_edu_rounded, size: 16),
-                        const SizedBox(width: 8),
-                        Text('Security Audit Trail (${db.auditLogs.length})'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+              Text('User & Role Access Management (RBAC)', style: AppTextStyles.h1),
+              const SizedBox(height: 4),
+              Text('Manage ERP operators, primary & multi-department roles, and granular permission matrices', style: AppTextStyles.subtitle),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          Container(
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textMuted,
+              indicatorColor: AppColors.primary,
+              indicatorWeight: 3,
+              tabs: [
+                Tab(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.people_alt_outlined, size: 16),
+                      const SizedBox(width: 8),
+                      Text('Users Directory (${db.users.length})'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.security_rounded, size: 16),
+                      const SizedBox(width: 8),
+                      Text('Roles & Permission Matrix (${db.roles.length})'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.history_edu_rounded, size: 16),
+                      const SizedBox(width: 8),
+                      Text('Security Audit Trail (${db.auditLogs.length})'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // Tab Content Area
           SizedBox(
