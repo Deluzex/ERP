@@ -46,7 +46,14 @@ BEGIN
   VALUES
     -- Dashboard
     ('dashboard.view', 'dashboard', 'view', 'View standard and executive dashboards'),
+    ('dashboard.create', 'dashboard', 'create', 'Create custom dashboard widgets and views'),
+    ('dashboard.edit', 'dashboard', 'edit', 'Modify dashboard layouts and metrics'),
+    ('dashboard.delete', 'dashboard', 'delete', 'Remove custom dashboard views'),
+    ('dashboard.approve', 'dashboard', 'approve', 'Approve dashboard metric targets'),
+    ('dashboard.cancel', 'dashboard', 'cancel', 'Reset dashboard preferences'),
     ('dashboard.export', 'dashboard', 'export', 'Export dashboard data and charts'),
+    ('dashboard.print', 'dashboard', 'print', 'Print dashboard executive summaries'),
+    ('dashboard.share', 'dashboard', 'share', 'Share dashboard reports via WhatsApp/Email'),
     -- Inventory
     ('inventory.view', 'inventory', 'view', 'View raw material and finished goods stock'),
     ('inventory.create', 'inventory', 'create', 'Create stock inward records'),

@@ -188,6 +188,15 @@ export class RolesService {
   ): Promise<RoleWithPermissions> {
     const role = await this.findById(id);
 
+    if (dto.permissions && dto.permissions.length > 0) {
+      const validPerms = await this.db.query<{ id: string }>('SELECT id FROM permissions');
+      const validSet = new Set(validPerms.rows.map((r) => r.id));
+      const invalid = dto.permissions.filter((p) => !validSet.has(p));
+      if (invalid.length > 0) {
+        throw new BadRequestException(`Invalid permission IDs: ${invalid.slice(0, 5).join(', ')}`);
+      }
+    }
+
     return this.uow.runInTransaction(async (client) => {
       const beforeSnapshot = { permissions: role.permissions };
 

@@ -178,7 +178,7 @@ class RolesApiService {
       case ErpModule.masters: return 'masters';
       case ErpModule.reports: return 'reports';
       case ErpModule.settings: return 'settings';
-      case ErpModule.userManagement: return 'settings';
+      case ErpModule.userManagement: return 'userManagement';
     }
   }
 

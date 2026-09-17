@@ -362,6 +362,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                             flex: 2,
                             child: DropdownButtonFormField<ErpNavSection>(
                               value: selectedDashboard,
+                              isExpanded: true,
                               decoration: const InputDecoration(labelText: 'Default Landing Dashboard'),
                               items: const [
                                 DropdownMenuItem(value: ErpNavSection.dashboard, child: Text('Admin Full Dashboard')),
