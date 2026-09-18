@@ -513,7 +513,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
     );
   }
 
-  void _createInvoice(bool isDraft) {
+  Future<void> _createInvoice(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
     final db = ref.read(databaseServiceProvider);
 
@@ -610,16 +610,29 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
       createdAt: DateTime.now(),
     );
 
-    db.createSale(sale);
+    try {
+      if (isDraft) {
+        // Direct-sale API always executes immediately (stock deduction + payment); drafts stay local-only.
+        db.createSale(sale);
+      } else {
+        await db.createDirectSaleAsync(sale);
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isDraft ? 'Draft Sale Saved' : 'Invoice Created! Finished Product stock deducted & commission generated.'),
-        backgroundColor: AppColors.success,
-      ),
-    );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isDraft ? 'Draft Sale Saved' : 'Invoice Created! Finished Product stock deducted & commission generated.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
 
-    ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+      ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create sale: $e'), backgroundColor: AppColors.danger),
+      );
+    }
   }
 
   @override

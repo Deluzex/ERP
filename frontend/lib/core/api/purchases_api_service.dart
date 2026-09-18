@@ -46,7 +46,7 @@ class PurchasesApiService {
       );
 
       final data = _client.unwrap<Map<String, dynamic>>(response);
-      final rawList = data['purchases'] as List<dynamic>? ?? [];
+      final rawList = data['items'] as List<dynamic>? ?? [];
       final purchases = rawList
           .map((p) => Purchase.fromJson(p as Map<String, dynamic>))
           .toList();
@@ -54,7 +54,7 @@ class PurchasesApiService {
       return {
         'summary': data['summary'] ?? {},
         'purchases': purchases,
-        'meta': data['meta'] ?? {},
+        'meta': data['pagination'] ?? {},
       };
     } catch (e) {
       throw _client.handleDioError(e);

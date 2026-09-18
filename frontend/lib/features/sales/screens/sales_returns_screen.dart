@@ -35,10 +35,13 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final db = ref.read(databaseServiceProvider);
+      db.loadSalesReturns();
+      db.loadSalesInvoices();
+
       final sourceId = ref.read(salesCreateSourceDocIdProvider);
       if (sourceId != null) {
         ref.read(salesCreateSourceDocIdProvider.notifier).state = null;
-        final db = ref.read(databaseServiceProvider);
         _showCreateOrEditSalesReturnDialog(context, db, preselectedInvoiceId: sourceId);
       }
     });
@@ -50,13 +53,20 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     super.dispose();
   }
 
-  void _showCreateOrEditSalesReturnDialog(BuildContext context, MockDatabaseService db, {Sale? existingReturn, String? preselectedInvoiceId}) {
+  Future<void> _showCreateOrEditSalesReturnDialog(BuildContext context, MockDatabaseService db, {Sale? initialExistingReturn, String? preselectedInvoiceId}) async {
     if (db.salesInvoices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No sales invoices available for return.'), backgroundColor: AppColors.warning),
       );
       return;
     }
+
+    // List endpoints omit line items; hydrate every invoice so whichever one gets picked below has items to return.
+    await db.hydrateSalesInvoiceItems();
+    final Sale? existingReturn = (initialExistingReturn != null && initialExistingReturn.items.isEmpty)
+        ? await db.getReturnDetailAsync(initialExistingReturn.id)
+        : initialExistingReturn;
+    if (!context.mounted) return;
 
     final isEdit = existingReturn != null;
     String selectedInvoiceId = existingReturn?.originalInvoiceId ?? preselectedInvoiceId ?? (db.salesInvoices.isNotEmpty ? db.salesInvoices.first.id : '');
@@ -449,7 +459,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     );
   }
 
-  void _processReturnSubmission(
+  Future<void> _processReturnSubmission(
     BuildContext context,
     MockDatabaseService db,
     Sale invoice,
@@ -460,7 +470,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     String notes,
     SalesReturnStatus targetStatus,
     BuildContext dialogCtx,
-  ) {
+  ) async {
     List<SaleLineItem> returnItems = [];
 
     for (final item in invoice.items) {
@@ -509,23 +519,28 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
       return;
     }
 
-    final returnDoc = db.createSalesReturn(
-      originalInvoiceId: invoice.id,
-      returnItems: returnItems,
-      returnReason: returnReason,
-      condition: returnItems.first.returnCondition ?? ReturnCondition.resalable,
-      financialAction: financialAction,
-      initialStatus: targetStatus,
-      notes: notes,
-    );
+    try {
+      final returnDoc = await db.createSalesReturnAsync(
+        originalInvoiceId: invoice.id,
+        returnItems: returnItems,
+        returnReason: returnReason,
+        condition: returnItems.first.returnCondition ?? ReturnCondition.resalable,
+        financialAction: financialAction,
+        notes: notes,
+      );
 
-    Navigator.pop(dialogCtx);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Sales Return ${returnDoc.invoiceNumber} created as ${targetStatus.name.toUpperCase()}!'),
-        backgroundColor: AppColors.success,
-      ),
-    );
+      Navigator.pop(dialogCtx);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sales Return ${returnDoc.invoiceNumber} created as ${(returnDoc.salesReturnStatus ?? targetStatus).name.toUpperCase()}!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create sales return: $e'), backgroundColor: AppColors.danger),
+      );
+    }
   }
 
   void _showApproveConfirmationDialog(BuildContext context, Sale returnDoc, MockDatabaseService db) {
@@ -571,15 +586,21 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
           ErpButton(
             text: 'Approve & Execute Adjustments',
             icon: Icons.check,
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              db.approveSalesReturn(returnDoc.id);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.'),
-                  backgroundColor: AppColors.success,
-                ),
-              );
+              try {
+                await db.approveSalesReturnAsync(returnDoc.id);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to approve return: $e'), backgroundColor: AppColors.danger),
+                );
+              }
             },
           ),
         ],
@@ -758,7 +779,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
               ErpButton(
                 text: asCustomerCredit ? 'Issue Store Credit' : 'Disburse Refund',
                 icon: Icons.check,
-                onPressed: () {
+                onPressed: () async {
                   final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
                   if (amount <= 0) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -767,22 +788,27 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     return;
                   }
 
-                  db.processSalesReturnRefund(
-                    returnId: returnDoc.id,
-                    paymentMode: refundMode,
-                    amount: amount,
-                    transactionRef: refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : null,
-                    notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
-                    asCustomerCredit: asCustomerCredit,
-                  );
+                  try {
+                    await db.disburseRefundAsync(
+                      returnId: returnDoc.id,
+                      paymentMode: asCustomerCredit ? PaymentMode.creditNote : refundMode,
+                      amount: amount,
+                      transactionRef: refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : null,
+                      notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
+                    );
 
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to process refund: $e'), backgroundColor: AppColors.danger),
+                    );
+                  }
                 },
               ),
             ],
@@ -1136,7 +1162,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                           ref.read(activeRecordDetailsStackProvider.notifier).push(ret.id, 'salesReturn', ErpNavSection.salesReturns);
                           break;
                         case 'edit':
-                          _showCreateOrEditSalesReturnDialog(context, db, existingReturn: ret);
+                          _showCreateOrEditSalesReturnDialog(context, db, initialExistingReturn: ret);
                           break;
                         case 'submit':
                           db.updateSalesReturnStatus(ret.id, SalesReturnStatus.submitted);

@@ -31,6 +31,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(databaseServiceProvider).loadProforma());
   }
 
   @override
@@ -160,7 +161,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
               ErpButton(
                 text: 'Record Advance Receipt',
                 icon: Icons.check,
-                onPressed: () {
+                onPressed: () async {
                   if (enteredAmount <= 0) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Please enter a valid payment amount.'), backgroundColor: AppColors.danger),
@@ -174,21 +175,27 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
                     return;
                   }
 
-                  db.recordProformaAdvancePayment(
-                    proformaId: proforma.id,
-                    amount: enteredAmount,
-                    paymentMode: paymentMode,
-                    transactionRef: transactionRefCtrl.text.trim(),
-                    notes: notesCtrl.text.trim(),
-                  );
+                  try {
+                    await db.recordProformaAdvancePaymentAsync(
+                      proformaId: proforma.id,
+                      amount: enteredAmount,
+                      paymentMode: paymentMode,
+                      transactionRef: transactionRefCtrl.text.trim(),
+                      notes: notesCtrl.text.trim(),
+                    );
 
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Advance of ${Formatters.formatCurrency(enteredAmount)} recorded against ${proforma.invoiceNumber}!'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Advance of ${Formatters.formatCurrency(enteredAmount)} recorded against ${proforma.invoiceNumber}!'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to record payment: $e'), backgroundColor: AppColors.danger),
+                    );
+                  }
                 },
               ),
             ],
@@ -401,57 +408,68 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
                 IconButton(
                   icon: const Icon(Icons.shopping_cart_checkout, color: AppColors.purple, size: 18),
                   tooltip: 'Convert to Sales Order',
-                  onPressed: () {
-                    // Convert Proforma to Sales Order
+                  onPressed: () async {
+                    // Convert Proforma to Sales Order. List rows omit line items, so hydrate first —
+                    // otherwise the new order would be posted with an empty items array.
+                    final hydratedProforma = proforma.items.isEmpty
+                        ? await db.getProformaDetailAsync(proforma.id)
+                        : proforma;
+                    if (!context.mounted) return;
                     final soNumber = 'DLZ/SO/2026/${(db.nextSalesOrderNumber).toString().padLeft(4, '0')}';
                     final so = Sale(
                       id: IdGenerator.generateId('SO'),
                       invoiceNumber: soNumber,
                       documentType: SalesDocumentType.salesOrder,
-                      partyType: proforma.partyType,
-                      partyId: proforma.partyId,
-                      partyName: proforma.partyName,
-                      customerContactPerson: proforma.customerContactPerson,
-                      customerMobile: proforma.customerMobile,
-                      customerEmail: proforma.customerEmail,
-                      customerGstNumber: proforma.customerGstNumber,
-                      billingAddress: proforma.billingAddress,
-                      shippingAddress: proforma.shippingAddress,
-                      projectId: proforma.projectId,
-                      projectName: proforma.projectName,
-                      architectId: proforma.architectId,
-                      architectName: proforma.architectName,
-                      salesExecutive: proforma.salesExecutive,
+                      partyType: hydratedProforma.partyType,
+                      partyId: hydratedProforma.partyId,
+                      partyName: hydratedProforma.partyName,
+                      customerContactPerson: hydratedProforma.customerContactPerson,
+                      customerMobile: hydratedProforma.customerMobile,
+                      customerEmail: hydratedProforma.customerEmail,
+                      customerGstNumber: hydratedProforma.customerGstNumber,
+                      billingAddress: hydratedProforma.billingAddress,
+                      shippingAddress: hydratedProforma.shippingAddress,
+                      projectId: hydratedProforma.projectId,
+                      projectName: hydratedProforma.projectName,
+                      architectId: hydratedProforma.architectId,
+                      architectName: hydratedProforma.architectName,
+                      salesExecutive: hydratedProforma.salesExecutive,
                       salesOrderNumber: soNumber,
-                      proformaReferenceId: proforma.id,
-                      proformaNumber: proforma.invoiceNumber,
-                      quotationReferenceId: proforma.quotationReferenceId,
+                      proformaReferenceId: hydratedProforma.id,
+                      proformaNumber: hydratedProforma.invoiceNumber,
+                      quotationReferenceId: hydratedProforma.quotationReferenceId,
                       saleDate: DateTime.now(),
                       deliveryDate: DateTime.now().add(const Duration(days: 14)),
-                      items: proforma.items.map((i) => i.copyWith()).toList(),
-                      subtotalAmount: proforma.subtotalAmount,
-                      discountAmount: proforma.discountAmount,
-                      taxableAmount: proforma.taxableAmount,
-                      cgstAmount: proforma.cgstAmount,
-                      sgstAmount: proforma.sgstAmount,
-                      igstAmount: proforma.igstAmount,
-                      gstAmount: proforma.gstAmount,
-                      totalAmount: proforma.totalAmount,
-                      paidAmount: proforma.paidAmount,
-                      pendingAmount: proforma.pendingAmount,
-                      paymentMode: proforma.paymentMode,
+                      items: hydratedProforma.items.map((i) => i.copyWith()).toList(),
+                      subtotalAmount: hydratedProforma.subtotalAmount,
+                      discountAmount: hydratedProforma.discountAmount,
+                      taxableAmount: hydratedProforma.taxableAmount,
+                      cgstAmount: hydratedProforma.cgstAmount,
+                      sgstAmount: hydratedProforma.sgstAmount,
+                      igstAmount: hydratedProforma.igstAmount,
+                      gstAmount: hydratedProforma.gstAmount,
+                      totalAmount: hydratedProforma.totalAmount,
+                      paidAmount: hydratedProforma.paidAmount,
+                      pendingAmount: hydratedProforma.pendingAmount,
+                      paymentMode: hydratedProforma.paymentMode,
                       status: SaleStatus.active,
                       createdAt: DateTime.now(),
                     );
 
-                    final createdSO = db.createSalesOrder(so, autoAllocate: true);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Created Sales Order ${createdSO.invoiceNumber} with automated stock allocation!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
-                    ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders;
+                    try {
+                      final createdSO = await db.createSalesOrderAsync(so, autoAllocate: true);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Created Sales Order ${createdSO.invoiceNumber} with automated stock allocation!'),
+                          backgroundColor: AppColors.success,
+                        ),
+                      );
+                      ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders;
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to create sales order: $e'), backgroundColor: AppColors.danger),
+                      );
+                    }
                   },
                 ),
             ],

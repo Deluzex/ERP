@@ -29,6 +29,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
   void initState() {
     super.initState();
     _tabController = TabController(length: 6, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(databaseServiceProvider).loadQuotations());
   }
 
   @override
@@ -290,46 +291,57 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
     );
   }
 
-  void _handleAction(BuildContext context, WidgetRef ref, String action, Sale quote, MockDatabaseService db) {
-    switch (action) {
-      case 'view':
-        ref.read(activeRecordDetailsStackProvider.notifier).push(quote.id, 'quotation', ErpNavSection.quotations);
-        break;
-      case 'send':
-        db.markQuotationSent(quote.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Quotation ${quote.invoiceNumber} marked as SENT to client.'), backgroundColor: AppColors.info),
-        );
-        break;
-      case 'accept':
-        db.acceptQuotation(quote.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Quotation ${quote.invoiceNumber} ACCEPTED! You can now generate Proforma Invoice.'), backgroundColor: AppColors.success),
-        );
-        break;
-      case 'reject':
-        db.rejectQuotation(quote.id, reason: 'Rejected by client');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Quotation ${quote.invoiceNumber} marked as REJECTED.'), backgroundColor: AppColors.danger),
-        );
-        break;
-      case 'revision':
-        ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
-        ref.read(salesCreateSourceDocIdProvider.notifier).state = quote.id;
-        ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
-        break;
-      case 'proforma':
-        final proforma = db.createProformaFromQuotation(quote.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Created Proforma Invoice ${proforma.invoiceNumber}!'), backgroundColor: AppColors.success),
-        );
-        ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.proformaInvoices;
-        break;
-      case 'duplicate':
-        ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
-        ref.read(salesCreateSourceDocIdProvider.notifier).state = quote.id;
-        ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
-        break;
+  Future<void> _handleAction(BuildContext context, WidgetRef ref, String action, Sale quote, MockDatabaseService db) async {
+    try {
+      switch (action) {
+        case 'view':
+          ref.read(activeRecordDetailsStackProvider.notifier).push(quote.id, 'quotation', ErpNavSection.quotations);
+          break;
+        case 'send':
+          await db.updateQuotationStatusAsync(quote.id, QuotationStatus.sent.name);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Quotation ${quote.invoiceNumber} marked as SENT to client.'), backgroundColor: AppColors.info),
+          );
+          break;
+        case 'accept':
+          await db.updateQuotationStatusAsync(quote.id, QuotationStatus.accepted.name);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Quotation ${quote.invoiceNumber} ACCEPTED! You can now generate Proforma Invoice.'), backgroundColor: AppColors.success),
+          );
+          break;
+        case 'reject':
+          await db.updateQuotationStatusAsync(quote.id, QuotationStatus.rejected.name);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Quotation ${quote.invoiceNumber} marked as REJECTED.'), backgroundColor: AppColors.danger),
+          );
+          break;
+        case 'revision':
+          ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
+          ref.read(salesCreateSourceDocIdProvider.notifier).state = quote.id;
+          ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
+          break;
+        case 'proforma':
+          final proforma = await db.convertQuotationToProformaAsync(quote.id);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Created Proforma Invoice ${proforma.invoiceNumber}!'), backgroundColor: AppColors.success),
+          );
+          ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.proformaInvoices;
+          break;
+        case 'duplicate':
+          ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
+          ref.read(salesCreateSourceDocIdProvider.notifier).state = quote.id;
+          ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
+          break;
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Action failed: $e'), backgroundColor: AppColors.danger),
+      );
     }
   }
 }

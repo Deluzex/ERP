@@ -29,6 +29,7 @@ import '../../core/api/vendors_api_service.dart';
 import '../../core/api/inventory_api_service.dart';
 import '../../core/api/purchases_api_service.dart';
 import '../../core/api/production_api_service.dart';
+import '../../core/api/sales_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
@@ -3858,6 +3859,7 @@ class MockDatabaseService extends ChangeNotifier {
   final InventoryApiService _inventoryApi = InventoryApiService();
   final PurchasesApiService _purchasesApi = PurchasesApiService();
   final ProductionApiService _productionApi = ProductionApiService();
+  final SalesApiService _salesApi = SalesApiService();
 
   bool _isLoadingVendors = false;
   bool get isLoadingVendors => _isLoadingVendors;
@@ -3887,6 +3889,7 @@ class MockDatabaseService extends ChangeNotifier {
         loadLowStockAlerts(forceRefresh: forceRefresh),
         loadPurchases(forceRefresh: forceRefresh),
         loadProductionOrders(forceRefresh: forceRefresh),
+        loadAllSales(forceRefresh: forceRefresh),
       ]);
     } catch (e) {
       if (kDebugMode) {
@@ -5085,6 +5088,627 @@ class MockDatabaseService extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] updatePurchaseStatusAsync remote failed: $e');
       rethrow;
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Sales Live API
+  // -------------------------------------------------------------
+  bool _isLoadingQuotations = false;
+  bool get isLoadingQuotations => _isLoadingQuotations;
+  bool _isLoadingProforma = false;
+  bool get isLoadingProforma => _isLoadingProforma;
+  bool _isLoadingSalesOrders = false;
+  bool get isLoadingSalesOrders => _isLoadingSalesOrders;
+  bool _isLoadingDeliveries = false;
+  bool get isLoadingDeliveries => _isLoadingDeliveries;
+  bool _isLoadingSalesInvoices = false;
+  bool get isLoadingSalesInvoices => _isLoadingSalesInvoices;
+  bool _isLoadingSalesReturns = false;
+  bool get isLoadingSalesReturns => _isLoadingSalesReturns;
+  bool _isLoadingSalesDashboard = false;
+  bool get isLoadingSalesDashboard => _isLoadingSalesDashboard;
+
+  Map<String, dynamic> salesDashboardMetrics = {};
+
+  void _mergeSalesDocuments(SalesDocumentType type, List<Sale> remote) {
+    sales.removeWhere((s) => s.documentType == type);
+    sales.addAll(remote);
+  }
+
+  /// List endpoints omit line items; some list screens preview them per row, so hydrate in parallel after a merge.
+  Future<void> _hydrateItemsFor(SalesDocumentType type, Future<Sale> Function(String id) fetchDetail) async {
+    final ids = sales.where((s) => s.documentType == type && s.items.isEmpty).map((s) => s.id).toList();
+    if (ids.isEmpty) return;
+    await Future.wait(ids.map(fetchDetail));
+  }
+
+  Future<void> loadQuotations({bool forceRefresh = false, String? status, String? search}) async {
+    _isLoadingQuotations = true;
+    try {
+      final res = await _salesApi.getQuotations(status: status, search: search);
+      _mergeSalesDocuments(SalesDocumentType.quotation, res['items'] as List<Sale>? ?? []);
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadQuotations fallback: $e');
+    } finally {
+      _isLoadingQuotations = false;
+    }
+  }
+
+  Future<void> loadProforma({bool forceRefresh = false, String? status, String? search}) async {
+    _isLoadingProforma = true;
+    try {
+      final res = await _salesApi.getProforma(status: status, search: search);
+      _mergeSalesDocuments(SalesDocumentType.proformaInvoice, res['items'] as List<Sale>? ?? []);
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadProforma fallback: $e');
+    } finally {
+      _isLoadingProforma = false;
+    }
+  }
+
+  Future<void> loadSalesOrders({bool forceRefresh = false, String? status, String? search}) async {
+    _isLoadingSalesOrders = true;
+    try {
+      final res = await _salesApi.getSalesOrders(status: status, search: search);
+      _mergeSalesDocuments(SalesDocumentType.salesOrder, res['items'] as List<Sale>? ?? []);
+      notifyListeners();
+      await _hydrateItemsFor(SalesDocumentType.salesOrder, getSalesOrderDetailAsync);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadSalesOrders fallback: $e');
+    } finally {
+      _isLoadingSalesOrders = false;
+    }
+  }
+
+  Future<void> loadSalesDeliveries({bool forceRefresh = false, String? status, String? search}) async {
+    _isLoadingDeliveries = true;
+    try {
+      final res = await _salesApi.getDeliveries(status: status, search: search);
+      _mergeSalesDocuments(SalesDocumentType.delivery, res['items'] as List<Sale>? ?? []);
+      notifyListeners();
+      await _hydrateItemsFor(SalesDocumentType.delivery, getDeliveryDetailAsync);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadSalesDeliveries fallback: $e');
+    } finally {
+      _isLoadingDeliveries = false;
+    }
+  }
+
+  Future<void> loadSalesInvoices({bool forceRefresh = false, String? status, String? search}) async {
+    _isLoadingSalesInvoices = true;
+    try {
+      final res = await _salesApi.getInvoices(status: status, search: search);
+      _mergeSalesDocuments(SalesDocumentType.invoice, res['items'] as List<Sale>? ?? []);
+      notifyListeners();
+      // Return-status column derives from item-level returnedQuantity, which list rows omit.
+      await _hydrateItemsFor(SalesDocumentType.invoice, getInvoiceDetailAsync);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadSalesInvoices fallback: $e');
+    } finally {
+      _isLoadingSalesInvoices = false;
+    }
+  }
+
+  Future<void> loadSalesReturns({bool forceRefresh = false, String? status, String? search}) async {
+    _isLoadingSalesReturns = true;
+    try {
+      final res = await _salesApi.getReturns(status: status, search: search);
+      _mergeSalesDocuments(SalesDocumentType.salesReturn, res['items'] as List<Sale>? ?? []);
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadSalesReturns fallback: $e');
+    } finally {
+      _isLoadingSalesReturns = false;
+    }
+  }
+
+  Future<void> loadSalesDashboard({bool forceRefresh = false}) async {
+    _isLoadingSalesDashboard = true;
+    try {
+      salesDashboardMetrics = await _salesApi.getDashboardMetrics();
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadSalesDashboard fallback: $e');
+    } finally {
+      _isLoadingSalesDashboard = false;
+    }
+  }
+
+  /// Loads every Phase 5 Sales document type plus dashboard metrics from the live backend
+  Future<void> loadAllSales({bool forceRefresh = false}) async {
+    try {
+      await Future.wait([
+        loadQuotations(forceRefresh: forceRefresh),
+        loadProforma(forceRefresh: forceRefresh),
+        loadSalesOrders(forceRefresh: forceRefresh),
+        loadSalesDeliveries(forceRefresh: forceRefresh),
+        loadSalesInvoices(forceRefresh: forceRefresh),
+        loadSalesReturns(forceRefresh: forceRefresh),
+        loadSalesDashboard(forceRefresh: forceRefresh),
+      ]);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadAllSales error: $e');
+    }
+  }
+
+  int? _quotationValidDays(Sale quotation) =>
+      quotation.validUntil?.difference(DateTime.now()).inDays.clamp(1, 3650);
+
+  Future<Sale> createQuotationAsync(Sale quotation) async {
+    try {
+      final created = await _salesApi.createQuotation(
+        partyType: quotation.partyType,
+        partyId: quotation.partyId,
+        architectId: quotation.architectId,
+        projectId: quotation.projectId,
+        salesExecutive: quotation.salesExecutive,
+        validDays: _quotationValidDays(quotation),
+        isInterStateTax: quotation.isInterStateTax,
+        isDraft: quotation.quotationStatus == QuotationStatus.draft,
+        items: quotation.items,
+        notes: quotation.notes,
+        termsAndConditions: quotation.termsAndConditions,
+      );
+      sales.insert(0, created);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] createQuotationAsync remote failed, fallback to local: $e');
+      createQuotation(quotation);
+      return quotation;
+    }
+  }
+
+  Future<Sale> createQuotationRevisionAsync(String originalQuotationId, Sale revisedQuotation) async {
+    try {
+      final created = await _salesApi.createQuotationRevision(
+        originalQuotationId,
+        discountAmount: revisedQuotation.discountAmount,
+        notes: revisedQuotation.notes,
+        termsAndConditions: revisedQuotation.termsAndConditions,
+        isDraft: revisedQuotation.quotationStatus == QuotationStatus.draft,
+        items: revisedQuotation.items,
+      );
+      await loadQuotations(forceRefresh: true);
+      sales.removeWhere((s) => s.id == created.id);
+      sales.insert(0, created);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] createQuotationRevisionAsync remote failed, fallback to local: $e');
+      return createQuotationRevision(originalQuotationId, revisedQuotation);
+    }
+  }
+
+  Future<Sale> updateQuotationStatusAsync(String quotationId, String status) async {
+    try {
+      final updated = await _salesApi.updateQuotationStatus(quotationId, status);
+      final idx = sales.indexWhere((s) => s.id == quotationId);
+      if (idx != -1) sales[idx] = updated;
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updateQuotationStatusAsync remote failed: $e');
+      rethrow;
+    }
+  }
+
+  Future<Sale> convertQuotationToProformaAsync(String quotationId) async {
+    try {
+      final proforma = await _salesApi.convertQuotationToProforma(quotationId);
+      await loadQuotations(forceRefresh: true);
+      sales.removeWhere((s) => s.id == proforma.id);
+      sales.insert(0, proforma);
+      notifyListeners();
+      return proforma;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] convertQuotationToProformaAsync remote failed, fallback to local: $e');
+      return createProformaFromQuotation(quotationId);
+    }
+  }
+
+  Future<Sale> recordProformaAdvancePaymentAsync({
+    required String proformaId,
+    required double amount,
+    required PaymentMode paymentMode,
+    String? transactionRef,
+    String? notes,
+  }) async {
+    try {
+      final updated = await _salesApi.recordProformaAdvancePayment(
+        proformaId,
+        amount: amount,
+        paymentMode: paymentMode,
+        transactionReference: transactionRef,
+        notes: notes,
+      );
+      final idx = sales.indexWhere((s) => s.id == proformaId);
+      if (idx != -1) sales[idx] = updated;
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] recordProformaAdvancePaymentAsync remote failed, fallback to local: $e');
+      recordProformaAdvancePayment(
+        proformaId: proformaId,
+        amount: amount,
+        paymentMode: paymentMode,
+        transactionRef: transactionRef,
+        notes: notes,
+      );
+      return sales.firstWhere((s) => s.id == proformaId);
+    }
+  }
+
+  Future<Sale> createSalesOrderAsync(Sale salesOrder, {bool autoAllocate = true}) async {
+    try {
+      final created = await _salesApi.createSalesOrder(
+        partyType: salesOrder.partyType,
+        partyId: salesOrder.partyId,
+        architectId: salesOrder.architectId,
+        projectId: salesOrder.projectId,
+        salesExecutive: salesOrder.salesExecutive,
+        deliveryDate: salesOrder.deliveryDate?.toIso8601String(),
+        paymentMode: salesOrder.paymentMode,
+        isInterStateTax: salesOrder.isInterStateTax,
+        items: salesOrder.items,
+        notes: salesOrder.notes,
+      );
+      sales.insert(0, created);
+      // A quotation/proforma referenced by this order is now converted server-side; refresh to reflect it
+      await Future.wait([
+        loadQuotations(forceRefresh: true),
+        loadProforma(forceRefresh: true),
+        loadFinishedProducts(forceRefresh: true),
+      ]);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesOrderAsync remote failed, fallback to local: $e');
+      return createSalesOrder(salesOrder, autoAllocate: autoAllocate);
+    }
+  }
+
+  /// List endpoints omit line items (backend keeps them for single-document fetches only);
+  /// call this to hydrate a specific sales order with its items before an item-level action (e.g. dispatch).
+  Future<Sale> getSalesOrderDetailAsync(String id) async {
+    try {
+      final full = await _salesApi.getSalesOrderById(id);
+      final idx = sales.indexWhere((s) => s.id == id);
+      if (idx != -1) sales[idx] = full;
+      notifyListeners();
+      return full;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] getSalesOrderDetailAsync failed, using cached row: $e');
+      return sales.firstWhere((s) => s.id == id);
+    }
+  }
+
+  /// Same hydration need as [getSalesOrderDetailAsync], for delivery challans (the list preview shows dispatched items).
+  Future<Sale> getDeliveryDetailAsync(String id) async {
+    try {
+      final full = await _salesApi.getDeliveryById(id);
+      final idx = sales.indexWhere((s) => s.id == id);
+      if (idx != -1) sales[idx] = full;
+      notifyListeners();
+      return full;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] getDeliveryDetailAsync failed, using cached row: $e');
+      return sales.firstWhere((s) => s.id == id);
+    }
+  }
+
+  /// Same hydration need as [getSalesOrderDetailAsync], for tax invoices (e.g. before picking return items).
+  Future<Sale> getInvoiceDetailAsync(String id) async {
+    try {
+      final full = await _salesApi.getInvoiceById(id);
+      final idx = sales.indexWhere((s) => s.id == id);
+      if (idx != -1) sales[idx] = full;
+      notifyListeners();
+      return full;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] getInvoiceDetailAsync failed, using cached row: $e');
+      return sales.firstWhere((s) => s.id == id);
+    }
+  }
+
+  /// Same hydration need as [getSalesOrderDetailAsync], for a proforma invoice before copying its items into a new Sales Order.
+  Future<Sale> getProformaDetailAsync(String id) async {
+    try {
+      final full = await _salesApi.getProformaById(id);
+      final idx = sales.indexWhere((s) => s.id == id);
+      if (idx != -1) sales[idx] = full;
+      notifyListeners();
+      return full;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] getProformaDetailAsync failed, using cached row: $e');
+      return sales.firstWhere((s) => s.id == id);
+    }
+  }
+
+  /// Same hydration need as [getSalesOrderDetailAsync], for a sales return being reopened for edit.
+  Future<Sale> getReturnDetailAsync(String id) async {
+    try {
+      final full = await _salesApi.getReturnById(id);
+      final idx = sales.indexWhere((s) => s.id == id);
+      if (idx != -1) sales[idx] = full;
+      notifyListeners();
+      return full;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] getReturnDetailAsync failed, using cached row: $e');
+      return sales.firstWhere((s) => s.id == id);
+    }
+  }
+
+  /// Hydrates every tax invoice currently missing line items (list endpoints omit them).
+  /// Call before a UI flow that lets the user pick from any invoice's items (e.g. the RMA dialog's invoice dropdown).
+  Future<void> hydrateSalesInvoiceItems() async {
+    final idsNeedingItems = salesInvoices.where((s) => s.items.isEmpty).map((s) => s.id).toList();
+    if (idsNeedingItems.isEmpty) return;
+    await Future.wait(idsNeedingItems.map((id) => getInvoiceDetailAsync(id)));
+  }
+
+  Future<Sale> updateSalesOrderStatusAsync(String orderId, String status) async {
+    try {
+      final updated = await _salesApi.updateSalesOrderStatus(orderId, status);
+      final idx = sales.indexWhere((s) => s.id == orderId);
+      if (idx != -1) sales[idx] = updated;
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updateSalesOrderStatusAsync remote failed: $e');
+      rethrow;
+    }
+  }
+
+  Future<Sale> createDeliveryAsync({
+    required String salesOrderId,
+    required List<SaleLineItem> deliveryItems,
+    required String vehicleNumber,
+    required String driverContact,
+    String? trackingNumber,
+    String? notes,
+  }) async {
+    try {
+      final created = await _salesApi.createDelivery(
+        salesOrderId: salesOrderId,
+        vehicleNumber: vehicleNumber,
+        driverContact: driverContact,
+        trackingNumber: trackingNumber,
+        dispatchNotes: notes,
+        items: deliveryItems,
+      );
+      sales.insert(0, created);
+      await Future.wait([
+        loadSalesOrders(forceRefresh: true),
+        loadFinishedProducts(forceRefresh: true),
+        loadStockMovements(forceRefresh: true),
+      ]);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] createDeliveryAsync remote failed, fallback to local: $e');
+      return createDelivery(
+        salesOrderId: salesOrderId,
+        deliveryItems: deliveryItems,
+        vehicleNumber: vehicleNumber,
+        driverContact: driverContact,
+        trackingNumber: trackingNumber,
+        notes: notes,
+      );
+    }
+  }
+
+  Future<Sale> updateDeliveryTrackingAsync(
+    String deliveryId, {
+    String? courierName,
+    String? trackingNumber,
+    String? vehicleNumber,
+    String? driverContact,
+    String? dispatchNotes,
+  }) async {
+    try {
+      final updated = await _salesApi.updateDeliveryTracking(
+        deliveryId,
+        courierName: courierName,
+        trackingNumber: trackingNumber,
+        vehicleNumber: vehicleNumber,
+        driverContact: driverContact,
+        dispatchNotes: dispatchNotes,
+      );
+      final idx = sales.indexWhere((s) => s.id == deliveryId);
+      if (idx != -1) sales[idx] = updated;
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updateDeliveryTrackingAsync remote failed, fallback to local: $e');
+      final idx = sales.indexWhere((s) => s.id == deliveryId);
+      if (idx == -1) rethrow;
+      final updated = sales[idx].copyWith(
+        courierName: courierName,
+        trackingNumber: trackingNumber,
+        vehicleNumber: vehicleNumber,
+        driverContact: driverContact,
+        dispatchNotes: dispatchNotes,
+      );
+      updateDeliveryChallan(updated);
+      return updated;
+    }
+  }
+
+  Future<Sale> createSalesInvoiceFromDeliveryAsync({
+    required String deliveryId,
+    double discountAmount = 0.0,
+    double initialPaidAmount = 0.0,
+    PaymentMode paymentMode = PaymentMode.bankTransfer,
+    String? notes,
+  }) async {
+    try {
+      final created = await _salesApi.createInvoiceFromDelivery(
+        deliveryId: deliveryId,
+        discountAmount: discountAmount,
+        initialPaidAmount: initialPaidAmount,
+        paymentMode: paymentMode,
+        notes: notes,
+      );
+      sales.insert(0, created);
+      await loadSalesDeliveries(forceRefresh: true);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesInvoiceFromDeliveryAsync remote failed, fallback to local: $e');
+      return createSalesInvoiceFromDelivery(
+        deliveryId: deliveryId,
+        discountAmount: discountAmount,
+        initialPaidAmount: initialPaidAmount,
+        paymentMode: paymentMode,
+        notes: notes,
+      );
+    }
+  }
+
+  Future<Sale> createDirectSaleAsync(Sale sale) async {
+    try {
+      final created = await _salesApi.createDirectSale(
+        partyType: sale.partyType,
+        partyId: sale.partyId,
+        architectId: sale.architectId,
+        projectId: sale.projectId,
+        items: sale.items,
+        paidAmount: sale.paidAmount,
+        paymentMode: sale.paymentMode,
+        isInterStateTax: sale.isInterStateTax,
+        notes: sale.notes,
+      );
+      sales.insert(0, created);
+      await Future.wait([
+        loadFinishedProducts(forceRefresh: true),
+        loadStockMovements(forceRefresh: true),
+      ]);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] createDirectSaleAsync remote failed, fallback to local: $e');
+      createDirectSale(sale);
+      return sale;
+    }
+  }
+
+  Future<Sale> recordInvoicePaymentAsync(
+    String invoiceId, {
+    required double amount,
+    required PaymentMode paymentMode,
+    String? transactionRef,
+    String? notes,
+  }) async {
+    try {
+      final updated = await _salesApi.recordInvoicePayment(
+        invoiceId,
+        amount: amount,
+        paymentMode: paymentMode,
+        transactionReference: transactionRef,
+        notes: notes,
+      );
+      final idx = sales.indexWhere((s) => s.id == invoiceId);
+      if (idx != -1) sales[idx] = updated;
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] recordInvoicePaymentAsync remote failed, fallback to local: $e');
+      recordCustomerInvoicePayment(
+        invoiceId: invoiceId,
+        amount: amount,
+        paymentMode: paymentMode,
+        transactionRef: transactionRef,
+        notes: notes,
+      );
+      return sales.firstWhere((s) => s.id == invoiceId);
+    }
+  }
+
+  Future<Sale> createSalesReturnAsync({
+    required String originalInvoiceId,
+    required List<SaleLineItem> returnItems,
+    required String returnReason,
+    required ReturnCondition condition,
+    required ReturnFinancialAction financialAction,
+    String? notes,
+  }) async {
+    try {
+      final created = await _salesApi.createSalesReturn(
+        originalInvoiceId: originalInvoiceId,
+        returnReason: returnReason,
+        condition: condition,
+        financialAction: financialAction,
+        items: returnItems,
+        notes: notes,
+      );
+      sales.insert(0, created);
+      await loadSalesInvoices(forceRefresh: true);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesReturnAsync remote failed, fallback to local: $e');
+      return createSalesReturn(
+        originalInvoiceId: originalInvoiceId,
+        returnItems: returnItems,
+        returnReason: returnReason,
+        condition: condition,
+        financialAction: financialAction,
+        notes: notes,
+      );
+    }
+  }
+
+  Future<Sale> approveSalesReturnAsync(String returnId) async {
+    try {
+      final updated = await _salesApi.approveSalesReturn(returnId);
+      final idx = sales.indexWhere((s) => s.id == returnId);
+      if (idx != -1) sales[idx] = updated;
+      await Future.wait([
+        loadFinishedProducts(forceRefresh: true),
+        loadStockMovements(forceRefresh: true),
+      ]);
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] approveSalesReturnAsync remote failed, fallback to local: $e');
+      approveSalesReturn(returnId);
+      return sales.firstWhere((s) => s.id == returnId);
+    }
+  }
+
+  Future<Sale> disburseRefundAsync({
+    required String returnId,
+    required PaymentMode paymentMode,
+    required double amount,
+    String? transactionRef,
+    String? notes,
+  }) async {
+    try {
+      final updated = await _salesApi.disburseRefund(
+        returnId,
+        amount: amount,
+        paymentMode: paymentMode,
+        transactionReference: transactionRef,
+        notes: notes,
+      );
+      final idx = sales.indexWhere((s) => s.id == returnId);
+      if (idx != -1) sales[idx] = updated;
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] disburseRefundAsync remote failed, fallback to local: $e');
+      processSalesReturnRefund(
+        returnId: returnId,
+        paymentMode: paymentMode,
+        amount: amount,
+        transactionRef: transactionRef,
+        notes: notes,
+      );
+      return sales.firstWhere((s) => s.id == returnId);
     }
   }
 

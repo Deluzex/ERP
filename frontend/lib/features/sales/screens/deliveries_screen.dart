@@ -26,6 +26,12 @@ class DeliveriesScreen extends ConsumerStatefulWidget {
 class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
   String _searchQuery = '';
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(databaseServiceProvider).loadSalesDeliveries());
+  }
+
   void _showEditCourierDialog(BuildContext context, Sale delivery, MockDatabaseService db) {
     final courierCtrl = TextEditingController(text: delivery.courierName ?? '');
     final trackingCtrl = TextEditingController(text: delivery.trackingNumber ?? '');
@@ -152,24 +158,29 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
             ErpButton(
               text: 'Save Details',
               icon: Icons.check,
-              onPressed: () {
-                final updated = delivery.copyWith(
-                  courierName: courierCtrl.text.trim().isNotEmpty ? courierCtrl.text.trim() : null,
-                  trackingNumber: trackingCtrl.text.trim().isNotEmpty ? trackingCtrl.text.trim() : null,
-                  vehicleNumber: vehicleCtrl.text.trim().isNotEmpty ? vehicleCtrl.text.trim() : null,
-                  courierContact: contactCtrl.text.trim().isNotEmpty ? contactCtrl.text.trim() : null,
-                  expectedDeliveryDate: expDeliveryDate,
-                  dispatchNotes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
-                );
-                db.updateDeliveryChallan(updated);
-                Navigator.pop(ctx);
-                setState(() {});
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Courier & tracking details updated successfully!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+              onPressed: () async {
+                try {
+                  await db.updateDeliveryTrackingAsync(
+                    delivery.id,
+                    courierName: courierCtrl.text.trim().isNotEmpty ? courierCtrl.text.trim() : null,
+                    trackingNumber: trackingCtrl.text.trim().isNotEmpty ? trackingCtrl.text.trim() : null,
+                    vehicleNumber: vehicleCtrl.text.trim().isNotEmpty ? vehicleCtrl.text.trim() : null,
+                    driverContact: contactCtrl.text.trim().isNotEmpty ? contactCtrl.text.trim() : null,
+                    dispatchNotes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
+                  );
+                  Navigator.pop(ctx);
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Courier & tracking details updated successfully!'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to update tracking: $e'), backgroundColor: AppColors.danger),
+                  );
+                }
               },
             ),
           ],
@@ -252,25 +263,31 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
           ErpButton(
             text: 'Generate Tax Invoice',
             icon: Icons.check,
-            onPressed: () {
+            onPressed: () async {
               final discount = double.tryParse(discountCtrl.text.trim()) ?? 0.0;
               final paid = double.tryParse(initialPaidCtrl.text.trim()) ?? 0.0;
 
-              final invoice = db.createSalesInvoiceFromDelivery(
-                deliveryId: delivery.id,
-                discountAmount: discount,
-                initialPaidAmount: paid,
-                notes: notesCtrl.text.trim(),
-              );
+              try {
+                final invoice = await db.createSalesInvoiceFromDeliveryAsync(
+                  deliveryId: delivery.id,
+                  discountAmount: discount,
+                  initialPaidAmount: paid,
+                  notes: notesCtrl.text.trim(),
+                );
 
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Tax Invoice ${invoice.invoiceNumber} created from delivered items! Customer outstanding updated.'),
-                  backgroundColor: AppColors.success,
-                ),
-              );
-              ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Tax Invoice ${invoice.invoiceNumber} created from delivered items! Customer outstanding updated.'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to generate invoice: $e'), backgroundColor: AppColors.danger),
+                );
+              }
             },
           ),
         ],

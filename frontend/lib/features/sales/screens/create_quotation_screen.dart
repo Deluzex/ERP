@@ -99,6 +99,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   final List<_QuotationItemDraft> _items = [];
   Sale? _sourceQuotation;
   bool _isRevision = false;
+  bool _isSubmitting = false;
   int _revisionNumber = 0;
 
   @override
@@ -629,7 +630,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   double get _totalGst => _items.fold(0.0, (sum, i) => sum + i.gstAmount);
   double get _grandTotal => _totalTaxable + _totalGst;
 
-  void _saveQuotation(bool isDraft) {
+  Future<void> _saveQuotation(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -637,6 +638,8 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       );
       return;
     }
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
 
     final db = ref.read(databaseServiceProvider);
 
@@ -751,22 +754,32 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       ],
     );
 
-    if (_isRevision && _sourceQuotation != null) {
-      db.createQuotationRevision(_sourceQuotation!.id, quotation);
-    } else {
-      db.createQuotation(quotation);
+    try {
+      if (_isRevision && _sourceQuotation != null) {
+        await db.createQuotationRevisionAsync(_sourceQuotation!.id, quotation);
+      } else {
+        await db.createQuotationAsync(quotation);
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isRevision
+              ? 'Quotation Revision $quoteNumber created! Old version marked as Superseded.'
+              : (isDraft ? 'Quotation Draft Saved ($quoteNumber)' : 'Quotation $quoteNumber Created and Sent to Client!')),
+          backgroundColor: AppColors.success,
+        ),
+      );
+
+      ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save quotation: $e'), backgroundColor: AppColors.danger),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_isRevision
-            ? 'Quotation Revision $quoteNumber created! Old version marked as Superseded.'
-            : (isDraft ? 'Quotation Draft Saved ($quoteNumber)' : 'Quotation $quoteNumber Created and Sent to Client!')),
-        backgroundColor: AppColors.success,
-      ),
-    );
-
-    ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations;
   }
 
   @override

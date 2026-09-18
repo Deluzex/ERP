@@ -30,6 +30,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(databaseServiceProvider).loadSalesInvoices());
   }
 
   @override
@@ -155,7 +156,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
               ErpButton(
                 text: 'Save Payment Receipt',
                 icon: Icons.check,
-                onPressed: () {
+                onPressed: () async {
                   if (enteredAmount <= 0) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Please enter a valid receipt amount.'), backgroundColor: AppColors.danger),
@@ -169,21 +170,27 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
                     return;
                   }
 
-                  db.recordCustomerInvoicePayment(
-                    invoiceId: invoice.id,
-                    amount: enteredAmount,
-                    paymentMode: paymentMode,
-                    transactionRef: transactionRefCtrl.text.trim(),
-                    notes: notesCtrl.text.trim(),
-                  );
+                  try {
+                    await db.recordInvoicePaymentAsync(
+                      invoice.id,
+                      amount: enteredAmount,
+                      paymentMode: paymentMode,
+                      transactionRef: transactionRefCtrl.text.trim(),
+                      notes: notesCtrl.text.trim(),
+                    );
 
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Payment of ${Formatters.formatCurrency(enteredAmount)} recorded! Customer outstanding balance reduced.'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Payment of ${Formatters.formatCurrency(enteredAmount)} recorded! Customer outstanding balance reduced.'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to record payment: $e'), backgroundColor: AppColors.danger),
+                    );
+                  }
                 },
               ),
             ],

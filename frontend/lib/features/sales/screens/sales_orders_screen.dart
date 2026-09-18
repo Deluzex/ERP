@@ -29,6 +29,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
   void initState() {
     super.initState();
     _tabController = TabController(length: 6, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(databaseServiceProvider).loadSalesOrders());
   }
 
   @override
@@ -221,7 +222,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
               ErpButton(
                 text: 'Confirm Dispatch & Deduct Stock',
                 icon: Icons.check,
-                onPressed: () {
+                onPressed: () async {
                   // Validate delivery quantities
                   List<SaleLineItem> deliveryItems = [];
                   for (final item in so.items) {
@@ -272,22 +273,28 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                     return;
                   }
 
-                  final deliveryDoc = db.createDelivery(
-                    salesOrderId: so.id,
-                    deliveryItems: deliveryItems,
-                    vehicleNumber: vehicleCtrl.text.trim(),
-                    driverContact: driverCtrl.text.trim(),
-                    trackingNumber: trackingCtrl.text.trim(),
-                    notes: notesCtrl.text.trim(),
-                  );
+                  try {
+                    final deliveryDoc = await db.createDeliveryAsync(
+                      salesOrderId: so.id,
+                      deliveryItems: deliveryItems,
+                      vehicleNumber: vehicleCtrl.text.trim(),
+                      driverContact: driverCtrl.text.trim(),
+                      trackingNumber: trackingCtrl.text.trim(),
+                      notes: notesCtrl.text.trim(),
+                    );
 
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Delivery Challan ${deliveryDoc.invoiceNumber} generated! Physical stock deducted from finished goods.'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Delivery Challan ${deliveryDoc.invoiceNumber} generated! Physical stock deducted from finished goods.'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to create delivery: $e'), backgroundColor: AppColors.danger),
+                    );
+                  }
                 },
               ),
             ],
@@ -510,7 +517,11 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                 IconButton(
                   icon: const Icon(Icons.local_shipping, color: AppColors.info, size: 18),
                   tooltip: 'Dispatch Delivery',
-                  onPressed: () => _showDispatchDeliveryDialog(context, so, db),
+                  onPressed: () async {
+                    final fullSo = await db.getSalesOrderDetailAsync(so.id);
+                    if (!context.mounted) return;
+                    _showDispatchDeliveryDialog(context, fullSo, db);
+                  },
                 ),
             ],
           ),

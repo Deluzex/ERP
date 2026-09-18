@@ -199,6 +199,46 @@ class SaleLineItem {
     return subtotal + gstAmount;
   }
 
+  factory SaleLineItem.fromJson(Map<String, dynamic> json) {
+    return SaleLineItem(
+      finishedProductId: json['finishedProductId']?.toString() ?? '',
+      finishedProductName: json['finishedProductName']?.toString() ?? '',
+      finishedProductCode: json['finishedProductCode']?.toString() ?? '',
+      productDescription: json['productDescription']?.toString() ?? '',
+      quantity: double.tryParse(json['quantity']?.toString() ?? '0') ?? 0.0,
+      reservedQuantity: double.tryParse(json['reservedQuantity']?.toString() ?? '0') ?? 0.0,
+      producedQuantity: double.tryParse(json['producedQuantity']?.toString() ?? '0') ?? 0.0,
+      deliveredQuantity: double.tryParse(json['deliveredQuantity']?.toString() ?? '0') ?? 0.0,
+      invoicedQuantity: double.tryParse(json['invoicedQuantity']?.toString() ?? '0') ?? 0.0,
+      returnedQuantity: double.tryParse(json['returnedQuantity']?.toString() ?? '0') ?? 0.0,
+      unit: json['unit']?.toString() ?? 'pcs',
+      rate: double.tryParse(json['rate']?.toString() ?? '0') ?? 0.0,
+      discountAmount: double.tryParse(json['discountAmount']?.toString() ?? '0') ?? 0.0,
+      gstPercent: double.tryParse(json['gstPercent']?.toString() ?? '18') ?? 18.0,
+      taxableAmount: double.tryParse(json['taxableAmount']?.toString() ?? '0'),
+      cgstAmount: double.tryParse(json['cgstAmount']?.toString() ?? '0'),
+      sgstAmount: double.tryParse(json['sgstAmount']?.toString() ?? '0'),
+      igstAmount: double.tryParse(json['igstAmount']?.toString() ?? '0'),
+      lineTotal: double.tryParse(json['lineTotal']?.toString() ?? '0') ?? 0.0,
+      productCondition: json['productCondition']?.toString(),
+      returnCondition: _enumFromName<ReturnCondition>(json['returnCondition'], ReturnCondition.values),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'finishedProductId': finishedProductId,
+      if (finishedProductName.isNotEmpty) 'finishedProductName': finishedProductName,
+      if (finishedProductCode.isNotEmpty) 'finishedProductCode': finishedProductCode,
+      if (productDescription.isNotEmpty) 'productDescription': productDescription,
+      'quantity': quantity,
+      'rate': rate,
+      'discountAmount': discountAmount,
+      'gstPercent': gstPercent,
+      if (returnCondition != null) 'returnCondition': returnCondition!.name,
+    };
+  }
+
   SaleLineItem copyWith({
     String? finishedProductId,
     String? finishedProductName,
@@ -804,4 +844,103 @@ class Sale {
       activityLogs: activityLogs ?? this.activityLogs,
     );
   }
+
+  factory Sale.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'] as List<dynamic>? ?? [];
+    final parsedItems = rawItems
+        .map((i) => SaleLineItem.fromJson(i as Map<String, dynamic>))
+        .toList();
+
+    DateTime? parseDate(dynamic val) => val != null ? DateTime.tryParse(val.toString()) : null;
+
+    return Sale(
+      id: json['id']?.toString() ?? '',
+      invoiceNumber: json['invoiceNumber']?.toString() ?? '',
+      documentType: _enumFromName<SalesDocumentType>(json['documentType'], SalesDocumentType.values) ?? SalesDocumentType.quotation,
+      partyType: _enumFromName<PartyType>(json['partyType'], PartyType.values) ?? PartyType.customer,
+      partyId: json['partyId']?.toString() ?? '',
+      partyName: json['partyName']?.toString() ?? '',
+      customerContactPerson: json['customerContactPerson']?.toString(),
+      customerMobile: json['customerMobile']?.toString(),
+      customerEmail: json['customerEmail']?.toString(),
+      customerGstNumber: json['customerGstNumber']?.toString(),
+      billingAddress: json['billingAddress']?.toString(),
+      shippingAddress: json['shippingAddress']?.toString(),
+      projectId: json['projectId']?.toString(),
+      projectName: json['projectName']?.toString(),
+      architectId: json['architectId']?.toString(),
+      architectName: json['architectName']?.toString(),
+      salesExecutive: json['salesExecutive']?.toString(),
+      saleDate: parseDate(json['saleDate']) ?? DateTime.now(),
+      items: parsedItems,
+      subtotalAmount: double.tryParse(json['subtotalAmount']?.toString() ?? '0') ?? 0.0,
+      discountAmount: double.tryParse(json['discountAmount']?.toString() ?? '0') ?? 0.0,
+      taxableAmount: double.tryParse(json['taxableAmount']?.toString() ?? '0'),
+      cgstAmount: double.tryParse(json['cgstAmount']?.toString() ?? '0'),
+      sgstAmount: double.tryParse(json['sgstAmount']?.toString() ?? '0'),
+      igstAmount: double.tryParse(json['igstAmount']?.toString() ?? '0'),
+      gstAmount: double.tryParse(json['gstAmount']?.toString() ?? '0') ?? 0.0,
+      totalAmount: double.tryParse(json['totalAmount']?.toString() ?? '0') ?? 0.0,
+      paidAmount: double.tryParse(json['paidAmount']?.toString() ?? '0') ?? 0.0,
+      pendingAmount: double.tryParse(json['pendingAmount']?.toString() ?? '0') ?? 0.0,
+      paymentMode: _enumFromName<PaymentMode>(json['paymentMode'], PaymentMode.values) ?? PaymentMode.credit,
+      status: _enumFromName<SaleStatus>(json['status'], SaleStatus.values) ?? SaleStatus.draft,
+      architectCommissionAmount: double.tryParse(json['architectCommissionAmount']?.toString() ?? '0') ?? 0.0,
+      notes: json['notes']?.toString(),
+      termsAndConditions: json['termsAndConditions']?.toString(),
+      bankDetails: json['bankDetails']?.toString(),
+      createdAt: parseDate(json['createdAt']) ?? DateTime.now(),
+      updatedAt: parseDate(json['updatedAt']),
+      validUntil: parseDate(json['validUntil']),
+      revisionNumber: int.tryParse(json['revisionNumber']?.toString() ?? '0') ?? 0,
+      originalQuotationId: json['originalQuotationId']?.toString(),
+      parentQuotationId: json['parentQuotationId']?.toString(),
+      parentQuotationNumber: json['parentQuotationNumber']?.toString(),
+      quotationStatus: _enumFromName<QuotationStatus>(json['quotationStatus'], QuotationStatus.values),
+      proformaStatus: _enumFromName<ProformaStatus>(json['proformaStatus'], ProformaStatus.values),
+      proformaReferenceId: json['proformaReferenceId']?.toString(),
+      proformaNumber: json['proformaNumber']?.toString(),
+      salesOrderNumber: json['salesOrderNumber']?.toString(),
+      salesOrderReferenceId: json['salesOrderReferenceId']?.toString(),
+      deliveryDate: parseDate(json['deliveryDate']),
+      salesOrderStatus: _enumFromName<SalesOrderStatus>(json['salesOrderStatus'], SalesOrderStatus.values),
+      deliveryStatus: _enumFromName<DeliveryStatus>(json['deliveryStatus'], DeliveryStatus.values),
+      deliveryNumber: json['deliveryNumber']?.toString(),
+      vehicleNumber: json['vehicleNumber']?.toString(),
+      driverContact: json['driverContact']?.toString(),
+      courierName: json['courierName']?.toString(),
+      trackingNumber: json['trackingNumber']?.toString(),
+      expectedDeliveryDate: parseDate(json['expectedDeliveryDate']),
+      courierContact: json['courierContact']?.toString(),
+      dispatchNotes: json['dispatchNotes']?.toString(),
+      isInterStateTax: json['isInterStateTax'] == true || json['isInterStateTax']?.toString() == 'true',
+      salesReturnStatus: _enumFromName<SalesReturnStatus>(json['salesReturnStatus'], SalesReturnStatus.values),
+      returnCondition: _enumFromName<ReturnCondition>(json['returnCondition'], ReturnCondition.values),
+      returnFinancialAction: _enumFromName<ReturnFinancialAction>(json['returnFinancialAction'], ReturnFinancialAction.values),
+      returnType: _enumFromName<ReturnType>(json['returnType'], ReturnType.values),
+      refundStatus: _enumFromName<RefundStatus>(json['refundStatus'], RefundStatus.values),
+      refundAmount: double.tryParse(json['refundAmount']?.toString() ?? '0') ?? 0.0,
+      refundPaymentMode: _enumFromName<PaymentMode>(json['refundPaymentMode'], PaymentMode.values),
+      refundTransactionRef: json['refundTransactionRef']?.toString(),
+      refundDate: parseDate(json['refundDate']),
+      isProcessed: json['isProcessed'] == true || json['isProcessed']?.toString() == 'true',
+      createdBy: json['createdBy']?.toString(),
+      originalInvoiceId: json['originalInvoiceId']?.toString(),
+      originalInvoiceNumber: json['originalInvoiceNumber']?.toString(),
+      returnReason: json['returnReason']?.toString(),
+      quotationReferenceId: json['quotationReferenceId']?.toString(),
+      attachmentUrl: json['attachmentUrl']?.toString(),
+    );
+  }
+}
+
+/// Parses a backend enum string into its matching Dart enum value by name,
+/// returning null when absent or unrecognized (caller supplies the default).
+T? _enumFromName<T extends Enum>(dynamic val, List<T> values) {
+  if (val == null) return null;
+  final str = val.toString();
+  for (final v in values) {
+    if (v.name == str) return v;
+  }
+  return null;
 }

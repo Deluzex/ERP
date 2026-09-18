@@ -115,7 +115,7 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
   double get _totalGst => _items.fold(0.0, (sum, i) => sum + i.gstAmount);
   double get _grandTotal => _totalTaxable + _totalGst;
 
-  void _createSalesOrder() {
+  Future<void> _createSalesOrder() async {
     if (!_formKey.currentState!.validate()) return;
     final db = ref.read(databaseServiceProvider);
 
@@ -195,16 +195,24 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
       createdAt: DateTime.now(),
     );
 
-    final createdSO = db.createSalesOrder(so, autoAllocate: true);
+    try {
+      final createdSO = await db.createSalesOrderAsync(so, autoAllocate: true);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Sales Order ${createdSO.invoiceNumber} created! Automated inventory check & reservation applied.'),
-        backgroundColor: AppColors.success,
-      ),
-    );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sales Order ${createdSO.invoiceNumber} created! Automated inventory check & reservation applied.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
 
-    ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders;
+      ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create sales order: $e'), backgroundColor: AppColors.danger),
+      );
+    }
   }
 
   @override
