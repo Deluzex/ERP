@@ -191,22 +191,70 @@ describe('Dynamic RBAC Permissions Lifecycle & De-Privileging (E2E)', () => {
     expect(res.body.error.code).toBe('PERMISSION_DENIED');
   });
 
-  it('5. Admin Role Persistence: GET /roles/admin must return database permissions (no hardcoded bypass)', async () => {
-    // Fetch admin role
-    const res = await request(app.getHttpServer())
+  it('5. Admin Role Dynamism: stripping and restoring a permission on the admin role is reflected immediately (no hardcoded bypass)', async () => {
+    // This test makes NO assumption about how many permissions the admin role has,
+    // or which ones. RBAC is fully dynamic and client-configurable, so the admin
+    // role's permission set is just data — the only thing worth regression-testing
+    // is that GET /roles/admin reflects the database exactly, with no hardcoded
+    // bypass forcing it back to "all permissions" regardless of what's persisted.
+    //
+    // We prove this by reading whatever admin's live permissions currently are,
+    // stripping exactly one of them through the real API, confirming the read
+    // reflects that change, and then restoring the original set — so this test
+    // never leaves the live admin role in a mutated state, even on failure.
+    const beforeRes = await request(app.getHttpServer())
       .get('/api/v1/roles/admin')
       .set('Authorization', `Bearer ${adminToken}`)
       .set('X-Correlation-ID', testCorrelationId)
       .expect(200);
 
-    // The user had unchecked dashboard and inventory (leaving 63 permissions)
-    // Verify that the response matches the database role_permissions count rather than hardcoded 90
-    expect(res.body.data).toBeDefined();
-    expect(res.body.data.id).toBe('admin');
-    expect(res.body.data.permissions).toBeDefined();
-    // Permissions should be what is stored in the database (not forced to 90)
-    expect(res.body.data.permissions.length).toBeLessThan(90);
-    expect(res.body.data.permissions).not.toContain('dashboard.view');
-    expect(res.body.data.permissions).not.toContain('inventory.view');
-  });
+    expect(beforeRes.body.data.id).toBe('admin');
+    const originalPermissions: string[] = beforeRes.body.data.permissions;
+    expect(Array.isArray(originalPermissions)).toBe(true);
+    expect(originalPermissions.length).toBeGreaterThan(0);
+
+    // Pick whichever permission happens to be first — we don't hardcode which
+    // one, since that would reintroduce the same brittleness we're removing.
+    const permissionToStrip = originalPermissions[0];
+    const reducedPermissions = originalPermissions.filter((p) => p !== permissionToStrip);
+
+    try {
+      await request(app.getHttpServer())
+        .put('/api/v1/roles/admin/permissions')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('X-Correlation-ID', testCorrelationId)
+        .send({ permissions: reducedPermissions })
+        .expect(200);
+
+      const afterStripRes = await request(app.getHttpServer())
+        .get('/api/v1/roles/admin')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('X-Correlation-ID', testCorrelationId)
+        .expect(200);
+
+      // The response must match exactly what was just persisted — not a
+      // hardcoded full list regardless of database state.
+      expect(afterStripRes.body.data.permissions).toHaveLength(reducedPermissions.length);
+      expect(afterStripRes.body.data.permissions).not.toContain(permissionToStrip);
+      expect(new Set(afterStripRes.body.data.permissions)).toEqual(new Set(reducedPermissions));
+    } finally {
+      // Always restore admin's original permission set, regardless of the
+      // assertions above succeeding or throwing.
+      await request(app.getHttpServer())
+        .put('/api/v1/roles/admin/permissions')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('X-Correlation-ID', testCorrelationId)
+        .send({ permissions: originalPermissions });
+    }
+
+    // Confirm the restoration actually took effect, so this test is a no-op
+    // against the live admin role by the time it completes.
+    const restoredRes = await request(app.getHttpServer())
+      .get('/api/v1/roles/admin')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Correlation-ID', testCorrelationId)
+      .expect(200);
+    expect(new Set(restoredRes.body.data.permissions)).toEqual(new Set(originalPermissions));
+  }, 60000); // admin currently holds ~90 permissions; updatePermissions writes them one row at a time,
+  // and this test does that twice (strip + restore) against the live remote DB — needs more than the 30s default.
 });
