@@ -30,6 +30,7 @@ import '../../core/api/inventory_api_service.dart';
 import '../../core/api/purchases_api_service.dart';
 import '../../core/api/production_api_service.dart';
 import '../../core/api/sales_api_service.dart';
+import '../../core/api/projects_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
@@ -3860,6 +3861,10 @@ class MockDatabaseService extends ChangeNotifier {
   final PurchasesApiService _purchasesApi = PurchasesApiService();
   final ProductionApiService _productionApi = ProductionApiService();
   final SalesApiService _salesApi = SalesApiService();
+  final ProjectsApiService _projectsApi = ProjectsApiService();
+
+  bool _isLoadingProjects = false;
+  bool get isLoadingProjects => _isLoadingProjects;
 
   bool _isLoadingVendors = false;
   bool get isLoadingVendors => _isLoadingVendors;
@@ -4652,6 +4657,71 @@ class MockDatabaseService extends ChangeNotifier {
   void deleteProject(String id) {
     projects.removeWhere((p) => p.id == id);
     notifyListeners();
+  }
+
+  Future<void> loadProjects({bool forceRefresh = false, String? search, String? status}) async {
+    if (_isLoadingProjects && !forceRefresh) return;
+    _isLoadingProjects = true;
+    try {
+      final remote = await _projectsApi.getProjects(search: search, status: status);
+      if (remote.isNotEmpty || forceRefresh) {
+        projects = remote;
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadProjects fallback: $e');
+    } finally {
+      _isLoadingProjects = false;
+    }
+  }
+
+  Future<Project> createProjectAsync(Project project) async {
+    try {
+      final saved = await _projectsApi.createProject(project);
+      projects.insert(0, saved);
+      notifyListeners();
+      return saved;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] createProjectAsync fallback: $e');
+      addProject(project);
+      return project;
+    }
+  }
+
+  Future<Project> updateProjectAsync(Project project) async {
+    try {
+      final updated = await _projectsApi.updateProject(project);
+      final index = projects.indexWhere((p) => p.id == project.id);
+      if (index != -1) {
+        projects[index] = updated;
+        notifyListeners();
+      }
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updateProjectAsync fallback: $e');
+      updateProject(project);
+      return project;
+    }
+  }
+
+  Future<void> deleteProjectAsync(String id, {String reason = 'User deleted'}) async {
+    try {
+      await _projectsApi.deleteProject(id, reason);
+      projects.removeWhere((p) => p.id == id);
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] deleteProjectAsync fallback: $e');
+      deleteProject(id);
+    }
+  }
+
+  Future<Map<String, dynamic>?> getProjectFinancialsAsync(String id) async {
+    try {
+      return await _projectsApi.getProjectFinancials(id);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] getProjectFinancialsAsync fallback: $e');
+      return null;
+    }
   }
 
   void addCategory(ItemCategory category) {
