@@ -342,15 +342,23 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
             ErpButton(
               text: 'Delete',
               isDanger: true,
-              onPressed: () {
-                ref.read(databaseServiceProvider).deleteRawMaterial(rm.id);
+              onPressed: () async {
                 Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Raw material "${rm.name}" deleted successfully!'),
-                    backgroundColor: AppColors.danger,
-                  ),
-                );
+                try {
+                  await ref.read(databaseServiceProvider).deleteRawMaterialAsync(rm.id);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Raw material "${rm.name}" deleted successfully!'),
+                      backgroundColor: AppColors.danger,
+                    ),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete "${rm.name}": $e'), backgroundColor: AppColors.danger),
+                  );
+                }
               },
             ),
           ],
@@ -363,6 +371,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final materials = db.rawMaterials.where((rm) {
+      if (rm.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
       return query.isEmpty ||
           rm.name.toLowerCase().contains(query) ||

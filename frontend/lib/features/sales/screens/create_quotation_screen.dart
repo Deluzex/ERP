@@ -384,73 +384,84 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
             ErpButton(
               text: 'Save & Select',
               icon: Icons.check_circle_outline,
-              onPressed: () {
+              onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
                 Navigator.of(ctx).pop();
 
-                if (partyType == PartyType.customer) {
-                  final newCust = Customer(
-                    id: IdGenerator.generateId('CUST'),
-                    name: nameCtrl.text.trim(),
-                    mobile: mobileCtrl.text.trim(),
-                    email: emailCtrl.text.trim(),
-                    gstNumber: gstCtrl.text.trim(),
-                    address: addressCtrl.text.trim(),
-                    outstandingAmount: 0.0,
-                    createdAt: DateTime.now(),
-                  );
-                  db.addCustomer(newCust);
-                  setState(() {
-                    _selectedPartyId = newCust.id;
-                    _autoFillPartyDetails(newCust.id, PartyType.customer, db);
-                  });
-                } else if (partyType == PartyType.dealer) {
-                  final newDealer = Dealer(
-                    id: IdGenerator.generateId('DLR'),
-                    name: nameCtrl.text.trim(),
-                    companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
-                    contactPerson: contactPersonCtrl.text.trim(),
-                    mobile: mobileCtrl.text.trim(),
-                    email: emailCtrl.text.trim(),
-                    gstNumber: gstCtrl.text.trim(),
-                    address: addressCtrl.text.trim(),
-                    outstandingAmount: 0.0,
-                    createdAt: DateTime.now(),
-                  );
-                  db.addDealer(newDealer);
-                  setState(() {
-                    _selectedPartyId = newDealer.id;
-                    _autoFillPartyDetails(newDealer.id, PartyType.dealer, db);
-                  });
-                } else if (partyType == PartyType.architect) {
-                  final newArch = Architect(
-                    id: IdGenerator.generateId('ARCH'),
-                    name: nameCtrl.text.trim(),
-                    companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
-                    mobile: mobileCtrl.text.trim(),
-                    email: emailCtrl.text.trim(),
-                    gstNumber: gstCtrl.text.trim(),
-                    address: addressCtrl.text.trim(),
-                    defaultCommissionRate: double.tryParse(commissionRateCtrl.text.trim()) ?? 5.0,
-                    totalCommissionEarned: 0.0,
-                    pendingCommission: 0.0,
-                    approvedCommission: 0.0,
-                    paidCommission: 0.0,
-                    createdAt: DateTime.now(),
-                  );
-                  db.addArchitect(newArch);
-                  setState(() {
-                    _selectedPartyId = newArch.id;
-                    _autoFillPartyDetails(newArch.id, PartyType.architect, db);
-                  });
-                }
+                try {
+                  if (partyType == PartyType.customer) {
+                    final newCust = Customer(
+                      id: IdGenerator.generateId('CUST'),
+                      name: nameCtrl.text.trim(),
+                      mobile: mobileCtrl.text.trim(),
+                      email: emailCtrl.text.trim(),
+                      gstNumber: gstCtrl.text.trim(),
+                      address: addressCtrl.text.trim(),
+                      outstandingAmount: 0.0,
+                      createdAt: DateTime.now(),
+                    );
+                    final saved = await db.addCustomerAsync(newCust);
+                    if (!mounted) return;
+                    setState(() {
+                      _selectedPartyId = saved.id;
+                      _autoFillPartyDetails(saved.id, PartyType.customer, db);
+                    });
+                  } else if (partyType == PartyType.dealer) {
+                    final newDealer = Dealer(
+                      id: IdGenerator.generateId('DLR'),
+                      name: nameCtrl.text.trim(),
+                      companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
+                      contactPerson: contactPersonCtrl.text.trim(),
+                      mobile: mobileCtrl.text.trim(),
+                      email: emailCtrl.text.trim(),
+                      gstNumber: gstCtrl.text.trim(),
+                      address: addressCtrl.text.trim(),
+                      outstandingAmount: 0.0,
+                      createdAt: DateTime.now(),
+                    );
+                    final saved = await db.addDealerAsync(newDealer);
+                    if (!mounted) return;
+                    setState(() {
+                      _selectedPartyId = saved.id;
+                      _autoFillPartyDetails(saved.id, PartyType.dealer, db);
+                    });
+                  } else if (partyType == PartyType.architect) {
+                    final newArch = Architect(
+                      id: IdGenerator.generateId('ARCH'),
+                      name: nameCtrl.text.trim(),
+                      companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
+                      mobile: mobileCtrl.text.trim(),
+                      email: emailCtrl.text.trim(),
+                      gstNumber: gstCtrl.text.trim(),
+                      address: addressCtrl.text.trim(),
+                      defaultCommissionRate: double.tryParse(commissionRateCtrl.text.trim()) ?? 5.0,
+                      totalCommissionEarned: 0.0,
+                      pendingCommission: 0.0,
+                      approvedCommission: 0.0,
+                      paidCommission: 0.0,
+                      createdAt: DateTime.now(),
+                    );
+                    final saved = await db.addArchitectAsync(newArch);
+                    if (!mounted) return;
+                    setState(() {
+                      _selectedPartyId = saved.id;
+                      _autoFillPartyDetails(saved.id, PartyType.architect, db);
+                    });
+                  }
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${partyType == PartyType.customer ? 'Customer' : partyType == PartyType.dealer ? 'Dealer' : 'Architect'} created and added to master successfully!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${partyType == PartyType.customer ? 'Customer' : partyType == PartyType.dealer ? 'Dealer' : 'Architect'} created and added to master successfully!'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to save: $e'), backgroundColor: AppColors.danger),
+                  );
+                }
               },
             ),
           ],

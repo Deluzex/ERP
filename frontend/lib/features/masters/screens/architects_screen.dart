@@ -637,6 +637,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                   tooltip: 'Edit Architect',
                                   onPressed: () => _openAddEditArchitectDialog(a),
                                 ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                                  tooltip: 'Delete Architect',
+                                  onPressed: () => _confirmDeleteArchitect(a),
+                                ),
                               ],
                             ),
                           ];

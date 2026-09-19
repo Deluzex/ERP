@@ -48,6 +48,24 @@ class Validators {
     return email(value);
   }
 
+  static const int emailMaxLength = 254;
+
+  static final RegExp _emailPattern = RegExp(
+    r"^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*"
+    r'@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
+    r'(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$',
+  );
+
+  /// Required email, any provider/domain, trimmed, max 254 chars.
+  static String? requiredEmailAddress(String? value) {
+    const message = 'Please enter a valid email address.';
+    final v = value?.trim() ?? '';
+    if (v.isEmpty || v.length > emailMaxLength || !_emailPattern.hasMatch(v)) {
+      return message;
+    }
+    return null;
+  }
+
   /// Optional mobile number
   static String? mobile(String? value) {
     if (value == null || value.trim().isEmpty) return null;

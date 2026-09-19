@@ -282,6 +282,73 @@ describe('Masters Domain Lifecycle (E2E with Auto-Cleanup)', () => {
     });
   });
 
+  describe('5b. Customer email validation & normalization', () => {
+    const post = (body: Record<string, unknown>, token = accessToken) =>
+      request(app.getHttpServer())
+        .post('/api/v1/masters/customers')
+        .set('Authorization', `Bearer ${token}`)
+        .set('X-Correlation-ID', testCid)
+        .send({ name: 'Email Test', mobile: '9898011223', address: 'Ahmedabad', ...body });
+    const created: string[] = [];
+
+    afterAll(async () => {
+      for (const id of created) await db.query('DELETE FROM customers WHERE id = $1', [id]);
+    });
+
+    it('creates with trimmed + lowercased email', async () => {
+      const res = await post({ email: '  E2E.Plus+ERP@Company.CO.IN ' }).expect(201);
+      created.push(res.body.data.id);
+      expect(res.body.data.email).toBe('e2e.plus+erp@company.co.in');
+    });
+
+    it.each(['kamalgmail.com', 'kamal@@gmail.com', '@gmail.com', 'kamal@', 'kamal @gmail.com', '', `a@${'b'.repeat(250)}.com`])(
+      'rejects invalid create email %j (frontend bypass)',
+      async (email) => {
+        const res = await post({ email }).expect(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      },
+    );
+
+    it('updates with normalization and rejects invalid update', async () => {
+      const id = created[0];
+      const ok = await request(app.getHttpServer())
+        .put(`/api/v1/masters/customers/${id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({ email: ' UPDATED@Gmail.com ' })
+        .expect(200);
+      expect(ok.body.data.email).toBe('updated@gmail.com');
+
+      const bad = await request(app.getHttpServer())
+        .put(`/api/v1/masters/customers/${id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({ email: 'not-an-email' })
+        .expect(400);
+      expect(bad.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('rejects unauthenticated create/update', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/masters/customers')
+        .send({ name: 'x', mobile: '9898011223', address: 'x', email: 'a@b.com' })
+        .expect(401);
+      await request(app.getHttpServer())
+        .put(`/api/v1/masters/customers/${created[0]}`)
+        .send({ email: 'a@b.com' })
+        .expect(401);
+    });
+
+    it('DB constraint rejects invalid/over-length email inserted directly', async () => {
+      await expect(
+        db.query(`INSERT INTO customers (name, mobile, email, address) VALUES ('x','1','bad email','x')`),
+      ).rejects.toBeDefined();
+      await expect(
+        db.query(`INSERT INTO customers (name, mobile, email, address) VALUES ('x','1',$1,'x')`, [`a@${'b'.repeat(260)}.com`]),
+      ).rejects.toBeDefined();
+    });
+  });
+
   describe('5. Parties & Dual Identity Linking', () => {
     it('Positive: should create Customer, Dealer, and Architect', async () => {
       // Customer

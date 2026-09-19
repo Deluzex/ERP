@@ -1,10 +1,17 @@
+import { Transform } from 'class-transformer';
 import {
   IsBoolean,
   IsEmail,
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
 } from 'class-validator';
+
+export const EMAIL_MAX_LENGTH = 254;
+
+const normalizeEmail = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 export class CreateCustomerDto {
   @IsString()
@@ -15,8 +22,10 @@ export class CreateCustomerDto {
   @IsNotEmpty()
   mobile!: string;
 
-  @IsEmail()
-  @IsNotEmpty()
+  @Transform(normalizeEmail)
+  @IsNotEmpty({ message: 'Please enter a valid email address.' })
+  @MaxLength(EMAIL_MAX_LENGTH, { message: 'Email must be at most 254 characters.' })
+  @IsEmail({}, { message: 'Please enter a valid email address.' })
   email!: string;
 
   @IsString()
@@ -49,8 +58,11 @@ export class UpdateCustomerDto {
   @IsOptional()
   mobile?: string;
 
-  @IsEmail()
+  @Transform(normalizeEmail)
   @IsOptional()
+  @IsNotEmpty({ message: 'Please enter a valid email address.' })
+  @MaxLength(EMAIL_MAX_LENGTH, { message: 'Email must be at most 254 characters.' })
+  @IsEmail({}, { message: 'Please enter a valid email address.' })
   email?: string;
 
   @IsString()

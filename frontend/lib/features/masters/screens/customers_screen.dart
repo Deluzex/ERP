@@ -143,8 +143,12 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                             Expanded(
                               child: TextFormField(
                                 controller: emailCtrl,
-                                validator: Validators.email,
-                                decoration: const InputDecoration(labelText: 'Email Address'),
+                                validator: Validators.requiredEmailAddress,
+                                keyboardType: TextInputType.emailAddress,
+                                maxLength: Validators.emailMaxLength,
+                                autocorrect: false,
+                                enableSuggestions: false,
+                                decoration: const InputDecoration(labelText: 'Email Address *', counterText: ''),
                               ),
                             ),
                           ],
