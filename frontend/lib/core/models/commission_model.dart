@@ -57,6 +57,58 @@ class ArchitectCommission {
     }
   }
 
+  factory ArchitectCommission.fromJson(Map<String, dynamic> json) {
+    CommissionStatus parseStatus(dynamic val) {
+      final s = val?.toString().toLowerCase();
+      if (s == 'approved') return CommissionStatus.approved;
+      if (s == 'paid') return CommissionStatus.paid;
+      if (s == 'rejected') return CommissionStatus.rejected;
+      return CommissionStatus.generated;
+    }
+
+    return ArchitectCommission(
+      id: json['id']?.toString() ?? '',
+      commissionNumber: json['commissionNumber']?.toString() ?? '',
+      architectId: json['architectId']?.toString() ?? '',
+      architectName: json['architectName']?.toString() ?? '',
+      saleInvoiceId: json['saleInvoiceId']?.toString() ?? '',
+      saleInvoiceNumber: json['saleInvoiceNumber']?.toString() ?? '',
+      projectId: json['projectId']?.toString(),
+      projectName: json['projectName']?.toString(),
+      saleAmount: (json['saleAmount'] is num) ? (json['saleAmount'] as num).toDouble() : double.tryParse(json['saleAmount']?.toString() ?? '0') ?? 0.0,
+      commissionRate: (json['commissionRate'] is num) ? (json['commissionRate'] as num).toDouble() : double.tryParse(json['commissionRate']?.toString() ?? '0') ?? 0.0,
+      commissionAmount: (json['commissionAmount'] is num) ? (json['commissionAmount'] as num).toDouble() : double.tryParse(json['commissionAmount']?.toString() ?? '0') ?? 0.0,
+      status: parseStatus(json['status']),
+      generatedDate: json['generatedDate'] != null ? DateTime.tryParse(json['generatedDate'].toString()) ?? DateTime.now() : DateTime.now(),
+      approvedDate: json['approvedDate'] != null ? DateTime.tryParse(json['approvedDate'].toString()) : null,
+      paidDate: json['paidDate'] != null ? DateTime.tryParse(json['paidDate'].toString()) : null,
+      paymentReference: json['paymentReference']?.toString(),
+      notes: json['notes']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'commissionNumber': commissionNumber,
+      'architectId': architectId,
+      'architectName': architectName,
+      'saleInvoiceId': saleInvoiceId,
+      'saleInvoiceNumber': saleInvoiceNumber,
+      if (projectId != null) 'projectId': projectId,
+      if (projectName != null) 'projectName': projectName,
+      'saleAmount': saleAmount,
+      'commissionRate': commissionRate,
+      'commissionAmount': commissionAmount,
+      'status': status.name,
+      'generatedDate': generatedDate.toIso8601String(),
+      if (approvedDate != null) 'approvedDate': approvedDate!.toIso8601String(),
+      if (paidDate != null) 'paidDate': paidDate!.toIso8601String(),
+      if (paymentReference != null) 'paymentReference': paymentReference,
+      if (notes != null) 'notes': notes,
+    };
+  }
+
   ArchitectCommission copyWith({
     String? id,
     String? commissionNumber,

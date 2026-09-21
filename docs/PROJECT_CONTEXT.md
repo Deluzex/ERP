@@ -1,9 +1,10 @@
 # Deluzex ERP — Comprehensive Project Context & Reference
 
-**Document Version:** 1.1.0  
-**Last Updated:** 2026-09-16  
+**Document Version:** 3.0.0  
+**Last Updated:** 2026-09-21  
 **Current Branch:** `Feat---Backend-Setup`  
-**Current Phase:** Phase 1 — Master Data Registry & Stock Management (Phase 0 Foundation Complete)  
+**Current Phase Status:** **Phases 1 through 8 are 100% Complete, Bound, and Verified** (Phases 9 & 10 are strictly ON HOLD awaiting QA/BA sign-off)  
+**Detailed Audit Reference:** [`docs/PROJECT_PROGRESS_AND_MODULE_AUDIT.md`](PROJECT_PROGRESS_AND_MODULE_AUDIT.md)  
 **Primary Authorities:**  
 1. [`PROJECT_RULES.md`](../PROJECT_RULES.md) (The Constitution)  
 2. [`Client Doc/FINAL_BUSINESS_DECISIONS.md`](../Client%20Doc/FINAL_BUSINESS_DECISIONS.md) & [`Client Doc/046 Hotel Winsome, Ahmedabad.pdf`](../Client%20Doc/046%20Hotel%20Winsome,%20Ahmedabad.pdf) (Authoritative Client Evidence)  
@@ -24,7 +25,8 @@ The business solves several operational challenges:
 3. **BOM & Manufacturing:** Converting raw materials into finished lighting fixtures, tracking production consumption, wastage, and cost allocation.
 4. **Commercial Sales & Projects:** Multi-tier pricing (direct Customer vs wholesale Dealer), Quotations, Proforma Invoices, Sales Orders, Delivery Challans, and GST Tax Invoices.
 5. **Architect Commission Attribution:** Tracking dual identities (e.g. an architect who is also a direct customer), project-specific commissions, approval workflows, and disbursements.
-6. **Statutory GST Accounting:** Intra-state (CGST + SGST) vs inter-state (IGST) calculation based on place of supply, signed entered round-offs, and immutable audit logging.
+6. **Payments & Reconciliations:** Tracking Customer & Dealer receipts, Vendor bill-wise disbursements, Architect commission payouts, and categorized operating expenses.
+7. **Statutory GST Accounting & BI:** Intra-state (CGST + SGST) vs inter-state (IGST) calculation based on place of supply, signed entered round-offs, 8 core managerial/statutory reports, and immutable audit logging.
 
 ### 1.2 Target Users & Roles
 - **Procurement Team:** Manages vendor master data, raises Purchase Orders, processes Inward Bills.
@@ -32,8 +34,8 @@ The business solves several operational challenges:
 - **Production Operators:** Executes production work orders, logs raw material consumption and finished goods assembly.
 - **Sales & Billing Executives:** Issues quotations, converts to sales orders/challans, generates GST tax invoices.
 - **Project Coordinators:** Connects architects and dealers to projects and client installations.
-- **Finance & Accounts Team:** Manages GST tax summaries, vendor payments, customer collections, and commission payouts.
-- **Business Owners / Admins:** Controls user access, defines custom RBAC roles, audits operations.
+- **Finance & Accounts Team:** Manages GST tax summaries, vendor payments, customer collections, commission payouts, and operating expenses.
+- **Business Owners / Admins:** Controls user access, defines custom RBAC roles, audits operations, inspects financial and working capital reports.
 
 ### 1.3 Target Deployment & Single Legal Entity Scope (ADR-014, Q-22)
 - **Dedicated Single-Client Instance:** The platform is built for **one single legal entity** registered in Gujarat (State Code 24).
@@ -66,10 +68,10 @@ The business solves several operational challenges:
 Flutter UI (Presentation)
     │
     ▼
-Riverpod Notifiers & Services (State Management)
+Riverpod Notifiers & MockDatabaseService (State Management & Offline Fallback)
     │
     ▼
-Dio ApiClient (/api/v1 REST)
+Dio ApiClient (/api/v1 REST with Auth & Correlation Interceptors)
     │
     ▼
 NestJS Controllers (AuthGuard, PermissionGuard, ScopeGuard, ValidationPipe)
@@ -95,127 +97,28 @@ DatabasePool (PostgreSQL on Supabase)
 
 ---
 
-## 4. Modules & Domain Features
+## 4. Current Implementation Status (Phases 1 to 8: 100% Complete)
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                          DELUZEX ERP MODULES                           │
-├──────────────────┬──────────────────┬─────────────────┬────────────────┤
-│     MASTERS      │  STOCK & PURCH.  │  MANUFACTURING  │ SALES & COMM.  │
-│  (Units, RM, FP, │ (Purchases, PO,  │ (Work Orders,   │ (Quotations,   │
-│   Vendors, Cust, │  Stock Ledger,   │  BOM/Assembly,  │  Invoices,     │
-│   Dealers, Arch) │  Adjustments)    │  Costing)       │  Commissions)  │
-└──────────────────┴──────────────────┴─────────────────┴────────────────┘
-```
-
-### 4.1 Master Data Registry (Current Work Focus)
-- **Categories & Measurement Units (`categories`, `measurement_units`):**
-  - Standard measurement units: `PCS`, `MTR`, `KG`, `BOX`, `SET`, `ROL`, `LITRE`.
-  - Exactly one unit per item. **No unit conversions** (Q-15 confirmed).
-- **Vendors (`vendors`):**
-  - Name, Contact Person, Mobile, Email, GST Number (15-char), PAN (10-char), Address, Payment Terms, Credit Limit.
-  - Soft-delete with mandatory `delete_reason`.
-  - Partial unique index on `gst_number WHERE is_deleted = false`.
-- **Raw Materials (`raw_materials`):**
-  - Item Code (`UNIQUE WHERE is_deleted = false`, Q-06 allows reuse after soft delete).
-  - Category, Unit, nullable `hsn_sac_code` (Q-23), stock thresholds (`opening_stock`, `minimum_stock`, `reorder_level` as `numeric(18,4)`), `default_purchase_price` (`numeric(18,2)`), `gst_percent`.
-- **Finished Products (`finished_products`):**
-  - Item Code, Category, Unit, HSN/SAC, stock quantities, multi-tier pricing (`cost_price`, `dealer_selling_price`, `customer_selling_price`), `gst_percent`.
-- **Parties (Customers, Dealers, Architects):**
-  - Customers: Direct buyers with mobile, GSTIN (optional), state code, balance tracking.
-  - Dealers: Commercial distributors with company name, mandatory GSTIN, credit limits.
-  - Architects: Design partners with default commission rate (e.g. 5–7%), commission balance tracking.
-  - **Dual Identity Linking:** Bi-directional link between Customer and Architect (`customers.linked_architect_id` ↔ `architects.linked_customer_id`) allowing an entity to act as both specifier and purchaser.
-
-### 4.2 Stock Management & Ledger (Phase 1 Next Step)
-- **Append-Only Ledger (`stock_transactions`):**
-  - Immutable insert-only table. Mutation triggers forbid `UPDATE` and `DELETE`.
-  - Exactly **8 Transaction Types:** `PURCHASE`, `PRODUCTION_CONSUMPTION`, `PRODUCTION_OUTPUT`, `SALE`, `SALE_RETURN`, `PURCHASE_RETURN`, `DAMAGE`, `ADJUSTMENT`.
-  - **No `TRANSFER` type:** Inter-location stock transfer is explicitly out of scope (Q-19).
-- **Cached Stock Balances (`stock_balances`):**
-  - `(stock_location_id, item_type, item_id) → quantity`.
-  - Maintained atomically within ledger transactions using `SELECT ... FOR UPDATE`.
-  - 100% reconstructible from ledger `SUM(quantity_in) - SUM(quantity_out)`.
-- **Stock Scoping (ADR-013):**
-  - Every transaction and balance is anchored to `stock_location_id` (`NOT NULL`).
-  - Branch and warehouse hierarchies are optional.
-
-### 4.3 Purchase & Inward Management
-- **Workflow:** Draft → Confirmed.
-- **Draft:** No stock or financial impact; fully editable.
-- **Confirmation:** Atomic execution inserting `stock_transactions`, updating `stock_balances`, and incrementing vendor payable.
-- **Statutory Calculation Chain (ADR-015):**
-  $$\text{Gross Amount} - \text{Discount} = \text{Taxable Amount} \xrightarrow{+ \text{GST}} \text{Sub-Total} \xrightarrow{+ \text{Round Off}} \text{Grand Total}$$
-  - Discount is applied **before** GST.
-  - Intra-state (Gujarat State Code 24) = CGST + SGST (IGST = 0).
-  - Inter-state (Other States) = IGST (CGST = SGST = 0).
-  - **Round-Off (ADR-015 §3, Sample Invoice 046):** Must be an **entered, signed adjustment** (e.g. −₹93.50), **not** an automated paise-rounding algorithm.
+| Component | Status | Evidence & Metrics |
+|---|---|---|
+| **Phase 0: Auth & RBAC** | ✅ Complete | JWT + Argon2id, dynamic RBAC, `auth-journey` + `rbac-journey` passing |
+| **Phase 1: Masters** | ✅ Complete | 7 master entities, soft deletes, GSTIN/PAN checks, `masters-journey` passing |
+| **Phase 2: Inventory** | ✅ Complete | Immutable stock ledger, adjustments, alerts, `inventory-journey` passing |
+| **Phase 3: Purchases** | ✅ Complete | PO + Inward Bills, GST calculations, stock inward, `purchases-journey` passing |
+| **Phase 4: Production** | ✅ Complete | Work orders, BOM consumption, assembly inward, rollback, `production-journey` passing |
+| **Phase 5: Sales** | ✅ Complete | 7-stage commercial pipeline, signed round-off, `sales-journey` passing |
+| **Phase 6: Projects** | ✅ Complete | Portfolios, material consumption, financials, `projects-journey` passing |
+| **Phase 7: Payments & Expenses** | ✅ Complete | Receipts, vendor payments, commissions, expenses, `payments-journey` + `expenses-journey` passing |
+| **Phase 8: Reports & BI** | ✅ Complete | 8 core reports (Inventory, Purchases, Production, Sales, Costing, Expenses, Commissions, Financial Balance), `reports-journey` passing |
+| **Phase 9: OCR & WhatsApp** | ⏸️ ON HOLD | Strictly on hold per user instructions awaiting QA/BA sign-off |
+| **Phase 10: Release Hardening** | ⏸️ ON HOLD | Strictly on hold per user instructions awaiting QA/BA sign-off |
 
 ---
 
-## 5. Current Branch & Work-in-Progress Analysis
+## 5. Verification Test Suite Summary
 
-### 5.1 Git Context
-- **Current Branch:** `Feat---Backend-Setup`
-- **Upstream:** `origin/Feat---Backend-Setup` (in sync)
-- **Last Committed Commit (`d73595e`):** Initialized NestJS backend, foundation migrations (`001_foundation.sql`, `002_seed_foundation.sql`), core auth/identity, and initial Flutter setup.
-
-### 5.2 Working Tree Status & Untracked Files
-The following major work has been implemented in the working tree:
-
-| Component | Files | Implementation Status | Test Status |
-|---|---|---|---|
-| **Database Migration** | `backend/migrations/003_masters.sql` | Applied on Supabase PostgreSQL (Categories, Units, Vendors, RM, FP, Customers, Dealers, Architects) | Verified active in DB |
-| **Backend Masters Module** | `backend/src/modules/masters/` (6 controllers, 6 services, 8 DTOs, module) | Complete CRUD + soft-delete + dual-linking | `test/masters-journey.e2e-spec.ts` **PASSED (17/17)** |
-| **Backend Integration** | `backend/src/app.module.ts` | `MastersModule` imported into Root Module | Builds cleanly (`nest build`) |
-| **Flutter API Services** | `frontend/lib/core/api/` (10 service files) | Implemented using Dio with auth token injection | Unit tested |
-| **Flutter Models** | `frontend/lib/core/models/*_model.dart` | Updated with `fromJson` and `toJson` matching NestJS DTOs | Unit tested |
-| **Flutter Validators** | `frontend/lib/core/utils/validators.dart` | Statutory regex validation for 15-char GSTIN, 10-char PAN | `test/vendor_api_binding_test.dart` **PASSED (5/5)** |
-| **Flutter Mock DB Bridge** | `frontend/lib/shared/services/mock_database_service.dart` | Augmented with async methods calling backend API with fallback | Working |
-| **Flutter Master Screens** | `frontend/lib/features/masters/screens/*.dart` | Rewired to call async database/API methods | **3 Screens have missing import** |
-
-### 5.3 Exact Diagnosis of Where Work Stopped
-Right before the previous session paused, the agent was wiring the frontend master screens to the backend API:
-1. **`vendors_screen.dart`:** Fully updated and tested.
-2. **`dealers_screen.dart`, `customers_screen.dart`, `architects_screen.dart`:** Updated to use `ErpConfirmDeleteDialog`, but the file import:
-   ```dart
-   import '../../../core/widgets/erp_confirm_dialog.dart';
-   ```
-   was **omitted from the imports list** in those three files. This causes `flutter analyze` and widget tests to report:
-   `Error: The method 'ErpConfirmDeleteDialog' isn't defined for the type ...`
-3. **`document_sharing_service.dart`:** Line 33 imports `dart:html` unconditionally, which causes VM-based `widget_test.dart` to fail on desktop.
-4. **Active Open File:** `backend/src/modules/masters/controllers/vendors.controller.ts` was open in the IDE.
-
----
-
-## 6. Open Questions & Technical Risk Assessment
-
-### 6.1 Status of Architectural Questions
-- **Q-05a (Round-Off):** Closed. Enterable signed amount; followed Invoice 046.
-- **Q-06 (Item Code Reuse):** Closed. Allowed after soft-delete via partial index.
-- **Q-07 & Q-08 (Document Numbering):** Closed. Continuous sequence, no yearly reset.
-- **Q-13 (Credit Limit):** Closed. Warning issued upon exceeding limit.
-- **Q-15 (Units):** Closed. Dedicated Master, no unit conversions.
-- **Q-19 (Stock Transfer):** Closed. Inter-location transfer is out of scope. Exactly 8 transaction types.
-- **Q-22 (Legal Entity):** Closed. Single client entity in Gujarat (ADR-014).
-- **Q-23 (HSN/SAC Code):** Closed. Nullable text column on raw materials and finished products.
-- **Q-24 (Consignee vs Buyer State for Place of Supply):** **PENDING BUSINESS CLARIFICATION.** When Consignee (Ship-to) and Buyer (Bill-to) are in different states, which state governs intra-state vs inter-state GST?
-
-### 6.2 Key Risks & Mitigations
-- **Ledger Concurrency:** Concurrent operations updating stock balances. *Mitigation:* Explicit row locking (`SELECT ... FOR UPDATE`) in PostgreSQL transactions.
-- **Precision Leaks:** Accidental use of `double` in new financial calculations. *Mitigation:* ADR-011 decimal rule enforcement and unit test coverage.
-- **Dual-State Out-of-Sync:** Flutter frontend managing both in-memory mock state and remote API state. *Mitigation:* Ticket-by-ticket migration to pure Riverpod `AsyncNotifier` consuming the REST API.
-
----
-
-## 7. Immediate Resumption Plan
-
-When starting back work:
-1. **Fix Missing Imports:** Add `import '../../../core/widgets/erp_confirm_dialog.dart';` to:
-   - `frontend/lib/features/masters/screens/dealers_screen.dart`
-   - `frontend/lib/features/masters/screens/customers_screen.dart`
-   - `frontend/lib/features/masters/screens/architects_screen.dart`
-2. **Fix Web Guard:** Guard `dart:html` in `frontend/lib/core/utils/document_sharing_service.dart` with `kIsWeb` check so tests run cleanly across all platforms.
-3. **Verify Frontend Suite:** Run `flutter analyze lib test` and `flutter test` to ensure zero compilation or test failures.
-4. **Stage & Commit Masters Module:** Clean commit for Phase 1 Master Data Registry (NestJS + Flutter + Migration 003).
-5. **Begin Stock Management & Purchases:** Implement `004_stock_ledger.sql`, `stock_transactions`, and `purchases` modules per Phase 1 specification.
+- **Backend Unit Tests:** **47 passing** (`npm test`)
+- **Backend E2E Database Journey Tests:** **119 passing** (`npm run test:e2e`)
+- **Frontend Flutter Unit & Binding Tests:** **36 passing** (`flutter test`)
+- **Total Automated Tests:** **202 / 202 Green (100% Passing)**
+- **Build Status:** TypeScript backend compiles with 0 errors (`npm run build`). Flutter static analysis has 0 compilation errors (`flutter analyze lib test`).

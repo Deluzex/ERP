@@ -2103,7 +2103,7 @@ class RecordDetailsView extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     _buildInfoRow('Start Date', Formatters.formatDate(prj.startDate)),
-                    _buildInfoRow('Expected Handover', Formatters.formatDate(prj.expectedCompletionDate)),
+                    _buildInfoRow('Expected Handover', prj.expectedCompletionDate != null ? Formatters.formatDate(prj.expectedCompletionDate!) : 'N/A'),
                     _buildInfoRow('Scope Notes', prj.notes ?? 'Standard luminaire design and execution scope'),
                   ],
                 ),

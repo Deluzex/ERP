@@ -18,6 +18,9 @@ import { PurchasesModule } from './modules/purchases/purchases.module';
 import { ProductionModule } from './modules/production/production.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -36,6 +39,9 @@ import { ProjectsModule } from './modules/projects/projects.module';
     ProductionModule,
     SalesModule,
     ProjectsModule,
+    PaymentsModule,
+    ExpensesModule,
+    ReportsModule,
   ],
   providers: [
     AppLogger,

@@ -31,6 +31,9 @@ import '../../core/api/purchases_api_service.dart';
 import '../../core/api/production_api_service.dart';
 import '../../core/api/sales_api_service.dart';
 import '../../core/api/projects_api_service.dart';
+import '../../core/api/payments_api_service.dart';
+import '../../core/api/expenses_api_service.dart';
+import '../../core/api/reports_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
@@ -3862,6 +3865,9 @@ class MockDatabaseService extends ChangeNotifier {
   final ProductionApiService _productionApi = ProductionApiService();
   final SalesApiService _salesApi = SalesApiService();
   final ProjectsApiService _projectsApi = ProjectsApiService();
+  final PaymentsApiService _paymentsApi = PaymentsApiService();
+  final ExpensesApiService _expensesApi = ExpensesApiService();
+  final ReportsApiService _reportsApi = ReportsApiService();
 
   bool _isLoadingProjects = false;
   bool get isLoadingProjects => _isLoadingProjects;
@@ -3895,6 +3901,9 @@ class MockDatabaseService extends ChangeNotifier {
         loadPurchases(forceRefresh: forceRefresh),
         loadProductionOrders(forceRefresh: forceRefresh),
         loadAllSales(forceRefresh: forceRefresh),
+        loadPayments(forceRefresh: forceRefresh),
+        loadCommissions(forceRefresh: forceRefresh),
+        loadExpenses(forceRefresh: forceRefresh),
       ]);
     } catch (e) {
       if (kDebugMode) {
@@ -5876,6 +5885,219 @@ class MockDatabaseService extends ChangeNotifier {
     String? notes,
   }) async {
     return _productionApi.saveBom(finishedProductId, items, notes: notes);
+  }
+
+  // -------------------------------------------------------------
+  // Phase 7: Payments, Receipts & Commissions Live API
+  // -------------------------------------------------------------
+  bool _isLoadingPayments = false;
+  bool get isLoadingPayments => _isLoadingPayments;
+
+  Future<void> loadPayments({bool forceRefresh = false}) async {
+    if (_isLoadingPayments && !forceRefresh) return;
+    _isLoadingPayments = true;
+    try {
+      final res = await _paymentsApi.getPayments(limit: 100);
+      final remotePayments = res['items'] as List<ErpPayment>? ?? [];
+      payments = remotePayments;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadPayments fallback to local: $e');
+    } finally {
+      _isLoadingPayments = false;
+    }
+  }
+
+  Future<ErpPayment> addPaymentAsync(ErpPayment payment) async {
+    try {
+      final payload = {
+        'paymentType': payment.paymentType.name,
+        'partyId': payment.partyId,
+        'partyName': payment.partyName,
+        'referenceDocumentId': payment.referenceDocumentId,
+        'referenceDocumentNumber': payment.referenceDocumentNumber,
+        'amount': payment.amount,
+        'paymentMode': payment.paymentMode.name,
+        'paymentDate': payment.paymentDate.toIso8601String(),
+        'transactionReference': payment.transactionReference,
+        'notes': payment.notes,
+        'isFullPayment': payment.isFullPayment,
+        'totalDocumentAmount': payment.totalDocumentAmount,
+        'remainingAmount': payment.remainingAmount,
+        'projectId': payment.projectId,
+        'projectName': payment.projectName,
+      };
+      final created = await _paymentsApi.createPayment(payload);
+      payments.removeWhere((p) => p.id == created.id);
+      payments.insert(0, created);
+
+      // Re-fetch affected ledgers: customers/dealers/vendors and invoices/purchases
+      await Future.wait([
+        loadCustomers(forceRefresh: true),
+        loadDealers(forceRefresh: true),
+        loadVendors(forceRefresh: true),
+        loadSalesInvoices(forceRefresh: true),
+        loadPurchases(forceRefresh: true),
+      ]);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] addPaymentAsync remote failed, fallback: $e');
+      addManualPayment(payment);
+      return payment;
+    }
+  }
+
+  bool _isLoadingCommissions = false;
+  bool get isLoadingCommissions => _isLoadingCommissions;
+
+  Future<void> loadCommissions({bool forceRefresh = false}) async {
+    if (_isLoadingCommissions && !forceRefresh) return;
+    _isLoadingCommissions = true;
+    try {
+      final res = await _paymentsApi.getCommissions(limit: 100);
+      final remoteCommissions = res['items'] as List<ArchitectCommission>? ?? [];
+      commissions = remoteCommissions;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadCommissions fallback to local: $e');
+    } finally {
+      _isLoadingCommissions = false;
+    }
+  }
+
+  Future<ArchitectCommission> approveCommissionAsync(String commissionId, {String? notes}) async {
+    try {
+      final updated = await _paymentsApi.approveCommission(commissionId, notes: notes);
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) commissions[idx] = updated;
+      await loadArchitects(forceRefresh: true);
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] approveCommissionAsync remote failed, fallback: $e');
+      approveCommission(commissionId);
+      return commissions.firstWhere((c) => c.id == commissionId);
+    }
+  }
+
+  Future<Map<String, dynamic>> disburseCommissionAsync({
+    required String commissionId,
+    required PaymentMode paymentMode,
+    String? transactionRef,
+    String? notes,
+  }) async {
+    try {
+      final result = await _paymentsApi.disburseCommission(
+        commissionId,
+        paymentMode: paymentMode.name,
+        transactionReference: transactionRef,
+        notes: notes,
+      );
+      final updatedComm = result['commission'] as ArchitectCommission;
+      final newPay = result['payment'] as ErpPayment;
+
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) commissions[idx] = updatedComm;
+      payments.removeWhere((p) => p.id == newPay.id);
+      payments.insert(0, newPay);
+
+      await loadArchitects(forceRefresh: true);
+      notifyListeners();
+      return result;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] disburseCommissionAsync remote failed, fallback: $e');
+      disburseCommission(commissionId, paymentMode, transactionRef ?? '');
+      return {
+        'commission': commissions.firstWhere((c) => c.id == commissionId),
+        'payment': payments.first,
+      };
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Phase 7: Expenses Live API
+  // -------------------------------------------------------------
+  bool _isLoadingExpenses = false;
+  bool get isLoadingExpenses => _isLoadingExpenses;
+
+  Future<void> loadExpenses({bool forceRefresh = false}) async {
+    if (_isLoadingExpenses && !forceRefresh) return;
+    _isLoadingExpenses = true;
+    try {
+      final res = await _expensesApi.getExpenses(limit: 100);
+      final remoteExpenses = res['items'] as List<Expense>? ?? [];
+      expenses = remoteExpenses;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadExpenses fallback to local: $e');
+    } finally {
+      _isLoadingExpenses = false;
+    }
+  }
+
+  Future<Expense> createExpenseAsync(Expense expense) async {
+    try {
+      final created = await _expensesApi.createExpense(expense);
+      expenses.removeWhere((e) => e.id == created.id);
+      expenses.insert(0, created);
+      notifyListeners();
+      return created;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] createExpenseAsync remote failed, fallback: $e');
+      addExpense(expense);
+      return expense;
+    }
+  }
+
+  Future<Expense> updateExpenseAsync(Expense expense) async {
+    try {
+      final payload = {
+        'expenseName': expense.expenseName,
+        'category': expense.category.name,
+        'amount': expense.amount,
+        'paidBy': expense.paidBy,
+        'paymentMethod': expense.paymentMethod,
+        if (expense.vendorPayee != null) 'vendorPayee': expense.vendorPayee,
+        if (expense.projectId != null) 'projectId': expense.projectId,
+        if (expense.projectName != null) 'projectName': expense.projectName,
+        if (expense.purchaseId != null) 'purchaseId': expense.purchaseId,
+        if (expense.purchaseNumber != null) 'purchaseNumber': expense.purchaseNumber,
+        if (expense.productionId != null) 'productionId': expense.productionId,
+        if (expense.productionNumber != null) 'productionNumber': expense.productionNumber,
+        if (expense.expenseReference != null) 'expenseReference': expense.expenseReference,
+        if (expense.description != null) 'description': expense.description,
+        if (expense.receiptAttachmentName != null) 'receiptAttachmentName': expense.receiptAttachmentName,
+        'paymentStatus': expense.paymentStatus.name,
+      };
+      final updated = await _expensesApi.updateExpense(expense.id, payload);
+      final idx = expenses.indexWhere((e) => e.id == expense.id);
+      if (idx != -1) expenses[idx] = updated;
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updateExpenseAsync remote failed, fallback: $e');
+      updateExpense(expense);
+      return expense;
+    }
+  }
+
+  Future<void> deleteExpenseAsync(String id) async {
+    try {
+      await _expensesApi.deleteExpense(id);
+      expenses.removeWhere((e) => e.id == id);
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] deleteExpenseAsync remote failed, fallback: $e');
+      deleteExpense(id);
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Phase 8: Reports Live API
+  // -------------------------------------------------------------
+  Future<Map<String, dynamic>> getReportAsync(String reportType, {Map<String, dynamic>? query}) async {
+    return _reportsApi.getReport(reportType, query: query);
   }
 }
 

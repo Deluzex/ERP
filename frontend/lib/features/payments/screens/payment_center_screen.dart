@@ -36,6 +36,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       _tabController.index = widget.initialTab!.index;
     }
     _tabController.addListener(_handleTabChange);
+    Future.microtask(() {
+      final db = ref.read(databaseServiceProvider);
+      db.loadPayments();
+      db.loadCommissions();
+    });
   }
 
   void _handleTabChange() {
@@ -469,7 +474,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                       createdAt: DateTime.now(),
                     );
 
-                    db.addManualPayment(payment);
+                    db.addPaymentAsync(payment);
                     Navigator.of(ctx).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(

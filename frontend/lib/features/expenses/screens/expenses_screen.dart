@@ -26,6 +26,12 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   ExpensePaymentStatus? _selectedStatus;
   String? _selectedProjectId;
 
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => ref.read(databaseServiceProvider).loadExpenses());
+  }
+
   void _openAddEditExpenseDialog([Expense? existing]) {
     final db = ref.read(databaseServiceProvider);
     final isEdit = existing != null;
@@ -264,7 +270,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   }
 
                   if (isEdit) {
-                    db.updateExpense(existing.copyWith(
+                    db.updateExpenseAsync(existing.copyWith(
                       expenseName: nameCtrl.text.trim(),
                       amount: amt,
                       category: category,
@@ -281,7 +287,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                       paymentStatus: paymentStatus,
                     ));
                   } else {
-                    db.addExpense(Expense(
+                    db.createExpenseAsync(Expense(
                       id: IdGenerator.generateId('EXP'),
                       expenseNumber: IdGenerator.generateDocNumber('EXP', db.nextExpenseNumber),
                       expenseDate: expenseDate,
