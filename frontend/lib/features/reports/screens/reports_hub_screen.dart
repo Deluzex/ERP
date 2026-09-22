@@ -57,7 +57,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
     setState(() {});
     if (!_tabController.indexIsChanging) {
       final targetSection = _getSectionForIndex(_tabController.index);
-      if (ref.read(currentNavSectionProvider) != targetSection) {
+      if (targetSection != null && ref.read(currentNavSectionProvider) != targetSection) {
         ref.read(currentNavSectionProvider.notifier).state = targetSection;
       }
     }
@@ -75,8 +75,6 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
         return 3;
       case ErpNavSection.projectReports:
         return 4;
-      case ErpNavSection.expenseList:
-        return 5;
       case ErpNavSection.commissionReports:
         return 6;
       case ErpNavSection.financialReports:
@@ -86,7 +84,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
     }
   }
 
-  ErpNavSection _getSectionForIndex(int index) {
+  ErpNavSection? _getSectionForIndex(int index) {
     switch (index) {
       case 0:
         return ErpNavSection.inventoryReports;
@@ -99,13 +97,13 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
       case 4:
         return ErpNavSection.projectReports;
       case 5:
-        return ErpNavSection.expenseList;
+        return null; // Internal Expense Ledger report statement
       case 6:
         return ErpNavSection.commissionReports;
       case 7:
         return ErpNavSection.financialReports;
       default:
-        return ErpNavSection.inventoryReports;
+        return null;
     }
   }
 
@@ -789,16 +787,20 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Reports & Analytics Hub', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Stock sources, purchase types, expense registers, and GST tax breakup statements',
-                      style: AppTextStyles.subtitle),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Reports & Analytics Hub', style: AppTextStyles.h1),
+                    const SizedBox(height: 4),
+                    Text('Stock sources, purchase types, expense registers, and GST tax breakup statements',
+                        style: AppTextStyles.subtitle, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
               ),
+              const SizedBox(width: 16),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   ErpButton(
                     text: 'Print Statement',

@@ -112,6 +112,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                           Expanded(
                             child: DropdownButtonFormField<ExpenseCategory>(
                               value: category,
+                              isExpanded: true,
                               decoration: const InputDecoration(labelText: 'Expense Category *'),
                               items: ExpenseCategory.values.map((c) {
                                 return DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()));
@@ -125,6 +126,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                           Expanded(
                             child: DropdownButtonFormField<ExpensePaymentStatus>(
                               value: paymentStatus,
+                              isExpanded: true,
                               decoration: const InputDecoration(labelText: 'Payment Status'),
                               items: ExpensePaymentStatus.values.map((s) {
                                 return DropdownMenuItem(value: s, child: Text(s.name.toUpperCase()));
@@ -151,14 +153,15 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
                               value: paymentMethod,
                               decoration: const InputDecoration(labelText: 'Payment Method'),
                               items: const [
-                                DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                                DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer (NEFT/RTGS)')),
-                                DropdownMenuItem(value: 'UPI', child: Text('UPI / QR')),
-                                DropdownMenuItem(value: 'Cheque', child: Text('Cheque')),
-                                DropdownMenuItem(value: 'Company Card', child: Text('Corporate Card')),
+                                DropdownMenuItem(value: 'Cash', child: Text('Cash', overflow: TextOverflow.ellipsis)),
+                                DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer (NEFT/RTGS)', overflow: TextOverflow.ellipsis)),
+                                DropdownMenuItem(value: 'UPI', child: Text('UPI / QR', overflow: TextOverflow.ellipsis)),
+                                DropdownMenuItem(value: 'Cheque', child: Text('Cheque', overflow: TextOverflow.ellipsis)),
+                                DropdownMenuItem(value: 'Company Card', child: Text('Corporate Card', overflow: TextOverflow.ellipsis)),
                               ],
                               onChanged: (val) {
                                 if (val != null) setDlgState(() => paymentMethod = val);
@@ -206,10 +209,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                 Expanded(
                                   child: DropdownButtonFormField<String?>(
                                     value: selectedProjId,
+                                    isExpanded: true,
                                     decoration: const InputDecoration(labelText: 'Related Project'),
                                     items: [
                                       const DropdownMenuItem(value: null, child: Text('None (General Expense)')),
-                                      ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
+                                      ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
                                     ],
                                     onChanged: (val) => setDlgState(() => selectedProjId = val),
                                   ),
@@ -218,10 +222,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                 Expanded(
                                   child: DropdownButtonFormField<String?>(
                                     value: selectedProdId,
+                                    isExpanded: true,
                                     decoration: const InputDecoration(labelText: 'Related Production'),
                                     items: [
                                       const DropdownMenuItem(value: null, child: Text('None')),
-                                      ...db.productionOrders.map((o) => DropdownMenuItem(value: o.id, child: Text('${o.productionNumber} (${o.finishedProductName})'))),
+                                      ...db.productionOrders.map((o) => DropdownMenuItem(value: o.id, child: Text('${o.productionNumber} (${o.finishedProductName})', overflow: TextOverflow.ellipsis))),
                                     ],
                                     onChanged: (val) => setDlgState(() => selectedProdId = val),
                                   ),
@@ -433,6 +438,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               Expanded(
                 child: DropdownButtonFormField<ExpenseCategory?>(
                   value: _selectedCategory,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Filter Category'),
                   items: [
                     const DropdownMenuItem(value: null, child: Text('All Categories')),
@@ -445,10 +451,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               Expanded(
                 child: DropdownButtonFormField<String?>(
                   value: _selectedProjectId,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Filter Project'),
                   items: [
                     const DropdownMenuItem(value: null, child: Text('All Projects')),
-                    ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
+                    ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
                   ],
                   onChanged: (v) => setState(() => _selectedProjectId = v),
                 ),

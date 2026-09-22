@@ -239,7 +239,10 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Current Total Outstanding:', style: AppTextStyles.bodyMedium),
+                              Flexible(
+                                child: Text('Current Total Outstanding:', style: AppTextStyles.bodyMedium, overflow: TextOverflow.ellipsis),
+                              ),
+                              const SizedBox(width: 8),
                               Text(
                                 Formatters.formatCurrency(outstanding),
                                 style: AppTextStyles.bodyBold.copyWith(
@@ -255,8 +258,9 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                         if (type == PaymentType.customerPayment) ...[
                           DropdownButtonFormField<String>(
                             value: selectedPartyId,
+                            isExpanded: true,
                             decoration: const InputDecoration(labelText: 'Select Customer *'),
-                            items: db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                            items: db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis))).toList(),
                             onChanged: (val) {
                               setDlgState(() {
                                 selectedPartyId = val;
@@ -269,8 +273,9 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                         ] else if (type == PaymentType.dealerPayment) ...[
                           DropdownButtonFormField<String>(
                             value: selectedPartyId,
+                            isExpanded: true,
                             decoration: const InputDecoration(labelText: 'Select Dealer *'),
-                            items: db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name))).toList(),
+                            items: db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, overflow: TextOverflow.ellipsis))).toList(),
                             onChanged: (val) {
                               setDlgState(() {
                                 selectedPartyId = val;
@@ -283,8 +288,9 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                         ] else if (type == PaymentType.vendorPayment) ...[
                           DropdownButtonFormField<String>(
                             value: selectedPartyId,
+                            isExpanded: true,
                             decoration: const InputDecoration(labelText: 'Select Vendor *'),
-                            items: db.vendors.map((v) => DropdownMenuItem(value: v.id, child: Text(v.name))).toList(),
+                            items: db.vendors.map((v) => DropdownMenuItem(value: v.id, child: Text(v.name, overflow: TextOverflow.ellipsis))).toList(),
                             onChanged: (val) {
                               setDlgState(() {
                                 selectedPartyId = val;
@@ -297,8 +303,9 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                         ] else if (type == PaymentType.commissionPayment) ...[
                           DropdownButtonFormField<String>(
                             value: selectedPartyId,
+                            isExpanded: true,
                             decoration: const InputDecoration(labelText: 'Select Architect / Partner *'),
-                            items: db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))).toList(),
+                            items: db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name, overflow: TextOverflow.ellipsis))).toList(),
                             onChanged: (val) {
                               setDlgState(() {
                                 selectedPartyId = val;
@@ -342,48 +349,51 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             children: [
                               const Text('Payment Settlement Type:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: RadioListTile<bool>(
-                                      title: const Text('Full Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                      subtitle: selectedDocPending > 0
-                                          ? Text('Clear full balance ₹${selectedDocPending.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11))
-                                          : null,
-                                      value: true,
-                                      groupValue: isFullPayment,
-                                      contentPadding: EdgeInsets.zero,
-                                      dense: true,
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          setDlgState(() {
-                                            isFullPayment = val;
-                                            if (selectedDocPending > 0) {
-                                              amountCtrl.text = selectedDocPending.toStringAsFixed(0);
-                                            }
-                                          });
-                                        }
-                                      },
+                              Material(
+                                color: Colors.transparent,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: RadioListTile<bool>(
+                                        title: const Text('Full Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                        subtitle: selectedDocPending > 0
+                                            ? Text('Clear full balance ₹${selectedDocPending.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11))
+                                            : null,
+                                        value: true,
+                                        groupValue: isFullPayment,
+                                        contentPadding: EdgeInsets.zero,
+                                        dense: true,
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            setDlgState(() {
+                                              isFullPayment = val;
+                                              if (selectedDocPending > 0) {
+                                                amountCtrl.text = selectedDocPending.toStringAsFixed(0);
+                                              }
+                                            });
+                                          }
+                                        },
+                                      ),
                                     ),
-                                  ),
-                                  Expanded(
-                                    child: RadioListTile<bool>(
-                                      title: const Text('Partial Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                      subtitle: const Text('Enter installment amount', style: TextStyle(fontSize: 11)),
-                                      value: false,
-                                      groupValue: isFullPayment,
-                                      contentPadding: EdgeInsets.zero,
-                                      dense: true,
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          setDlgState(() {
-                                            isFullPayment = val;
-                                          });
-                                        }
-                                      },
+                                    Expanded(
+                                      child: RadioListTile<bool>(
+                                        title: const Text('Partial Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                        subtitle: const Text('Enter installment amount', style: TextStyle(fontSize: 11)),
+                                        value: false,
+                                        groupValue: isFullPayment,
+                                        contentPadding: EdgeInsets.zero,
+                                        dense: true,
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            setDlgState(() {
+                                              isFullPayment = val;
+                                            });
+                                          }
+                                        },
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -416,10 +426,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<PaymentMode>(
+                          isExpanded: true,
                           value: selectedMode,
                           decoration: const InputDecoration(labelText: 'Payment Mode'),
                           items: PaymentMode.values.map((mode) {
-                            return DropdownMenuItem(value: mode, child: Text(mode.toString().split('.').last.toUpperCase()));
+                            return DropdownMenuItem(value: mode, child: Text(mode.toString().split('.').last.toUpperCase(), overflow: TextOverflow.ellipsis));
                           }).toList(),
                           onChanged: (val) {
                             if (val != null) setDlgState(() => selectedMode = val);
@@ -529,15 +540,18 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Payments & Treasury Center', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Manual payment entry (Full & Partial), invoice balance auto-reconciliation, and treasury tracking',
-                      style: AppTextStyles.subtitle),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Payments & Treasury Center', style: AppTextStyles.h1),
+                    const SizedBox(height: 4),
+                    Text('Manual payment entry (Full & Partial), invoice balance auto-reconciliation, and treasury tracking',
+                        style: AppTextStyles.subtitle),
+                  ],
+                ),
               ),
+              const SizedBox(width: 16),
               ErpButton(
                 text: buttonLabel,
                 icon: Icons.add,

@@ -114,18 +114,19 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
                           value: selectedItemId,
+                          isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Select Item *'),
                           items: selectedItemType == ItemType.rawMaterial
                               ? db.rawMaterials.map((rm) {
                                   return DropdownMenuItem(
                                     value: rm.id,
-                                    child: Text('${rm.itemCode} - ${rm.name} (Stock: ${rm.currentStock} ${rm.unit})'),
+                                    child: Text('${rm.itemCode} - ${rm.name} (Stock: ${rm.currentStock} ${rm.unit})', overflow: TextOverflow.ellipsis),
                                   );
                                 }).toList()
                               : db.finishedProducts.map((fp) {
                                   return DropdownMenuItem(
                                     value: fp.id,
-                                    child: Text('${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})'),
+                                    child: Text('${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})', overflow: TextOverflow.ellipsis),
                                   );
                                 }).toList(),
                           onChanged: (val) {
@@ -174,6 +175,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                         const SizedBox(height: 14),
                         DropdownButtonFormField<AdjustmentReason>(
                           value: selectedReason,
+                          isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Reason for Adjustment *'),
                           items: AdjustmentReason.values.map((r) {
                             return DropdownMenuItem(
