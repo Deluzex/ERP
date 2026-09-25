@@ -50,6 +50,17 @@ async function bootstrap() {
     res.redirect('/api/docs');
   });
 
+  // Version check endpoint for deployment verification
+  app.getHttpAdapter().get('/api/v1/version', (_req: any, res: any) => {
+    res.json({
+      app: 'Deluzex ERP API',
+      version: '1.0.1',
+      status: 'healthy',
+      environment: process.env.NODE_ENV || 'production',
+      deployedOn: 'Vercel',
+    });
+  });
+
   // Global Input Validation Pipe
   app.useGlobalPipes(
     new ValidationPipe({
@@ -64,9 +75,9 @@ async function bootstrap() {
 
   // Swagger Documentation Setup
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Deluzex ERP API')
-    .setDescription('Production-grade enterprise manufacturing & inventory management REST APIs')
-    .setVersion('1.0')
+    .setTitle('Deluzex ERP API — v1.0.1')
+    .setDescription('Production-grade enterprise manufacturing & inventory management REST APIs (Vercel Live v1.0.1)')
+    .setVersion('1.0.1')
     .addBearerAuth(
       {
         type: 'http',
