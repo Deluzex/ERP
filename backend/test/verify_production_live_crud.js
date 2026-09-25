@@ -376,8 +376,8 @@ async function runSimulation() {
   // Step 10: Deterministic Database Cleanup
   console.log('\n10. Executing deterministic cleanup of simulation test records...');
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://postgres.clhyeyeykckjexwghghm:Pks%40%24123456@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres',
-    ssl: { rejectUnauthorized: false },
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/deluzex_erp',
+    ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
   });
 
   try {

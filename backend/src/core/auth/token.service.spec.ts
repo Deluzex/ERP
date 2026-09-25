@@ -58,4 +58,38 @@ describe('TokenService', () => {
       UnauthorizedError,
     );
   });
+
+  describe('Production secret validation', () => {
+    it('should throw if NODE_ENV is production and JWT_ACCESS_SECRET is missing or default', () => {
+      const prodConfig = new ConfigService({
+        NODE_ENV: 'production',
+        JWT_ACCESS_SECRET: 'deluzex_dev_access_secret',
+        JWT_REFRESH_SECRET: 'valid-secure-refresh-secret-1234567890',
+      });
+      expect(() => new TokenService(jwtService, prodConfig)).toThrow(
+        /JWT_ACCESS_SECRET must be configured with a secure/i,
+      );
+    });
+
+    it('should throw if NODE_ENV is production and JWT_REFRESH_SECRET is missing or default', () => {
+      const prodConfig = new ConfigService({
+        NODE_ENV: 'production',
+        JWT_ACCESS_SECRET: 'valid-secure-access-secret-1234567890',
+        JWT_REFRESH_SECRET: 'deluzex_dev_refresh_secret',
+      });
+      expect(() => new TokenService(jwtService, prodConfig)).toThrow(
+        /JWT_REFRESH_SECRET must be configured with a secure/i,
+      );
+    });
+
+    it('should initialize successfully in production with valid custom secrets', () => {
+      const prodConfig = new ConfigService({
+        NODE_ENV: 'production',
+        JWT_ACCESS_SECRET: 'valid-secure-access-secret-1234567890',
+        JWT_REFRESH_SECRET: 'valid-secure-refresh-secret-1234567890',
+      });
+      expect(() => new TokenService(jwtService, prodConfig)).not.toThrow();
+    });
+  });
 });
+

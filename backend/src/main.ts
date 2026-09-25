@@ -26,8 +26,17 @@ async function bootstrap() {
   );
 
   // CORS Configuration
+  const corsOrigin = config.get<string>('CORS_ORIGIN');
+  let allowedOrigins: boolean | string | string[] = true;
+
+  if (process.env.NODE_ENV === 'production' && corsOrigin) {
+    allowedOrigins = corsOrigin.includes(',')
+      ? corsOrigin.split(',').map((o) => o.trim())
+      : corsOrigin.trim();
+  }
+
   app.enableCors({
-    origin: true,
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-ID'],
@@ -84,7 +93,7 @@ async function bootstrap() {
     },
   });
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.log(
     `🚀 Deluzex ERP Backend running on http://localhost:${port}/${apiPrefix.replace(/^\/+|\/+$/g, '')}`,
     'Bootstrap',

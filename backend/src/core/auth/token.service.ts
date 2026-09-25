@@ -31,8 +31,19 @@ export class TokenService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {
-    this.accessSecret = this.config.get<string>('JWT_ACCESS_SECRET') || 'deluzex_dev_access_secret';
-    this.refreshSecret = this.config.get<string>('JWT_REFRESH_SECRET') || 'deluzex_dev_refresh_secret';
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    const accessSecret = this.config.get<string>('JWT_ACCESS_SECRET');
+    const refreshSecret = this.config.get<string>('JWT_REFRESH_SECRET');
+
+    if (isProd && (!accessSecret || accessSecret === 'deluzex_dev_access_secret' || accessSecret.includes('dev_super_secret'))) {
+      throw new Error('JWT_ACCESS_SECRET must be configured with a secure, non-default secret in production environments.');
+    }
+    if (isProd && (!refreshSecret || refreshSecret === 'deluzex_dev_refresh_secret' || refreshSecret.includes('dev_super_secret'))) {
+      throw new Error('JWT_REFRESH_SECRET must be configured with a secure, non-default secret in production environments.');
+    }
+
+    this.accessSecret = accessSecret || 'deluzex_dev_access_secret';
+    this.refreshSecret = refreshSecret || 'deluzex_dev_refresh_secret';
     this.accessExpiresIn = this.config.get<string>('JWT_ACCESS_EXPIRES_IN') || '15m';
     this.refreshExpiresIn = this.config.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d';
   }
