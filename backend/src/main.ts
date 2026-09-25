@@ -18,10 +18,10 @@ async function bootstrap() {
   const port = config.get<number>('PORT') || 3000;
   const apiPrefix = config.get<string>('API_PREFIX') || '/api/v1';
 
-  // Security Headers (CSP relaxed in dev for Swagger UI assets)
+  // Security Headers (CSP relaxed for Swagger UI CDN assets)
   app.use(
     helmet({
-      contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+      contentSecurityPolicy: false,
     }),
   );
 
@@ -44,6 +44,11 @@ async function bootstrap() {
 
   // Global Routing Prefix
   app.setGlobalPrefix(apiPrefix.replace(/^\/+|\/+$/g, ''));
+
+  // Root redirect to Swagger Documentation
+  app.getHttpAdapter().get('/', (_req: any, res: any) => {
+    res.redirect('/api/docs');
+  });
 
   // Global Input Validation Pipe
   app.useGlobalPipes(
@@ -76,22 +81,24 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document, {
+  const swaggerOptions = {
     customSiteTitle: 'Deluzex ERP — Swagger API Docs',
+    customCssUrl: [
+      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.20.0/swagger-ui.min.css',
+    ],
+    customJs: [
+      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.20.0/swagger-ui-bundle.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.20.0/swagger-ui-standalone-preset.js',
+    ],
     swaggerOptions: {
       persistAuthorization: true,
       displayRequestDuration: true,
       filter: true,
     },
-  });
-  SwaggerModule.setup('docs', app, document, {
-    customSiteTitle: 'Deluzex ERP — Swagger API Docs',
-    swaggerOptions: {
-      persistAuthorization: true,
-      displayRequestDuration: true,
-      filter: true,
-    },
-  });
+  };
+
+  SwaggerModule.setup('api/docs', app, document, swaggerOptions);
+  SwaggerModule.setup('docs', app, document, swaggerOptions);
 
   await app.listen(port, '0.0.0.0');
   logger.log(
