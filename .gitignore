@@ -1,0 +1,24 @@
+# Environment and Secrets (CRITICAL: Never commit credentials)
+.env
+.env.*
+*.env
+!.env.example
+
+# Dependencies
+node_modules/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Build Outputs
+dist/
+build/
+coverage/
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
