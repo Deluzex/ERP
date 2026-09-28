@@ -33,6 +33,7 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: const Text('Delete Production Order'),
         content: Text('Are you sure you want to delete draft order ${o.productionNumber}? This cannot be undone.'),
         actions: [
@@ -74,23 +75,28 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: const Text('Cancel & Soft-Delete Production Order'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('You are cancelling/deactivating production run ${o.productionNumber}. Please specify the reason below:'),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: reasonCtrl,
-                validator: (v) => v == null || v.trim().isEmpty ? 'Cancellation reason is required' : null,
-                decoration: const InputDecoration(
-                  labelText: 'Cancellation Reason *',
-                  hintText: 'E.g., Client request, machine breakdown...',
+        content: Container(
+          constraints: const BoxConstraints(maxWidth: 480),
+          width: double.infinity,
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('You are cancelling/deactivating production run ${o.productionNumber}. Please specify the reason below:'),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: reasonCtrl,
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Cancellation reason is required' : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Cancellation Reason *',
+                    hintText: 'E.g., Client request, machine breakdown...',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         actions: [
@@ -146,18 +152,22 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
+          // Header
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isStacked = constraints.maxWidth < 650;
+              final titleBlock = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Production Orders & Batches', style: AppTextStyles.h1),
                   const SizedBox(height: 4),
                   Text('Manufacturing work orders, raw material consumption, and unit costing', style: AppTextStyles.subtitle),
                 ],
-              ),
-              Row(
+              );
+
+              final actionBlock = Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   ErpButton(
                     text: 'Refresh',
@@ -165,15 +175,34 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                     isOutlined: true,
                     onPressed: () => ref.read(databaseServiceProvider).loadProductionOrders(forceRefresh: true),
                   ),
-                  const SizedBox(width: 8),
                   ErpButton(
                     text: 'New Production Order',
                     icon: Icons.precision_manufacturing_outlined,
                     onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
                   ),
                 ],
-              ),
-            ],
+              );
+
+              if (isStacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBlock,
+                    const SizedBox(height: 12),
+                    actionBlock,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleBlock),
+                  const SizedBox(width: 12),
+                  actionBlock,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 24),
 

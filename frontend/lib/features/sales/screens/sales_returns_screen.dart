@@ -359,14 +359,17 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Items Selected: $totalItemsToReturn products', style: AppTextStyles.bodyBold),
-                              const SizedBox(height: 2),
-                              Text('Taxable: ${Formatters.formatCurrency(liveSubtotal - liveDiscount)} | GST: ${Formatters.formatCurrency(liveGst)}', style: AppTextStyles.bodySmall),
-                            ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Items Selected: $totalItemsToReturn products', style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                const SizedBox(height: 2),
+                                Text('Taxable: ${Formatters.formatCurrency(liveSubtotal - liveDiscount)} | GST: ${Formatters.formatCurrency(liveGst)}', style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
                           ),
+                          const SizedBox(width: 8),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
@@ -547,15 +550,19 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: const Row(
           children: [
             Icon(Icons.check_circle_outline, color: AppColors.success, size: 24),
             SizedBox(width: 10),
-            Text('Approve Sales Return & Process Adjustments'),
+            Expanded(
+              child: Text('Approve Sales Return & Process Adjustments'),
+            ),
           ],
         ),
-        content: SizedBox(
-          width: 500,
+        content: Container(
+          constraints: const BoxConstraints(maxWidth: 520),
+          width: double.infinity,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -672,25 +679,29 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             title: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: AppColors.success.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
                   child: const Icon(Icons.payments_outlined, color: AppColors.success, size: 20),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Process Customer Refund / Credit', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('Return: ${returnDoc.invoiceNumber} | Customer: ${returnDoc.partyName}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Process Customer Refund / Credit', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('Return: ${returnDoc.invoiceNumber} | Customer: ${returnDoc.partyName}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
                 ),
               ],
             ),
-            content: SizedBox(
-              width: 500,
+            content: Container(
+              constraints: const BoxConstraints(maxWidth: 520),
+              width: double.infinity,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -893,31 +904,48 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Sales Returns & Credit Notes', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Multi-stage return verification: QA Inspection, Condition Routing (Resalable/Damaged/Scrap), Ledger Adjustments & Refunds',
-                      style: AppTextStyles.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              ErpButton(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 650;
+              final titleBlock = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Sales Returns & Credit Notes', style: AppTextStyles.h1),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Multi-stage return verification: QA Inspection, Condition Routing (Resalable/Damaged/Scrap), Ledger Adjustments & Refunds',
+                    style: AppTextStyles.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              );
+              final actionButton = ErpButton(
                 text: 'Create Sales Return',
                 icon: Icons.assignment_return_outlined,
                 onPressed: () => _showCreateOrEditSalesReturnDialog(context, db),
-              ),
-            ],
+              );
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBlock,
+                    const SizedBox(height: 12),
+                    actionButton,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleBlock),
+                  const SizedBox(width: 12),
+                  actionButton,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
@@ -995,46 +1023,67 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
           const SizedBox(height: 16),
 
           // 4. Search and Dropdown Filter Row
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: TextField(
-                  onChanged: (val) => setState(() => _searchQuery = val),
-                  decoration: const InputDecoration(
-                    hintText: 'Search by return number, customer, invoice ref, or reason...',
-                    prefixIcon: Icon(Icons.search, size: 18),
-                  ),
+          LayoutBuilder(
+            builder: (context, filterBox) {
+              final isStacked = filterBox.maxWidth < 750;
+
+              final searchField = TextField(
+                onChanged: (val) => setState(() => _searchQuery = val),
+                decoration: const InputDecoration(
+                  hintText: 'Search by return number, customer, invoice ref, or reason...',
+                  prefixIcon: Icon(Icons.search, size: 18),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<String?>(
-                  value: (_selectedCustomerFilter != null && db.customers.any((c) => c.id == _selectedCustomerFilter)) ? _selectedCustomerFilter : null,
-                  decoration: const InputDecoration(labelText: 'Filter Customer', isDense: true),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All Customers')),
-                    ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+              );
+
+              final customerDropdown = DropdownButtonFormField<String?>(
+                value: (_selectedCustomerFilter != null && db.customers.any((c) => c.id == _selectedCustomerFilter)) ? _selectedCustomerFilter : null,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Filter Customer', isDense: true),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('All Customers')),
+                  ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                ],
+                onChanged: (val) => setState(() => _selectedCustomerFilter = val),
+              );
+
+              final typeDropdown = DropdownButtonFormField<ReturnType?>(
+                value: _selectedReturnTypeFilter,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Return Type', isDense: true),
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('All Return Types')),
+                  DropdownMenuItem(value: ReturnType.fullReturn, child: Text('Full Return')),
+                  DropdownMenuItem(value: ReturnType.partialReturn, child: Text('Partial Return')),
+                ],
+                onChanged: (val) => setState(() => _selectedReturnTypeFilter = val),
+              );
+
+              if (isStacked) {
+                return Column(
+                  children: [
+                    searchField,
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: customerDropdown),
+                        const SizedBox(width: 12),
+                        Expanded(child: typeDropdown),
+                      ],
+                    ),
                   ],
-                  onChanged: (val) => setState(() => _selectedCustomerFilter = val),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<ReturnType?>(
-                  value: _selectedReturnTypeFilter,
-                  decoration: const InputDecoration(labelText: 'Return Type', isDense: true),
-                  items: const [
-                    DropdownMenuItem(value: null, child: Text('All Return Types')),
-                    DropdownMenuItem(value: ReturnType.fullReturn, child: Text('Full Return')),
-                    DropdownMenuItem(value: ReturnType.partialReturn, child: Text('Partial Return')),
-                  ],
-                  onChanged: (val) => setState(() => _selectedReturnTypeFilter = val),
-                ),
-              ),
-            ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(flex: 3, child: searchField),
+                  const SizedBox(width: 12),
+                  Expanded(flex: 2, child: customerDropdown),
+                  const SizedBox(width: 12),
+                  Expanded(flex: 2, child: typeDropdown),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
 

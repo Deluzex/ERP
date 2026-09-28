@@ -32,28 +32,10 @@ class ErpLineChartCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: AppTextStyles.h3),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        style: AppTextStyles.subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 420;
+              final badgeWidget = Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.primaryLight,
@@ -66,8 +48,53 @@ class ErpLineChartCard extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-            ],
+              );
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTextStyles.h3),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: AppTextStyles.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    badgeWidget,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: AppTextStyles.h3),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle!,
+                            style: AppTextStyles.subtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  badgeWidget,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -185,35 +212,62 @@ class ErpDualBarChartCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 450;
+              if (isNarrow) {
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title, style: AppTextStyles.h3),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        style: AppTextStyles.subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      Text(subtitle!, style: AppTextStyles.subtitle),
                     ],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      children: [
+                        _buildLegend(AppColors.primary, 'Stock In'),
+                        _buildLegend(AppColors.danger, 'Stock Out'),
+                      ],
+                    ),
                   ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Row(
+                );
+              }
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildLegend(AppColors.primary, 'Stock In'),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: AppTextStyles.h3),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle!,
+                            style: AppTextStyles.subtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                   const SizedBox(width: 12),
-                  _buildLegend(AppColors.danger, 'Stock Out'),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    children: [
+                      _buildLegend(AppColors.primary, 'Stock In'),
+                      _buildLegend(AppColors.danger, 'Stock Out'),
+                    ],
+                  ),
                 ],
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -343,76 +397,87 @@ class ErpDonutChartCard extends StatelessWidget {
             Text(subtitle!, style: AppTextStyles.subtitle),
           ],
           const SizedBox(height: 20),
-          Row(
-            children: [
-              // Donut Chart
-              Expanded(
-                flex: 3,
-                child: SizedBox(
-                  height: 190,
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 3,
-                      centerSpaceRadius: 46,
-                      sections: sections,
-                    ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 450;
+              final chartWidget = SizedBox(
+                height: 190,
+                child: PieChart(
+                  PieChartData(
+                    sectionsSpace: 3,
+                    centerSpaceRadius: 46,
+                    sections: sections,
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              // Legends & Percentages
-              Expanded(
-                flex: 4,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: legends.map((leg) {
-                    final color = leg['color'] as Color;
-                    final name = leg['name'] as String;
-                    final percent = leg['percent'] as String;
-                    final val = leg['value'] as String;
+              );
 
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 5.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              final legendListWidget = Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: legends.map((leg) {
+                  final color = leg['color'] as Color;
+                  final name = leg['name'] as String;
+                  final percent = leg['percent'] as String;
+                  final val = leg['value'] as String;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              name,
-                              style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                        ),
+                        Text(
+                          val,
+                          style: AppTextStyles.bodyBold.copyWith(fontSize: 12),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                          Text(
-                            val,
-                            style: AppTextStyles.bodyBold.copyWith(fontSize: 12),
+                          child: Text(
+                            percent,
+                            style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w700),
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: color.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              percent,
-                              style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+
+              if (isNarrow) {
+                return Column(
+                  children: [
+                    chartWidget,
+                    const SizedBox(height: 16),
+                    legendListWidget,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(flex: 3, child: chartWidget),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 4, child: legendListWidget),
+                ],
+              );
+            },
           ),
         ],
       ),

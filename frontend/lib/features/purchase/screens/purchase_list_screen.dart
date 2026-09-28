@@ -39,17 +39,21 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           title: Row(
             children: [
               const Icon(Icons.warning_amber_rounded, color: AppColors.danger),
               const SizedBox(width: 8),
-              Text('Cancel Purchase ${p.purchaseNumber}?', style: AppTextStyles.h3),
+              Expanded(
+                child: Text('Cancel Purchase ${p.purchaseNumber}?', style: AppTextStyles.h3),
+              ),
             ],
           ),
-          content: Form(
-            key: formKey,
-            child: SizedBox(
-              width: 480,
+          content: Container(
+            constraints: const BoxConstraints(maxWidth: 480),
+            width: double.infinity,
+            child: Form(
+              key: formKey,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,18 +133,22 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('PO Details: ${p.purchaseNumber}', style: AppTextStyles.h3),
+            Expanded(
+              child: Text('PO Details: ${p.purchaseNumber}', style: AppTextStyles.h3),
+            ),
             IconButton(
               icon: const Icon(Icons.close),
               onPressed: () => Navigator.pop(ctx),
             ),
           ],
         ),
-        content: SizedBox(
-          width: 650,
+        content: Container(
+          constraints: const BoxConstraints(maxWidth: 650),
+          width: double.infinity,
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,18 +266,28 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
+          // Header
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isStacked = constraints.maxWidth < 600;
+              final titleBlock = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Purchase Orders', style: AppTextStyles.h1),
                   const SizedBox(height: 4),
-                  Text('Vendor purchase orders, incoming invoices, and payment statuses', style: AppTextStyles.subtitle),
+                  Text(
+                    'Vendor purchase orders, incoming invoices, and payment statuses',
+                    style: AppTextStyles.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
-              ),
-              Row(
+              );
+
+              final actionBlock = Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   IconButton(
                     icon: db.isLoadingPurchases
@@ -282,72 +300,115 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                     tooltip: 'Refresh Purchases',
                     onPressed: () => db.loadPurchases(forceRefresh: true),
                   ),
-                  const SizedBox(width: 8),
                   ErpButton(
                     text: 'Create Purchase',
                     icon: Icons.add,
                     onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
                   ),
                 ],
-              ),
-            ],
+              );
+
+              if (isStacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBlock,
+                    const SizedBox(height: 12),
+                    actionBlock,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleBlock),
+                  const SizedBox(width: 12),
+                  actionBlock,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
           // Search and Filters
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  onChanged: (val) => setState(() => _searchQuery = val),
-                  decoration: const InputDecoration(
-                    hintText: 'Search purchase by PO number, vendor name or invoice number...',
-                    prefixIcon: Icon(Icons.search, size: 18),
-                  ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 750;
+              final searchField = TextField(
+                onChanged: (val) => setState(() => _searchQuery = val),
+                decoration: const InputDecoration(
+                  hintText: 'Search purchase by PO number, vendor name or invoice number...',
+                  prefixIcon: Icon(Icons.search, size: 18),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Wrap(
-                spacing: 8,
+              );
+
+              final filterChips = SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    ChoiceChip(
+                      label: const Text('All'),
+                      selected: _selectedStatusFilter == 'all',
+                      onSelected: (selected) {
+                        if (selected) setState(() => _selectedStatusFilter = 'all');
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Saved / Inward'),
+                      selected: _selectedStatusFilter == 'saved',
+                      onSelected: (selected) {
+                        if (selected) setState(() => _selectedStatusFilter = 'saved');
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Partial'),
+                      selected: _selectedStatusFilter == 'partialpaid',
+                      onSelected: (selected) {
+                        if (selected) setState(() => _selectedStatusFilter = 'partialpaid');
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Paid'),
+                      selected: _selectedStatusFilter == 'paid',
+                      onSelected: (selected) {
+                        if (selected) setState(() => _selectedStatusFilter = 'paid');
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Cancelled'),
+                      selected: _selectedStatusFilter == 'cancelled',
+                      onSelected: (selected) {
+                        if (selected) setState(() => _selectedStatusFilter = 'cancelled');
+                      },
+                    ),
+                  ],
+                ),
+              );
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    searchField,
+                    const SizedBox(height: 12),
+                    filterChips,
+                  ],
+                );
+              }
+
+              return Row(
                 children: [
-                  ChoiceChip(
-                    label: const Text('All'),
-                    selected: _selectedStatusFilter == 'all',
-                    onSelected: (selected) {
-                      if (selected) setState(() => _selectedStatusFilter = 'all');
-                    },
-                  ),
-                  ChoiceChip(
-                    label: const Text('Saved / Inward'),
-                    selected: _selectedStatusFilter == 'saved',
-                    onSelected: (selected) {
-                      if (selected) setState(() => _selectedStatusFilter = 'saved');
-                    },
-                  ),
-                  ChoiceChip(
-                    label: const Text('Partial'),
-                    selected: _selectedStatusFilter == 'partialpaid',
-                    onSelected: (selected) {
-                      if (selected) setState(() => _selectedStatusFilter = 'partialpaid');
-                    },
-                  ),
-                  ChoiceChip(
-                    label: const Text('Paid'),
-                    selected: _selectedStatusFilter == 'paid',
-                    onSelected: (selected) {
-                      if (selected) setState(() => _selectedStatusFilter = 'paid');
-                    },
-                  ),
-                  ChoiceChip(
-                    label: const Text('Cancelled'),
-                    selected: _selectedStatusFilter == 'cancelled',
-                    onSelected: (selected) {
-                      if (selected) setState(() => _selectedStatusFilter = 'cancelled');
-                    },
-                  ),
+                  Expanded(child: searchField),
+                  const SizedBox(width: 16),
+                  filterChips,
                 ],
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 

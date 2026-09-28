@@ -43,7 +43,7 @@ class StatCard extends StatelessWidget {
           ),
         ],
       ),
-      padding: AppSpacing.cardPadding,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -60,7 +60,7 @@ class StatCard extends StatelessWidget {
                   style: AppTextStyles.subtitle.copyWith(
                     fontWeight: FontWeight.w500,
                     color: AppColors.textSecondary,
-                    fontSize: 13,
+                    fontSize: 12.5,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -68,12 +68,16 @@ class StatCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: AppTextStyles.metricValue,
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: AppTextStyles.metricValue.copyWith(fontSize: 22),
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           if (trendText != null)
             Row(
               children: [
@@ -85,15 +89,20 @@ class StatCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                 ],
-                Text(
-                  trendText!,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: isPositiveTrend == true
-                        ? AppColors.successText
-                        : isPositiveTrend == false
-                            ? AppColors.dangerText
-                            : AppColors.textMuted,
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Text(
+                    trendText!,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: isPositiveTrend == true
+                          ? AppColors.successText
+                          : isPositiveTrend == false
+                              ? AppColors.dangerText
+                              : AppColors.textMuted,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -122,7 +131,7 @@ class StatCard extends StatelessWidget {
               ),
             )
           else
-            const SizedBox(height: 18),
+            const SizedBox.shrink(),
         ],
       ),
     );

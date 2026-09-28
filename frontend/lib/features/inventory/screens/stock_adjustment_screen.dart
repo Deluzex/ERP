@@ -67,9 +67,11 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
             final diff = parsedNewQty - currentStock;
 
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text('Record Stock Adjustment', style: AppTextStyles.h2),
-              content: SizedBox(
-                width: 520,
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                width: double.infinity,
                 child: Form(
                   key: formKey,
                   child: SingleChildScrollView(
@@ -77,39 +79,80 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: RadioListTile<ItemType>(
-                                title: const Text('Finished Product'),
-                                value: ItemType.finishedProduct,
-                                groupValue: selectedItemType,
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setDlgState(() {
-                                      selectedItemType = val;
-                                      selectedItemId = db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : '';
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                            Expanded(
-                              child: RadioListTile<ItemType>(
-                                title: const Text('Raw Material'),
-                                value: ItemType.rawMaterial,
-                                groupValue: selectedItemType,
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setDlgState(() {
-                                      selectedItemType = val;
-                                      selectedItemId = db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : '';
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isNarrow = constraints.maxWidth < 450;
+                            if (isNarrow) {
+                              return Column(
+                                children: [
+                                  RadioListTile<ItemType>(
+                                    title: const Text('Finished Product'),
+                                    value: ItemType.finishedProduct,
+                                    groupValue: selectedItemType,
+                                    contentPadding: EdgeInsets.zero,
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setDlgState(() {
+                                          selectedItemType = val;
+                                          selectedItemId = db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : '';
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  RadioListTile<ItemType>(
+                                    title: const Text('Raw Material'),
+                                    value: ItemType.rawMaterial,
+                                    groupValue: selectedItemType,
+                                    contentPadding: EdgeInsets.zero,
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setDlgState(() {
+                                          selectedItemType = val;
+                                          selectedItemId = db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : '';
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ],
+                              );
+                            }
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: RadioListTile<ItemType>(
+                                    title: const Text('Finished Product'),
+                                    value: ItemType.finishedProduct,
+                                    groupValue: selectedItemType,
+                                    contentPadding: EdgeInsets.zero,
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setDlgState(() {
+                                          selectedItemType = val;
+                                          selectedItemId = db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : '';
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                Expanded(
+                                  child: RadioListTile<ItemType>(
+                                    title: const Text('Raw Material'),
+                                    value: ItemType.rawMaterial,
+                                    groupValue: selectedItemType,
+                                    contentPadding: EdgeInsets.zero,
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setDlgState(() {
+                                          selectedItemType = val;
+                                          selectedItemId = db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : '';
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
@@ -264,23 +307,34 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 600;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text('Stock Adjustments', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Reconcile physical stock counts, log damages, and record audited corrections', style: AppTextStyles.subtitle),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 240),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Stock Adjustments', style: AppTextStyles.h1),
+                        const SizedBox(height: 4),
+                        Text('Reconcile physical stock counts, log damages, and record audited corrections', style: AppTextStyles.subtitle),
+                      ],
+                    ),
+                  ),
+                  ErpButton(
+                    text: 'New Stock Adjustment',
+                    icon: Icons.tune_rounded,
+                    onPressed: _openCreateAdjustmentDialog,
+                  ),
                 ],
-              ),
-              ErpButton(
-                text: 'New Stock Adjustment',
-                icon: Icons.tune_rounded,
-                onPressed: _openCreateAdjustmentDialog,
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 24),
 

@@ -40,7 +40,8 @@ class _ErpConfirmDeleteDialogState extends State<ErpConfirmDeleteDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
       child: Container(
-        width: 480,
+        constraints: const BoxConstraints(maxWidth: 480),
+        width: double.infinity,
         padding: AppSpacing.dialogPadding,
         child: Form(
           key: _formKey,
@@ -112,15 +113,16 @@ class _ErpConfirmDeleteDialogState extends State<ErpConfirmDeleteDialog> {
                 ),
               ],
               const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 12,
+                runSpacing: 10,
                 children: [
                   ErpButton(
                     text: 'Cancel',
                     isOutlined: true,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-                  const SizedBox(width: 12),
                   ErpButton(
                     text: 'Confirm Delete',
                     isDanger: true,

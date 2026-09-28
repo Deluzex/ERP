@@ -218,9 +218,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                 : (outstanding - currentEnteredAmt).clamp(0.0, double.infinity);
 
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text(title, style: AppTextStyles.h2),
-              content: SizedBox(
-                width: 540,
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 540),
+                width: double.infinity,
                 child: Form(
                   key: formKey,
                   child: SingleChildScrollView(
@@ -351,48 +353,94 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                               const SizedBox(height: 6),
                               Material(
                                 color: Colors.transparent,
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: RadioListTile<bool>(
-                                        title: const Text('Full Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                        subtitle: selectedDocPending > 0
-                                            ? Text('Clear full balance ₹${selectedDocPending.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11))
-                                            : null,
-                                        value: true,
-                                        groupValue: isFullPayment,
-                                        contentPadding: EdgeInsets.zero,
-                                        dense: true,
-                                        onChanged: (val) {
-                                          if (val != null) {
-                                            setDlgState(() {
-                                              isFullPayment = val;
-                                              if (selectedDocPending > 0) {
-                                                amountCtrl.text = selectedDocPending.toStringAsFixed(0);
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final isNarrow = constraints.maxWidth < 450;
+                                    if (isNarrow) {
+                                      return Column(
+                                        children: [
+                                          RadioListTile<bool>(
+                                            title: const Text('Full Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                            subtitle: selectedDocPending > 0
+                                                ? Text('Clear full balance ₹${selectedDocPending.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11))
+                                                : null,
+                                            value: true,
+                                            groupValue: isFullPayment,
+                                            contentPadding: EdgeInsets.zero,
+                                            dense: true,
+                                            onChanged: (val) {
+                                              if (val != null) {
+                                                setDlgState(() {
+                                                  isFullPayment = val;
+                                                  if (selectedDocPending > 0) {
+                                                    amountCtrl.text = selectedDocPending.toStringAsFixed(0);
+                                                  }
+                                                });
                                               }
-                                            });
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: RadioListTile<bool>(
-                                        title: const Text('Partial Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                        subtitle: const Text('Enter installment amount', style: TextStyle(fontSize: 11)),
-                                        value: false,
-                                        groupValue: isFullPayment,
-                                        contentPadding: EdgeInsets.zero,
-                                        dense: true,
-                                        onChanged: (val) {
-                                          if (val != null) {
-                                            setDlgState(() {
-                                              isFullPayment = val;
-                                            });
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                  ],
+                                            },
+                                          ),
+                                          RadioListTile<bool>(
+                                            title: const Text('Partial Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                            subtitle: const Text('Enter installment amount', style: TextStyle(fontSize: 11)),
+                                            value: false,
+                                            groupValue: isFullPayment,
+                                            contentPadding: EdgeInsets.zero,
+                                            dense: true,
+                                            onChanged: (val) {
+                                              if (val != null) {
+                                                setDlgState(() {
+                                                  isFullPayment = val;
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      );
+                                    }
+                                    return Row(
+                                      children: [
+                                        Expanded(
+                                          child: RadioListTile<bool>(
+                                            title: const Text('Full Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                            subtitle: selectedDocPending > 0
+                                                ? Text('Clear full balance ₹${selectedDocPending.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11))
+                                                : null,
+                                            value: true,
+                                            groupValue: isFullPayment,
+                                            contentPadding: EdgeInsets.zero,
+                                            dense: true,
+                                            onChanged: (val) {
+                                              if (val != null) {
+                                                setDlgState(() {
+                                                  isFullPayment = val;
+                                                  if (selectedDocPending > 0) {
+                                                    amountCtrl.text = selectedDocPending.toStringAsFixed(0);
+                                                  }
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: RadioListTile<bool>(
+                                            title: const Text('Partial Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                            subtitle: const Text('Enter installment amount', style: TextStyle(fontSize: 11)),
+                                            value: false,
+                                            groupValue: isFullPayment,
+                                            contentPadding: EdgeInsets.zero,
+                                            dense: true,
+                                            onChanged: (val) {
+                                              if (val != null) {
+                                                setDlgState(() {
+                                                  isFullPayment = val;
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ),
                             ],
@@ -537,27 +585,37 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Payments & Treasury Center', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Manual payment entry (Full & Partial), invoice balance auto-reconciliation, and treasury tracking',
-                        style: AppTextStyles.subtitle),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              ErpButton(
-                text: buttonLabel,
-                icon: Icons.add,
-                onPressed: () => _openRecordPaymentDialog(currentPaymentType),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 600;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 240),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Payments & Treasury Center', style: AppTextStyles.h1),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Manual payment entry (Full & Partial), invoice balance auto-reconciliation, and treasury tracking',
+                          style: AppTextStyles.subtitle,
+                        ),
+                      ],
+                    ),
+                  ),
+                  ErpButton(
+                    text: buttonLabel,
+                    icon: Icons.add,
+                    onPressed: () => _openRecordPaymentDialog(currentPaymentType),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 

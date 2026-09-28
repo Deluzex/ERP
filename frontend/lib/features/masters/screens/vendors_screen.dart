@@ -57,8 +57,11 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
         return StatefulBuilder(
           builder: (dialogCtx, setDlgState) {
             return AlertDialog(
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              title: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   Text(isEdit ? 'Edit Vendor' : 'Add Vendor Master', style: AppTextStyles.h2),
                   ErpButton(
@@ -70,9 +73,11 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                         context: context,
                         builder: (ocrCtx) => Dialog(
                           backgroundColor: Colors.transparent,
-                          child: SizedBox(
-                            width: 800,
-                            height: 600,
+                          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
+                            width: double.infinity,
+                            height: MediaQuery.of(context).size.height * 0.88,
                             child: DocumentOcrUploader(
                               docType: OcrDocType.vendorDoc,
                               onCancel: () => Navigator.of(ocrCtx).pop(),
@@ -95,8 +100,9 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                   ),
                 ],
               ),
-              content: SizedBox(
-                width: 560,
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 580),
+                width: double.infinity,
                 child: Form(
                   key: formKey,
                   child: SingleChildScrollView(
@@ -356,23 +362,45 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 550) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Vendors Master', style: AppTextStyles.h1),
+                    const SizedBox(height: 4),
+                    Text('Raw material suppliers, payment terms, credit limits, and outstanding balances', style: AppTextStyles.subtitle),
+                    const SizedBox(height: 12),
+                    ErpButton(
+                      text: 'Add Vendor',
+                      icon: Icons.add,
+                      onPressed: () => _openAddEditVendorDialog(),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Vendors Master', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Raw material suppliers, payment terms, credit limits, and outstanding balances', style: AppTextStyles.subtitle),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Vendors Master', style: AppTextStyles.h1),
+                        const SizedBox(height: 4),
+                        Text('Raw material suppliers, payment terms, credit limits, and outstanding balances', style: AppTextStyles.subtitle),
+                      ],
+                    ),
+                  ),
+                  ErpButton(
+                    text: 'Add Vendor',
+                    icon: Icons.add,
+                    onPressed: () => _openAddEditVendorDialog(),
+                  ),
                 ],
-              ),
-              ErpButton(
-                text: 'Add Vendor',
-                icon: Icons.add,
-                onPressed: () => _openAddEditVendorDialog(),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 24),
 

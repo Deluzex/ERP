@@ -73,9 +73,11 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
         return StatefulBuilder(
           builder: (dlgCtx, setDlgState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text(isEdit ? 'Edit Product Item' : 'Product / Item Entry', style: AppTextStyles.h2),
-              content: SizedBox(
-                width: 580,
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 580),
+                width: double.infinity,
                 child: Form(
                   key: formKey,
                   child: SingleChildScrollView(
@@ -102,133 +104,234 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                             ),
                           ),
                         ],
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: TextFormField(
-                                controller: nameCtrl,
-                                validator: (v) => Validators.requiredField(v, 'Product name required'),
-                                decoration: const InputDecoration(
-                                  labelText: 'Product / Item Name *',
-                                  hintText: 'E.g., Aarix Wall Sconce Light',
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isNarrow = constraints.maxWidth < 500;
+                            if (isNarrow) {
+                              return Column(
+                                children: [
+                                  TextFormField(
+                                    controller: nameCtrl,
+                                    validator: (v) => Validators.requiredField(v, 'Product name required'),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Product / Item Name *',
+                                      hintText: 'E.g., Aarix Wall Sconce Light',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: codeCtrl,
+                                    validator: (v) => Validators.requiredField(v, 'SKU / Code required'),
+                                    decoration: const InputDecoration(
+                                      labelText: 'SKU / Code *',
+                                      hintText: 'E.g., DLX-WSC-01',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: selectedCategory.isNotEmpty ? selectedCategory : null,
+                                    decoration: const InputDecoration(labelText: 'Category *'),
+                                    items: db.categories.map((c) {
+                                      return DropdownMenuItem(value: c.id, child: Text(c.name));
+                                    }).toList(),
+                                    onChanged: isSubmitting ? null : (val) {
+                                      if (val != null) setDlgState(() => selectedCategory = val);
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
+                                    decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
+                                    items: db.units.map((u) {
+                                      return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
+                                    }).toList(),
+                                    onChanged: isSubmitting ? null : (val) {
+                                      if (val != null) setDlgState(() => selectedUnitId = val);
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: costCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.positiveNumber,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Cost Price (₹) *',
+                                      hintText: 'Production cost',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: dealerCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.positiveNumber,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Dealer Price (₹) *',
+                                      hintText: 'B2B price',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: custCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.positiveNumber,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Customer Price (₹) *',
+                                      hintText: 'Retail MRP',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: stockCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.nonNegativeNumber,
+                                    decoration: InputDecoration(
+                                      labelText: isEdit ? 'Current Stock *' : 'Opening Stock *',
+                                      hintText: 'Initial stock units',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: minCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.nonNegativeNumber,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Minimum Alert Stock *',
+                                      hintText: 'Low stock warning threshold',
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 3,
+                                      child: TextFormField(
+                                        controller: nameCtrl,
+                                        validator: (v) => Validators.requiredField(v, 'Product name required'),
+                                        decoration: const InputDecoration(
+                                          labelText: 'Product / Item Name *',
+                                          hintText: 'E.g., Aarix Wall Sconce Light',
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      flex: 2,
+                                      child: TextFormField(
+                                        controller: codeCtrl,
+                                        validator: (v) => Validators.requiredField(v, 'SKU / Code required'),
+                                        decoration: const InputDecoration(
+                                          labelText: 'SKU / Code *',
+                                          hintText: 'E.g., DLX-WSC-01',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 2,
-                              child: TextFormField(
-                                controller: codeCtrl,
-                                validator: (v) => Validators.requiredField(v, 'SKU / Code required'),
-                                decoration: const InputDecoration(
-                                  labelText: 'SKU / Code *',
-                                  hintText: 'E.g., DLX-WSC-01',
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        initialValue: selectedCategory.isNotEmpty ? selectedCategory : null,
+                                        decoration: const InputDecoration(labelText: 'Category *'),
+                                        items: db.categories.map((c) {
+                                          return DropdownMenuItem(value: c.id, child: Text(c.name));
+                                        }).toList(),
+                                        onChanged: isSubmitting ? null : (val) {
+                                          if (val != null) setDlgState(() => selectedCategory = val);
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
+                                        decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
+                                        items: db.units.map((u) {
+                                          return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
+                                        }).toList(),
+                                        onChanged: isSubmitting ? null : (val) {
+                                          if (val != null) setDlgState(() => selectedUnitId = val);
+                                        },
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                initialValue: selectedCategory.isNotEmpty ? selectedCategory : null,
-                                decoration: const InputDecoration(labelText: 'Category *'),
-                                items: db.categories.map((c) {
-                                  return DropdownMenuItem(value: c.id, child: Text(c.name));
-                                }).toList(),
-                                onChanged: isSubmitting ? null : (val) {
-                                  if (val != null) setDlgState(() => selectedCategory = val);
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
-                                decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
-                                items: db.units.map((u) {
-                                  return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
-                                }).toList(),
-                                onChanged: isSubmitting ? null : (val) {
-                                  if (val != null) setDlgState(() => selectedUnitId = val);
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: costCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.positiveNumber,
-                                decoration: const InputDecoration(
-                                  labelText: 'Cost Price (₹) *',
-                                  hintText: 'Production cost',
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: costCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.positiveNumber,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Cost Price (₹) *',
+                                          hintText: 'Production cost',
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: dealerCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.positiveNumber,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Dealer Price (₹) *',
+                                          hintText: 'B2B price',
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: custCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.positiveNumber,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Customer Price (₹) *',
+                                          hintText: 'Retail MRP',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextFormField(
-                                controller: dealerCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.positiveNumber,
-                                decoration: const InputDecoration(
-                                  labelText: 'Dealer Price (₹) *',
-                                  hintText: 'B2B price',
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: stockCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: InputDecoration(
+                                          labelText: isEdit ? 'Current Stock *' : 'Opening Stock *',
+                                          hintText: 'Initial stock units',
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: minCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Minimum Alert Stock *',
+                                          hintText: 'Low stock warning threshold',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextFormField(
-                                controller: custCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.positiveNumber,
-                                decoration: const InputDecoration(
-                                  labelText: 'Customer Price (₹) *',
-                                  hintText: 'Retail MRP',
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: stockCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.nonNegativeNumber,
-                                decoration: InputDecoration(
-                                  labelText: isEdit ? 'Current Stock *' : 'Opening Stock *',
-                                  hintText: 'Initial stock units',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextFormField(
-                                controller: minCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.nonNegativeNumber,
-                                decoration: const InputDecoration(
-                                  labelText: 'Minimum Alert Stock *',
-                                  hintText: 'Low stock warning threshold',
-                                ),
-                              ),
-                            ),
-                          ],
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -407,26 +510,37 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 600;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text('Product Master', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Finished goods catalog, multi-tier pricing, category definitions, and specifications',
-                    style: AppTextStyles.subtitle,
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Product Master', style: AppTextStyles.h1),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Finished goods catalog, multi-tier pricing, category definitions, and specifications',
+                          style: AppTextStyles.subtitle,
+                        ),
+                      ],
+                    ),
+                  ),
+                  ErpButton(
+                    text: 'Add Product Item',
+                    icon: Icons.add,
+                    onPressed: () => _openAddEditDialog(),
                   ),
                 ],
-              ),
-              ErpButton(
-                text: 'Add Product Item',
-                icon: Icons.add,
-                onPressed: () => _openAddEditDialog(),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 24),
 

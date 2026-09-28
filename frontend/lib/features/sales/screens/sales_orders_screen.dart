@@ -57,6 +57,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             title: Row(
               children: [
                 Container(
@@ -65,57 +66,88 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                   child: const Icon(Icons.local_shipping_outlined, color: AppColors.info, size: 22),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Dispatch Goods / Create Delivery Challan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('Sales Order: ${so.invoiceNumber} | Customer: ${so.partyName}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Dispatch Goods / Create Delivery Challan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('Sales Order: ${so.invoiceNumber} | Customer: ${so.partyName}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    ],
+                  ),
                 ),
               ],
             ),
-            content: SizedBox(
-              width: 640,
+            content: Container(
+              constraints: const BoxConstraints(maxWidth: 640),
+              width: double.infinity,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Transport Info Box
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: vehicleCtrl,
-                            decoration: const InputDecoration(labelText: 'Vehicle Number *', hintText: 'e.g. MH-04-KU-8842'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: driverCtrl,
-                            decoration: const InputDecoration(labelText: 'Driver Name & Phone *', hintText: 'e.g. Rajesh Sharma'),
-                          ),
-                        ),
-                      ],
+                    LayoutBuilder(
+                      builder: (context, fieldBox) {
+                        final isFieldStacked = fieldBox.maxWidth < 500;
+                        final vehicleField = TextFormField(
+                          controller: vehicleCtrl,
+                          decoration: const InputDecoration(labelText: 'Vehicle Number *', hintText: 'e.g. MH-04-KU-8842'),
+                        );
+                        final driverField = TextFormField(
+                          controller: driverCtrl,
+                          decoration: const InputDecoration(labelText: 'Driver Name & Phone *', hintText: 'e.g. Rajesh Sharma'),
+                        );
+
+                        if (isFieldStacked) {
+                          return Column(
+                            children: [
+                              vehicleField,
+                              const SizedBox(height: 12),
+                              driverField,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: vehicleField),
+                            const SizedBox(width: 12),
+                            Expanded(child: driverField),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: trackingCtrl,
-                            decoration: const InputDecoration(labelText: 'Tracking / LR Number', hintText: 'e.g. TRK-2026-9912'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: notesCtrl,
-                            decoration: const InputDecoration(labelText: 'Delivery Notes / Gate Pass'),
-                          ),
-                        ),
-                      ],
+                    LayoutBuilder(
+                      builder: (context, fieldBox) {
+                        final isFieldStacked = fieldBox.maxWidth < 500;
+                        final trackField = TextFormField(
+                          controller: trackingCtrl,
+                          decoration: const InputDecoration(labelText: 'Tracking / LR Number', hintText: 'e.g. TRK-2026-9912'),
+                        );
+                        final notesField = TextFormField(
+                          controller: notesCtrl,
+                          decoration: const InputDecoration(labelText: 'Delivery Notes / Gate Pass'),
+                        );
+
+                        if (isFieldStacked) {
+                          return Column(
+                            children: [
+                              trackField,
+                              const SizedBox(height: 12),
+                              notesField,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: trackField),
+                            const SizedBox(width: 12),
+                            Expanded(child: notesField),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 18),
 
@@ -314,34 +346,50 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Sales Orders & Stock Allocation', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Order execution, stock reservation, shortage production links & dispatch',
-                      style: AppTextStyles.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              ErpButton(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isStacked = constraints.maxWidth < 650;
+              final titleBlock = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Sales Orders & Stock Allocation', style: AppTextStyles.h1),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Order execution, stock reservation, shortage production links & dispatch',
+                    style: AppTextStyles.subtitle,
+                  ),
+                ],
+              );
+
+              final actionBtn = ErpButton(
                 text: 'New Sales Order',
                 icon: Icons.add,
                 onPressed: () {
                   ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.salesOrder;
                   ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesOrder;
                 },
-              ),
-            ],
+              );
+
+              if (isStacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBlock,
+                    const SizedBox(height: 12),
+                    actionBtn,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleBlock),
+                  const SizedBox(width: 12),
+                  actionBtn,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 

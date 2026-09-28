@@ -146,18 +146,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 480;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A), // Sleek Slate Dark Background
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          padding: EdgeInsets.symmetric(vertical: 24, horizontal: isCompact ? 12 : 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 500,
-                padding: const EdgeInsets.all(36),
+                constraints: const BoxConstraints(maxWidth: 480),
+                width: double.infinity,
+                padding: EdgeInsets.all(isCompact ? 20 : 36),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: AppRadius.xlBorderRadius,
@@ -177,30 +180,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     children: [
                       // Logo & Brand Header
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Image.asset(
-                            'assets/images/logo.png',
-                            height: 42,
-                            fit: BoxFit.contain,
-                            alignment: Alignment.centerLeft,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              width: 38,
+                          Flexible(
+                            child: SizedBox(
                               height: 38,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'd',
-                                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 24),
+                              child: Image.asset(
+                                'assets/images/logo.png',
+                                height: 38,
+                                fit: BoxFit.contain,
+                                alignment: Alignment.centerLeft,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      'd',
+                                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 22),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(6),
@@ -208,7 +217,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             child: const Text(
                               'ENTERPRISE RBAC',
-                              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.primary),
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
                             ),
                           ),
                         ],
@@ -309,8 +318,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         children: [
                           const Expanded(child: Divider()),
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Text('QUICK DEMO ROLE PRESETS', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold, fontSize: 10.5, letterSpacing: 0.8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'DEMO ROLE PRESETS',
+                              style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 0.5),
+                            ),
                           ),
                           const Expanded(child: Divider()),
                         ],

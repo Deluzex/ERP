@@ -48,35 +48,39 @@ class ErpDataTable extends StatelessWidget {
         border: Border.all(color: AppColors.border, width: 1),
       ),
       clipBehavior: Clip.antiAlias,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minWidth: MediaQuery.of(context).size.width - 300,
-          ),
-          child: DataTable(
-            headingRowColor: WidgetStateProperty.all(AppColors.surfaceMuted),
-            headingTextStyle: AppTextStyles.tableHeader,
-            dataTextStyle: AppTextStyles.tableCell,
-            dividerThickness: 1,
-            horizontalMargin: 20,
-            columnSpacing: 28,
-            columns: columns.map((col) {
-              return DataColumn(
-                numeric: col.isNumeric,
-                label: Text(
-                  col.title.toUpperCase(),
-                  style: AppTextStyles.tableHeader.copyWith(fontSize: 11),
-                ),
-              );
-            }).toList(),
-            rows: rows.map((cells) {
-              return DataRow(
-                cells: cells.map((cell) => DataCell(cell)).toList(),
-              );
-            }).toList(),
-          ),
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width,
+              ),
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(AppColors.surfaceMuted),
+                headingTextStyle: AppTextStyles.tableHeader,
+                dataTextStyle: AppTextStyles.tableCell,
+                dividerThickness: 1,
+                horizontalMargin: 20,
+                columnSpacing: 28,
+                columns: columns.map((col) {
+                  return DataColumn(
+                    numeric: col.isNumeric,
+                    label: Text(
+                      col.title.toUpperCase(),
+                      style: AppTextStyles.tableHeader.copyWith(fontSize: 11),
+                    ),
+                  );
+                }).toList(),
+                rows: rows.map((cells) {
+                  return DataRow(
+                    cells: cells.map((cell) => DataCell(cell)).toList(),
+                  );
+                }).toList(),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

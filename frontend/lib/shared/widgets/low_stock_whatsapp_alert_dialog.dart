@@ -111,48 +111,51 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(existing == null ? 'Add Alert Recipient' : 'Edit Alert Recipient', style: AppTextStyles.h2),
-        content: SizedBox(
-          width: 440,
+        content: Container(
+          constraints: const BoxConstraints(maxWidth: 440),
+          width: double.infinity,
           child: Form(
             key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Recipient Name *', hintText: 'e.g. Vikram Joshi'),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Name required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: roleCtrl,
-                  decoration: const InputDecoration(labelText: 'Role / Department *', hintText: 'e.g. Production Head'),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Role required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: mobileCtrl,
-                  decoration: const InputDecoration(labelText: 'Mobile Number *', hintText: '+91 98200 12345'),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Mobile required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: whatsappCtrl,
-                  decoration: const InputDecoration(labelText: 'WhatsApp Number *', hintText: '+919820012345'),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'WhatsApp number required' : null,
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<WhatsAppAlertType>(
-                  value: alertType,
-                  decoration: const InputDecoration(labelText: 'Subscribed Alert Type'),
-                  items: WhatsAppAlertType.values.map((t) {
-                    return DropdownMenuItem(value: t, child: Text(t.name));
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) alertType = val;
-                  },
-                ),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Recipient Name *', hintText: 'e.g. Vikram Joshi'),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Name required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: roleCtrl,
+                    decoration: const InputDecoration(labelText: 'Role / Department *', hintText: 'e.g. Production Head'),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Role required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: mobileCtrl,
+                    decoration: const InputDecoration(labelText: 'Mobile Number *', hintText: '+91 98200 12345'),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Mobile required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: whatsappCtrl,
+                    decoration: const InputDecoration(labelText: 'WhatsApp Number *', hintText: '+919820012345'),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'WhatsApp number required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<WhatsAppAlertType>(
+                    value: alertType,
+                    decoration: const InputDecoration(labelText: 'Subscribed Alert Type'),
+                    items: WhatsAppAlertType.values.map((t) {
+                      return DropdownMenuItem(value: t, child: Text(t.name));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) alertType = val;
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -195,41 +198,50 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
     final db = ref.watch(databaseServiceProvider);
     final lowRM = db.lowStockRawMaterials;
     final lowFP = db.lowStockFinishedProducts;
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.width < 650;
 
     return Dialog(
       backgroundColor: AppColors.surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
       child: Container(
-        width: 820,
-        height: 620,
-        padding: const EdgeInsets.all(24),
+        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
+        width: double.infinity,
+        height: size.height * 0.9,
+        padding: EdgeInsets.all(isMobile ? 16 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Top Bar
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.warning.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 24),
                       ),
-                      child: const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 24),
-                    ),
-                    const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Low Stock WhatsApp Alerts & Production Warning System', style: AppTextStyles.h2),
-                        const SizedBox(height: 2),
-                        Text('Real-time buffer monitoring, production team notification & alert history', style: AppTextStyles.bodySmall),
-                      ],
-                    ),
-                  ],
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Low Stock WhatsApp Alerts & Production Warning System', style: AppTextStyles.h2),
+                            const SizedBox(height: 2),
+                            Text('Real-time buffer monitoring, production team notification & alert history', style: AppTextStyles.bodySmall),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(context)),
               ],
@@ -239,6 +251,7 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
             // Tab Bar
             TabBar(
               controller: _tabController,
+              isScrollable: isMobile,
               tabs: [
                 Tab(text: 'Active Low Stock (${lowRM.length + lowFP.length})'),
                 Tab(text: 'Alert Recipients (${db.alertRecipients.length})'),
@@ -370,16 +383,36 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
   Widget _buildRecipientsTab(BuildContext context, dynamic db) {
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Registered Production & Inventory WhatsApp Numbers', style: AppTextStyles.h3),
-            ErpButton(
-              text: 'Add Recipient',
-              icon: Icons.add,
-              onPressed: () => _openAddRecipientDialog(),
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 500) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Registered WhatsApp Numbers', style: AppTextStyles.h3),
+                  const SizedBox(height: 8),
+                  ErpButton(
+                    text: 'Add Recipient',
+                    icon: Icons.add,
+                    onPressed: () => _openAddRecipientDialog(),
+                  ),
+                ],
+              );
+            }
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text('Registered Production & Inventory WhatsApp Numbers', style: AppTextStyles.h3),
+                ),
+                ErpButton(
+                  text: 'Add Recipient',
+                  icon: Icons.add,
+                  onPressed: () => _openAddRecipientDialog(),
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 12),
         Expanded(

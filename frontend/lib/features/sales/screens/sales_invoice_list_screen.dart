@@ -54,6 +54,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
           final remainingAfter = (invoice.pendingAmount - enteredAmount).clamp(0.0, double.infinity);
 
           return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             title: Row(
               children: [
                 Container(
@@ -62,17 +63,20 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
                   child: const Icon(Icons.payments_outlined, color: AppColors.success, size: 20),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Record Customer Payment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('Invoice: ${invoice.invoiceNumber} | Party: ${invoice.partyName}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Record Customer Payment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('Invoice: ${invoice.invoiceNumber} | Party: ${invoice.partyName}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    ],
+                  ),
                 ),
               ],
             ),
-            content: SizedBox(
-              width: 480,
+            content: Container(
+              constraints: const BoxConstraints(maxWidth: 480),
+              width: double.infinity,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -210,27 +214,24 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Sales Invoices & Revenue', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Tax invoices created from delivered goods, payment receipts & customer outstanding balances',
-                      style: AppTextStyles.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Wrap(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isStacked = constraints.maxWidth < 750;
+              final titleBlock = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Sales Invoices & Revenue', style: AppTextStyles.h1),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tax invoices created from delivered goods, payment receipts & customer outstanding balances',
+                    style: AppTextStyles.subtitle,
+                  ),
+                ],
+              );
+
+              final actionButtons = Wrap(
                 spacing: 8,
+                runSpacing: 8,
                 children: [
                   ErpButton(
                     text: 'Invoice from Delivery',
@@ -244,8 +245,28 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
                     onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
                   ),
                 ],
-              ),
-            ],
+              );
+
+              if (isStacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBlock,
+                    const SizedBox(height: 16),
+                    actionButtons,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleBlock),
+                  const SizedBox(width: 12),
+                  actionButtons,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 

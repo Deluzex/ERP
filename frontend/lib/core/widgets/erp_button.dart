@@ -80,9 +80,13 @@ class ErpButton extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: fgColor),
           const SizedBox(width: 8),
-          Text(
-            text,
-            style: AppTextStyles.button.copyWith(color: fgColor),
+          Flexible(
+            child: Text(
+              text,
+              style: AppTextStyles.button.copyWith(color: fgColor),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       );
@@ -91,6 +95,8 @@ class ErpButton extends StatelessWidget {
     return Text(
       text,
       style: AppTextStyles.button.copyWith(color: fgColor),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

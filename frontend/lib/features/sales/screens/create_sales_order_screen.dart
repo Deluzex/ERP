@@ -226,19 +226,24 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isStacked = constraints.maxWidth < 750;
+                final titleBlock = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Create Sales Order', style: AppTextStyles.h1),
                     const SizedBox(height: 4),
-                    Text('Direct confirmed order with automated stock reservation & production shortage creation', style: AppTextStyles.subtitle),
+                    Text(
+                      'Direct confirmed order with automated stock reservation & production shortage creation',
+                      style: AppTextStyles.subtitle,
+                    ),
                   ],
-                ),
-                Wrap(
+                );
+
+                final actionButtons = Wrap(
                   spacing: 12,
+                  runSpacing: 8,
                   children: [
                     ErpButton(
                       text: 'Cancel',
@@ -251,8 +256,28 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
                       onPressed: _createSalesOrder,
                     ),
                   ],
-                ),
-              ],
+                );
+
+                if (isStacked) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      titleBlock,
+                      const SizedBox(height: 16),
+                      actionButtons,
+                    ],
+                  );
+                }
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: titleBlock),
+                    const SizedBox(width: 16),
+                    actionButtons,
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 24),
 
@@ -269,67 +294,85 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
                 children: [
                   Text('Customer & Delivery Scheduling', style: AppTextStyles.h3),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: ((_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId)) ||
-                                  (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId)) ||
-                                  (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId)))
-                              ? _selectedPartyId
-                              : null,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            labelText: _partyType == PartyType.customer
-                                ? 'Customer *'
-                                : _partyType == PartyType.dealer
-                                    ? 'Dealer *'
-                                    : 'Architect *',
-                          ),
-                          items: _partyType == PartyType.customer
-                              ? db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList()
+                  LayoutBuilder(
+                    builder: (context, partyConstraints) {
+                      final isNarrow = partyConstraints.maxWidth < 750;
+
+                      final partyDropdown = DropdownButtonFormField<String>(
+                        value: ((_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId)) ||
+                                (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId)) ||
+                                (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId)))
+                            ? _selectedPartyId
+                            : null,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: _partyType == PartyType.customer
+                              ? 'Customer *'
                               : _partyType == PartyType.dealer
-                                  ? db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name))).toList()
-                                  : db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})'))).toList(),
-                          onChanged: (val) => setState(() => _selectedPartyId = val),
+                                  ? 'Dealer *'
+                                  : 'Architect *',
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: DropdownButtonFormField<String?>(
-                          value: (_selectedProjectId != null && db.projects.any((p) => p.id == _selectedProjectId))
-                              ? _selectedProjectId
-                              : null,
-                          isExpanded: true,
-                          decoration: const InputDecoration(labelText: 'Linked Project (Optional)'),
-                          items: [
-                            const DropdownMenuItem(value: null, child: Text('None (Direct Site)')),
-                            ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
+                        items: _partyType == PartyType.customer
+                            ? db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList()
+                            : _partyType == PartyType.dealer
+                                ? db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name))).toList()
+                                : db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})'))).toList(),
+                        onChanged: (val) => setState(() => _selectedPartyId = val),
+                      );
+
+                      final projectDropdown = DropdownButtonFormField<String?>(
+                        value: (_selectedProjectId != null && db.projects.any((p) => p.id == _selectedProjectId))
+                            ? _selectedProjectId
+                            : null,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Linked Project (Optional)'),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('None (Direct Site)')),
+                          ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
+                        ],
+                        onChanged: (val) => setState(() => _selectedProjectId = val),
+                      );
+
+                      final dateField = TextFormField(
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: 'Expected Delivery Date',
+                          suffixIcon: const Icon(Icons.calendar_today, size: 18),
+                          hintText: Formatters.formatDate(_deliveryDate),
+                        ),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _deliveryDate,
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(const Duration(days: 180)),
+                          );
+                          if (picked != null) setState(() => _deliveryDate = picked);
+                        },
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            partyDropdown,
+                            const SizedBox(height: 12),
+                            projectDropdown,
+                            const SizedBox(height: 12),
+                            dateField,
                           ],
-                          onChanged: (val) => setState(() => _selectedProjectId = val),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextFormField(
-                          readOnly: true,
-                          decoration: InputDecoration(
-                            labelText: 'Expected Delivery Date',
-                            suffixIcon: const Icon(Icons.calendar_today, size: 18),
-                            hintText: Formatters.formatDate(_deliveryDate),
-                          ),
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _deliveryDate,
-                              firstDate: DateTime.now(),
-                              lastDate: DateTime.now().add(const Duration(days: 180)),
-                            );
-                            if (picked != null) setState(() => _deliveryDate = picked);
-                          },
-                        ),
-                      ),
-                    ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Expanded(child: partyDropdown),
+                          const SizedBox(width: 16),
+                          Expanded(child: projectDropdown),
+                          const SizedBox(width: 16),
+                          Expanded(child: dateField),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -347,12 +390,28 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Ordered Products & Real-time Stock Check', style: AppTextStyles.h3),
-                      ErpButton(text: 'Add Product Row', icon: Icons.add, isOutlined: true, onPressed: _addNewRow),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, headerConstraints) {
+                      final isNarrowHeader = headerConstraints.maxWidth < 420;
+                      if (isNarrowHeader) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Ordered Products & Real-time Stock Check', style: AppTextStyles.h3),
+                            const SizedBox(height: 8),
+                            ErpButton(text: 'Add Product Row', icon: Icons.add, isOutlined: true, onPressed: _addNewRow),
+                          ],
+                        );
+                      }
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('Ordered Products & Real-time Stock Check', style: AppTextStyles.h3)),
+                          const SizedBox(width: 8),
+                          ErpButton(text: 'Add Product Row', icon: Icons.add, isOutlined: true, onPressed: _addNewRow),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   ListView.separated(
@@ -364,94 +423,164 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
                       final item = _items[idx];
                       final isShortage = item.quantity > item.availableStock;
 
-                      return Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isShortage ? AppColors.warning.withValues(alpha: 0.04) : Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: isShortage ? AppColors.warning.withValues(alpha: 0.4) : Colors.grey.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: DropdownButtonFormField<String>(
-                                value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
-                                    ? item.finishedProductId
-                                    : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
-                                isExpanded: true,
-                                decoration: const InputDecoration(labelText: 'Finished Product *'),
-                                items: db.finishedProducts.map((fp) {
-                                  return DropdownMenuItem(
-                                    value: fp.id,
-                                    child: Text('${fp.name} (${fp.itemCode}) - Usable Avail: ${fp.availableStock} ${fp.unit}'),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    final fp = db.finishedProducts.firstWhere((p) => p.id == val);
-                                    setState(() {
-                                      item.finishedProductId = fp.id;
-                                      item.finishedProductName = fp.name;
-                                      item.finishedProductCode = fp.itemCode;
-                                      item.unit = fp.unit;
-                                      item.rate = fp.customerSellingPrice;
-                                      item.gstPercent = fp.gstPercent;
-                                      item.availableStock = fp.availableStock;
-                                    });
-                                  }
-                                },
+                      return LayoutBuilder(
+                        builder: (context, rowConstraints) {
+                          final isStacked = rowConstraints.maxWidth < 800;
+
+                          final productDropdown = DropdownButtonFormField<String>(
+                            value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
+                                ? item.finishedProductId
+                                : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                            isExpanded: true,
+                            decoration: const InputDecoration(labelText: 'Finished Product *'),
+                            items: db.finishedProducts.map((fp) {
+                              return DropdownMenuItem(
+                                value: fp.id,
+                                child: Text('${fp.name} (${fp.itemCode}) - Usable Avail: ${fp.availableStock} ${fp.unit}'),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                final fp = db.finishedProducts.firstWhere((p) => p.id == val);
+                                setState(() {
+                                  item.finishedProductId = fp.id;
+                                  item.finishedProductName = fp.name;
+                                  item.finishedProductCode = fp.itemCode;
+                                  item.unit = fp.unit;
+                                  item.rate = fp.customerSellingPrice;
+                                  item.gstPercent = fp.gstPercent;
+                                  item.availableStock = fp.availableStock;
+                                });
+                              }
+                            },
+                          );
+
+                          final stockBadge = Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isShortage ? AppColors.warning.withValues(alpha: 0.1) : AppColors.success.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: isShortage ? AppColors.warning : AppColors.success),
+                            ),
+                            child: Text(
+                              isShortage ? 'Shortage: ${(item.quantity - item.availableStock).toInt()} (Auto Prod)' : 'In Stock (${item.availableStock.toInt()})',
+                              style: TextStyle(
+                                color: isShortage ? AppColors.warningText : AppColors.successText,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 1,
-                              child: TextFormField(
-                                initialValue: item.quantity.toString(),
-                                keyboardType: TextInputType.number,
-                                decoration: InputDecoration(
-                                  labelText: 'Ordered Qty',
-                                  helperText: isShortage ? 'Shortage: ${(item.quantity - item.availableStock).toInt()} (Auto Production)' : 'Full Stock Avail',
-                                  helperStyle: TextStyle(color: isShortage ? AppColors.warningText : AppColors.successText, fontSize: 10),
-                                ),
-                                onChanged: (val) => setState(() => item.quantity = double.tryParse(val) ?? 1.0),
+                          );
+
+                          final qtyField = TextFormField(
+                            initialValue: item.quantity.toString(),
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Ordered Qty'),
+                            onChanged: (val) => setState(() => item.quantity = double.tryParse(val) ?? 1.0),
+                          );
+
+                          final rateField = TextFormField(
+                            initialValue: item.rate.toString(),
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Rate (₹)'),
+                            onChanged: (val) => setState(() => item.rate = double.tryParse(val) ?? 0.0),
+                          );
+
+                          final discountField = TextFormField(
+                            initialValue: item.discount.toString(),
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Discount (₹)'),
+                            onChanged: (val) => setState(() => item.discount = double.tryParse(val) ?? 0.0),
+                          );
+
+                          final totalPill = Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text('Total', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                                  Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodyBold.copyWith(fontSize: 14)),
+                                ],
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 1,
-                              child: TextFormField(
-                                initialValue: item.rate.toString(),
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(labelText: 'Rate (₹)'),
-                                onChanged: (val) => setState(() => item.rate = double.tryParse(val) ?? 0.0),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                                onPressed: () => _removeRow(idx),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 1,
-                              child: TextFormField(
-                                initialValue: item.discount.toString(),
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(labelText: 'Discount (₹)'),
-                                onChanged: (val) => setState(() => item.discount = double.tryParse(val) ?? 0.0),
+                            ],
+                          );
+
+                          if (isStacked) {
+                            final isVeryNarrow = rowConstraints.maxWidth < 450;
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isShortage ? AppColors.warning.withValues(alpha: 0.04) : Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: isShortage ? AppColors.warning.withValues(alpha: 0.4) : Colors.grey.shade200),
                               ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  productDropdown,
+                                  const SizedBox(height: 8),
+                                  stockBadge,
+                                  const SizedBox(height: 12),
+                                  if (isVeryNarrow) ...[
+                                    qtyField,
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(child: rateField),
+                                        const SizedBox(width: 8),
+                                        Expanded(child: discountField),
+                                      ],
+                                    ),
+                                  ] else
+                                    Row(
+                                      children: [
+                                        Expanded(child: qtyField),
+                                        const SizedBox(width: 8),
+                                        Expanded(child: rateField),
+                                        const SizedBox(width: 8),
+                                        Expanded(child: discountField),
+                                      ],
+                                    ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [totalPill],
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isShortage ? AppColors.warning.withValues(alpha: 0.04) : Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: isShortage ? AppColors.warning.withValues(alpha: 0.4) : Colors.grey.shade200),
                             ),
-                            const SizedBox(width: 16),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
+                            child: Row(
                               children: [
-                                Text('Total', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                                Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodyBold.copyWith(fontSize: 14)),
+                                Expanded(flex: 3, child: productDropdown),
+                                const SizedBox(width: 8),
+                                stockBadge,
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: qtyField),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: rateField),
+                                const SizedBox(width: 12),
+                                Expanded(flex: 1, child: discountField),
+                                const SizedBox(width: 16),
+                                totalPill,
                               ],
                             ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                              onPressed: () => _removeRow(idx),
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       );
                     },
                   ),
@@ -461,31 +590,48 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
             const SizedBox(height: 24),
 
             // Summary Totals
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Container(
-                  width: 380,
-                  padding: AppSpacing.cardPadding,
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.lgBorderRadius,
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Subtotal:'), Text(Formatters.formatCurrency(_subtotalAmount))]),
-                      const SizedBox(height: 4),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('GST Taxes:'), Text(Formatters.formatCurrency(_totalGst))]),
-                      const Divider(height: 16),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('Total Order Amount:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                        Text(Formatters.formatCurrency(_grandTotal), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary)),
-                      ]),
-                    ],
-                  ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 380),
+                width: double.infinity,
+                padding: AppSpacing.cardPadding,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: AppRadius.lgBorderRadius,
+                  border: Border.all(color: AppColors.border),
                 ),
-              ],
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(child: Text('Subtotal:')),
+                        Text(Formatters.formatCurrency(_subtotalAmount)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(child: Text('GST Taxes:')),
+                        Text(Formatters.formatCurrency(_totalGst)),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Text('Total Order Amount:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(Formatters.formatCurrency(_grandTotal), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

@@ -20,7 +20,7 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
+    final isDesktop = MediaQuery.of(context).size.width >= 1100;
     final isTablet = MediaQuery.of(context).size.width >= 700;
 
     // Computed values
@@ -40,11 +40,11 @@ class DashboardScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 650;
+              if (isNarrow) {
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Dashboard', style: AppTextStyles.h1),
@@ -52,30 +52,67 @@ class DashboardScreen extends ConsumerWidget {
                     Text(
                       'Enterprise operations, stock valuation & financial overview',
                       style: AppTextStyles.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ErpButton(
+                          text: 'Create Purchase',
+                          icon: Icons.shopping_bag_outlined,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                        ),
+                        ErpButton(
+                          text: 'Create Sale',
+                          icon: Icons.point_of_sale_outlined,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Wrap(
-                spacing: 8,
+                );
+              }
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  ErpButton(
-                    text: 'Create Purchase',
-                    icon: Icons.shopping_bag_outlined,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Dashboard', style: AppTextStyles.h1),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Enterprise operations, stock valuation & financial overview',
+                          style: AppTextStyles.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                  ErpButton(
-                    text: 'Create Sale',
-                    icon: Icons.point_of_sale_outlined,
-                    isOutlined: true,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                  const SizedBox(width: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ErpButton(
+                        text: 'Create Purchase',
+                        icon: Icons.shopping_bag_outlined,
+                        onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                      ),
+                      ErpButton(
+                        text: 'Create Sale',
+                        icon: Icons.point_of_sale_outlined,
+                        isOutlined: true,
+                        onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 24),
 
@@ -178,24 +215,31 @@ class DashboardScreen extends ConsumerWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Finished Product Stock Value',
-                      style: AppTextStyles.subtitle.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      Formatters.formatCurrency(finishedProductStockVal),
-                      style: AppTextStyles.h1.copyWith(
-                        fontSize: 32,
-                        color: AppColors.primaryDark,
-                        letterSpacing: -0.5,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Finished Product Stock Value',
+                        style: AppTextStyles.subtitle.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      Text(
+                        Formatters.formatCurrency(finishedProductStockVal),
+                        style: AppTextStyles.h1.copyWith(
+                          fontSize: 28,
+                          color: AppColors.primaryDark,
+                          letterSpacing: -0.5,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 12),
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -335,10 +379,11 @@ class DashboardScreen extends ConsumerWidget {
                           borderRadius: AppRadius.lgBorderRadius,
                           border: Border.all(color: const Color(0xFFFCA5A5)),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
+                        child: LayoutBuilder(
+                          builder: (context, bannerBox) {
+                            final isNarrow = bannerBox.maxWidth < 490;
+                            final contentBlock = Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(12),
@@ -358,13 +403,33 @@ class DashboardScreen extends ConsumerWidget {
                                   ],
                                 ),
                               ],
-                            ),
-                            ErpButton(
+                            );
+
+                            final button = ErpButton(
                               text: 'View Items →',
                               isDanger: true,
                               onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                            ),
-                          ],
+                            );
+
+                            if (isNarrow) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  contentBlock,
+                                  const SizedBox(height: 12),
+                                  button,
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                contentBlock,
+                                button,
+                              ],
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -398,22 +463,40 @@ class DashboardScreen extends ConsumerWidget {
                         borderRadius: AppRadius.lgBorderRadius,
                         border: Border.all(color: const Color(0xFFFCA5A5)),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isNarrow = constraints.maxWidth < 360;
+                          final info = Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Low Stock Items', style: AppTextStyles.subtitle.copyWith(color: AppColors.dangerText)),
                               Text('$lowStockItemsCount Items', style: AppTextStyles.h2.copyWith(color: AppColors.dangerText)),
                             ],
-                          ),
-                          ErpButton(
+                          );
+                          final action = ErpButton(
                             text: 'View Items →',
                             isDanger: true,
                             onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                          ),
-                        ],
+                          );
+
+                          if (isNarrow) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                info,
+                                const SizedBox(height: 12),
+                                SizedBox(width: double.infinity, child: action),
+                              ],
+                            );
+                          }
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              info,
+                              action,
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -542,26 +625,23 @@ class DashboardScreen extends ConsumerWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Recent Activity', style: AppTextStyles.h3),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Real-time immutable stock ledger transactions',
-                              style: AppTextStyles.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      OutlinedButton(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 420;
+                      final headerText = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Recent Activity', style: AppTextStyles.h3),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Real-time immutable stock ledger transactions',
+                            style: AppTextStyles.subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      );
+                      final button = OutlinedButton(
                         onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: AppColors.border, width: 1),
@@ -570,8 +650,27 @@ class DashboardScreen extends ConsumerWidget {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                         ),
                         child: Text('View Full Ledger', style: AppTextStyles.button.copyWith(fontSize: 12)),
-                      ),
-                    ],
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            headerText,
+                            const SizedBox(height: 10),
+                            button,
+                          ],
+                        );
+                      }
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: headerText),
+                          const SizedBox(width: 12),
+                          button,
+                        ],
+                      );
+                    },
                   ),
                 ),
                 const Divider(height: 1),
@@ -691,16 +790,25 @@ class DashboardScreen extends ConsumerWidget {
           child: Icon(icon, color: color, size: 24),
         ),
         const SizedBox(width: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: AppTextStyles.subtitle.copyWith(fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: AppTextStyles.h2.copyWith(fontSize: 22, letterSpacing: -0.3),
-            ),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTextStyles.subtitle.copyWith(fontSize: 13, fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: AppTextStyles.h2.copyWith(fontSize: 22, letterSpacing: -0.3),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -727,7 +835,15 @@ class DashboardScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: AppTextStyles.subtitle.copyWith(fontSize: 13)),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.subtitle.copyWith(fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -739,7 +855,11 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(value, style: AppTextStyles.h2.copyWith(fontSize: 22)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value, style: AppTextStyles.h2.copyWith(fontSize: 22)),
+          ),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -771,7 +891,7 @@ class DashboardScreen extends ConsumerWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: color.withOpacity(0.08),
           borderRadius: BorderRadius.circular(8),
@@ -781,13 +901,17 @@ class DashboardScreen extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: color, size: 18),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: AppTextStyles.button.copyWith(
-                color: color,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                style: AppTextStyles.button.copyWith(
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

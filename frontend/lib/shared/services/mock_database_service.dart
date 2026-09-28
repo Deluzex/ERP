@@ -5139,9 +5139,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createPurchaseAsync remote failed, fallback to local: $e');
-      createPurchase(purchase);
-      return purchase;
+      if (kDebugMode) debugPrint('[MockDatabaseService] createPurchaseAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5339,9 +5338,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createQuotationAsync remote failed, fallback to local: $e');
-      createQuotation(quotation);
-      return quotation;
+      if (kDebugMode) debugPrint('[MockDatabaseService] createQuotationAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5361,8 +5359,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createQuotationRevisionAsync remote failed, fallback to local: $e');
-      return createQuotationRevision(originalQuotationId, revisedQuotation);
+      if (kDebugMode) debugPrint('[MockDatabaseService] createQuotationRevisionAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5388,8 +5386,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return proforma;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] convertQuotationToProformaAsync remote failed, fallback to local: $e');
-      return createProformaFromQuotation(quotationId);
+      if (kDebugMode) debugPrint('[MockDatabaseService] convertQuotationToProformaAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5413,15 +5411,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return updated;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] recordProformaAdvancePaymentAsync remote failed, fallback to local: $e');
-      recordProformaAdvancePayment(
-        proformaId: proformaId,
-        amount: amount,
-        paymentMode: paymentMode,
-        transactionRef: transactionRef,
-        notes: notes,
-      );
-      return sales.firstWhere((s) => s.id == proformaId);
+      if (kDebugMode) debugPrint('[MockDatabaseService] recordProformaAdvancePaymentAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5449,8 +5440,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesOrderAsync remote failed, fallback to local: $e');
-      return createSalesOrder(salesOrder, autoAllocate: autoAllocate);
+      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesOrderAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5572,15 +5563,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createDeliveryAsync remote failed, fallback to local: $e');
-      return createDelivery(
-        salesOrderId: salesOrderId,
-        deliveryItems: deliveryItems,
-        vehicleNumber: vehicleNumber,
-        driverContact: driverContact,
-        trackingNumber: trackingNumber,
-        notes: notes,
-      );
+      if (kDebugMode) debugPrint('[MockDatabaseService] createDeliveryAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5641,14 +5625,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesInvoiceFromDeliveryAsync remote failed, fallback to local: $e');
-      return createSalesInvoiceFromDelivery(
-        deliveryId: deliveryId,
-        discountAmount: discountAmount,
-        initialPaidAmount: initialPaidAmount,
-        paymentMode: paymentMode,
-        notes: notes,
-      );
+      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesInvoiceFromDeliveryAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5673,9 +5651,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createDirectSaleAsync remote failed, fallback to local: $e');
-      createDirectSale(sale);
-      return sale;
+      if (kDebugMode) debugPrint('[MockDatabaseService] createDirectSaleAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5699,15 +5676,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return updated;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] recordInvoicePaymentAsync remote failed, fallback to local: $e');
-      recordCustomerInvoicePayment(
-        invoiceId: invoiceId,
-        amount: amount,
-        paymentMode: paymentMode,
-        transactionRef: transactionRef,
-        notes: notes,
-      );
-      return sales.firstWhere((s) => s.id == invoiceId);
+      if (kDebugMode) debugPrint('[MockDatabaseService] recordInvoicePaymentAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5733,15 +5703,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesReturnAsync remote failed, fallback to local: $e');
-      return createSalesReturn(
-        originalInvoiceId: originalInvoiceId,
-        returnItems: returnItems,
-        returnReason: returnReason,
-        condition: condition,
-        financialAction: financialAction,
-        notes: notes,
-      );
+      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesReturnAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5757,9 +5720,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return updated;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] approveSalesReturnAsync remote failed, fallback to local: $e');
-      approveSalesReturn(returnId);
-      return sales.firstWhere((s) => s.id == returnId);
+      if (kDebugMode) debugPrint('[MockDatabaseService] approveSalesReturnAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5783,15 +5745,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return updated;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] disburseRefundAsync remote failed, fallback to local: $e');
-      processSalesReturnRefund(
-        returnId: returnId,
-        paymentMode: paymentMode,
-        amount: amount,
-        transactionRef: transactionRef,
-        notes: notes,
-      );
-      return sales.firstWhere((s) => s.id == returnId);
+      if (kDebugMode) debugPrint('[MockDatabaseService] disburseRefundAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5848,9 +5803,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] completeProductionOrderAsync remote failed, fallback: $e');
-      completeProductionOrder(order);
-      return order;
+      if (kDebugMode) debugPrint('[MockDatabaseService] completeProductionOrderAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5946,9 +5900,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] addPaymentAsync remote failed, fallback: $e');
-      addManualPayment(payment);
-      return payment;
+      if (kDebugMode) debugPrint('[MockDatabaseService] addPaymentAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -5979,9 +5932,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return updated;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] approveCommissionAsync remote failed, fallback: $e');
-      approveCommission(commissionId);
-      return commissions.firstWhere((c) => c.id == commissionId);
+      if (kDebugMode) debugPrint('[MockDatabaseService] approveCommissionAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -6010,12 +5962,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return result;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] disburseCommissionAsync remote failed, fallback: $e');
-      disburseCommission(commissionId, paymentMode, transactionRef ?? '');
-      return {
-        'commission': commissions.firstWhere((c) => c.id == commissionId),
-        'payment': payments.first,
-      };
+      if (kDebugMode) debugPrint('[MockDatabaseService] disburseCommissionAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -6048,9 +5996,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createExpenseAsync remote failed, fallback: $e');
-      addExpense(expense);
-      return expense;
+      if (kDebugMode) debugPrint('[MockDatabaseService] createExpenseAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -6080,9 +6027,8 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return updated;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] updateExpenseAsync remote failed, fallback: $e');
-      updateExpense(expense);
-      return expense;
+      if (kDebugMode) debugPrint('[MockDatabaseService] updateExpenseAsync remote failed: $e');
+      rethrow;
     }
   }
 
@@ -6092,8 +6038,8 @@ class MockDatabaseService extends ChangeNotifier {
       expenses.removeWhere((e) => e.id == id);
       notifyListeners();
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] deleteExpenseAsync remote failed, fallback: $e');
-      deleteExpense(id);
+      if (kDebugMode) debugPrint('[MockDatabaseService] deleteExpenseAsync remote failed: $e');
+      rethrow;
     }
   }
 

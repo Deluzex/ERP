@@ -463,41 +463,50 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
 
     final taxableAmount = saleDoc.taxableAmount;
 
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.width < 650;
+
     return AlertDialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
-      titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-      actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: AppRadius.smBorderRadius,
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: AppRadius.smBorderRadius,
+                  ),
+                  child: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 22),
                 ),
-                child: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$_documentTitle PDF Preview',
-                    style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$_documentTitle PDF Preview',
+                        style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                      Text(
+                        'Document No: ${saleDoc.invoiceNumber} | Date: ${Formatters.formatDate(saleDoc.saleDate)}',
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      ),
+                    ],
                   ),
-                  Text(
-                    'Document No: ${saleDoc.invoiceNumber} | Date: ${Formatters.formatDate(saleDoc.saleDate)}',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.close, size: 20),
@@ -508,174 +517,242 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
           ),
         ],
       ),
-      content: SizedBox(
-        width: 820,
-        height: 600,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: AppRadius.mdBorderRadius,
-            border: Border.all(color: Colors.grey.shade300),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. Header: Company Brand & Document Title
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Column(
+      content: Container(
+        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 700),
+        width: double.infinity,
+        height: size.height * 0.85,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: AppRadius.mdBorderRadius,
+          border: Border.all(color: Colors.grey.shade300),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(isMobile ? 14 : 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Header: Company Brand & Document Title
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.start,
+                spacing: 16,
+                runSpacing: 12,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'd',
+                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 20),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'DELUZEX LIGHTING',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.2,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Deluzex Architectural Luminaires Pvt. Ltd.',
+                        style: TextStyle(color: Colors.grey.shade800, fontWeight: FontWeight.w600, fontSize: 12),
+                      ),
+                      Text('Plot 88, Electronic Zone, SEEPZ, Andheri East, Mumbai - 400096', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                      Text('GSTIN: 27AABCD8899K1Z4 | PAN: AABCD8899K', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                      Text('Email: enterprise@deluzex.com | Web: www.deluzex.com', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'd',
-                                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 20),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            const Text(
-                              'DELUZEX LIGHTING',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.2,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          _documentTitle,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.sidebarBackground, letterSpacing: 1.0),
+                        ),
+                        Text(
+                          _documentSubtitle,
+                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: saleDoc.documentType == SalesDocumentType.proformaInvoice ? AppColors.warningText : AppColors.primary),
                         ),
                         const SizedBox(height: 6),
-                        Text(
-                          'Deluzex Architectural Luminaires Pvt. Ltd.',
-                          style: TextStyle(color: Colors.grey.shade800, fontWeight: FontWeight.w600, fontSize: 12),
-                        ),
-                        Text('Plot 88, Electronic Zone, SEEPZ, Andheri East, Mumbai - 400096', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
-                        Text('GSTIN: 27AABCD8899K1Z4 | PAN: AABCD8899K', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
-                        Text('Email: enterprise@deluzex.com | Web: www.deluzex.com', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                        Text('Doc No: ${saleDoc.invoiceNumber}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87)),
+                        Text('Date: ${Formatters.formatDate(saleDoc.saleDate)}', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                        if (saleDoc.validUntil != null)
+                          Text('Valid Till: ${Formatters.formatDate(saleDoc.validUntil!)}', style: const TextStyle(color: AppColors.dangerText, fontWeight: FontWeight.bold, fontSize: 11)),
+                        if (saleDoc.salesOrderNumber != null)
+                          Text('SO Ref: ${saleDoc.salesOrderNumber}', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                        if (saleDoc.parentQuotationNumber != null)
+                          Text('Quotation Ref: ${saleDoc.parentQuotationNumber}', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            _documentTitle,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.sidebarBackground, letterSpacing: 1.0),
-                          ),
-                          Text(
-                            _documentSubtitle,
-                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: saleDoc.documentType == SalesDocumentType.proformaInvoice ? AppColors.warningText : AppColors.primary),
-                          ),
-                          const SizedBox(height: 6),
-                          Text('Doc No: ${saleDoc.invoiceNumber}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87)),
-                          Text('Date: ${Formatters.formatDate(saleDoc.saleDate)}', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
-                          if (saleDoc.validUntil != null)
-                            Text('Valid Till: ${Formatters.formatDate(saleDoc.validUntil!)}', style: const TextStyle(color: AppColors.dangerText, fontWeight: FontWeight.bold, fontSize: 11)),
-                          if (saleDoc.salesOrderNumber != null)
-                            Text('SO Ref: ${saleDoc.salesOrderNumber}', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
-                          if (saleDoc.parentQuotationNumber != null)
-                            Text('Quotation Ref: ${saleDoc.parentQuotationNumber}', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
 
-                const SizedBox(height: 20),
-                Divider(color: Colors.grey.shade300, thickness: 1),
-                const SizedBox(height: 12),
+              const SizedBox(height: 20),
+              Divider(color: Colors.grey.shade300, thickness: 1),
+              const SizedBox(height: 12),
 
-                // 2. Client & Project Details
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('BILLED TO / CUSTOMER:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 0.5)),
-                          const SizedBox(height: 4),
-                          Text('${saleDoc.partyName} ($customerCode)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
-                          Text('Contact: ${saleDoc.customerContactPerson ?? "Procurement Dept"} ($customerPhone)', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
-                          Text('Email: $customerEmail', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
-                          Text('GSTIN: $customerGst', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
-                          Text('Billing Address: $billingAddress', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('SHIPPING / SITE & PROJECT DETAILS:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 0.5)),
-                          const SizedBox(height: 4),
-                          if (saleDoc.projectName != null)
-                            Text('Project: ${saleDoc.projectName}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
-                          if (saleDoc.architectName != null)
-                            Text('Architect: ${saleDoc.architectName}', style: TextStyle(color: Colors.grey.shade800, fontSize: 11)),
-                          Text('Shipping Address: $shippingAddress', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
-                          if (saleDoc.courierName != null || saleDoc.trackingNumber != null) ...[
+              // 2. Client & Project Details
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 540;
+                  if (isNarrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('BILLED TO / CUSTOMER:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 0.5)),
                             const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(0.06),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.blue.withOpacity(0.2)),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('COURIER & TRACKING:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue)),
-                                  if (saleDoc.courierName != null) Text('Courier: ${saleDoc.courierName}', style: const TextStyle(fontSize: 10.5)),
-                                  if (saleDoc.trackingNumber != null) Text('LR / Track No: ${saleDoc.trackingNumber}', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                                  if (saleDoc.expectedDeliveryDate != null) Text('Expected Delivery: ${Formatters.formatDate(saleDoc.expectedDeliveryDate!)}', style: const TextStyle(fontSize: 10)),
-                                  if (saleDoc.courierContact != null) Text('Contact: ${saleDoc.courierContact}', style: const TextStyle(fontSize: 10)),
-                                  if (saleDoc.dispatchNotes != null) Text('Notes: ${saleDoc.dispatchNotes}', style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
-                                ],
-                              ),
-                            ),
+                            Text('${saleDoc.partyName} ($customerCode)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+                            Text('Contact: ${saleDoc.customerContactPerson ?? "Procurement Dept"} ($customerPhone)', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                            Text('Email: $customerEmail', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                            Text('GSTIN: $customerGst', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                            Text('Billing Address: $billingAddress', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
                           ],
-                          if (saleDoc.vehicleNumber != null)
-                            Text('Vehicle No: ${saleDoc.vehicleNumber} | Driver: ${saleDoc.driverContact ?? "-"}', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 11)),
-                        ],
+                        ),
+                        const Divider(height: 24),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('SHIPPING / SITE & PROJECT DETAILS:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 0.5)),
+                            const SizedBox(height: 4),
+                            if (saleDoc.projectName != null)
+                              Text('Project: ${saleDoc.projectName}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
+                            if (saleDoc.architectName != null)
+                              Text('Architect: ${saleDoc.architectName}', style: TextStyle(color: Colors.grey.shade800, fontSize: 11)),
+                            Text('Shipping Address: $shippingAddress', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                            if (saleDoc.courierName != null || saleDoc.trackingNumber != null) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.06),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('COURIER & TRACKING:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue)),
+                                    if (saleDoc.courierName != null) Text('Courier: ${saleDoc.courierName}', style: const TextStyle(fontSize: 10.5)),
+                                    if (saleDoc.trackingNumber != null) Text('LR / Track No: ${saleDoc.trackingNumber}', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                    if (saleDoc.expectedDeliveryDate != null) Text('Expected Delivery: ${Formatters.formatDate(saleDoc.expectedDeliveryDate!)}', style: const TextStyle(fontSize: 10)),
+                                    if (saleDoc.courierContact != null) Text('Contact: ${saleDoc.courierContact}', style: const TextStyle(fontSize: 10)),
+                                    if (saleDoc.dispatchNotes != null) Text('Notes: ${saleDoc.dispatchNotes}', style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (saleDoc.vehicleNumber != null)
+                              Text('Vehicle No: ${saleDoc.vehicleNumber} | Driver: ${saleDoc.driverContact ?? "-"}', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 11)),
+                          ],
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('BILLED TO / CUSTOMER:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 0.5)),
+                            const SizedBox(height: 4),
+                            Text('${saleDoc.partyName} ($customerCode)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+                            Text('Contact: ${saleDoc.customerContactPerson ?? "Procurement Dept"} ($customerPhone)', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                            Text('Email: $customerEmail', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                            Text('GSTIN: $customerGst', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                            Text('Billing Address: $billingAddress', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('SHIPPING / SITE & PROJECT DETAILS:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey.shade600, letterSpacing: 0.5)),
+                            const SizedBox(height: 4),
+                            if (saleDoc.projectName != null)
+                              Text('Project: ${saleDoc.projectName}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
+                            if (saleDoc.architectName != null)
+                              Text('Architect: ${saleDoc.architectName}', style: TextStyle(color: Colors.grey.shade800, fontSize: 11)),
+                            Text('Shipping Address: $shippingAddress', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+                            if (saleDoc.courierName != null || saleDoc.trackingNumber != null) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.06),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('COURIER & TRACKING:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue)),
+                                    if (saleDoc.courierName != null) Text('Courier: ${saleDoc.courierName}', style: const TextStyle(fontSize: 10.5)),
+                                    if (saleDoc.trackingNumber != null) Text('LR / Track No: ${saleDoc.trackingNumber}', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                    if (saleDoc.expectedDeliveryDate != null) Text('Expected Delivery: ${Formatters.formatDate(saleDoc.expectedDeliveryDate!)}', style: const TextStyle(fontSize: 10)),
+                                    if (saleDoc.courierContact != null) Text('Contact: ${saleDoc.courierContact}', style: const TextStyle(fontSize: 10)),
+                                    if (saleDoc.dispatchNotes != null) Text('Notes: ${saleDoc.dispatchNotes}', style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (saleDoc.vehicleNumber != null)
+                              Text('Vehicle No: ${saleDoc.vehicleNumber} | Driver: ${saleDoc.driverContact ?? "-"}', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
 
-                const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-                // 3. Line Items Table
-                Container(
+              // 3. Line Items Table (Horizontally scrollable)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 680),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(6),
@@ -739,177 +816,206 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
                     ],
                   ),
                 ),
+              ),
 
-                const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-                // 4. Totals & Tax Calculation Breakdown
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (saleDoc.bankDetails != null) ...[
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('COMPANY BANK DETAILS FOR REMITTANCE:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5, color: Colors.black87)),
-                                  const SizedBox(height: 2),
-                                  Text(saleDoc.bankDetails!, style: TextStyle(color: Colors.grey.shade800, fontSize: 10.5)),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                          ],
-                          Text('TERMS AND CONDITIONS:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey.shade700)),
-                          const SizedBox(height: 4),
-                          Text(
-                            saleDoc.termsAndConditions ?? '1. Taxes are calculated as applicable by GST regulations.\n2. Goods once delivered are subject to Deluzex standard warranty policy.\n3. Payment is due as per agreed commercial milestones.',
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 10.5, height: 1.3),
+              // 4. Totals & Tax Calculation Breakdown
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 560;
+                  final bankAndTerms = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (saleDoc.bankDetails != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.grey.shade300),
                           ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('COMPANY BANK DETAILS FOR REMITTANCE:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5, color: Colors.black87)),
+                              const SizedBox(height: 2),
+                              Text(saleDoc.bankDetails!, style: TextStyle(color: Colors.grey.shade800, fontSize: 10.5)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      Text('TERMS AND CONDITIONS:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey.shade700)),
+                      const SizedBox(height: 4),
+                      Text(
+                        saleDoc.termsAndConditions ?? '1. Taxes are calculated as applicable by GST regulations.\n2. Goods once delivered are subject to Deluzex standard warranty policy.\n3. Payment is due as per agreed commercial milestones.',
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 10.5, height: 1.3),
+                      ),
+                    ],
+                  );
+
+                  final totalsCard = Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildTotalRow('Subtotal', Formatters.formatCurrency(saleDoc.subtotalAmount)),
+                        if (saleDoc.discountAmount > 0)
+                          _buildTotalRow('Discount', '- ${Formatters.formatCurrency(saleDoc.discountAmount)}', isDiscount: true),
+                        _buildTotalRow('Taxable Amount', Formatters.formatCurrency(taxableAmount)),
+                        if (!saleDoc.isInterStateTax && saleDoc.igstAmount == 0) ...[
+                          _buildTotalRow('CGST (9%)', Formatters.formatCurrency(saleDoc.cgstAmount)),
+                          _buildTotalRow('SGST (9%)', Formatters.formatCurrency(saleDoc.sgstAmount)),
+                        ] else ...[
+                          _buildTotalRow('IGST (18%)', Formatters.formatCurrency(saleDoc.igstAmount > 0 ? saleDoc.igstAmount : saleDoc.gstAmount), color: Colors.purple),
                         ],
-                      ),
+                        const Divider(),
+                        _buildTotalRow('Grand Total', Formatters.formatCurrency(saleDoc.totalAmount), isGrandTotal: true),
+                        if (saleDoc.paidAmount > 0) ...[
+                          const SizedBox(height: 4),
+                          _buildTotalRow('Received / Paid', Formatters.formatCurrency(saleDoc.paidAmount), color: AppColors.successText),
+                          _buildTotalRow('Balance Due', Formatters.formatCurrency(saleDoc.pendingAmount), color: AppColors.dangerText, isBold: true),
+                        ],
+                      ],
                     ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      flex: 2,
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Column(
-                          children: [
-                            _buildTotalRow('Subtotal', Formatters.formatCurrency(saleDoc.subtotalAmount)),
-                            if (saleDoc.discountAmount > 0)
-                              _buildTotalRow('Discount', '- ${Formatters.formatCurrency(saleDoc.discountAmount)}', isDiscount: true),
-                            _buildTotalRow('Taxable Amount', Formatters.formatCurrency(taxableAmount)),
-                            if (!saleDoc.isInterStateTax && saleDoc.igstAmount == 0) ...[
-                              _buildTotalRow('CGST (9%)', Formatters.formatCurrency(saleDoc.cgstAmount)),
-                              _buildTotalRow('SGST (9%)', Formatters.formatCurrency(saleDoc.sgstAmount)),
-                            ] else ...[
-                              _buildTotalRow('IGST (18%)', Formatters.formatCurrency(saleDoc.igstAmount > 0 ? saleDoc.igstAmount : saleDoc.gstAmount), color: Colors.purple),
-                            ],
-                            const Divider(),
-                            _buildTotalRow('Grand Total', Formatters.formatCurrency(saleDoc.totalAmount), isGrandTotal: true),
-                            if (saleDoc.paidAmount > 0) ...[
-                              const SizedBox(height: 4),
-                              _buildTotalRow('Received / Paid', Formatters.formatCurrency(saleDoc.paidAmount), color: AppColors.successText),
-                              _buildTotalRow('Balance Due', Formatters.formatCurrency(saleDoc.pendingAmount), color: AppColors.dangerText, isBold: true),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  );
 
-                const SizedBox(height: 28),
-
-                // 5. Signatures & Footer
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
+                  if (isCompact) {
+                    return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Customer Acceptance / Signature', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
-                        const SizedBox(height: 36),
-                        Container(width: 180, height: 1, color: Colors.grey.shade400),
-                        const SizedBox(height: 4),
-                        Text('Authorized Signatory & Date', style: TextStyle(color: Colors.grey.shade500, fontSize: 10)),
+                        bankAndTerms,
+                        const SizedBox(height: 16),
+                        totalsCard,
                       ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text('For Deluzex Architectural Luminaires Pvt. Ltd.', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 11)),
-                        const SizedBox(height: 36),
-                        Container(width: 200, height: 1, color: Colors.grey.shade400),
-                        const SizedBox(height: 4),
-                        const Text('Authorized Signatory', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 10)),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: bankAndTerms,
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        flex: 2,
+                        child: totalsCard,
+                      ),
+                    ],
+                  );
+                },
+              ),
+
+              const SizedBox(height: 28),
+
+              // 5. Signatures & Footer
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: 24,
+                runSpacing: 20,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Customer Acceptance / Signature', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                      const SizedBox(height: 32),
+                      Container(width: 180, height: 1, color: Colors.grey.shade400),
+                      const SizedBox(height: 4),
+                      Text('Authorized Signatory & Date', style: TextStyle(color: Colors.grey.shade500, fontSize: 10)),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text('For Deluzex Architectural Luminaires Pvt. Ltd.', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 11)),
+                      const SizedBox(height: 32),
+                      Container(width: 200, height: 1, color: Colors.grey.shade400),
+                      const SizedBox(height: 4),
+                      const Text('Authorized Signatory', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
       actions: [
-        ErpButton(
-          text: 'Share Document',
-          icon: Icons.share,
-          isOutlined: true,
-          onPressed: () => ShareDocumentDialog.show(context, saleDoc),
-        ),
-        ErpButton(
-          text: 'Copy PDF Link',
-          icon: Icons.link,
-          isOutlined: true,
-          onPressed: () {
-            Clipboard.setData(ClipboardData(text: 'https://erp.deluzex.com/docs/${saleDoc.invoiceNumber.replaceAll(RegExp(r"[/\\ ]"), "_")}.pdf'));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Document link copied to clipboard!'), backgroundColor: AppColors.success),
-            );
-          },
-        ),
-        ErpButton(
-          text: 'Print',
-          icon: Icons.print_outlined,
-          isOutlined: true,
-          onPressed: () async {
-            try {
-              final bytes = await generateDocumentPdfBytes(saleDoc, db);
-              await Printing.layoutPdf(
-                onLayout: (format) async => bytes,
-                name: saleDoc.invoiceNumber,
-              );
-            } catch (e) {
-              if (context.mounted) {
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.end,
+          children: [
+            ErpButton(
+              text: 'Share Document',
+              icon: Icons.share,
+              isOutlined: true,
+              onPressed: () => ShareDocumentDialog.show(context, saleDoc),
+            ),
+            ErpButton(
+              text: 'Copy PDF Link',
+              icon: Icons.link,
+              isOutlined: true,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: 'https://erp.deluzex.com/docs/${saleDoc.invoiceNumber.replaceAll(RegExp(r"[/\\ ]"), "_")}.pdf'));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Print error: $e'), backgroundColor: AppColors.danger),
+                  const SnackBar(content: Text('Document link copied to clipboard!'), backgroundColor: AppColors.success),
                 );
-              }
-            }
-          },
-        ),
-        ErpButton(
-          text: 'Download PDF',
-          icon: Icons.download_outlined,
-          onPressed: () async {
-            try {
-              final bytes = await generateDocumentPdfBytes(saleDoc, db);
-              final safeFileName = saleDoc.invoiceNumber.replaceAll(RegExp(r'[/\\?%*:|"<> ]'), '_');
-              await FileDownloader.downloadPdf(bytes, '$safeFileName.pdf');
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('$safeFileName.pdf downloaded / saved!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
-              }
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to generate PDF: $e'), backgroundColor: AppColors.danger),
-                );
-              }
-            }
-          },
+              },
+            ),
+            ErpButton(
+              text: 'Print',
+              icon: Icons.print_outlined,
+              isOutlined: true,
+              onPressed: () async {
+                try {
+                  final bytes = await generateDocumentPdfBytes(saleDoc, db);
+                  await Printing.layoutPdf(
+                    onLayout: (format) async => bytes,
+                    name: saleDoc.invoiceNumber,
+                  );
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Print error: $e'), backgroundColor: AppColors.danger),
+                    );
+                  }
+                }
+              },
+            ),
+            ErpButton(
+              text: 'Download PDF',
+              icon: Icons.download_outlined,
+              onPressed: () async {
+                try {
+                  final bytes = await generateDocumentPdfBytes(saleDoc, db);
+                  final safeFileName = saleDoc.invoiceNumber.replaceAll(RegExp(r'[/\\?%*:|"<> ]'), '_');
+                  await FileDownloader.downloadPdf(bytes, '$safeFileName.pdf');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('$safeFileName.pdf downloaded / saved!'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to generate PDF: $e'), backgroundColor: AppColors.danger),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
         ),
       ],
     );

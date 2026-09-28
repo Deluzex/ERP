@@ -296,42 +296,53 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isSmall = constraints.maxWidth < 700;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text('Create Purchase Order', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Inward Raw Materials or Finished Goods directly into stock with GST tax breakup',
-                        style: AppTextStyles.subtitle),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 380),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Create Purchase Order', style: AppTextStyles.h1),
+                          const SizedBox(height: 4),
+                          Text('Inward Raw Materials or Finished Goods directly into stock with GST tax breakup',
+                              style: AppTextStyles.subtitle),
+                        ],
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        ErpButton(
+                          text: 'Cancel',
+                          isOutlined: true,
+                          onPressed: _isSubmitting
+                              ? null
+                              : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                        ),
+                        ErpButton(
+                          text: 'Save Draft',
+                          isOutlined: true,
+                          onPressed: _isSubmitting ? null : () => _savePurchase(true),
+                        ),
+                        ErpButton(
+                          text: _isSubmitting ? 'Saving & Inwarding...' : 'Save & Inward Stock',
+                          icon: _isSubmitting ? null : Icons.check,
+                          onPressed: _isSubmitting ? null : () => _savePurchase(false),
+                        ),
+                      ],
+                    ),
                   ],
-                ),
-                Row(
-                  children: [
-                    ErpButton(
-                      text: 'Cancel',
-                      isOutlined: true,
-                      onPressed: _isSubmitting
-                          ? null
-                          : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
-                    ),
-                    const SizedBox(width: 12),
-                    ErpButton(
-                      text: 'Save Draft',
-                      isOutlined: true,
-                      onPressed: _isSubmitting ? null : () => _savePurchase(true),
-                    ),
-                    const SizedBox(width: 12),
-                    ErpButton(
-                      text: _isSubmitting ? 'Saving & Inwarding...' : 'Save & Inward Stock',
-                      icon: _isSubmitting ? null : Icons.check,
-                      onPressed: _isSubmitting ? null : () => _savePurchase(false),
-                    ),
-                  ],
-                ),
-              ],
+                );
+              },
             ),
             const SizedBox(height: 24),
 
@@ -346,178 +357,294 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Vendor & Invoice Details', style: AppTextStyles.h3),
-                      // GST Tax Region Selector
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _isInterStateTax ? Colors.purple.withOpacity(0.08) : Colors.blue.withOpacity(0.08),
-                          borderRadius: AppRadius.smBorderRadius,
-                          border: Border.all(
-                            color: _isInterStateTax ? Colors.purple.withOpacity(0.3) : Colors.blue.withOpacity(0.3),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text('Vendor & Invoice Details', style: AppTextStyles.h3),
+                          // GST Tax Region Selector
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: _isInterStateTax ? Colors.purple.withValues(alpha: 0.08) : Colors.blue.withValues(alpha: 0.08),
+                              borderRadius: AppRadius.smBorderRadius,
+                              border: Border.all(
+                                color: _isInterStateTax ? Colors.purple.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _isInterStateTax ? Icons.map_outlined : Icons.location_on_outlined,
+                                      size: 16,
+                                      color: _isInterStateTax ? Colors.purple : Colors.blue,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Tax Mode:',
+                                      style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                ChoiceChip(
+                                  label: const Text('Intra-State (CGST + SGST)'),
+                                  selected: !_isInterStateTax,
+                                  selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                                  labelStyle: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: !_isInterStateTax ? FontWeight.bold : FontWeight.normal,
+                                    color: !_isInterStateTax ? AppColors.primary : AppColors.textMuted,
+                                  ),
+                                  onSelected: (val) {
+                                    if (val) setState(() => _isInterStateTax = false);
+                                  },
+                                ),
+                                ChoiceChip(
+                                  label: const Text('Inter-State (IGST)'),
+                                  selected: _isInterStateTax,
+                                  selectedColor: Colors.purple.withValues(alpha: 0.15),
+                                  labelStyle: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: _isInterStateTax ? FontWeight.bold : FontWeight.normal,
+                                    color: _isInterStateTax ? Colors.purple : AppColors.textMuted,
+                                  ),
+                                  onSelected: (val) {
+                                    if (val) setState(() => _isInterStateTax = true);
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 650;
+                      if (isNarrow) {
+                        return Column(
                           children: [
-                            Icon(
-                              _isInterStateTax ? Icons.map_outlined : Icons.location_on_outlined,
-                              size: 16,
-                              color: _isInterStateTax ? Colors.purple : Colors.blue,
+                            DropdownButtonFormField<String>(
+                              value: _selectedVendorId,
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: 'Select Vendor *'),
+                              items: db.vendors.where((v) => !v.isDeleted).map((v) {
+                                return DropdownMenuItem(
+                                  value: v.id,
+                                  child: Text(
+                                    '${v.name} (${v.mobile})',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) => setState(() => _selectedVendorId = val),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Tax Mode:',
-                              style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(width: 8),
-                            ChoiceChip(
-                              label: const Text('Intra-State (CGST + SGST)'),
-                              selected: !_isInterStateTax,
-                              selectedColor: AppColors.primary.withOpacity(0.15),
-                              labelStyle: TextStyle(
-                                fontSize: 12,
-                                fontWeight: !_isInterStateTax ? FontWeight.bold : FontWeight.normal,
-                                color: !_isInterStateTax ? AppColors.primary : AppColors.textMuted,
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _vendorInvoiceCtrl,
+                              validator: (v) => Validators.requiredField(v, 'Vendor invoice number required'),
+                              decoration: const InputDecoration(
+                                labelText: 'Vendor Invoice Number *',
+                                hintText: 'E.g. APEX/2026/901',
                               ),
-                              onSelected: (val) {
-                                if (val) setState(() => _isInterStateTax = false);
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String?>(
+                              value: _selectedProjectId,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Link to Project (Optional)',
+                                hintText: 'General / No Project',
+                              ),
+                              items: [
+                                const DropdownMenuItem(value: null, child: Text('General Inventory (No Project)')),
+                                ...db.projects.map((p) => DropdownMenuItem(
+                                      value: p.id,
+                                      child: Text(p.name),
+                                    )),
+                              ],
+                              onChanged: (val) => setState(() => _selectedProjectId = val),
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              readOnly: true,
+                              controller: TextEditingController(text: Formatters.formatDate(_purchaseDate)),
+                              decoration: const InputDecoration(
+                                  labelText: 'Purchase Date', suffixIcon: Icon(Icons.calendar_today, size: 16)),
+                              onTap: () async {
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: _purchaseDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2030),
+                                );
+                                if (date != null) setState(() => _purchaseDate = date);
                               },
                             ),
-                            const SizedBox(width: 8),
-                            ChoiceChip(
-                              label: const Text('Inter-State (IGST)'),
-                              selected: _isInterStateTax,
-                              selectedColor: Colors.purple.withOpacity(0.15),
-                              labelStyle: TextStyle(
-                                fontSize: 12,
-                                fontWeight: _isInterStateTax ? FontWeight.bold : FontWeight.normal,
-                                color: _isInterStateTax ? Colors.purple : AppColors.textMuted,
-                              ),
-                              onSelected: (val) {
-                                if (val) setState(() => _isInterStateTax = true);
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              readOnly: true,
+                              controller: TextEditingController(text: Formatters.formatDate(_invoiceDate)),
+                              decoration: const InputDecoration(
+                                  labelText: 'Vendor Invoice Date', suffixIcon: Icon(Icons.calendar_today, size: 16)),
+                              onTap: () async {
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: _invoiceDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2030),
+                                );
+                                if (date != null) setState(() => _invoiceDate = date);
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<PaymentMode>(
+                              value: _paymentMode,
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: 'Payment Mode'),
+                              items: PaymentMode.values.map((mode) {
+                                return DropdownMenuItem(
+                                  value: mode,
+                                  child: Text(mode.toString().split('.').last.toUpperCase()),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) setState(() => _paymentMode = val);
                               },
                             ),
                           ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedVendorId,
-                          isExpanded: true,
-                          decoration: const InputDecoration(labelText: 'Select Vendor *'),
-                          items: db.vendors.where((v) => !v.isDeleted).map((v) {
-                            return DropdownMenuItem(
-                              value: v.id,
-                              child: Text(
-                                '${v.name} (${v.mobile})',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                        );
+                      }
+                      return Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: DropdownButtonFormField<String>(
+                                  value: _selectedVendorId,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(labelText: 'Select Vendor *'),
+                                  items: db.vendors.where((v) => !v.isDeleted).map((v) {
+                                    return DropdownMenuItem(
+                                      value: v.id,
+                                      child: Text(
+                                        '${v.name} (${v.mobile})',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) => setState(() => _selectedVendorId = val),
+                                ),
                               ),
-                            );
-                          }).toList(),
-                          onChanged: (val) => setState(() => _selectedVendorId = val),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 2,
-                        child: TextFormField(
-                          controller: _vendorInvoiceCtrl,
-                          validator: (v) => Validators.requiredField(v, 'Vendor invoice number required'),
-                          decoration: const InputDecoration(
-                            labelText: 'Vendor Invoice Number *',
-                            hintText: 'E.g. APEX/2026/901',
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 2,
+                                child: TextFormField(
+                                  controller: _vendorInvoiceCtrl,
+                                  validator: (v) => Validators.requiredField(v, 'Vendor invoice number required'),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Vendor Invoice Number *',
+                                    hintText: 'E.g. APEX/2026/901',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 2,
+                                child: DropdownButtonFormField<String?>(
+                                  value: _selectedProjectId,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Link to Project (Optional)',
+                                    hintText: 'General / No Project',
+                                  ),
+                                  items: [
+                                    const DropdownMenuItem(value: null, child: Text('General Inventory (No Project)')),
+                                    ...db.projects.map((p) => DropdownMenuItem(
+                                          value: p.id,
+                                          child: Text(p.name),
+                                        )),
+                                  ],
+                                  onChanged: (val) => setState(() => _selectedProjectId = val),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 2,
-                        child: DropdownButtonFormField<String?>(
-                          value: _selectedProjectId,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Link to Project (Optional)',
-                            hintText: 'General / No Project',
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  readOnly: true,
+                                  controller: TextEditingController(text: Formatters.formatDate(_purchaseDate)),
+                                  decoration: const InputDecoration(
+                                      labelText: 'Purchase Date', suffixIcon: Icon(Icons.calendar_today, size: 16)),
+                                  onTap: () async {
+                                    final date = await showDatePicker(
+                                      context: context,
+                                      initialDate: _purchaseDate,
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime(2030),
+                                    );
+                                    if (date != null) setState(() => _purchaseDate = date);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: TextFormField(
+                                  readOnly: true,
+                                  controller: TextEditingController(text: Formatters.formatDate(_invoiceDate)),
+                                  decoration: const InputDecoration(
+                                      labelText: 'Vendor Invoice Date', suffixIcon: Icon(Icons.calendar_today, size: 16)),
+                                  onTap: () async {
+                                    final date = await showDatePicker(
+                                      context: context,
+                                      initialDate: _invoiceDate,
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime(2030),
+                                    );
+                                    if (date != null) setState(() => _invoiceDate = date);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: DropdownButtonFormField<PaymentMode>(
+                                  value: _paymentMode,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(labelText: 'Payment Mode'),
+                                  items: PaymentMode.values.map((mode) {
+                                    return DropdownMenuItem(
+                                      value: mode,
+                                      child: Text(mode.toString().split('.').last.toUpperCase()),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) setState(() => _paymentMode = val);
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
-                          items: [
-                            const DropdownMenuItem(value: null, child: Text('General Inventory (No Project)')),
-                            ...db.projects.map((p) => DropdownMenuItem(
-                                  value: p.id,
-                                  child: Text(p.name),
-                                )),
-                          ],
-                          onChanged: (val) => setState(() => _selectedProjectId = val),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          readOnly: true,
-                          controller: TextEditingController(text: Formatters.formatDate(_purchaseDate)),
-                          decoration: const InputDecoration(
-                              labelText: 'Purchase Date', suffixIcon: Icon(Icons.calendar_today, size: 16)),
-                          onTap: () async {
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: _purchaseDate,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2030),
-                            );
-                            if (date != null) setState(() => _purchaseDate = date);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextFormField(
-                          readOnly: true,
-                          controller: TextEditingController(text: Formatters.formatDate(_invoiceDate)),
-                          decoration: const InputDecoration(
-                              labelText: 'Vendor Invoice Date', suffixIcon: Icon(Icons.calendar_today, size: 16)),
-                          onTap: () async {
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: _invoiceDate,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2030),
-                            );
-                            if (date != null) setState(() => _invoiceDate = date);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: DropdownButtonFormField<PaymentMode>(
-                          value: _paymentMode,
-                          isExpanded: true,
-                          decoration: const InputDecoration(labelText: 'Payment Mode'),
-                          items: PaymentMode.values.map((mode) {
-                            return DropdownMenuItem(
-                              value: mode,
-                              child: Text(mode.toString().split('.').last.toUpperCase()),
-                            );
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) setState(() => _paymentMode = val);
-                          },
-                        ),
-                      ),
-                    ],
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -535,10 +662,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 750;
+                      final headerText = Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Items Ordered (Raw Materials & Finished Goods)', style: AppTextStyles.h3),
@@ -546,8 +673,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                           Text('Direct Finished Product purchases are added to Finished Goods stock directly',
                               style: AppTextStyles.caption.copyWith(color: AppColors.textMuted)),
                         ],
-                      ),
-                      Row(
+                      );
+                      final buttonRow = Wrap(
+                        spacing: 10,
+                        runSpacing: 8,
                         children: [
                           ErpButton(
                             text: 'Add Raw Material',
@@ -555,7 +684,6 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                             isOutlined: true,
                             onPressed: () => _addNewLineItem(itemType: PurchaseItemType.rawMaterial),
                           ),
-                          const SizedBox(width: 10),
                           ErpButton(
                             text: 'Add Finished Good',
                             icon: Icons.inventory_2,
@@ -563,8 +691,27 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                             onPressed: () => _addNewLineItem(itemType: PurchaseItemType.finishedProduct),
                           ),
                         ],
-                      ),
-                    ],
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            headerText,
+                            const SizedBox(height: 12),
+                            buttonRow,
+                          ],
+                        );
+                      }
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: headerText),
+                          const SizedBox(width: 12),
+                          buttonRow,
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
@@ -802,185 +949,202 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
             const SizedBox(height: 24),
 
             // Summary & Payment Card
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 1,
-                  child: Container(
-                    padding: AppSpacing.cardPadding,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: AppRadius.lgBorderRadius,
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Invoice / Proof Attachment', style: AppTextStyles.h3),
-                        const SizedBox(height: 6),
-                        Text('Attach bill or vendor document from device storage',
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                        const SizedBox(height: 16),
-                        _attachmentName != null
-                            ? Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceMuted,
-                                  borderRadius: AppRadius.smBorderRadius,
-                                  border: Border.all(color: AppColors.border),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.description, color: AppColors.primary, size: 28),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(_attachmentName!,
-                                              style: AppTextStyles.bodyBold, overflow: TextOverflow.ellipsis),
-                                          Text('Size: ${_attachmentSize ?? 'Uploaded File'}',
-                                              style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete, color: AppColors.danger, size: 20),
-                                      onPressed: () => setState(() {
-                                        _attachmentName = null;
-                                        _attachmentSize = null;
-                                      }),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : Material(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isStacked = constraints.maxWidth < 800;
+                final leftCard = Container(
+                  padding: AppSpacing.cardPadding,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.lgBorderRadius,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Invoice / Proof Attachment', style: AppTextStyles.h3),
+                      const SizedBox(height: 6),
+                      Text('Attach bill or vendor document from device storage',
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                      const SizedBox(height: 16),
+                      _attachmentName != null
+                          ? Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
                                 color: AppColors.surfaceMuted,
-                                borderRadius: AppRadius.mdBorderRadius,
-                                child: InkWell(
-                                  onTap: _pickAttachmentFile,
-                                  borderRadius: AppRadius.mdBorderRadius,
-                                  child: Container(
-                                    height: 90,
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: AppColors.border, style: BorderStyle.solid),
-                                      borderRadius: AppRadius.mdBorderRadius,
+                                borderRadius: AppRadius.smBorderRadius,
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.description, color: AppColors.primary, size: 28),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(_attachmentName!,
+                                            style: AppTextStyles.bodyBold, overflow: TextOverflow.ellipsis),
+                                        Text('Size: ${_attachmentSize ?? 'Uploaded File'}',
+                                            style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                      ],
                                     ),
-                                    child: Center(
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          const Icon(Icons.cloud_upload_outlined, color: AppColors.primary),
-                                          const SizedBox(width: 10),
-                                          Text('Click to Upload from Storage',
-                                              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                                        ],
-                                      ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: AppColors.danger, size: 20),
+                                    onPressed: () => setState(() {
+                                      _attachmentName = null;
+                                      _attachmentSize = null;
+                                    }),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Material(
+                              color: AppColors.surfaceMuted,
+                              borderRadius: AppRadius.mdBorderRadius,
+                              child: InkWell(
+                                onTap: _pickAttachmentFile,
+                                borderRadius: AppRadius.mdBorderRadius,
+                                child: Container(
+                                  height: 90,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: AppColors.border, style: BorderStyle.solid),
+                                    borderRadius: AppRadius.mdBorderRadius,
+                                  ),
+                                  child: Center(
+                                    child: Wrap(
+                                      alignment: WrapAlignment.center,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      children: [
+                                        const Icon(Icons.cloud_upload_outlined, color: AppColors.primary),
+                                        Text('Click to Upload from Storage',
+                                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                                      ],
                                     ),
                                   ),
                                 ),
                               ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _notesCtrl,
-                          maxLines: 2,
-                          decoration: const InputDecoration(
-                            labelText: 'Purchase Notes / Remarks',
-                            hintText: 'Enter any vendor comments or inward instructions',
-                          ),
+                            ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _notesCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Purchase Notes / Remarks',
+                          hintText: 'Enter any vendor comments or inward instructions',
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 24),
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    padding: AppSpacing.cardPadding,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: AppRadius.lgBorderRadius,
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Financial & Tax Summary', style: AppTextStyles.h3),
-                        const SizedBox(height: 14),
+                );
+
+                final rightCard = Container(
+                  padding: AppSpacing.cardPadding,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.lgBorderRadius,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Financial & Tax Summary', style: AppTextStyles.h3),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('Taxable Subtotal:', style: AppTextStyles.bodyMedium)),
+                          Text(Formatters.formatCurrency(_subtotalAmount), style: AppTextStyles.bodyBold),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (!_isInterStateTax) ...[
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Taxable Subtotal:', style: AppTextStyles.bodyMedium),
-                            Text(Formatters.formatCurrency(_subtotalAmount), style: AppTextStyles.bodyBold),
+                            Expanded(child: Text('CGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))),
+                            Text(Formatters.formatCurrency(_cgstAmount),
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        if (!_isInterStateTax) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('CGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                              Text(Formatters.formatCurrency(_cgstAmount),
-                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('SGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                              Text(Formatters.formatCurrency(_sgstAmount),
-                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                            ],
-                          ),
-                        ] else ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('IGST (Inter-State Tax):',
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(child: Text('SGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))),
+                            Text(Formatters.formatCurrency(_sgstAmount),
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      ] else ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text('IGST (Inter-State Tax):',
                                   style: AppTextStyles.bodySmall.copyWith(color: Colors.purple)),
-                              Text(Formatters.formatCurrency(_igstAmount),
-                                  style: AppTextStyles.bodySmall.copyWith(color: Colors.purple, fontWeight: FontWeight.bold)),
-                            ],
+                            ),
+                            Text(Formatters.formatCurrency(_igstAmount),
+                                style: AppTextStyles.bodySmall.copyWith(color: Colors.purple, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                      const Divider(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('Grand Total:', style: AppTextStyles.h3)),
+                          Text(Formatters.formatCurrency(_totalAmount),
+                              style: AppTextStyles.h2.copyWith(color: AppColors.primary)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _paidAmountCtrl,
+                        keyboardType: TextInputType.number,
+                        validator: Validators.nonNegativeNumber,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(labelText: 'Paid Amount (₹)'),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('Pending Amount:', style: AppTextStyles.bodyMedium)),
+                          Text(
+                            Formatters.formatCurrency(_pendingAmount),
+                            style: AppTextStyles.bodyBold.copyWith(
+                              color: _pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
+                            ),
                           ),
                         ],
-                        const Divider(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Grand Total:', style: AppTextStyles.h3),
-                            Text(Formatters.formatCurrency(_totalAmount),
-                                style: AppTextStyles.h2.copyWith(color: AppColors.primary)),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _paidAmountCtrl,
-                          keyboardType: TextInputType.number,
-                          validator: Validators.nonNegativeNumber,
-                          onChanged: (_) => setState(() {}),
-                          decoration: const InputDecoration(labelText: 'Paid Amount (₹)'),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Pending Amount:', style: AppTextStyles.bodyMedium),
-                            Text(
-                              Formatters.formatCurrency(_pendingAmount),
-                              style: AppTextStyles.bodyBold.copyWith(
-                                color: _pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                );
+
+                if (isStacked) {
+                  return Column(
+                    children: [
+                      leftCard,
+                      const SizedBox(height: 20),
+                      rightCard,
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 1, child: leftCard),
+                    const SizedBox(width: 24),
+                    Expanded(flex: 2, child: rightCard),
+                  ],
+                );
+              },
             ),
           ],
         ),

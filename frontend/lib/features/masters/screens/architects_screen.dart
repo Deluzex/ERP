@@ -72,8 +72,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
         return StatefulBuilder(
           builder: (dlgCtx, setDlgState) {
             return AlertDialog(
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              title: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   Text(isEdit ? 'Edit Architect' : 'Add Architect Master', style: AppTextStyles.h2),
                   ErpButton(
@@ -85,9 +88,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                         context: context,
                         builder: (ocrCtx) => Dialog(
                           backgroundColor: Colors.transparent,
-                          child: SizedBox(
-                            width: 800,
-                            height: 600,
+                          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
+                            width: double.infinity,
+                            height: MediaQuery.of(context).size.height * 0.88,
                             child: DocumentOcrUploader(
                               docType: OcrDocType.architectDoc,
                               onCancel: () => Navigator.of(ocrCtx).pop(),
@@ -107,8 +112,9 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                   ),
                 ],
               ),
-              content: SizedBox(
-                width: 520,
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 540),
+                width: double.infinity,
                 child: Form(
                   key: formKey,
                   child: SingleChildScrollView(
@@ -470,24 +476,47 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 550) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Architects & Commission Hub', style: AppTextStyles.h1),
+                    const SizedBox(height: 4),
+                    Text('Architect profiles, dual Architect-Customer entities, and commission lifecycle (Generated → Review → Approved → Paid)',
+                        style: AppTextStyles.subtitle),
+                    const SizedBox(height: 12),
+                    ErpButton(
+                      text: 'Add Architect',
+                      icon: Icons.add,
+                      onPressed: () => _openAddEditArchitectDialog(),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Architects & Commission Hub', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Architect profiles, dual Architect-Customer entities, and commission lifecycle (Generated → Review → Approved → Paid)',
-                      style: AppTextStyles.subtitle),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Architects & Commission Hub', style: AppTextStyles.h1),
+                        const SizedBox(height: 4),
+                        Text('Architect profiles, dual Architect-Customer entities, and commission lifecycle (Generated → Review → Approved → Paid)',
+                            style: AppTextStyles.subtitle),
+                      ],
+                    ),
+                  ),
+                  ErpButton(
+                    text: 'Add Architect',
+                    icon: Icons.add,
+                    onPressed: () => _openAddEditArchitectDialog(),
+                  ),
                 ],
-              ),
-              ErpButton(
-                text: 'Add Architect',
-                icon: Icons.add,
-                onPressed: () => _openAddEditArchitectDialog(),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 

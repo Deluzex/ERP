@@ -163,8 +163,12 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          title: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Text(title, style: AppTextStyles.h2),
               ErpButton(
@@ -176,9 +180,11 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                     context: context,
                     builder: (ocrCtx) => Dialog(
                       backgroundColor: Colors.transparent,
-                      child: SizedBox(
-                        width: 800,
-                        height: 600,
+                      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
+                        width: double.infinity,
+                        height: MediaQuery.of(context).size.height * 0.88,
                         child: DocumentOcrUploader(
                           docType: partyType == PartyType.customer
                               ? OcrDocType.customerDoc
@@ -201,8 +207,9 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
               ),
             ],
           ),
-          content: SizedBox(
-            width: 520,
+          content: Container(
+            constraints: const BoxConstraints(maxWidth: 540),
+            width: double.infinity,
             child: Form(
               key: formKey,
               child: SingleChildScrollView(
@@ -657,39 +664,63 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isStacked = constraints.maxWidth < 750;
+                final titleBlock = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Create Sales Invoice', style: AppTextStyles.h1),
                     const SizedBox(height: 4),
-                    Text('Dispatch finished products, link project/architect, and record revenue', style: AppTextStyles.subtitle),
+                    Text(
+                      'Dispatch finished products, link project/architect, and record revenue',
+                      style: AppTextStyles.subtitle,
+                    ),
                   ],
-                ),
-                Row(
+                );
+
+                final actionButtons = Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
                   children: [
                     ErpButton(
                       text: 'Cancel',
                       isOutlined: true,
                       onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
                     ),
-                    const SizedBox(width: 12),
                     ErpButton(
                       text: 'Save Draft',
                       isOutlined: true,
                       onPressed: () => _createInvoice(true),
                     ),
-                    const SizedBox(width: 12),
                     ErpButton(
                       text: 'Create Invoice & Dispatch',
                       icon: Icons.receipt_long_outlined,
                       onPressed: () => _createInvoice(false),
                     ),
                   ],
-                ),
-              ],
+                );
+
+                if (isStacked) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      titleBlock,
+                      const SizedBox(height: 16),
+                      actionButtons,
+                    ],
+                  );
+                }
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: titleBlock),
+                    const SizedBox(width: 16),
+                    actionButtons,
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 24),
 
@@ -706,126 +737,211 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                 children: [
                   Text('Customer / Dealer & Project Association', style: AppTextStyles.h3),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: RadioListTile<PartyType>(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                title: const Text('Direct Customer'),
-                                value: PartyType.customer,
-                                groupValue: _partyType,
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setState(() {
-                                      _partyType = val;
-                                      _selectedProjectId = null;
-                                      _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                            Expanded(
-                              child: RadioListTile<PartyType>(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                title: const Text('Dealer Channel'),
-                                value: PartyType.dealer,
-                                groupValue: _partyType,
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setState(() {
-                                      _partyType = val;
-                                      _selectedProjectId = null;
-                                      _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                            Expanded(
-                              child: RadioListTile<PartyType>(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                title: const Text('Architect'),
-                                value: PartyType.architect,
-                                groupValue: _partyType,
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setState(() {
-                                      _partyType = val;
-                                      _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 2,
-                        child: DropdownButtonFormField<String>(
-                          value: ((_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId)) ||
-                                  (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId)) ||
-                                  (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId)))
-                              ? _selectedPartyId
-                              : null,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            labelText: _partyType == PartyType.customer
-                                ? 'Select Customer *'
-                                : _partyType == PartyType.dealer
-                                    ? 'Select Dealer *'
-                                    : 'Select Architect *',
-                          ),
-                          items: [
-                            DropdownMenuItem<String>(
-                              value: '__ADD_NEW__',
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _partyType == PartyType.customer
-                                        ? '+ Add New Customer'
-                                        : _partyType == PartyType.dealer
-                                            ? '+ Add New Dealer'
-                                            : '+ Add New Architect',
-                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                  LayoutBuilder(
+                    builder: (context, partyBox) {
+                      final isNarrow = partyBox.maxWidth < 750;
+                      final isMobileRadio = partyBox.maxWidth < 650;
+
+                      final radioGroup = isMobileRadio
+                          ? Column(
+                              children: [
+                                Material(
+                                  color: Colors.transparent,
+                                  child: RadioListTile<PartyType>(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('Direct Customer'),
+                                    value: PartyType.customer,
+                                    groupValue: _partyType,
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() {
+                                          _partyType = val;
+                                          _selectedProjectId = null;
+                                          _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
+                                        });
+                                      }
+                                    },
                                   ),
-                                ],
-                              ),
-                            ),
-                            const DropdownMenuItem<String>(
-                              enabled: false,
-                              value: '__DIVIDER__',
-                              child: Divider(height: 1),
-                            ),
-                            if (_partyType == PartyType.customer)
-                              ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
-                            else if (_partyType == PartyType.dealer)
-                              ...db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
-                            else
-                              ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
-                          ],
-                          onChanged: (val) {
-                            if (val == '__ADD_NEW__') {
-                              _openQuickAddPartyDialog(_partyType);
-                              return;
-                            }
-                            if (val == '__DIVIDER__') return;
-                            setState(() => _selectedPartyId = val);
-                          },
+                                ),
+                                Material(
+                                  color: Colors.transparent,
+                                  child: RadioListTile<PartyType>(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('Dealer Channel'),
+                                    value: PartyType.dealer,
+                                    groupValue: _partyType,
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() {
+                                          _partyType = val;
+                                          _selectedProjectId = null;
+                                          _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                Material(
+                                  color: Colors.transparent,
+                                  child: RadioListTile<PartyType>(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('Architect'),
+                                    value: PartyType.architect,
+                                    groupValue: _partyType,
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() {
+                                          _partyType = val;
+                                          _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: RadioListTile<PartyType>(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Direct Customer'),
+                                      value: PartyType.customer,
+                                      groupValue: _partyType,
+                                      onChanged: (val) {
+                                        if (val != null) {
+                                          setState(() {
+                                            _partyType = val;
+                                            _selectedProjectId = null;
+                                            _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: RadioListTile<PartyType>(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Dealer Channel'),
+                                      value: PartyType.dealer,
+                                      groupValue: _partyType,
+                                      onChanged: (val) {
+                                        if (val != null) {
+                                          setState(() {
+                                            _partyType = val;
+                                            _selectedProjectId = null;
+                                            _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: RadioListTile<PartyType>(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Architect'),
+                                      value: PartyType.architect,
+                                      groupValue: _partyType,
+                                      onChanged: (val) {
+                                        if (val != null) {
+                                          setState(() {
+                                            _partyType = val;
+                                            _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+
+                      final dropdownField = DropdownButtonFormField<String>(
+                        value: ((_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId)) ||
+                                (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId)) ||
+                                (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId)))
+                            ? _selectedPartyId
+                            : null,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: _partyType == PartyType.customer
+                              ? 'Select Customer *'
+                              : _partyType == PartyType.dealer
+                                  ? 'Select Dealer *'
+                                  : 'Select Architect *',
                         ),
-                      ),
-                    ],
+                        items: [
+                          DropdownMenuItem<String>(
+                            value: '__ADD_NEW__',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _partyType == PartyType.customer
+                                      ? '+ Add New Customer'
+                                      : _partyType == PartyType.dealer
+                                          ? '+ Add New Dealer'
+                                          : '+ Add New Architect',
+                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const DropdownMenuItem<String>(
+                            enabled: false,
+                            value: '__DIVIDER__',
+                            child: Divider(height: 1),
+                          ),
+                          if (_partyType == PartyType.customer)
+                            ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                          else if (_partyType == PartyType.dealer)
+                            ...db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                          else
+                            ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
+                        ],
+                        onChanged: (val) {
+                          if (val == '__ADD_NEW__') {
+                            _openQuickAddPartyDialog(_partyType);
+                            return;
+                          }
+                          if (val == '__DIVIDER__') return;
+                          setState(() => _selectedPartyId = val);
+                        },
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            radioGroup,
+                            const SizedBox(height: 12),
+                            dropdownField,
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Expanded(flex: 3, child: radioGroup),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 2, child: dropdownField),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -906,17 +1022,38 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Finished Products Invoiced', style: AppTextStyles.h3),
-                      ErpButton(
-                        text: 'Add Product',
-                        icon: Icons.add,
-                        isOutlined: true,
-                        onPressed: _addNewLineItem,
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, headerConstraints) {
+                      final isNarrow = headerConstraints.maxWidth < 420;
+                      if (isNarrow) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Finished Products Invoiced', style: AppTextStyles.h3),
+                            const SizedBox(height: 8),
+                            ErpButton(
+                              text: 'Add Product',
+                              icon: Icons.add,
+                              isOutlined: true,
+                              onPressed: _addNewLineItem,
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('Finished Products Invoiced', style: AppTextStyles.h3)),
+                          const SizedBox(width: 8),
+                          ErpButton(
+                            text: 'Add Product',
+                            icon: Icons.add,
+                            isOutlined: true,
+                            onPressed: _addNewLineItem,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
@@ -1072,126 +1209,145 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
             const SizedBox(height: 24),
 
             // Financial Summary & Commission
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Container(
-                    padding: AppSpacing.cardPadding,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: AppRadius.lgBorderRadius,
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Sale Notes & Dispatch Instructions', style: AppTextStyles.h3),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _notesCtrl,
-                          maxLines: 3,
-                          decoration: const InputDecoration(hintText: 'Enter dispatch address, site contact, or warranty notes...'),
-                        ),
-                        if (_partyType == PartyType.architect && _selectedPartyId != null) ...[
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.purpleLight,
-                              borderRadius: AppRadius.smBorderRadius,
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.stars_rounded, color: AppColors.purple, size: 20),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    'Architect Commission Generated: ${Formatters.formatCurrency(_calculatedCommission)}',
-                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple),
-                                  ),
+            LayoutBuilder(
+              builder: (context, summaryConstraints) {
+                final isNarrowSummary = summaryConstraints.maxWidth < 800;
+
+                final notesCard = Container(
+                  padding: AppSpacing.cardPadding,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.lgBorderRadius,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Sale Notes & Dispatch Instructions', style: AppTextStyles.h3),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _notesCtrl,
+                        maxLines: 3,
+                        decoration: const InputDecoration(hintText: 'Enter dispatch address, site contact, or warranty notes...'),
+                      ),
+                      if (_partyType == PartyType.architect && _selectedPartyId != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.purpleLight,
+                            borderRadius: AppRadius.smBorderRadius,
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.stars_rounded, color: AppColors.purple, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Architect Commission Generated: ${Formatters.formatCurrency(_calculatedCommission)}',
+                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple),
                                 ),
-                              ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+
+                final totalsCard = Container(
+                  padding: AppSpacing.cardPadding,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.lgBorderRadius,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Invoice Total', style: AppTextStyles.h3),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('Subtotal:', style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
+                          Text(Formatters.formatCurrency(_subtotalAmount), style: AppTextStyles.bodyBold),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('Discount:', style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
+                          Text('- ${Formatters.formatCurrency(_totalDiscount)}', style: AppTextStyles.bodySmall),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('GST Tax (18%):', style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
+                          Text(Formatters.formatCurrency(_totalGst), style: AppTextStyles.bodySmall),
+                        ],
+                      ),
+                      const Divider(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('Grand Total:', style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
+                          Text(Formatters.formatCurrency(_totalAmount), style: AppTextStyles.h2),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _paidAmountCtrl,
+                        keyboardType: TextInputType.number,
+                        validator: Validators.nonNegativeNumber,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(labelText: 'Received Paid Amount (₹)'),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('Customer Outstanding:', style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
+                          Text(
+                            Formatters.formatCurrency(_pendingAmount),
+                            style: AppTextStyles.bodyBold.copyWith(
+                              color: _pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
                             ),
                           ),
                         ],
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    padding: AppSpacing.cardPadding,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: AppRadius.lgBorderRadius,
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Invoice Total', style: AppTextStyles.h3),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Subtotal:', style: AppTextStyles.bodyMedium),
-                            Text(Formatters.formatCurrency(_subtotalAmount), style: AppTextStyles.bodyBold),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Discount:', style: AppTextStyles.bodyMedium),
-                            Text('- ${Formatters.formatCurrency(_totalDiscount)}', style: AppTextStyles.bodySmall),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('GST Tax (18%):', style: AppTextStyles.bodyMedium),
-                            Text(Formatters.formatCurrency(_totalGst), style: AppTextStyles.bodySmall),
-                          ],
-                        ),
-                        const Divider(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Grand Total:', style: AppTextStyles.bodyBold),
-                            Text(Formatters.formatCurrency(_totalAmount), style: AppTextStyles.h2),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _paidAmountCtrl,
-                          keyboardType: TextInputType.number,
-                          validator: Validators.nonNegativeNumber,
-                          onChanged: (_) => setState(() {}),
-                          decoration: const InputDecoration(labelText: 'Received Paid Amount (₹)'),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Customer Outstanding:', style: AppTextStyles.bodyMedium),
-                            Text(
-                              Formatters.formatCurrency(_pendingAmount),
-                              style: AppTextStyles.bodyBold.copyWith(
-                                color: _pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+                );
+
+                if (isNarrowSummary) {
+                  return Column(
+                    children: [
+                      notesCard,
+                      const SizedBox(height: 16),
+                      totalsCard,
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 3, child: notesCard),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 2, child: totalsCard),
+                  ],
+                );
+              },
             ),
           ],
         ),

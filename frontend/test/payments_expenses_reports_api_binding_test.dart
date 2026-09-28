@@ -154,7 +154,7 @@ void main() {
       expect(repApi, isNotNull);
     });
 
-    test('MockDatabaseService integrates Phase 7 & 8 async methods with fallback', () async {
+    test('MockDatabaseService integrates Phase 7 & 8 async methods with remote API dispatch', () async {
       final db = MockDatabaseService();
 
       // Test load calls
@@ -162,12 +162,12 @@ void main() {
       await db.loadCommissions(forceRefresh: true);
       await db.loadExpenses(forceRefresh: true);
 
-      // Verify that local fallback collections remain valid and accessible
+      // Verify that collections remain valid and accessible
       expect(db.payments, isA<List<ErpPayment>>());
       expect(db.commissions, isA<List<ArchitectCommission>>());
       expect(db.expenses, isA<List<Expense>>());
 
-      // Test addPaymentAsync
+      // Test manual synchronous local methods
       final testPayment = ErpPayment(
         id: 'test-pay-local-01',
         paymentNumber: 'PAY-TEST-001',
@@ -180,11 +180,10 @@ void main() {
         createdAt: DateTime.now(),
       );
 
-      final addedPayment = await db.addPaymentAsync(testPayment);
-      expect(addedPayment.id, testPayment.id);
+      db.addManualPayment(testPayment);
       expect(db.payments.any((p) => p.id == testPayment.id), isTrue);
 
-      // Test createExpenseAsync
+      // Test createExpense
       final testExpense = Expense(
         id: 'test-exp-local-01',
         expenseNumber: 'EXP-TEST-001',
@@ -198,9 +197,12 @@ void main() {
         createdAt: DateTime.now(),
       );
 
-      final addedExpense = await db.createExpenseAsync(testExpense);
-      expect(addedExpense.id, testExpense.id);
+      db.addExpense(testExpense);
       expect(db.expenses.any((e) => e.id == testExpense.id), isTrue);
+
+      // Verify async methods rethrow on network error when offline (no silent fallback)
+      expect(() => db.addPaymentAsync(testPayment), throwsA(anything));
+      expect(() => db.createExpenseAsync(testExpense), throwsA(anything));
     });
   });
 }

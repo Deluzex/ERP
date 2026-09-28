@@ -70,42 +70,50 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
     }
 
     final taxableAmount = quotation.subtotalAmount - quotation.discountAmount;
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.width < 650;
 
     return AlertDialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
-      titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-      actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: AppRadius.smBorderRadius,
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: AppRadius.smBorderRadius,
+                  ),
+                  child: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 22),
                 ),
-                child: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Quotation PDF Preview',
-                    style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Quotation PDF Preview',
+                        style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                      Text(
+                        'Quotation No: ${quotation.invoiceNumber}',
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      ),
+                    ],
                   ),
-                  Text(
-                    'Quotation No: ${quotation.invoiceNumber}',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.close, color: Colors.black54),
@@ -117,12 +125,13 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
           ),
         ],
       ),
-      content: SizedBox(
-        width: 850,
-        height: 580,
+      content: Container(
+        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 700),
+        width: double.infinity,
+        height: size.height * 0.85,
         child: SingleChildScrollView(
           child: Container(
-            padding: const EdgeInsets.all(28),
+            padding: EdgeInsets.all(isMobile ? 14 : 28),
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border.all(color: Colors.grey.shade300, width: 1.5),
@@ -138,14 +147,17 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 1. Company Letterhead Header
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.start,
+                  spacing: 16,
+                  runSpacing: 12,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
                               width: 34,
@@ -164,7 +176,7 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                             const SizedBox(width: 10),
                             const Text(
                               'DELUZEX LIGHTING PVT. LTD.',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: 0.5),
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: 0.5),
                             ),
                           ],
                         ),
@@ -200,8 +212,10 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                 const Divider(color: Colors.black87, thickness: 1.5, height: 28),
 
                 // 2. Document Details & Metadata Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 20,
+                  runSpacing: 8,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -213,7 +227,7 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                       ],
                     ),
                     Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildPdfMetaRow('Status:', (quotation.quotationStatus?.toString().split('.').last ?? 'Draft').toUpperCase()),
                         if (quotation.salesOrderNumber != null)
@@ -234,124 +248,164 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 540;
+                      if (isNarrow) {
+                        return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('CUSTOMER / BILL TO:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
-                            const SizedBox(height: 4),
-                            Text(quotation.partyName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
-                            Text('Code: $customerCode | Phone: $customerPhone', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
-                            Text('Email: $customerEmail', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
-                            Text('Address: $billingAddress', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('CUSTOMER / BILL TO:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
+                                const SizedBox(height: 4),
+                                Text(quotation.partyName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+                                Text('Code: $customerCode | Phone: $customerPhone', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                                Text('Email: $customerEmail', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                                Text('Address: $billingAddress', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                              ],
+                            ),
+                            const Divider(height: 20),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('SHIPPING / DELIVERY DESTINATION:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
+                                const SizedBox(height: 4),
+                                Text(quotation.partyName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+                                Text('Shipping Address: $shippingAddress', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                                if (quotation.deliveryDate != null)
+                                  Text('Expected Dispatch: ${Formatters.formatDate(quotation.deliveryDate!)}', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                              ],
+                            ),
                           ],
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('SHIPPING / DELIVERY DESTINATION:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
-                            const SizedBox(height: 4),
-                            Text(quotation.partyName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
-                            Text('Shipping Address: $shippingAddress', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
-                            if (quotation.deliveryDate != null)
-                              Text('Expected Dispatch: ${Formatters.formatDate(quotation.deliveryDate!)}', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
-                          ],
-                        ),
-                      ),
-                    ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('CUSTOMER / BILL TO:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
+                                const SizedBox(height: 4),
+                                Text(quotation.partyName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+                                Text('Code: $customerCode | Phone: $customerPhone', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                                Text('Email: $customerEmail', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                                Text('Address: $billingAddress', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('SHIPPING / DELIVERY DESTINATION:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
+                                const SizedBox(height: 4),
+                                Text(quotation.partyName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+                                Text('Shipping Address: $shippingAddress', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                                if (quotation.deliveryDate != null)
+                                  Text('Expected Dispatch: ${Formatters.formatDate(quotation.deliveryDate!)}', style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 20),
 
-                // 4. Product / Item Details Table
-                Table(
-                  border: TableBorder.all(color: Colors.grey.shade300, width: 1),
-                  columnWidths: const {
-                    0: FlexColumnWidth(0.8), // Sr No.
-                    1: FlexColumnWidth(1.6), // SKU
-                    2: FlexColumnWidth(3.0), // Description
-                    3: FlexColumnWidth(1.2), // Qty
-                    4: FlexColumnWidth(1.4), // Rate
-                    5: FlexColumnWidth(1.2), // Discount
-                    6: FlexColumnWidth(1.1), // Tax
-                    7: FlexColumnWidth(1.8), // Amount
-                  },
-                  children: [
-                    TableRow(
-                      decoration: BoxDecoration(color: Colors.grey.shade200),
-                      children: const [
-                        Padding(padding: EdgeInsets.all(7), child: Text('Sr.', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-                        Padding(padding: EdgeInsets.all(7), child: Text('Item Code', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
-                        Padding(padding: EdgeInsets.all(7), child: Text('Description', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
-                        Padding(padding: EdgeInsets.all(7), child: Text('Qty', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                        Padding(padding: EdgeInsets.all(7), child: Text('Rate (₹)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                        Padding(padding: EdgeInsets.all(7), child: Text('Disc.', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                        Padding(padding: EdgeInsets.all(7), child: Text('GST %', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                        Padding(padding: EdgeInsets.all(7), child: Text('Amount (₹)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                // 4. Product / Item Details Table (Horizontally Scrollable on Mobile)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: 700,
+                    child: Table(
+                      border: TableBorder.all(color: Colors.grey.shade300, width: 1),
+                      columnWidths: const {
+                        0: FlexColumnWidth(0.8), // Sr No.
+                        1: FlexColumnWidth(1.6), // SKU
+                        2: FlexColumnWidth(3.0), // Description
+                        3: FlexColumnWidth(1.2), // Qty
+                        4: FlexColumnWidth(1.4), // Rate
+                        5: FlexColumnWidth(1.2), // Discount
+                        6: FlexColumnWidth(1.1), // Tax
+                        7: FlexColumnWidth(1.8), // Amount
+                      },
+                      children: [
+                        TableRow(
+                          decoration: BoxDecoration(color: Colors.grey.shade200),
+                          children: const [
+                            Padding(padding: EdgeInsets.all(7), child: Text('Sr.', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+                            Padding(padding: EdgeInsets.all(7), child: Text('Item Code', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
+                            Padding(padding: EdgeInsets.all(7), child: Text('Description', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
+                            Padding(padding: EdgeInsets.all(7), child: Text('Qty', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                            Padding(padding: EdgeInsets.all(7), child: Text('Rate (₹)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                            Padding(padding: EdgeInsets.all(7), child: Text('Disc.', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                            Padding(padding: EdgeInsets.all(7), child: Text('GST %', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                            Padding(padding: EdgeInsets.all(7), child: Text('Amount (₹)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                          ],
+                        ),
+                        ...List.generate(quotation.items.length, (idx) {
+                          final item = quotation.items[idx];
+                          return TableRow(
+                            decoration: BoxDecoration(
+                              color: idx % 2 == 0 ? Colors.white : Colors.grey.shade50,
+                            ),
+                            children: [
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text('${idx + 1}', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.center)),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text(item.finishedProductCode, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600))),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text(item.finishedProductName, style: const TextStyle(fontSize: 9.5))),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text('${item.quantity.toInt()} ${item.unit}', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text(Formatters.formatCurrency(item.rate).replaceAll('₹', ''), style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text(item.discountAmount > 0 ? Formatters.formatCurrency(item.discountAmount).replaceAll('₹', '') : '-', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text('${item.gstPercent.toInt()}%', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text(Formatters.formatCurrency(item.lineTotal).replaceAll('₹', ''), style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                            ],
+                          );
+                        }),
                       ],
                     ),
-                    ...List.generate(quotation.items.length, (idx) {
-                      final item = quotation.items[idx];
-                      return TableRow(
-                        decoration: BoxDecoration(
-                          color: idx % 2 == 0 ? Colors.white : Colors.grey.shade50,
-                        ),
-                        children: [
-                          Padding(padding: const EdgeInsets.all(6.5), child: Text('${idx + 1}', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.center)),
-                          Padding(padding: const EdgeInsets.all(6.5), child: Text(item.finishedProductCode, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600))),
-                          Padding(padding: const EdgeInsets.all(6.5), child: Text(item.finishedProductName, style: const TextStyle(fontSize: 9.5))),
-                          Padding(padding: const EdgeInsets.all(6.5), child: Text('${item.quantity.toInt()} ${item.unit}', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
-                          Padding(padding: const EdgeInsets.all(6.5), child: Text(Formatters.formatCurrency(item.rate).replaceAll('₹', ''), style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
-                          Padding(padding: const EdgeInsets.all(6.5), child: Text(item.discountAmount > 0 ? Formatters.formatCurrency(item.discountAmount).replaceAll('₹', '') : '-', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
-                          Padding(padding: const EdgeInsets.all(6.5), child: Text('${item.gstPercent.toInt()}%', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
-                          Padding(padding: const EdgeInsets.all(6.5), child: Text(Formatters.formatCurrency(item.lineTotal).replaceAll('₹', ''), style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                        ],
-                      );
-                    }),
-                  ],
+                  ),
                 ),
                 const SizedBox(height: 18),
 
                 // 5. Subtotal, Discounts, Taxes, Grand Total Summary
                 Align(
                   alignment: Alignment.centerRight,
-                  child: SizedBox(
-                    width: 320,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildSummaryRow('Subtotal:', Formatters.formatCurrency(quotation.subtotalAmount)),
-                          const SizedBox(height: 4),
-                          _buildSummaryRow('Discount:', '- ${Formatters.formatCurrency(quotation.discountAmount)}'),
-                          const SizedBox(height: 4),
-                          _buildSummaryRow('Taxable Amount:', Formatters.formatCurrency(taxableAmount)),
-                          const SizedBox(height: 4),
-                          _buildSummaryRow('GST Tax (18%):', Formatters.formatCurrency(quotation.gstAmount)),
-                          const Divider(height: 14, color: Colors.black45),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('GRAND TOTAL:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
-                              Text(
-                                Formatters.formatCurrency(quotation.totalAmount),
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 340),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildSummaryRow('Subtotal:', Formatters.formatCurrency(quotation.subtotalAmount)),
+                        const SizedBox(height: 4),
+                        _buildSummaryRow('Discount:', '- ${Formatters.formatCurrency(quotation.discountAmount)}'),
+                        const SizedBox(height: 4),
+                        _buildSummaryRow('Taxable Amount:', Formatters.formatCurrency(taxableAmount)),
+                        const SizedBox(height: 4),
+                        _buildSummaryRow('GST Tax (18%):', Formatters.formatCurrency(quotation.gstAmount)),
+                        const Divider(height: 14, color: Colors.black45),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('GRAND TOTAL:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+                            Text(
+                              Formatters.formatCurrency(quotation.totalAmount),
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -367,27 +421,29 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('TERMS & CONDITIONS:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87)),
-                      const SizedBox(height: 4),
-                      const Text('1. Payment Terms: 30% advance with Purchase Order, 70% against delivery / dispatch.', style: TextStyle(fontSize: 9.5, color: Colors.black87)),
-                      const Text('2. Delivery Terms: Ex-Factory / standard surface transport within 10-14 working days.', style: TextStyle(fontSize: 9.5, color: Colors.black87)),
-                      const Text('3. Validity: Quotation prices are valid for 30 days from the date of issuance.', style: TextStyle(fontSize: 9.5, color: Colors.black87)),
-                      const Text('4. Taxes: GST applicable as per prevailing government statutory rates.', style: TextStyle(fontSize: 9.5, color: Colors.black87)),
+                    children: const [
+                      Text('TERMS & CONDITIONS:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      SizedBox(height: 4),
+                      Text('1. Payment Terms: 30% advance with Purchase Order, 70% against delivery / dispatch.', style: TextStyle(fontSize: 9.5, color: Colors.black87)),
+                      Text('2. Delivery Terms: Ex-Factory / standard surface transport within 10-14 working days.', style: TextStyle(fontSize: 9.5, color: Colors.black87)),
+                      Text('3. Validity: Quotation prices are valid for 30 days from the date of issuance.', style: TextStyle(fontSize: 9.5, color: Colors.black87)),
+                      Text('4. Taxes: GST applicable as per prevailing government statutory rates.', style: TextStyle(fontSize: 9.5, color: Colors.black87)),
                     ],
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 32),
 
                 // 7. Prepared By & Authorized Signatory Area
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 24,
+                  runSpacing: 20,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Prepared By: Commercial Sales Desk', style: TextStyle(fontSize: 10, color: Colors.black87)),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 28),
                         Container(width: 140, height: 1, color: Colors.grey.shade400),
                         const SizedBox(height: 4),
                         Text('Sales Representative', style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
@@ -397,7 +453,7 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         const Text('For DELUZEX LIGHTING PVT. LTD.', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87)),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 28),
                         Container(width: 140, height: 1, color: Colors.grey.shade400),
                         const SizedBox(height: 4),
                         Text('Authorized Signatory', style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
@@ -411,61 +467,68 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
         ),
       ),
       actions: [
-        // Share Action
-        ErpButton(
-          text: 'Share',
-          icon: Icons.share_outlined,
-          isOutlined: true,
-          onPressed: () {
-            Clipboard.setData(ClipboardData(
-              text: 'https://erp.deluzex.com/quotations/${quotation.id}/preview?no=${quotation.invoiceNumber}',
-            ));
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Quotation link for ${quotation.invoiceNumber} copied to clipboard!'),
-                backgroundColor: AppColors.success,
-              ),
-            );
-          },
-        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.end,
+          children: [
+            // Share Action
+            ErpButton(
+              text: 'Share',
+              icon: Icons.share_outlined,
+              isOutlined: true,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(
+                  text: 'https://erp.deluzex.com/quotations/${quotation.id}/preview?no=${quotation.invoiceNumber}',
+                ));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Quotation link for ${quotation.invoiceNumber} copied to clipboard!'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              },
+            ),
 
-        // Download Action
-        ErpButton(
-          text: 'Download',
-          icon: Icons.download_outlined,
-          isOutlined: true,
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Quotation ${quotation.invoiceNumber}.pdf downloaded successfully!'),
-                backgroundColor: AppColors.success,
-              ),
-            );
-          },
-        ),
+            // Download Action
+            ErpButton(
+              text: 'Download',
+              icon: Icons.download_outlined,
+              isOutlined: true,
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Quotation ${quotation.invoiceNumber}.pdf downloaded successfully!'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              },
+            ),
 
-        // Print Action
-        ErpButton(
-          text: 'Print',
-          icon: Icons.print_outlined,
-          isOutlined: true,
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Sent Quotation ${quotation.invoiceNumber} to system printer.'),
-                backgroundColor: AppColors.info,
-              ),
-            );
-          },
-        ),
+            // Print Action
+            ErpButton(
+              text: 'Print',
+              icon: Icons.print_outlined,
+              isOutlined: true,
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Sent Quotation ${quotation.invoiceNumber} to system printer.'),
+                    backgroundColor: AppColors.info,
+                  ),
+                );
+              },
+            ),
 
-        // Close Action
-        ErpButton(
-          text: 'Close',
-          onPressed: () {
-            Navigator.of(context).pop();
-            if (onClose != null) onClose!();
-          },
+            // Close Action
+            ErpButton(
+              text: 'Close',
+              onPressed: () {
+                Navigator.of(context).pop();
+                if (onClose != null) onClose!();
+              },
+            ),
+          ],
         ),
       ],
     );
