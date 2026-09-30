@@ -25,11 +25,11 @@ export class CreateVendorDto {
   email!: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   gstNumber!: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   panNumber!: string;
 
   @IsString()

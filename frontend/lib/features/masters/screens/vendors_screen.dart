@@ -174,9 +174,9 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                             Expanded(
                               child: TextFormField(
                                 controller: gstCtrl,
-                                validator: (v) => Validators.gst(v, true),
+                                validator: (v) => Validators.gst(v, false),
                                 textCapitalization: TextCapitalization.characters,
-                                decoration: const InputDecoration(labelText: 'GST Number *', hintText: '24AAATE1234F1Z5'),
+                                decoration: const InputDecoration(labelText: 'GST Number (Optional)', hintText: '24AAATE1234F1Z5'),
                               ),
                             ),
                           ],
@@ -187,9 +187,9 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                             Expanded(
                               child: TextFormField(
                                 controller: panCtrl,
-                                validator: (v) => Validators.pan(v, true),
+                                validator: (v) => Validators.pan(v, false),
                                 textCapitalization: TextCapitalization.characters,
-                                decoration: const InputDecoration(labelText: 'PAN Number *', hintText: 'AAATE1234F'),
+                                decoration: const InputDecoration(labelText: 'PAN Number (Optional)', hintText: 'AAATE1234F'),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -437,7 +437,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                     Text(v.email, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
                   ],
                 ),
-                Text(v.gstNumber, style: AppTextStyles.bodySmall),
+                Text(v.gstNumber.trim().isNotEmpty ? v.gstNumber : '-', style: AppTextStyles.bodySmall),
                 Text(v.paymentTerms, style: AppTextStyles.bodySmall),
                 Text(Formatters.formatCurrency(v.creditLimit), style: AppTextStyles.bodySmall),
                 Text(

@@ -113,12 +113,14 @@ export class VendorsService {
     userId?: string,
     correlationId?: string,
   ): Promise<VendorRecord> {
-    const existing = await this.db.query(
-      'SELECT 1 FROM vendors WHERE UPPER(gst_number) = UPPER($1) AND is_deleted = false',
-      [dto.gstNumber.trim()],
-    );
-    if (existing.rowCount && existing.rowCount > 0) {
-      throw new ConflictError(`Active vendor with GST "${dto.gstNumber}" already exists`);
+    if (dto.gstNumber && dto.gstNumber.trim().length > 0) {
+      const existing = await this.db.query(
+        'SELECT 1 FROM vendors WHERE UPPER(gst_number) = UPPER($1) AND is_deleted = false',
+       [dto.gstNumber.trim()],
+     );
+     if (existing.rowCount && existing.rowCount > 0) {
+       throw new ConflictError(`Active vendor with GST "${dto.gstNumber}" already exists`);
+      }
     }
 
     const creditLimit = Money.format(dto.creditLimit ?? 500000);
@@ -151,8 +153,8 @@ export class VendorsService {
         dto.contactPerson.trim(),
         dto.mobile.trim(),
         dto.email.trim().toLowerCase(),
-        dto.gstNumber.trim().toUpperCase(),
-        dto.panNumber.trim().toUpperCase(),
+        dto.gstNumber ? dto.gstNumber.trim().toUpperCase() : '',
+        dto.panNumber ? dto.panNumber.trim().toUpperCase() : '',
         dto.address.trim(),
         dto.paymentTerms || 'Net 30 Days',
         creditLimit,

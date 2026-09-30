@@ -162,7 +162,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                               child: TextFormField(
                                 controller: emailCtrl,
                                 validator: Validators.email,
-                                decoration: const InputDecoration(labelText: 'Email Address'),
+                                decoration: const InputDecoration(labelText: 'Email Address *'),
                               ),
                             ),
                           ],
@@ -170,7 +170,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: gstCtrl,
-                          validator: Validators.gst,
+                          validator: (v) => Validators.gst(v, false),
                           decoration: const InputDecoration(
                             labelText: 'GST Number (Optional, 15 chars)',
                             hintText: '24AAAAA0000A1Z5',
