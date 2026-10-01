@@ -16,160 +16,175 @@ class ErpHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        final isDesktop = MediaQuery.of(context).size.width >= 1024;
+        final showLowStockPill = availableWidth >= 780;
+        final isMobile = availableWidth < 500;
+        final hideUserDetails = availableWidth < 620;
 
-    return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
-      ),
-      child: Row(
-        children: [
-          if (!isDesktop) ...[
-            IconButton(
-              icon: const Icon(Icons.menu, color: AppColors.textPrimary),
-              onPressed: onMenuToggle,
+        return Container(
+          height: 64,
+          padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 16),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            border: Border(
+              bottom: BorderSide(color: AppColors.border, width: 1),
             ),
-            const SizedBox(width: 8),
-          ],
+          ),
+          child: Row(
+            children: [
+              if (!isDesktop) ...[
+                IconButton(
+                  icon: const Icon(Icons.menu, color: AppColors.textPrimary),
+                  onPressed: onMenuToggle,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+                const SizedBox(width: 4),
+              ],
 
-          // Search Field pill with filter icon
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 480),
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.mdBorderRadius,
-                border: Border.all(color: AppColors.border, width: 1),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.search,
-                    size: 18,
-                    color: AppColors.textMuted,
+              // Search Field pill with filter icon
+              Expanded(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.mdBorderRadius,
+                    border: Border.all(color: AppColors.border, width: 1),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      onChanged: (val) {
-                        ref.read(globalSearchQueryProvider.notifier).state = val;
-                      },
-                      style: AppTextStyles.bodyMedium.copyWith(fontSize: 13),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                        hintText: 'Search product , SKU, barcode',
-                        hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textDisabled),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        fillColor: Colors.transparent,
-                        filled: false,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.search,
+                        size: 17,
+                        color: AppColors.textMuted,
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: TextField(
+                          onChanged: (val) {
+                            ref.read(globalSearchQueryProvider.notifier).state = val;
+                          },
+                          style: AppTextStyles.bodyMedium.copyWith(fontSize: 12.5),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            hintText: isMobile ? 'Search products...' : 'Search product, SKU, barcode',
+                            hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textDisabled, fontSize: 12),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            fillColor: Colors.transparent,
+                            filled: false,
+                          ),
+                        ),
+                      ),
+                      if (!isMobile) ...[
+                        Container(
+                          height: 18,
+                          width: 1,
+                          color: AppColors.border,
+                          margin: const EdgeInsets.symmetric(horizontal: 6),
+                        ),
+                        InkWell(
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Search filter active: All categories')),
+                            );
+                          },
+                          child: const Icon(
+                            Icons.tune_rounded,
+                            size: 16,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  Container(
-                    height: 20,
-                    width: 1,
-                    color: AppColors.border,
-                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                ),
+              ),
+
+              SizedBox(width: isMobile ? 6 : 10),
+
+              // Low Stock Alert Quick Button if low stock exists (Only show text pill on wide containers)
+              if (showLowStockPill)
+                Builder(
+                  builder: (context) {
+                    final db = ref.watch(databaseServiceProvider);
+                    final lowCount = db.totalLowStockCount;
+                    if (lowCount == 0) return const SizedBox.shrink();
+
+                    return Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      child: InkWell(
+                        onTap: () => LowStockWhatsAppAlertDialog.show(context),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.danger.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.danger.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                '$lowCount Low Stock Alerts',
+                                style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 11.5),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_forward_ios, color: AppColors.danger, size: 10),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+              // Notification Bell with unread dot
+              Stack(
+                children: [
+                  IconButton(
+                    tooltip: 'Low Stock & Production Alerts',
+                    icon: const Icon(Icons.notifications_none_rounded, color: AppColors.textSecondary, size: 22),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    onPressed: () => LowStockWhatsAppAlertDialog.show(context),
                   ),
-                  InkWell(
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Search filter active: All categories')),
-                      );
-                    },
-                    child: const Icon(
-                      Icons.tune_rounded,
-                      size: 16,
-                      color: AppColors.textSecondary,
+                  Positioned(
+                    right: 6,
+                    top: 6,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.danger,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
-          ),
+              SizedBox(width: isMobile ? 4 : 8),
 
-          const Spacer(),
-
-          // Low Stock Alert Quick Button if low stock exists
-          Builder(
-            builder: (context) {
-              final db = ref.watch(databaseServiceProvider);
-              final lowCount = db.totalLowStockCount;
-              if (lowCount == 0) return const SizedBox.shrink();
-
-              return Container(
-                margin: const EdgeInsets.only(right: 12),
-                child: InkWell(
-                  onTap: () => LowStockWhatsAppAlertDialog.show(context),
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.danger.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.danger.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          '$lowCount Low Stock Alerts',
-                          style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 11.5),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.arrow_forward_ios, color: AppColors.danger, size: 10),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-
-          // Notification Bell with unread dot
-          Stack(
-            children: [
-              IconButton(
-                tooltip: 'Low Stock & Production Alerts',
-                icon: const Icon(Icons.notifications_none_rounded, color: AppColors.textSecondary, size: 22),
-                onPressed: () => LowStockWhatsAppAlertDialog.show(context),
-              ),
-              Positioned(
-                right: 12,
-                top: 12,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppColors.danger,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
+              // User Profile Popup Menu
+              _buildUserProfileMenu(context, ref, hideUserDetails),
             ],
           ),
-          const SizedBox(width: 12),
-
-          // User Profile Popup Menu
-          _buildUserProfileMenu(context, ref),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildUserProfileMenu(BuildContext context, WidgetRef ref) {
+  Widget _buildUserProfileMenu(BuildContext context, WidgetRef ref, bool hideUserDetails) {
     final db = ref.watch(databaseServiceProvider);
     final user = ref.watch(currentUserProvider) ?? db.currentUser;
     final role = db.getUserRole(user);
@@ -179,7 +194,7 @@ class ErpHeader extends ConsumerWidget {
       offset: const Offset(0, 48),
       shape: RoundedRectangleBorder(borderRadius: AppRadius.mdBorderRadius),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: EdgeInsets.symmetric(horizontal: hideUserDetails ? 6 : 10, vertical: 6),
         decoration: BoxDecoration(
           color: AppColors.surfaceMuted,
           borderRadius: BorderRadius.circular(24),
@@ -189,33 +204,35 @@ class ErpHeader extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             CircleAvatar(
-              radius: 14,
+              radius: 13,
               backgroundColor: AppColors.primary,
               child: Text(
                 user.name.isNotEmpty ? user.name.substring(0, 1).toUpperCase() : 'U',
-                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
               ),
             ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  user.name,
-                  style: AppTextStyles.bodyBold.copyWith(fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  role.name,
-                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-            const SizedBox(width: 6),
+            if (!hideUserDetails) ...[
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    user.name,
+                    style: AppTextStyles.bodyBold.copyWith(fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    role.name,
+                    style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(width: 4),
             const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: AppColors.textSecondary),
           ],
         ),

@@ -50,9 +50,11 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
         return StatefulBuilder(
           builder: (context, setDlgState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text(isEdit ? 'Edit Raw Material' : 'Add Raw Material', style: AppTextStyles.h2),
-              content: SizedBox(
-                width: 540,
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 540),
+                width: double.infinity,
                 child: Form(
                   key: formKey,
                   child: SingleChildScrollView(
@@ -65,77 +67,140 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                           decoration: const InputDecoration(labelText: 'Material Name *', hintText: 'E.g., Aluminum Profile 6063'),
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: codeCtrl,
-                                validator: (v) => Validators.requiredField(v, 'Item code required'),
-                                decoration: const InputDecoration(labelText: 'Item Code *', hintText: 'RAW-AL-01'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: selectedCategory.isNotEmpty ? selectedCategory : null,
-                                decoration: const InputDecoration(labelText: 'Category'),
-                                items: db.categories.map((cat) {
-                                  return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) setDlgState(() => selectedCategory = val);
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: selectedUnit,
-                                decoration: const InputDecoration(labelText: 'Unit'),
-                                items: db.units.map((u) {
-                                  return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) setDlgState(() => selectedUnit = val);
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextFormField(
-                                controller: stockCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.nonNegativeNumber,
-                                decoration: InputDecoration(labelText: isEdit ? 'Current Stock' : 'Opening Stock *'),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: minCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.nonNegativeNumber,
-                                decoration: const InputDecoration(labelText: 'Minimum Stock Level *'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextFormField(
-                                controller: priceCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.nonNegativeNumber,
-                                decoration: const InputDecoration(labelText: 'Default Purchase Price (₹) *'),
-                              ),
-                            ),
-                          ],
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isNarrow = constraints.maxWidth < 500;
+                            if (isNarrow) {
+                              return Column(
+                                children: [
+                                  TextFormField(
+                                    controller: codeCtrl,
+                                    validator: (v) => Validators.requiredField(v, 'Item code required'),
+                                    decoration: const InputDecoration(labelText: 'Item Code *', hintText: 'RAW-AL-01'),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    value: selectedCategory.isNotEmpty ? selectedCategory : null,
+                                    decoration: const InputDecoration(labelText: 'Category'),
+                                    items: db.categories.map((cat) {
+                                      return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      if (val != null) setDlgState(() => selectedCategory = val);
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    value: selectedUnit,
+                                    decoration: const InputDecoration(labelText: 'Unit'),
+                                    items: db.units.map((u) {
+                                      return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      if (val != null) setDlgState(() => selectedUnit = val);
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: stockCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.nonNegativeNumber,
+                                    decoration: InputDecoration(labelText: isEdit ? 'Current Stock' : 'Opening Stock *'),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: minCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.nonNegativeNumber,
+                                    decoration: const InputDecoration(labelText: 'Minimum Stock Level *'),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: priceCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.nonNegativeNumber,
+                                    decoration: const InputDecoration(labelText: 'Default Purchase Price (₹) *'),
+                                  ),
+                                ],
+                              );
+                            }
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: codeCtrl,
+                                        validator: (v) => Validators.requiredField(v, 'Item code required'),
+                                        decoration: const InputDecoration(labelText: 'Item Code *', hintText: 'RAW-AL-01'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedCategory.isNotEmpty ? selectedCategory : null,
+                                        decoration: const InputDecoration(labelText: 'Category'),
+                                        items: db.categories.map((cat) {
+                                          return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          if (val != null) setDlgState(() => selectedCategory = val);
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedUnit,
+                                        decoration: const InputDecoration(labelText: 'Unit'),
+                                        items: db.units.map((u) {
+                                          return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          if (val != null) setDlgState(() => selectedUnit = val);
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: stockCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: InputDecoration(labelText: isEdit ? 'Current Stock' : 'Opening Stock *'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: minCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: const InputDecoration(labelText: 'Minimum Stock Level *'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: priceCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: const InputDecoration(labelText: 'Default Purchase Price (₹) *'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String?>(
@@ -238,42 +303,69 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Raw Material Stock', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Manage raw material quantities, thresholds, and valuations', style: AppTextStyles.subtitle),
-                ],
+              Text('Raw Material Stock', style: AppTextStyles.h1),
+              const SizedBox(height: 4),
+              Text(
+                'Manage raw material quantities, thresholds, and valuations',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
           const SizedBox(height: 24),
 
           // Filter bar
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  onChanged: (val) => setState(() => _searchQuery = val),
-                  decoration: const InputDecoration(
-                    hintText: 'Search raw material by name, code, category, or vendor...',
-                    prefixIcon: Icon(Icons.search, size: 18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 600;
+              if (isSmall) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                      decoration: const InputDecoration(
+                        hintText: 'Search raw material by name, code, category, or vendor...',
+                        prefixIcon: Icon(Icons.search, size: 18),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilterChip(
+                      label: Text('Low Stock Only (${db.lowStockRawMaterials.length})'),
+                      selected: _showOnlyLowStock,
+                      onSelected: (val) => setState(() => _showOnlyLowStock = val),
+                      selectedColor: AppColors.dangerLight,
+                      checkmarkColor: AppColors.dangerText,
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                      decoration: const InputDecoration(
+                        hintText: 'Search raw material by name, code, category, or vendor...',
+                        prefixIcon: Icon(Icons.search, size: 18),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              FilterChip(
-                label: Text('Low Stock Only (${db.lowStockRawMaterials.length})'),
-                selected: _showOnlyLowStock,
-                onSelected: (val) => setState(() => _showOnlyLowStock = val),
-                selectedColor: AppColors.dangerLight,
-                checkmarkColor: AppColors.dangerText,
-              ),
-            ],
+                  const SizedBox(width: 16),
+                  FilterChip(
+                    label: Text('Low Stock Only (${db.lowStockRawMaterials.length})'),
+                    selected: _showOnlyLowStock,
+                    onSelected: (val) => setState(() => _showOnlyLowStock = val),
+                    selectedColor: AppColors.dangerLight,
+                    checkmarkColor: AppColors.dangerText,
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 

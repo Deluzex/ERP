@@ -48,10 +48,12 @@ class InventoryRoleDashboard extends ConsumerWidget {
               borderRadius: AppRadius.mdBorderRadius,
               border: Border.all(color: AppColors.border),
             ),
-            child: Row(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text('Quick Inventory Actions:', style: AppTextStyles.bodyBold),
-                const SizedBox(width: 16),
                 Wrap(
                   spacing: 10,
                   runSpacing: 8,
@@ -87,169 +89,171 @@ class InventoryRoleDashboard extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // 4 Key Metrics
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Raw Material Valuation',
-                  value: Formatters.formatCurrency(db.rawMaterialStockValue),
-                  subtitle: '${db.rawMaterials.length} Unique items',
-                  icon: Icons.view_in_ar_rounded,
-                  color: Colors.blue,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Finished Goods Valuation',
-                  value: Formatters.formatCurrency(db.finishedProductStockValue),
-                  subtitle: '${db.finishedProducts.length} Product SKUs',
-                  icon: Icons.inventory_outlined,
-                  color: Colors.teal,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Total Stock Valuation',
-                  value: Formatters.formatCurrency(db.totalStockValue),
-                  subtitle: 'Combined Warehouse Assets',
-                  icon: Icons.account_balance_wallet_outlined,
-                  color: Colors.indigo,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Low Stock Alerts',
-                  value: '${db.totalLowStockCount} Items',
-                  subtitle: '${lowStockRM.length} RM • ${lowStockFP.length} FP below min level',
-                  icon: Icons.warning_amber_rounded,
-                  color: db.totalLowStockCount > 0 ? AppColors.danger : AppColors.success,
-                ),
-              ),
-            ],
-          ),
+          _buildResponsiveMetricGrid(context, [
+            _buildMetricCard(
+              title: 'Raw Material Valuation',
+              value: Formatters.formatCurrency(db.rawMaterialStockValue),
+              subtitle: '${db.rawMaterials.length} Unique items',
+              icon: Icons.view_in_ar_rounded,
+              color: Colors.blue,
+            ),
+            _buildMetricCard(
+              title: 'Finished Goods Valuation',
+              value: Formatters.formatCurrency(db.finishedProductStockValue),
+              subtitle: '${db.finishedProducts.length} Product SKUs',
+              icon: Icons.inventory_outlined,
+              color: Colors.teal,
+            ),
+            _buildMetricCard(
+              title: 'Total Stock Valuation',
+              value: Formatters.formatCurrency(db.totalStockValue),
+              subtitle: 'Combined Warehouse Assets',
+              icon: Icons.account_balance_wallet_outlined,
+              color: Colors.indigo,
+            ),
+            _buildMetricCard(
+              title: 'Low Stock Alerts',
+              value: '${db.totalLowStockCount} Items',
+              subtitle: '${lowStockRM.length} RM • ${lowStockFP.length} FP below min level',
+              icon: Icons.warning_amber_rounded,
+              color: db.totalLowStockCount > 0 ? AppColors.danger : AppColors.success,
+            ),
+          ]),
           const SizedBox(height: 28),
 
           // Low Stock Alert Tables
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.lgBorderRadius,
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          _buildResponsiveTwoPanes(
+            context,
+            left: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: AppRadius.lgBorderRadius,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Low Stock Raw Materials', style: AppTextStyles.h3),
-                          ErpStatusBadge.warning('${lowStockRM.length} Critical'),
-                        ],
+                      Expanded(
+                        child: Text(
+                          'Low Stock Raw Materials',
+                          style: AppTextStyles.h3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const Divider(height: 24),
-                      if (lowStockRM.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 20),
-                          child: Center(child: Text('All raw materials are above minimum buffer levels.', style: TextStyle(color: Colors.grey))),
-                        )
-                      else
-                        ...lowStockRM.take(5).map((rm) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(rm.name, style: AppTextStyles.bodyBold),
-                                      Text('${rm.itemCode} • Min: ${rm.minimumStock} ${rm.unit}', style: AppTextStyles.caption),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-                                    ),
-                                    child: Text(
-                                      '${rm.currentStock} ${rm.unit}',
-                                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )),
+                      const SizedBox(width: 8),
+                      ErpStatusBadge.warning('${lowStockRM.length} Critical'),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.lgBorderRadius,
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Low Stock Finished Products', style: AppTextStyles.h3),
-                          ErpStatusBadge.warning('${lowStockFP.length} Critical'),
-                        ],
-                      ),
-                      const Divider(height: 24),
-                      if (lowStockFP.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 20),
-                          child: Center(child: Text('All finished product SKUs have adequate inventory.', style: TextStyle(color: Colors.grey))),
-                        )
-                      else
-                        ...lowStockFP.take(5).map((fp) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(fp.name, style: AppTextStyles.bodyBold),
-                                      Text('${fp.itemCode} • Min: ${fp.minimumStock} ${fp.unit}', style: AppTextStyles.caption),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-                                    ),
-                                    child: Text(
-                                      '${fp.currentStock} ${fp.unit}',
-                                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
-                                    ),
-                                  ),
-                                ],
+                  const Divider(height: 24),
+                  if (lowStockRM.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(child: Text('All raw materials are above minimum buffer levels.', style: TextStyle(color: Colors.grey))),
+                    )
+                  else
+                    ...lowStockRM.take(5).map((rm) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(rm.name, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    Text('${rm.itemCode} • Min: ${rm.minimumStock} ${rm.unit}', style: AppTextStyles.caption),
+                                  ],
+                                ),
                               ),
-                            )),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                                ),
+                                child: Text(
+                                  '${rm.currentStock} ${rm.unit}',
+                                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                ],
+              ),
+            ),
+            right: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: AppRadius.lgBorderRadius,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Low Stock Finished Products',
+                          style: AppTextStyles.h3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ErpStatusBadge.warning('${lowStockFP.length} Critical'),
                     ],
                   ),
-                ),
+                  const Divider(height: 24),
+                  if (lowStockFP.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(child: Text('All finished product SKUs have adequate inventory.', style: TextStyle(color: Colors.grey))),
+                    )
+                  else
+                    ...lowStockFP.take(5).map((fp) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(fp.name, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    Text('${fp.itemCode} • Min: ${fp.minimumStock} ${fp.unit}', style: AppTextStyles.caption),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                                ),
+                                child: Text(
+                                  '${fp.currentStock} ${fp.unit}',
+                                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                ],
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 28),
 
@@ -325,10 +329,12 @@ class PurchaseRoleDashboard extends ConsumerWidget {
               borderRadius: AppRadius.mdBorderRadius,
               border: Border.all(color: AppColors.border),
             ),
-            child: Row(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text('Purchase Actions:', style: AppTextStyles.bodyBold),
-                const SizedBox(width: 16),
                 Wrap(
                   spacing: 10,
                   runSpacing: 8,
@@ -364,49 +370,36 @@ class PurchaseRoleDashboard extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // 4 Key Metrics
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Total Purchases Placed',
-                  value: Formatters.formatCurrency(db.totalPurchaseAmount),
-                  subtitle: '${db.purchases.length} Purchase Orders',
-                  icon: Icons.shopping_bag_outlined,
-                  color: Colors.purple,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Pending PO Deliveries',
-                  value: '${pendingPurchases.length} Orders',
-                  subtitle: Formatters.formatCurrency(pendingPurchases.fold(0.0, (sum, p) => sum + p.totalAmount)),
-                  icon: Icons.local_shipping_outlined,
-                  color: Colors.orange,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Received & Verified',
-                  value: '${completedPurchases.length} Orders',
-                  subtitle: Formatters.formatCurrency(completedPurchases.fold(0.0, (sum, p) => sum + p.totalAmount)),
-                  icon: Icons.check_circle_outline,
-                  color: Colors.green,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Vendor Payables Due',
-                  value: Formatters.formatCurrency(db.pendingVendorPayments),
-                  subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} Vendors pending payment',
-                  icon: Icons.account_balance_outlined,
-                  color: Colors.red,
-                ),
-              ),
-            ],
-          ),
+          _buildResponsiveMetricGrid(context, [
+            _buildMetricCard(
+              title: 'Total Purchases Placed',
+              value: Formatters.formatCurrency(db.totalPurchaseAmount),
+              subtitle: '${db.purchases.length} Purchase Orders',
+              icon: Icons.shopping_bag_outlined,
+              color: Colors.purple,
+            ),
+            _buildMetricCard(
+              title: 'Pending PO Deliveries',
+              value: '${pendingPurchases.length} Orders',
+              subtitle: Formatters.formatCurrency(pendingPurchases.fold(0.0, (sum, p) => sum + p.totalAmount)),
+              icon: Icons.local_shipping_outlined,
+              color: Colors.orange,
+            ),
+            _buildMetricCard(
+              title: 'Received & Verified',
+              value: '${completedPurchases.length} Orders',
+              subtitle: Formatters.formatCurrency(completedPurchases.fold(0.0, (sum, p) => sum + p.totalAmount)),
+              icon: Icons.check_circle_outline,
+              color: Colors.green,
+            ),
+            _buildMetricCard(
+              title: 'Vendor Payables Due',
+              value: Formatters.formatCurrency(db.pendingVendorPayments),
+              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} Vendors pending payment',
+              icon: Icons.account_balance_outlined,
+              color: Colors.red,
+            ),
+          ]),
           const SizedBox(height: 28),
 
           // Recent Purchase Orders Table
@@ -477,10 +470,12 @@ class ProductionRoleDashboard extends ConsumerWidget {
               borderRadius: AppRadius.mdBorderRadius,
               border: Border.all(color: AppColors.border),
             ),
-            child: Row(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text('Production Actions:', style: AppTextStyles.bodyBold),
-                const SizedBox(width: 16),
                 Wrap(
                   spacing: 10,
                   runSpacing: 8,
@@ -510,49 +505,36 @@ class ProductionRoleDashboard extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // 4 Key Metrics
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Total Work Orders',
-                  value: '${db.productionOrders.length}',
-                  subtitle: 'All-time production jobs',
-                  icon: Icons.precision_manufacturing_outlined,
-                  color: Colors.indigo,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Active / In-Progress',
-                  value: '${pendingOrders.length} Orders',
-                  subtitle: 'Currently on Shopfloor',
-                  icon: Icons.autorenew_rounded,
-                  color: Colors.amber.shade800,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Completed Batches',
-                  value: '${completedOrders.length} Finished',
-                  subtitle: 'Transferred to FG Warehouse',
-                  icon: Icons.task_alt_rounded,
-                  color: Colors.green,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Critical RM Buffers',
-                  value: '${db.lowStockRawMaterials.length} Alerts',
-                  subtitle: 'Materials needing re-order',
-                  icon: Icons.warning_rounded,
-                  color: db.lowStockRawMaterials.isNotEmpty ? Colors.red : Colors.green,
-                ),
-              ),
-            ],
-          ),
+          _buildResponsiveMetricGrid(context, [
+            _buildMetricCard(
+              title: 'Total Work Orders',
+              value: '${db.productionOrders.length}',
+              subtitle: 'All-time production jobs',
+              icon: Icons.precision_manufacturing_outlined,
+              color: Colors.indigo,
+            ),
+            _buildMetricCard(
+              title: 'Active / In-Progress',
+              value: '${pendingOrders.length} Orders',
+              subtitle: 'Currently on Shopfloor',
+              icon: Icons.autorenew_rounded,
+              color: Colors.amber.shade800,
+            ),
+            _buildMetricCard(
+              title: 'Completed Batches',
+              value: '${completedOrders.length} Finished',
+              subtitle: 'Transferred to FG Warehouse',
+              icon: Icons.task_alt_rounded,
+              color: Colors.green,
+            ),
+            _buildMetricCard(
+              title: 'Critical RM Buffers',
+              value: '${db.lowStockRawMaterials.length} Alerts',
+              subtitle: 'Materials needing re-order',
+              icon: Icons.warning_rounded,
+              color: db.lowStockRawMaterials.isNotEmpty ? Colors.red : Colors.green,
+            ),
+          ]),
           const SizedBox(height: 28),
 
           // Production Orders Table
@@ -622,10 +604,12 @@ class AccountsPaymentRoleDashboard extends ConsumerWidget {
               borderRadius: AppRadius.mdBorderRadius,
               border: Border.all(color: AppColors.border),
             ),
-            child: Row(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text('Finance Actions:', style: AppTextStyles.bodyBold),
-                const SizedBox(width: 16),
                 Wrap(
                   spacing: 10,
                   runSpacing: 8,
@@ -661,49 +645,36 @@ class AccountsPaymentRoleDashboard extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // 4 Key Financial Metrics
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Customer Receivables',
-                  value: Formatters.formatCurrency(db.pendingCustomerPayments),
-                  subtitle: '${db.customers.where((c) => c.outstandingAmount > 0).length} Clients pending dues',
-                  icon: Icons.account_balance_wallet_outlined,
-                  color: Colors.teal,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Vendor Payables Due',
-                  value: Formatters.formatCurrency(db.pendingVendorPayments),
-                  subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} Suppliers awaiting payment',
-                  icon: Icons.payment_outlined,
-                  color: Colors.red,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Commission Payable',
-                  value: Formatters.formatCurrency(db.pendingCommissionAmount),
-                  subtitle: 'Approved & Pending Vouchers',
-                  icon: Icons.loyalty_outlined,
-                  color: Colors.purple,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Total Operating Expenses',
-                  value: Formatters.formatCurrency(db.totalExpenseAmount),
-                  subtitle: 'Fiscal Year Expenditures',
-                  icon: Icons.pie_chart_outline_rounded,
-                  color: Colors.blueGrey,
-                ),
-              ),
-            ],
-          ),
+          _buildResponsiveMetricGrid(context, [
+            _buildMetricCard(
+              title: 'Customer Receivables',
+              value: Formatters.formatCurrency(db.pendingCustomerPayments),
+              subtitle: '${db.customers.where((c) => c.outstandingAmount > 0).length} Clients pending dues',
+              icon: Icons.account_balance_wallet_outlined,
+              color: Colors.teal,
+            ),
+            _buildMetricCard(
+              title: 'Vendor Payables Due',
+              value: Formatters.formatCurrency(db.pendingVendorPayments),
+              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} Suppliers awaiting payment',
+              icon: Icons.payment_outlined,
+              color: Colors.red,
+            ),
+            _buildMetricCard(
+              title: 'Commission Payable',
+              value: Formatters.formatCurrency(db.pendingCommissionAmount),
+              subtitle: 'Approved & Pending Vouchers',
+              icon: Icons.loyalty_outlined,
+              color: Colors.purple,
+            ),
+            _buildMetricCard(
+              title: 'Total Operating Expenses',
+              value: Formatters.formatCurrency(db.totalExpenseAmount),
+              subtitle: 'Fiscal Year Expenditures',
+              icon: Icons.pie_chart_outline_rounded,
+              color: Colors.blueGrey,
+            ),
+          ]),
           const SizedBox(height: 28),
 
           // Recent Payment Transactions Table
@@ -774,10 +745,12 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
               borderRadius: AppRadius.mdBorderRadius,
               border: Border.all(color: AppColors.border),
             ),
-            child: Row(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text('Project Actions:', style: AppTextStyles.bodyBold),
-                const SizedBox(width: 16),
                 Wrap(
                   spacing: 10,
                   runSpacing: 8,
@@ -813,49 +786,36 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // 4 Key Metrics
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Total Projects',
-                  value: '${db.projects.length}',
-                  subtitle: Formatters.formatCurrency(db.projects.fold(0.0, (sum, p) => sum + p.totalSalesAmount)),
-                  icon: Icons.apartment_rounded,
-                  color: Colors.deepPurple,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Active On-Site Projects',
-                  value: '${activeProjects.length}',
-                  subtitle: 'Under Execution & Delivery',
-                  icon: Icons.construction_rounded,
-                  color: Colors.blue,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Completed Handover',
-                  value: '${completedProjects.length}',
-                  subtitle: 'Successfully Delivered',
-                  icon: Icons.verified_rounded,
-                  color: Colors.green,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Architect Partners',
-                  value: '${db.architects.length}',
-                  subtitle: 'Registered Specifiers',
-                  icon: Icons.architecture_rounded,
-                  color: Colors.purple,
-                ),
-              ),
-            ],
-          ),
+          _buildResponsiveMetricGrid(context, [
+            _buildMetricCard(
+              title: 'Total Projects',
+              value: '${db.projects.length}',
+              subtitle: Formatters.formatCurrency(db.projects.fold(0.0, (sum, p) => sum + p.totalSalesAmount)),
+              icon: Icons.apartment_rounded,
+              color: Colors.deepPurple,
+            ),
+            _buildMetricCard(
+              title: 'Active On-Site Projects',
+              value: '${activeProjects.length}',
+              subtitle: 'Under Execution & Delivery',
+              icon: Icons.construction_rounded,
+              color: Colors.blue,
+            ),
+            _buildMetricCard(
+              title: 'Completed Handover',
+              value: '${completedProjects.length}',
+              subtitle: 'Successfully Delivered',
+              icon: Icons.verified_rounded,
+              color: Colors.green,
+            ),
+            _buildMetricCard(
+              title: 'Architect Partners',
+              value: '${db.architects.length}',
+              subtitle: 'Registered Specifiers',
+              icon: Icons.architecture_rounded,
+              color: Colors.purple,
+            ),
+          ]),
           const SizedBox(height: 28),
 
           // Projects Table
@@ -914,164 +874,148 @@ class MastersRoleDashboard extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
 
-          // 8 Entity Metric Cards (2 rows of 4)
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Customers Master',
-                  value: '${db.customers.length} Clients',
-                  subtitle: '${db.customers.where((c) => c.outstandingAmount > 0).length} with active balances',
-                  icon: Icons.people_outline,
-                  color: Colors.blue,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Vendors Master',
-                  value: '${db.vendors.length} Suppliers',
-                  subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} with active payables',
-                  icon: Icons.storefront_outlined,
-                  color: Colors.purple,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Dealers Master',
-                  value: '${db.dealers.length} Retailers',
-                  subtitle: 'Active distribution network',
-                  icon: Icons.store_mall_directory_outlined,
-                  color: Colors.teal,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Architect Partners',
-                  value: '${db.architects.length} Specifiers',
-                  subtitle: '${db.projects.length} linked projects',
-                  icon: Icons.architecture_rounded,
-                  color: Colors.deepPurple,
-                ),
-              ),
-            ],
-          ),
+          // 8 Entity Metric Cards (Responsive Grid)
+          _buildResponsiveMetricGrid(context, [
+            _buildMetricCard(
+              title: 'Customers Master',
+              value: '${db.customers.length} Clients',
+              subtitle: '${db.customers.where((c) => c.outstandingAmount > 0).length} with active balances',
+              icon: Icons.people_outline,
+              color: Colors.blue,
+            ),
+            _buildMetricCard(
+              title: 'Vendors Master',
+              value: '${db.vendors.length} Suppliers',
+              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} with active payables',
+              icon: Icons.storefront_outlined,
+              color: Colors.purple,
+            ),
+            _buildMetricCard(
+              title: 'Dealers Master',
+              value: '${db.dealers.length} Retailers',
+              subtitle: 'Active distribution network',
+              icon: Icons.store_mall_directory_outlined,
+              color: Colors.teal,
+            ),
+            _buildMetricCard(
+              title: 'Architect Partners',
+              value: '${db.architects.length} Specifiers',
+              subtitle: '${db.projects.length} linked projects',
+              icon: Icons.architecture_rounded,
+              color: Colors.deepPurple,
+            ),
+          ]),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Raw Material Items',
-                  value: '${db.rawMaterials.length} Items',
-                  subtitle: '${db.lowStockRawMaterials.length} below buffer level',
-                  icon: Icons.view_in_ar_outlined,
-                  color: Colors.indigo,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Finished Product SKUs',
-                  value: '${db.finishedProducts.length} Products',
-                  subtitle: '${db.lowStockFinishedProducts.length} below buffer level',
-                  icon: Icons.inventory_2_outlined,
-                  color: Colors.green,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Item Categories',
-                  value: '${db.categories.length} Categories',
-                  subtitle: 'Product classifications',
-                  icon: Icons.category_outlined,
-                  color: Colors.amber.shade800,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Units of Measure',
-                  value: '${db.units.length} Units',
-                  subtitle: 'PCS, MTR, KG, BOX, ROL',
-                  icon: Icons.straighten_outlined,
-                  color: Colors.blueGrey,
-                ),
-              ),
-            ],
-          ),
+          _buildResponsiveMetricGrid(context, [
+            _buildMetricCard(
+              title: 'Raw Material Items',
+              value: '${db.rawMaterials.length} Items',
+              subtitle: '${db.lowStockRawMaterials.length} below buffer level',
+              icon: Icons.view_in_ar_outlined,
+              color: Colors.indigo,
+            ),
+            _buildMetricCard(
+              title: 'Finished Product SKUs',
+              value: '${db.finishedProducts.length} Products',
+              subtitle: '${db.lowStockFinishedProducts.length} below buffer level',
+              icon: Icons.inventory_2_outlined,
+              color: Colors.green,
+            ),
+            _buildMetricCard(
+              title: 'Item Categories',
+              value: '${db.categories.length} Categories',
+              subtitle: 'Product classifications',
+              icon: Icons.category_outlined,
+              color: Colors.amber.shade800,
+            ),
+            _buildMetricCard(
+              title: 'Units of Measure',
+              value: '${db.units.length} Units',
+              subtitle: 'PCS, MTR, KG, BOX, ROL',
+              icon: Icons.straighten_outlined,
+              color: Colors.blueGrey,
+            ),
+          ]),
           const SizedBox(height: 28),
 
           // Master Direct Jump Tiles
           Text('Quick Master Record Navigation', style: AppTextStyles.h2),
           const SizedBox(height: 14),
-          GridView.count(
-            crossAxisCount: 4,
-            crossAxisSpacing: 14,
-            mainAxisSpacing: 14,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 2.2,
-            children: [
-              _buildMasterShortcutCard(
-                title: 'Customer Directory',
-                subtitle: 'Manage client accounts & GSTIN',
-                icon: Icons.people_outline,
-                color: Colors.blue,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customers,
-              ),
-              _buildMasterShortcutCard(
-                title: 'Vendor Directory',
-                subtitle: 'Manage suppliers & payment terms',
-                icon: Icons.storefront_outlined,
-                color: Colors.purple,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendors,
-              ),
-              _buildMasterShortcutCard(
-                title: 'Dealer Directory',
-                subtitle: 'Trade discount rates & territory',
-                icon: Icons.store_mall_directory_outlined,
-                color: Colors.teal,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.dealers,
-              ),
-              _buildMasterShortcutCard(
-                title: 'Architect Registry',
-                subtitle: 'Commission rates & client linkage',
-                icon: Icons.architecture_rounded,
-                color: Colors.deepPurple,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
-              ),
-              _buildMasterShortcutCard(
-                title: 'Raw Material Masters',
-                subtitle: 'Purchase prices & stock thresholds',
-                icon: Icons.view_in_ar_outlined,
-                color: Colors.indigo,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterials,
-              ),
-              _buildMasterShortcutCard(
-                title: 'Finished Product Masters',
-                subtitle: 'Selling prices & BOM cost profiles',
-                icon: Icons.inventory_2_outlined,
-                color: Colors.green,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProducts,
-              ),
-              _buildMasterShortcutCard(
-                title: 'Categories & Units',
-                subtitle: 'Tax rates & measurement symbols',
-                icon: Icons.category_outlined,
-                color: Colors.amber.shade800,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.categoriesUnits,
-              ),
-              _buildMasterShortcutCard(
-                title: 'Project Portfolio',
-                subtitle: 'Site contracts & milestone scopes',
-                icon: Icons.apartment_rounded,
-                color: Colors.deepOrange,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectList,
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth >= 1100
+                  ? 4
+                  : constraints.maxWidth >= 650
+                      ? 2
+                      : 1;
+
+              return GridView.count(
+                crossAxisCount: crossAxisCount,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: crossAxisCount == 1 ? 3.5 : 2.2,
+                children: [
+                  _buildMasterShortcutCard(
+                    title: 'Customer Directory',
+                    subtitle: 'Manage client accounts & GSTIN',
+                    icon: Icons.people_outline,
+                    color: Colors.blue,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customers,
+                  ),
+                  _buildMasterShortcutCard(
+                    title: 'Vendor Directory',
+                    subtitle: 'Manage suppliers & payment terms',
+                    icon: Icons.storefront_outlined,
+                    color: Colors.purple,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendors,
+                  ),
+                  _buildMasterShortcutCard(
+                    title: 'Dealer Directory',
+                    subtitle: 'Trade discount rates & territory',
+                    icon: Icons.store_mall_directory_outlined,
+                    color: Colors.teal,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.dealers,
+                  ),
+                  _buildMasterShortcutCard(
+                    title: 'Architect Registry',
+                    subtitle: 'Commission rates & client linkage',
+                    icon: Icons.architecture_rounded,
+                    color: Colors.deepPurple,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
+                  ),
+                  _buildMasterShortcutCard(
+                    title: 'Raw Material Masters',
+                    subtitle: 'Purchase prices & stock thresholds',
+                    icon: Icons.view_in_ar_outlined,
+                    color: Colors.indigo,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterials,
+                  ),
+                  _buildMasterShortcutCard(
+                    title: 'Finished Product Masters',
+                    subtitle: 'Selling prices & BOM cost profiles',
+                    icon: Icons.inventory_2_outlined,
+                    color: Colors.green,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProducts,
+                  ),
+                  _buildMasterShortcutCard(
+                    title: 'Categories & Units',
+                    subtitle: 'Tax rates & measurement symbols',
+                    icon: Icons.category_outlined,
+                    color: Colors.amber.shade800,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.categoriesUnits,
+                  ),
+                  _buildMasterShortcutCard(
+                    title: 'Project Portfolio',
+                    subtitle: 'Site contracts & milestone scopes',
+                    icon: Icons.apartment_rounded,
+                    color: Colors.deepOrange,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectList,
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 28),
 
@@ -1177,56 +1121,67 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
           Text('Available ERP Analytical Reports', style: AppTextStyles.h2),
           const SizedBox(height: 16),
 
-          GridView.count(
-            crossAxisCount: 3,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              _buildReportHubCard(
-                title: 'Inventory & Stock Valuation',
-                description: 'Stock ledger, raw material buffer analysis, dead inventory, and reorder levels.',
-                icon: Icons.inventory_2_outlined,
-                color: Colors.blue,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.inventoryReports,
-              ),
-              _buildReportHubCard(
-                title: 'Sales & Revenue Analysis',
-                description: 'Tax invoice registry, sales by category, quotation conversion rate, and margins.',
-                icon: Icons.point_of_sale_outlined,
-                color: Colors.green,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesReports,
-              ),
-              _buildReportHubCard(
-                title: 'Procurement & Purchase Reports',
-                description: 'Vendor spending trends, purchase variance, delivery timelines, and item prices.',
-                icon: Icons.shopping_bag_outlined,
-                color: Colors.purple,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseReports,
-              ),
-              _buildReportHubCard(
-                title: 'Production & Shopfloor Yields',
-                description: 'BOM consumption accuracy, manufacturing output, work order cycle time, and costs.',
-                icon: Icons.precision_manufacturing_outlined,
-                color: Colors.indigo,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionReports,
-              ),
-              _buildReportHubCard(
-                title: 'Project Cost & Consumption',
-                description: 'Project-wise raw material usage, finished goods scheduled, and commercial profitability.',
-                icon: Icons.apartment_outlined,
-                color: Colors.deepPurple,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectReports,
-              ),
-              _buildReportHubCard(
-                title: 'Financial & Payment Audit',
-                description: 'Accounts receivable aging, vendor payable ledger, expense audit, and partner payouts.',
-                icon: Icons.account_balance_outlined,
-                color: Colors.teal,
-                onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.financialReports,
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth >= 1100
+                  ? 3
+                  : constraints.maxWidth >= 650
+                      ? 2
+                      : 1;
+
+              return GridView.count(
+                crossAxisCount: crossAxisCount,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: crossAxisCount == 1 ? 1.5 : (crossAxisCount == 2 ? 1.25 : 1.35),
+                children: [
+                  _buildReportHubCard(
+                    title: 'Inventory & Stock Valuation',
+                    description: 'Stock ledger, raw material buffer analysis, dead inventory, and reorder levels.',
+                    icon: Icons.inventory_2_outlined,
+                    color: Colors.blue,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.inventoryReports,
+                  ),
+                  _buildReportHubCard(
+                    title: 'Sales & Revenue Analysis',
+                    description: 'Tax invoice registry, sales by category, quotation conversion rate, and margins.',
+                    icon: Icons.point_of_sale_outlined,
+                    color: Colors.green,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesReports,
+                  ),
+                  _buildReportHubCard(
+                    title: 'Procurement & Purchase Reports',
+                    description: 'Vendor spending trends, purchase variance, delivery timelines, and item prices.',
+                    icon: Icons.shopping_bag_outlined,
+                    color: Colors.purple,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseReports,
+                  ),
+                  _buildReportHubCard(
+                    title: 'Production & Shopfloor Yields',
+                    description: 'BOM consumption accuracy, manufacturing output, work order cycle time, and costs.',
+                    icon: Icons.precision_manufacturing_outlined,
+                    color: Colors.indigo,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionReports,
+                  ),
+                  _buildReportHubCard(
+                    title: 'Project Cost & Consumption',
+                    description: 'Project-wise raw material usage, finished goods scheduled, and commercial profitability.',
+                    icon: Icons.apartment_outlined,
+                    color: Colors.deepPurple,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectReports,
+                  ),
+                  _buildReportHubCard(
+                    title: 'Financial & Payment Audit',
+                    description: 'Accounts receivable aging, vendor payable ledger, expense audit, and partner payouts.',
+                    icon: Icons.account_balance_outlined,
+                    color: Colors.teal,
+                    onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.financialReports,
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -1244,7 +1199,7 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
       onTap: onTap,
       borderRadius: AppRadius.lgBorderRadius,
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: AppRadius.lgBorderRadius,
@@ -1252,16 +1207,22 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 24),
+              child: Icon(icon, color: color, size: 22),
             ),
-            const SizedBox(height: 16),
-            Text(title, style: AppTextStyles.h3),
-            const SizedBox(height: 6),
-            Text(description, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 12),
+            Text(title, style: AppTextStyles.h3, maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 4),
+            Text(
+              description,
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
             const Spacer(),
             Row(
               children: [
@@ -1304,49 +1265,36 @@ class DataEntryRoleDashboard extends ConsumerWidget {
           Text('Quick Record Creation Shortcuts', style: AppTextStyles.h2),
           const SizedBox(height: 16),
 
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionShortcutTile(
-                  title: 'Create Quotation',
-                  subtitle: 'New estimate for client',
-                  icon: Icons.description_outlined,
-                  color: Colors.orange,
-                  onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildActionShortcutTile(
-                  title: 'Create Direct Sale',
-                  subtitle: 'Tax Invoice & Dispatch',
-                  icon: Icons.receipt_long_outlined,
-                  color: Colors.green,
-                  onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildActionShortcutTile(
-                  title: 'Create Purchase Order',
-                  subtitle: 'PO for Vendor supply',
-                  icon: Icons.add_shopping_cart,
-                  color: Colors.purple,
-                  onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildActionShortcutTile(
-                  title: 'Add New Customer',
-                  subtitle: 'Register buyer master',
-                  icon: Icons.person_add_alt_1,
-                  color: Colors.blue,
-                  onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customers,
-                ),
-              ),
-            ],
-          ),
+          _buildResponsiveMetricGrid(context, [
+            _buildActionShortcutTile(
+              title: 'Create Quotation',
+              subtitle: 'New estimate for client',
+              icon: Icons.description_outlined,
+              color: Colors.orange,
+              onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation,
+            ),
+            _buildActionShortcutTile(
+              title: 'Create Direct Sale',
+              subtitle: 'Tax Invoice & Dispatch',
+              icon: Icons.receipt_long_outlined,
+              color: Colors.green,
+              onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+            ),
+            _buildActionShortcutTile(
+              title: 'Create Purchase Order',
+              subtitle: 'PO for Vendor supply',
+              icon: Icons.add_shopping_cart,
+              color: Colors.purple,
+              onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+            ),
+            _buildActionShortcutTile(
+              title: 'Add New Customer',
+              subtitle: 'Register buyer master',
+              icon: Icons.person_add_alt_1,
+              color: Colors.blue,
+              onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customers,
+            ),
+          ]),
           const SizedBox(height: 28),
 
           Text('Recently Created Sales Invoices', style: AppTextStyles.h2),
@@ -1403,8 +1351,8 @@ class DataEntryRoleDashboard extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: AppTextStyles.bodyBold),
-                  Text(subtitle, style: AppTextStyles.caption),
+                  Text(title, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(subtitle, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
@@ -1416,7 +1364,7 @@ class DataEntryRoleDashboard extends ConsumerWidget {
 }
 
 // =====================================================================
-// SHARED HELPER WIDGETS
+// SHARED RESPONSIVE HELPER WIDGETS
 // =====================================================================
 Widget _buildRoleHeader({
   required BuildContext context,
@@ -1438,10 +1386,12 @@ Widget _buildRoleHeader({
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(title, style: AppTextStyles.h1),
-                  const SizedBox(width: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -1456,7 +1406,7 @@ Widget _buildRoleHeader({
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(subtitle, style: AppTextStyles.subtitle),
             ],
           ),
@@ -1486,7 +1436,15 @@ Widget _buildMetricCard({
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(title, style: AppTextStyles.tableHeader.copyWith(fontSize: 12)),
+            Expanded(
+              child: Text(
+                title,
+                style: AppTextStyles.tableHeader.copyWith(fontSize: 12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
@@ -1497,8 +1455,80 @@ Widget _buildMetricCard({
         const SizedBox(height: 10),
         Text(value, style: AppTextStyles.metricValue.copyWith(fontSize: 20, color: color)),
         const SizedBox(height: 4),
-        Text(subtitle, style: AppTextStyles.caption.copyWith(color: AppColors.textMuted)),
+        Text(subtitle, style: AppTextStyles.caption.copyWith(color: AppColors.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
       ],
     ),
   );
+}
+
+Widget _buildResponsiveMetricGrid(BuildContext context, List<Widget> cards) {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      if (width >= 1100) {
+        return Row(
+          children: cards.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final card = entry.value;
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(left: idx == 0 ? 0 : 16),
+                child: card,
+              ),
+            );
+          }).toList(),
+        );
+      } else if (width >= 600) {
+        final halfWidth = (width - 16) / 2;
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: cards.map((card) {
+            return SizedBox(
+              width: halfWidth,
+              child: card,
+            );
+          }).toList(),
+        );
+      } else {
+        return Column(
+          children: cards.map((card) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: card,
+            );
+          }).toList(),
+        );
+      }
+    },
+  );
+}
+
+Widget _buildResponsiveTwoPanes(
+  BuildContext context, {
+  required Widget left,
+  required Widget right,
+  int flexLeft = 1,
+  int flexRight = 1,
+}) {
+  final isDesktop = MediaQuery.of(context).size.width >= 1024;
+  if (isDesktop) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(flex: flexLeft, child: left),
+        const SizedBox(width: 20),
+        Expanded(flex: flexRight, child: right),
+      ],
+    );
+  } else {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        left,
+        const SizedBox(height: 20),
+        right,
+      ],
+    );
+  }
 }

@@ -27,8 +27,8 @@ export class CreateDealerDto {
   email!: string;
 
   @IsString()
-  @IsNotEmpty()
-  gstNumber!: string;
+  @IsOptional()
+  gstNumber?: string;
 
   @IsString()
   @IsNotEmpty()

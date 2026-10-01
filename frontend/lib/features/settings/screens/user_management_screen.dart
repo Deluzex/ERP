@@ -70,49 +70,67 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                   IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(ctx).pop()),
                 ],
               ),
-              content: SizedBox(
-                width: 600,
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 600),
+                width: double.infinity,
                 child: Form(
                   key: formKey,
                   child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isCompact = constraints.maxWidth < 500;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: TextFormField(
+                            if (isCompact) ...[
+                              TextFormField(
                                 controller: nameCtrl,
                                 validator: (v) => Validators.requiredField(v, 'Full Name required'),
                                 decoration: const InputDecoration(labelText: 'Full Name *', prefixIcon: Icon(Icons.person_outline, size: 18)),
                               ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: TextFormField(
+                              const SizedBox(height: 12),
+                              TextFormField(
                                 controller: mobileCtrl,
                                 validator: (v) => Validators.requiredField(v, 'Mobile required'),
                                 decoration: const InputDecoration(labelText: 'Mobile Number *', prefixIcon: Icon(Icons.phone_outlined, size: 18)),
                               ),
+                            ] else ...[
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: nameCtrl,
+                                      validator: (v) => Validators.requiredField(v, 'Full Name required'),
+                                      decoration: const InputDecoration(labelText: 'Full Name *', prefixIcon: Icon(Icons.person_outline, size: 18)),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: mobileCtrl,
+                                      validator: (v) => Validators.requiredField(v, 'Mobile required'),
+                                      decoration: const InputDecoration(labelText: 'Mobile Number *', prefixIcon: Icon(Icons.phone_outlined, size: 18)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: emailCtrl,
+                              validator: Validators.email,
+                              decoration: const InputDecoration(labelText: 'Work Email Address *', prefixIcon: Icon(Icons.email_outlined, size: 18)),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: emailCtrl,
-                          validator: Validators.email,
-                          decoration: const InputDecoration(labelText: 'Work Email Address *', prefixIcon: Icon(Icons.email_outlined, size: 18)),
-                        ),
-                        if (!isEdit) ...[
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: passwordCtrl,
-                            obscureText: true,
-                            validator: (v) => Validators.requiredField(v, 'Initial Password required'),
-                            decoration: const InputDecoration(labelText: 'Initial Password *', prefixIcon: Icon(Icons.lock_outline, size: 18)),
-                          ),
-                        ],
-                        const SizedBox(height: 20),
+                            if (!isEdit) ...[
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                controller: passwordCtrl,
+                                obscureText: true,
+                                validator: (v) => Validators.requiredField(v, 'Initial Password required'),
+                                decoration: const InputDecoration(labelText: 'Initial Password *', prefixIcon: Icon(Icons.lock_outline, size: 18)),
+                              ),
+                            ],
+                            const SizedBox(height: 20),
 
                         // Primary Role Dropdown
                         DropdownButtonFormField<String>(
@@ -169,7 +187,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                           onChanged: (val) => setDlgState(() => isActive = val),
                         ),
                       ],
-                    ),
+                    );
+                  },
+                ),
                   ),
                 ),
               ),
@@ -239,8 +259,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Reset Password for ${user.name}', style: AppTextStyles.h2),
-        content: SizedBox(
-          width: 400,
+        content: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          width: double.infinity,
           child: Form(
             key: formKey,
             child: Column(
@@ -307,89 +328,141 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
     showDialog(
       context: context,
       builder: (ctx) {
+        final size = MediaQuery.of(ctx).size;
+        final isMobile = size.width < 700;
+
         return StatefulBuilder(
           builder: (context, setDlgState) {
             return Dialog(
               backgroundColor: AppColors.surface,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
               child: Container(
-                width: 960,
-                height: 720,
-                padding: const EdgeInsets.all(24),
+                constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+                width: double.infinity,
+                height: size.height * 0.9,
+                padding: EdgeInsets.all(isMobile ? 16 : 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Title Bar
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(isEdit ? 'Edit Role: ${existing.name}' : 'Create Custom ERP Role', style: AppTextStyles.h2),
-                            const SizedBox(height: 2),
-                            Text('Configure granular Module and Action permission matrix', style: AppTextStyles.subtitle),
-                          ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(isEdit ? 'Edit Role: ${existing.name}' : 'Create Custom ERP Role', style: AppTextStyles.h2),
+                              const SizedBox(height: 2),
+                              Text('Configure granular Module and Action permission matrix', style: AppTextStyles.subtitle),
+                            ],
+                          ),
                         ),
                         IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(ctx).pop()),
                       ],
                     ),
-                    const Divider(height: 24),
+                    const Divider(height: 20),
 
                     // Top Metadata inputs
                     Form(
                       key: formKey,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: TextFormField(
-                              controller: nameCtrl,
-                              validator: (v) => Validators.requiredField(v, 'Role Name required'),
-                              decoration: const InputDecoration(labelText: 'Role Title *', hintText: 'e.g. Regional Sales Executive'),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            flex: 3,
-                            child: TextFormField(
-                              controller: descCtrl,
-                              decoration: const InputDecoration(labelText: 'Role Description', hintText: 'Describe department scope & duties'),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            flex: 2,
-                            child: DropdownButtonFormField<ErpNavSection>(
-                              value: selectedDashboard,
-                              isExpanded: true,
-                              decoration: const InputDecoration(labelText: 'Default Landing Dashboard'),
-                              items: const [
-                                DropdownMenuItem(value: ErpNavSection.dashboard, child: Text('Admin Full Dashboard')),
-                                DropdownMenuItem(value: ErpNavSection.inventoryDashboard, child: Text('Inventory Dashboard')),
-                                DropdownMenuItem(value: ErpNavSection.purchaseList, child: Text('Purchase Dashboard')),
-                                DropdownMenuItem(value: ErpNavSection.productionOrders, child: Text('Production Dashboard')),
-                                DropdownMenuItem(value: ErpNavSection.salesDashboard, child: Text('Sales Dashboard')),
-                                DropdownMenuItem(value: ErpNavSection.customerPayments, child: Text('Accounts / Payment Dashboard')),
-                                DropdownMenuItem(value: ErpNavSection.projectList, child: Text('Project Dashboard')),
-                                DropdownMenuItem(value: ErpNavSection.inventoryReports, child: Text('Reports Analytics Dashboard')),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isNarrow = constraints.maxWidth < 650;
+                          if (isNarrow) {
+                            return Column(
+                              children: [
+                                TextFormField(
+                                  controller: nameCtrl,
+                                  validator: (v) => Validators.requiredField(v, 'Role Name required'),
+                                  decoration: const InputDecoration(labelText: 'Role Title *', hintText: 'e.g. Regional Sales Executive'),
+                                ),
+                                const SizedBox(height: 10),
+                                TextFormField(
+                                  controller: descCtrl,
+                                  decoration: const InputDecoration(labelText: 'Role Description', hintText: 'Describe department scope & duties'),
+                                ),
+                                const SizedBox(height: 10),
+                                DropdownButtonFormField<ErpNavSection>(
+                                  value: selectedDashboard,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(labelText: 'Default Landing Dashboard'),
+                                  items: const [
+                                    DropdownMenuItem(value: ErpNavSection.dashboard, child: Text('Admin Full Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.inventoryDashboard, child: Text('Inventory Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.purchaseList, child: Text('Purchase Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.productionOrders, child: Text('Production Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.salesDashboard, child: Text('Sales Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.customerPayments, child: Text('Accounts / Payment Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.projectList, child: Text('Project Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.inventoryReports, child: Text('Reports Analytics Dashboard')),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val != null) setDlgState(() => selectedDashboard = val);
+                                  },
+                                ),
                               ],
-                              onChanged: (val) {
-                                if (val != null) setDlgState(() => selectedDashboard = val);
-                              },
-                            ),
-                          ),
-                        ],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: TextFormField(
+                                  controller: nameCtrl,
+                                  validator: (v) => Validators.requiredField(v, 'Role Name required'),
+                                  decoration: const InputDecoration(labelText: 'Role Title *', hintText: 'e.g. Regional Sales Executive'),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                flex: 3,
+                                child: TextFormField(
+                                  controller: descCtrl,
+                                  decoration: const InputDecoration(labelText: 'Role Description', hintText: 'Describe department scope & duties'),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                flex: 2,
+                                child: DropdownButtonFormField<ErpNavSection>(
+                                  value: selectedDashboard,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(labelText: 'Default Landing Dashboard'),
+                                  items: const [
+                                    DropdownMenuItem(value: ErpNavSection.dashboard, child: Text('Admin Full Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.inventoryDashboard, child: Text('Inventory Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.purchaseList, child: Text('Purchase Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.productionOrders, child: Text('Production Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.salesDashboard, child: Text('Sales Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.customerPayments, child: Text('Accounts / Payment Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.projectList, child: Text('Project Dashboard')),
+                                    DropdownMenuItem(value: ErpNavSection.inventoryReports, child: Text('Reports Analytics Dashboard')),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val != null) setDlgState(() => selectedDashboard = val);
+                                  },
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
                     // Quick Select All / None Bar
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 12,
+                      runSpacing: 6,
                       children: [
                         Text('Granular Permission Matrix (10 Modules x 9 Actions)', style: AppTextStyles.h3),
                         Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             TextButton.icon(
                               icon: const Icon(Icons.select_all, size: 16),
@@ -420,7 +493,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                     ),
                     const SizedBox(height: 8),
 
-                    // Interactive Matrix Table
+                    // Interactive Matrix Table (Horizontally and vertically scrollable)
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
@@ -428,76 +501,83 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                           borderRadius: AppRadius.mdBorderRadius,
                         ),
                         child: SingleChildScrollView(
-                          child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(AppColors.surfaceMuted),
-                            columnSpacing: 18,
-                            horizontalMargin: 12,
-                            columns: [
-                              const DataColumn(label: Text('Module', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                              ...ErpAction.values.map((act) => DataColumn(
-                                    label: Text(act.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                                  )),
-                            ],
-                            rows: ErpModule.values.map((mod) {
-                              final currentActions = permMatrix[mod] ?? {};
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(mod.label, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                                        IconButton(
-                                          icon: const Icon(Icons.checklist, size: 14, color: AppColors.textMuted),
-                                          tooltip: 'Toggle all actions for ${mod.label}',
-                                          onPressed: () {
+                          scrollDirection: Axis.horizontal,
+                          child: SingleChildScrollView(
+                            child: DataTable(
+                              headingRowColor: WidgetStateProperty.all(AppColors.surfaceMuted),
+                              columnSpacing: 18,
+                              horizontalMargin: 12,
+                              columns: [
+                                const DataColumn(label: Text('Module', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                ...ErpAction.values.map((act) => DataColumn(
+                                      label: Text(act.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                    )),
+                              ],
+                              rows: ErpModule.values.map((mod) {
+                                final currentActions = permMatrix[mod] ?? {};
+                                return DataRow(
+                                  cells: [
+                                    DataCell(
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(mod.label, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                                          IconButton(
+                                            icon: const Icon(Icons.checklist, size: 14, color: AppColors.textMuted),
+                                            tooltip: 'Toggle all actions for ${mod.label}',
+                                            onPressed: () {
+                                              setDlgState(() {
+                                                if (currentActions.length == ErpAction.values.length) {
+                                                  permMatrix[mod] = {};
+                                                } else {
+                                                  permMatrix[mod] = ErpAction.values.toSet();
+                                                }
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    ...ErpAction.values.map((act) {
+                                      final isGranted = currentActions.contains(act);
+                                      return DataCell(
+                                        Checkbox(
+                                          value: isGranted,
+                                          activeColor: AppColors.primary,
+                                          onChanged: (val) {
                                             setDlgState(() {
-                                              if (currentActions.length == ErpAction.values.length) {
-                                                permMatrix[mod] = {};
+                                              if (val == true) {
+                                                currentActions.add(act);
+                                                // Auto-grant View if any action is enabled
+                                                currentActions.add(ErpAction.view);
                                               } else {
-                                                permMatrix[mod] = ErpAction.values.toSet();
+                                                currentActions.remove(act);
                                               }
+                                              permMatrix[mod] = currentActions;
                                             });
                                           },
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                  ...ErpAction.values.map((act) {
-                                    final isGranted = currentActions.contains(act);
-                                    return DataCell(
-                                      Checkbox(
-                                        value: isGranted,
-                                        activeColor: AppColors.primary,
-                                        onChanged: (val) {
-                                          setDlgState(() {
-                                            if (val == true) {
-                                              currentActions.add(act);
-                                              // Auto-grant View if any action is enabled
-                                              currentActions.add(ErpAction.view);
-                                            } else {
-                                              currentActions.remove(act);
-                                            }
-                                            permMatrix[mod] = currentActions;
-                                          });
-                                        },
-                                      ),
-                                    );
-                                  }),
-                                ],
-                              );
-                            }).toList(),
+                                      );
+                                    }),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
                     // Actions footer
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 12,
+                      runSpacing: 10,
                       children: [
                         Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Checkbox(
                               value: isActive,
@@ -506,10 +586,11 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                             Text('Role is Active and Assignable to Users', style: AppTextStyles.bodySmall),
                           ],
                         ),
-                        Row(
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 8,
                           children: [
                             ErpButton(text: 'Cancel', isOutlined: true, onPressed: () => Navigator.of(ctx).pop()),
-                            const SizedBox(width: 12),
                             ErpButton(
                               text: isEdit ? 'Save Role Changes' : 'Create Role',
                               icon: Icons.check,
@@ -710,29 +791,46 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            height: 40,
-                            constraints: const BoxConstraints(maxWidth: 360),
-                            child: TextField(
-                              onChanged: (val) => setState(() => _userSearchQuery = val),
-                              decoration: const InputDecoration(
-                                hintText: 'Search user by name, email, or mobile...',
-                                prefixIcon: Icon(Icons.search, size: 18),
-                                isDense: true,
-                              ),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isNarrow = constraints.maxWidth < 600;
+                        final searchField = Container(
+                          height: 40,
+                          constraints: const BoxConstraints(maxWidth: 360),
+                          child: TextField(
+                            onChanged: (val) => setState(() => _userSearchQuery = val),
+                            decoration: const InputDecoration(
+                              hintText: 'Search user by name, email, or mobile...',
+                              prefixIcon: Icon(Icons.search, size: 18),
+                              isDense: true,
                             ),
                           ),
-                        ),
-                        const Spacer(),
-                        ErpButton(
+                        );
+                        final addBtn = ErpButton(
                           text: 'Add New User',
                           icon: Icons.person_add_alt_1,
                           onPressed: () => _openAddEditUserDialog(),
-                        ),
-                      ],
+                        );
+
+                        if (isNarrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              searchField,
+                              const SizedBox(height: 10),
+                              addBtn,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: searchField),
+                            const Spacer(),
+                            addBtn,
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
                     Expanded(
@@ -824,29 +922,46 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            height: 40,
-                            constraints: const BoxConstraints(maxWidth: 360),
-                            child: TextField(
-                              onChanged: (val) => setState(() => _roleSearchQuery = val),
-                              decoration: const InputDecoration(
-                                hintText: 'Search role title or scope...',
-                                prefixIcon: Icon(Icons.search, size: 18),
-                                isDense: true,
-                              ),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isNarrow = constraints.maxWidth < 600;
+                        final searchField = Container(
+                          height: 40,
+                          constraints: const BoxConstraints(maxWidth: 360),
+                          child: TextField(
+                            onChanged: (val) => setState(() => _roleSearchQuery = val),
+                            decoration: const InputDecoration(
+                              hintText: 'Search role title or scope...',
+                              prefixIcon: Icon(Icons.search, size: 18),
+                              isDense: true,
                             ),
                           ),
-                        ),
-                        const Spacer(),
-                        ErpButton(
+                        );
+                        final createBtn = ErpButton(
                           text: 'Create Custom Role',
                           icon: Icons.add_moderator_outlined,
                           onPressed: () => _openAddEditRoleDialog(),
-                        ),
-                      ],
+                        );
+
+                        if (isNarrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              searchField,
+                              const SizedBox(height: 10),
+                              createBtn,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: searchField),
+                            const Spacer(),
+                            createBtn,
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
                     Expanded(
@@ -900,25 +1015,24 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Filter bar & Search
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            height: 40,
-                            constraints: const BoxConstraints(maxWidth: 340),
-                            child: TextField(
-                              onChanged: (val) => setState(() => _auditSearchQuery = val),
-                              decoration: const InputDecoration(
-                                hintText: 'Search user, module, authorizer...',
-                                prefixIcon: Icon(Icons.search, size: 18),
-                                isDense: true,
-                              ),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isNarrow = constraints.maxWidth < 700;
+                        final searchBox = Container(
+                          height: 40,
+                          constraints: const BoxConstraints(maxWidth: 340),
+                          child: TextField(
+                            onChanged: (val) => setState(() => _auditSearchQuery = val),
+                            decoration: const InputDecoration(
+                              hintText: 'Search user, module, authorizer...',
+                              prefixIcon: Icon(Icons.search, size: 18),
+                              isDense: true,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Wrap(
+                        );
+                        final chips = Wrap(
                           spacing: 8,
+                          runSpacing: 6,
                           children: [
                             ChoiceChip(
                               label: const Text('All Events'),
@@ -944,29 +1058,48 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                               onSelected: (_) => setState(() => _auditFilterStatus = 'OVERRIDE'),
                             ),
                           ],
-                        ),
-                        const Spacer(),
-                        if (db.temporaryGrants.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.purple.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.lock_clock, size: 16, color: Colors.purple),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '${db.temporaryGrants.length} Active Temp Grant(s)',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.purple),
+                        );
+
+                        if (isNarrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              searchBox,
+                              const SizedBox(height: 10),
+                              chips,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: searchBox),
+                            const SizedBox(width: 16),
+                            chips,
+                            const Spacer(),
+                            if (db.temporaryGrants.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
                                 ),
-                              ],
-                            ),
-                          ),
-                      ],
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.lock_clock, size: 16, color: Colors.purple),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '${db.temporaryGrants.length} Active Temp Grant(s)',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.purple),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 14),
 

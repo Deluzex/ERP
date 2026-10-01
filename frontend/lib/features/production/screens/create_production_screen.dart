@@ -238,33 +238,45 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isSmall = constraints.maxWidth < 650;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text('Create Production Order', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Consume raw materials, record labor & overhead expenses, and output finished goods', style: AppTextStyles.subtitle),
-                  ],
-                ),
-                Row(
-                  children: [
-                    ErpButton(
-                      text: 'Cancel',
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 340),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Create Production Order', style: AppTextStyles.h1),
+                          const SizedBox(height: 4),
+                          Text('Consume raw materials, record labor & overhead expenses, and output finished goods', style: AppTextStyles.subtitle),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    ErpButton(
-                      text: 'Complete & Produce Stock',
-                      icon: Icons.check_circle_outline,
-                      onPressed: _completeProduction,
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        ErpButton(
+                          text: 'Cancel',
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                        ),
+                        ErpButton(
+                          text: 'Complete & Produce Stock',
+                          icon: Icons.check_circle_outline,
+                          onPressed: _completeProduction,
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ],
+                );
+              },
             ),
             const SizedBox(height: 24),
 
@@ -281,39 +293,74 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                 children: [
                   Text('Finished Product to Produce', style: AppTextStyles.h3),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedFinishedProductId,
-                          isExpanded: true,
-                          decoration: const InputDecoration(labelText: 'Finished Product *'),
-                          items: db.finishedProducts.map((fp) {
-                            return DropdownMenuItem(
-                              value: fp.id,
-                              child: Text(
-                                '${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (val) => setState(() => _selectedFinishedProductId = val),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 2,
-                        child: TextFormField(
-                          controller: _actualQtyCtrl,
-                          keyboardType: TextInputType.number,
-                          validator: Validators.positiveNumber,
-                          onChanged: (_) => setState(() {}),
-                          decoration: const InputDecoration(labelText: 'Production Quantity *'),
-                        ),
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 550;
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            DropdownButtonFormField<String>(
+                              value: _selectedFinishedProductId,
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: 'Finished Product *'),
+                              items: db.finishedProducts.map((fp) {
+                                return DropdownMenuItem(
+                                  value: fp.id,
+                                  child: Text(
+                                    '${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) => setState(() => _selectedFinishedProductId = val),
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _actualQtyCtrl,
+                              keyboardType: TextInputType.number,
+                              validator: Validators.positiveNumber,
+                              onChanged: (_) => setState(() {}),
+                              decoration: const InputDecoration(labelText: 'Production Quantity *'),
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedFinishedProductId,
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: 'Finished Product *'),
+                              items: db.finishedProducts.map((fp) {
+                                return DropdownMenuItem(
+                                  value: fp.id,
+                                  child: Text(
+                                    '${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) => setState(() => _selectedFinishedProductId = val),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            flex: 2,
+                            child: TextFormField(
+                              controller: _actualQtyCtrl,
+                              keyboardType: TextInputType.number,
+                              validator: Validators.positiveNumber,
+                              onChanged: (_) => setState(() {}),
+                              decoration: const InputDecoration(labelText: 'Production Quantity *'),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -331,17 +378,35 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Raw Materials Consumed', style: AppTextStyles.h3),
-                      ErpButton(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 600;
+                      final title = Text('Raw Materials Consumed', style: AppTextStyles.h3);
+                      final button = ErpButton(
                         text: 'Add Raw Material',
                         icon: Icons.add,
                         isOutlined: true,
                         onPressed: _addRawMaterial,
-                      ),
-                    ],
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            title,
+                            const SizedBox(height: 10),
+                            button,
+                          ],
+                        );
+                      }
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          title,
+                          button,
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
@@ -429,7 +494,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
 
                                 // Per Product Raw Material Calculation Card
                                 Container(
-                                  width: 190,
+                                  width: 220,
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                   decoration: BoxDecoration(
                                     color: AppColors.surface,
@@ -442,7 +507,13 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text('Per Product:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
+                                          Expanded(
+                                            child: Text(
+                                              'Per Product:',
+                                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
                                           Text(
                                             Formatters.formatCurrency(perUnitCost),
                                             style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 12),
@@ -494,25 +565,24 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                       borderRadius: AppRadius.smBorderRadius,
                       border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
+                    child: LayoutBuilder(
+                      builder: (context, bannerBox) {
+                        final isNarrow = bannerBox.maxWidth < 650;
+                        final leftBlock = Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.calculate_outlined, color: AppColors.primaryDark, size: 22),
                             const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Per Product Raw Material Calculation',
-                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark),
-                                ),
-                              ],
+                            Flexible(
+                              child: Text(
+                                'Per Product Raw Material Calculation',
+                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark),
+                              ),
                             ),
                           ],
-                        ),
-                        Container(
+                        );
+
+                        final rightPill = Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                           decoration: BoxDecoration(
                             color: Colors.white,
@@ -523,8 +593,28 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                             'Raw Material Cost: ${Formatters.formatCurrency(_actualQty > 0 ? _rawMaterialCost / _actualQty : 0.0)} / unit',
                             style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 13),
                           ),
-                        ),
-                      ],
+                        );
+
+                        if (isNarrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              leftBlock,
+                              const SizedBox(height: 10),
+                              rightPill,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(child: leftBlock),
+                            const SizedBox(width: 12),
+                            rightPill,
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -533,69 +623,80 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
             const SizedBox(height: 24),
 
             // Costing & Overhead Breakdown
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Container(
-                    padding: AppSpacing.cardPadding,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: AppRadius.lgBorderRadius,
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Labour & Additional Overhead Expenses', style: AppTextStyles.h3),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _labourCostCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.nonNegativeNumber,
-                                onChanged: (_) => setState(() {}),
-                                decoration: const InputDecoration(labelText: 'Direct Labour Cost (₹) *'),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _otherExpensesCtrl,
-                                keyboardType: TextInputType.number,
-                                validator: Validators.nonNegativeNumber,
-                                onChanged: (_) => setState(() {}),
-                                decoration: const InputDecoration(labelText: 'Other Expenses / Overheads (₹) *'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+            LayoutBuilder(
+              builder: (context, costBox) {
+                final isStacked = costBox.maxWidth < 800;
+
+                final labourCard = Container(
+                  padding: AppSpacing.cardPadding,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.lgBorderRadius,
+                    border: Border.all(color: AppColors.border),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    padding: AppSpacing.cardPadding,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: AppRadius.lgBorderRadius,
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Production Costing Summary', style: AppTextStyles.h3),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Labour & Additional Overhead Expenses', style: AppTextStyles.h3),
+                      const SizedBox(height: 16),
+                      LayoutBuilder(
+                        builder: (context, fieldBox) {
+                          final isFieldStacked = fieldBox.maxWidth < 500;
+                          final labourField = TextFormField(
+                            controller: _labourCostCtrl,
+                            keyboardType: TextInputType.number,
+                            validator: Validators.nonNegativeNumber,
+                            onChanged: (_) => setState(() {}),
+                            decoration: const InputDecoration(labelText: 'Direct Labour Cost (₹) *'),
+                          );
+                          final otherField = TextFormField(
+                            controller: _otherExpensesCtrl,
+                            keyboardType: TextInputType.number,
+                            validator: Validators.nonNegativeNumber,
+                            onChanged: (_) => setState(() {}),
+                            decoration: const InputDecoration(labelText: 'Other Expenses / Overheads (₹) *'),
+                          );
+
+                          if (isFieldStacked) {
+                            return Column(
+                              children: [
+                                labourField,
+                                const SizedBox(height: 16),
+                                otherField,
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            children: [
+                              Expanded(child: labourField),
+                              const SizedBox(width: 16),
+                              Expanded(child: otherField),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                );
+
+                final summaryCard = Container(
+                  padding: AppSpacing.cardPadding,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.lgBorderRadius,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Production Costing Summary', style: AppTextStyles.h3),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('Raw Material Cost:', style: AppTextStyles.bodyMedium),
@@ -605,14 +706,17 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                 ),
                               ],
                             ),
-                            Text(Formatters.formatCurrency(_rawMaterialCost), style: AppTextStyles.bodyBold),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
+                          ),
+                          const SizedBox(width: 8),
+                          Text(Formatters.formatCurrency(_rawMaterialCost), style: AppTextStyles.bodyBold),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('Labour Cost:', style: AppTextStyles.bodyMedium),
@@ -622,14 +726,17 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                 ),
                               ],
                             ),
-                            Text(Formatters.formatCurrency(_labourCost), style: AppTextStyles.bodyBold),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
+                          ),
+                          const SizedBox(width: 8),
+                          Text(Formatters.formatCurrency(_labourCost), style: AppTextStyles.bodyBold),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('Other Expenses:', style: AppTextStyles.bodyMedium),
@@ -639,47 +746,71 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                 ),
                               ],
                             ),
-                            Text(Formatters.formatCurrency(_otherExpenses), style: AppTextStyles.bodyBold),
-                          ],
+                          ),
+                          const SizedBox(width: 8),
+                          Text(Formatters.formatCurrency(_otherExpenses), style: AppTextStyles.bodyBold),
+                        ],
+                      ),
+                      const Divider(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text('Total Production Cost:', style: AppTextStyles.bodyBold)),
+                          const SizedBox(width: 8),
+                          Text(Formatters.formatCurrency(_totalProductionCost), style: AppTextStyles.h2),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: AppRadius.smBorderRadius,
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                         ),
-                        const Divider(height: 20),
-                        Row(
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Total Production Cost:', style: AppTextStyles.bodyBold),
-                            Text(Formatters.formatCurrency(_totalProductionCost), style: AppTextStyles.h2),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.primarySoft,
-                            borderRadius: AppRadius.smBorderRadius,
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
+                            Expanded(
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('Total Cost per Product:', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark)),
                                   Text('Materials + Labour + Overheads', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
                                 ],
                               ),
-                              Text(
-                                Formatters.formatCurrency(_costPerUnit),
-                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark, fontSize: 16),
-                              ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              Formatters.formatCurrency(_costPerUnit),
+                              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark, fontSize: 16),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                );
+
+                if (isStacked) {
+                  return Column(
+                    children: [
+                      labourCard,
+                      const SizedBox(height: 16),
+                      summaryCard,
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 3, child: labourCard),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 2, child: summaryCard),
+                  ],
+                );
+              },
             ),
           ],
         ),

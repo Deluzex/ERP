@@ -59,22 +59,26 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDlgState) {
           return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             title: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.12),
+                    color: AppColors.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(Icons.receipt_long, color: AppColors.primary, size: 20),
                 ),
                 const SizedBox(width: 12),
-                Text(isEdit ? 'Edit Expense Record' : 'Record Business Expense', style: AppTextStyles.h2),
+                Expanded(
+                  child: Text(isEdit ? 'Edit Expense Record' : 'Record Business Expense', style: AppTextStyles.h2),
+                ),
               ],
             ),
-            content: SizedBox(
-              width: 600,
+            content: Container(
+              constraints: const BoxConstraints(maxWidth: 600),
+              width: double.infinity,
               child: Form(
                 key: formKey,
                 child: SingleChildScrollView(
@@ -82,112 +86,189 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Basic Info
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: TextFormField(
-                              controller: nameCtrl,
-                              validator: (v) => Validators.requiredField(v, 'Expense Title required'),
-                              decoration: const InputDecoration(labelText: 'Expense Name / Title *', hintText: 'e.g. Crane Transport at Site'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: amountCtrl,
-                              keyboardType: TextInputType.number,
-                              validator: (v) => Validators.positiveNumber(v, 'Amount required'),
-                              decoration: const InputDecoration(labelText: 'Amount (₹) *', prefixText: '₹ '),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Category & Payment Status
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<ExpenseCategory>(
-                              value: category,
-                              isExpanded: true,
-                              decoration: const InputDecoration(labelText: 'Expense Category *'),
-                              items: ExpenseCategory.values.map((c) {
-                                return DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()));
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) setDlgState(() => category = val);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<ExpensePaymentStatus>(
-                              value: paymentStatus,
-                              isExpanded: true,
-                              decoration: const InputDecoration(labelText: 'Payment Status'),
-                              items: ExpensePaymentStatus.values.map((s) {
-                                return DropdownMenuItem(value: s, child: Text(s.name.toUpperCase()));
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) setDlgState(() => paymentStatus = val);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Paid By & Payment Method & Payee
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: paidByCtrl,
-                              validator: (v) => Validators.requiredField(v, 'Paid By required'),
-                              decoration: const InputDecoration(labelText: 'Paid By (Staff / Executive) *'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              value: paymentMethod,
-                              decoration: const InputDecoration(labelText: 'Payment Method'),
-                              items: const [
-                                DropdownMenuItem(value: 'Cash', child: Text('Cash', overflow: TextOverflow.ellipsis)),
-                                DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer (NEFT/RTGS)', overflow: TextOverflow.ellipsis)),
-                                DropdownMenuItem(value: 'UPI', child: Text('UPI / QR', overflow: TextOverflow.ellipsis)),
-                                DropdownMenuItem(value: 'Cheque', child: Text('Cheque', overflow: TextOverflow.ellipsis)),
-                                DropdownMenuItem(value: 'Company Card', child: Text('Corporate Card', overflow: TextOverflow.ellipsis)),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isNarrow = constraints.maxWidth < 500;
+                          if (isNarrow) {
+                            return Column(
+                              children: [
+                                TextFormField(
+                                  controller: nameCtrl,
+                                  validator: (v) => Validators.requiredField(v, 'Expense Title required'),
+                                  decoration: const InputDecoration(labelText: 'Expense Name / Title *', hintText: 'e.g. Crane Transport at Site'),
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: amountCtrl,
+                                  keyboardType: TextInputType.number,
+                                  validator: (v) => Validators.positiveNumber(v, 'Amount required'),
+                                  decoration: const InputDecoration(labelText: 'Amount (₹) *', prefixText: '₹ '),
+                                ),
+                                const SizedBox(height: 12),
+                                DropdownButtonFormField<ExpenseCategory>(
+                                  value: category,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(labelText: 'Expense Category *'),
+                                  items: ExpenseCategory.values.map((c) {
+                                    return DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()));
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) setDlgState(() => category = val);
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                DropdownButtonFormField<ExpensePaymentStatus>(
+                                  value: paymentStatus,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(labelText: 'Payment Status'),
+                                  items: ExpensePaymentStatus.values.map((s) {
+                                    return DropdownMenuItem(value: s, child: Text(s.name.toUpperCase()));
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) setDlgState(() => paymentStatus = val);
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: paidByCtrl,
+                                  validator: (v) => Validators.requiredField(v, 'Paid By required'),
+                                  decoration: const InputDecoration(labelText: 'Paid By (Staff / Executive) *'),
+                                ),
+                                const SizedBox(height: 12),
+                                DropdownButtonFormField<String>(
+                                  isExpanded: true,
+                                  value: paymentMethod,
+                                  decoration: const InputDecoration(labelText: 'Payment Method'),
+                                  items: const [
+                                    DropdownMenuItem(value: 'Cash', child: Text('Cash', overflow: TextOverflow.ellipsis)),
+                                    DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer (NEFT/RTGS)', overflow: TextOverflow.ellipsis)),
+                                    DropdownMenuItem(value: 'UPI', child: Text('UPI / QR', overflow: TextOverflow.ellipsis)),
+                                    DropdownMenuItem(value: 'Cheque', child: Text('Cheque', overflow: TextOverflow.ellipsis)),
+                                    DropdownMenuItem(value: 'Company Card', child: Text('Corporate Card', overflow: TextOverflow.ellipsis)),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val != null) setDlgState(() => paymentMethod = val);
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: payeeCtrl,
+                                  decoration: const InputDecoration(labelText: 'Vendor / Payee / Contractor (Optional)', hintText: 'e.g. QuickMove Logistics'),
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: refCtrl,
+                                  decoration: const InputDecoration(labelText: 'Voucher / Bill Reference No', hintText: 'e.g. INV-9921 / AWB-4412'),
+                                ),
                               ],
-                              onChanged: (val) {
-                                if (val != null) setDlgState(() => paymentMethod = val);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: payeeCtrl,
-                              decoration: const InputDecoration(labelText: 'Vendor / Payee / Contractor (Optional)', hintText: 'e.g. QuickMove Logistics'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: refCtrl,
-                              decoration: const InputDecoration(labelText: 'Voucher / Bill Reference No', hintText: 'e.g. INV-9921 / AWB-4412'),
-                            ),
-                          ),
-                        ],
+                            );
+                          }
+                          return Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: TextFormField(
+                                      controller: nameCtrl,
+                                      validator: (v) => Validators.requiredField(v, 'Expense Title required'),
+                                      decoration: const InputDecoration(labelText: 'Expense Name / Title *', hintText: 'e.g. Crane Transport at Site'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: amountCtrl,
+                                      keyboardType: TextInputType.number,
+                                      validator: (v) => Validators.positiveNumber(v, 'Amount required'),
+                                      decoration: const InputDecoration(labelText: 'Amount (₹) *', prefixText: '₹ '),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: DropdownButtonFormField<ExpenseCategory>(
+                                      value: category,
+                                      isExpanded: true,
+                                      decoration: const InputDecoration(labelText: 'Expense Category *'),
+                                      items: ExpenseCategory.values.map((c) {
+                                        return DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()));
+                                      }).toList(),
+                                      onChanged: (val) {
+                                        if (val != null) setDlgState(() => category = val);
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: DropdownButtonFormField<ExpensePaymentStatus>(
+                                      value: paymentStatus,
+                                      isExpanded: true,
+                                      decoration: const InputDecoration(labelText: 'Payment Status'),
+                                      items: ExpensePaymentStatus.values.map((s) {
+                                        return DropdownMenuItem(value: s, child: Text(s.name.toUpperCase()));
+                                      }).toList(),
+                                      onChanged: (val) {
+                                        if (val != null) setDlgState(() => paymentStatus = val);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: paidByCtrl,
+                                      validator: (v) => Validators.requiredField(v, 'Paid By required'),
+                                      decoration: const InputDecoration(labelText: 'Paid By (Staff / Executive) *'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: DropdownButtonFormField<String>(
+                                      isExpanded: true,
+                                      value: paymentMethod,
+                                      decoration: const InputDecoration(labelText: 'Payment Method'),
+                                      items: const [
+                                        DropdownMenuItem(value: 'Cash', child: Text('Cash', overflow: TextOverflow.ellipsis)),
+                                        DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer (NEFT/RTGS)', overflow: TextOverflow.ellipsis)),
+                                        DropdownMenuItem(value: 'UPI', child: Text('UPI / QR', overflow: TextOverflow.ellipsis)),
+                                        DropdownMenuItem(value: 'Cheque', child: Text('Cheque', overflow: TextOverflow.ellipsis)),
+                                        DropdownMenuItem(value: 'Company Card', child: Text('Corporate Card', overflow: TextOverflow.ellipsis)),
+                                      ],
+                                      onChanged: (val) {
+                                        if (val != null) setDlgState(() => paymentMethod = val);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: payeeCtrl,
+                                      decoration: const InputDecoration(labelText: 'Vendor / Payee / Contractor (Optional)', hintText: 'e.g. QuickMove Logistics'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: refCtrl,
+                                      decoration: const InputDecoration(labelText: 'Voucher / Bill Reference No', hintText: 'e.g. INV-9921 / AWB-4412'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 14),
 
@@ -204,34 +285,66 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                           children: [
                             Text('Module Linkages (Optional for Costing Analysis)', style: AppTextStyles.bodyBold.copyWith(fontSize: 11)),
                             const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: DropdownButtonFormField<String?>(
-                                    value: selectedProjId,
-                                    isExpanded: true,
-                                    decoration: const InputDecoration(labelText: 'Related Project'),
-                                    items: [
-                                      const DropdownMenuItem(value: null, child: Text('None (General Expense)')),
-                                      ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final isNarrow = constraints.maxWidth < 450;
+                                if (isNarrow) {
+                                  return Column(
+                                    children: [
+                                      DropdownButtonFormField<String?>(
+                                        value: selectedProjId,
+                                        isExpanded: true,
+                                        decoration: const InputDecoration(labelText: 'Related Project'),
+                                        items: [
+                                          const DropdownMenuItem(value: null, child: Text('None (General Expense)')),
+                                          ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
+                                        ],
+                                        onChanged: (val) => setDlgState(() => selectedProjId = val),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      DropdownButtonFormField<String?>(
+                                        value: selectedProdId,
+                                        isExpanded: true,
+                                        decoration: const InputDecoration(labelText: 'Related Production'),
+                                        items: [
+                                          const DropdownMenuItem(value: null, child: Text('None')),
+                                          ...db.productionOrders.map((o) => DropdownMenuItem(value: o.id, child: Text('${o.productionNumber} (${o.finishedProductName})', overflow: TextOverflow.ellipsis))),
+                                        ],
+                                        onChanged: (val) => setDlgState(() => selectedProdId = val),
+                                      ),
                                     ],
-                                    onChanged: (val) => setDlgState(() => selectedProjId = val),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: DropdownButtonFormField<String?>(
-                                    value: selectedProdId,
-                                    isExpanded: true,
-                                    decoration: const InputDecoration(labelText: 'Related Production'),
-                                    items: [
-                                      const DropdownMenuItem(value: null, child: Text('None')),
-                                      ...db.productionOrders.map((o) => DropdownMenuItem(value: o.id, child: Text('${o.productionNumber} (${o.finishedProductName})', overflow: TextOverflow.ellipsis))),
-                                    ],
-                                    onChanged: (val) => setDlgState(() => selectedProdId = val),
-                                  ),
-                                ),
-                              ],
+                                  );
+                                }
+                                return Row(
+                                  children: [
+                                    Expanded(
+                                      child: DropdownButtonFormField<String?>(
+                                        value: selectedProjId,
+                                        isExpanded: true,
+                                        decoration: const InputDecoration(labelText: 'Related Project'),
+                                        items: [
+                                          const DropdownMenuItem(value: null, child: Text('None (General Expense)')),
+                                          ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
+                                        ],
+                                        onChanged: (val) => setDlgState(() => selectedProjId = val),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: DropdownButtonFormField<String?>(
+                                        value: selectedProdId,
+                                        isExpanded: true,
+                                        decoration: const InputDecoration(labelText: 'Related Production'),
+                                        items: [
+                                          const DropdownMenuItem(value: null, child: Text('None')),
+                                          ...db.productionOrders.map((o) => DropdownMenuItem(value: o.id, child: Text('${o.productionNumber} (${o.finishedProductName})', overflow: TextOverflow.ellipsis))),
+                                        ],
+                                        onChanged: (val) => setDlgState(() => selectedProdId = val),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -387,80 +500,169 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 600;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text('Expense Management', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Track operational, project site, labour, utility, and maintenance overheads', style: AppTextStyles.subtitle),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Expense Management', style: AppTextStyles.h1),
+                        const SizedBox(height: 4),
+                        Text('Track operational, project site, labour, utility, and maintenance overheads', style: AppTextStyles.subtitle),
+                      ],
+                    ),
+                  ),
+                  ErpButton(
+                    text: 'Record Expense',
+                    icon: Icons.add,
+                    onPressed: () => _openAddEditExpenseDialog(),
+                  ),
                 ],
-              ),
-              ErpButton(
-                text: 'Record Expense',
-                icon: Icons.add,
-                onPressed: () => _openAddEditExpenseDialog(),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
           // KPI Cards
-          Row(
-            children: [
-              Expanded(child: _buildKpiCard('Total Expenses', Formatters.formatCurrency(totalExp), Icons.account_balance_wallet_outlined, AppColors.primary)),
-              const SizedBox(width: 16),
-              Expanded(child: _buildKpiCard('Project Expenses', Formatters.formatCurrency(projectExp), Icons.business_outlined, AppColors.purple)),
-              const SizedBox(width: 16),
-              Expanded(child: _buildKpiCard('Production Expenses', Formatters.formatCurrency(prodExp), Icons.precision_manufacturing_outlined, AppColors.warning)),
-              const SizedBox(width: 16),
-              Expanded(child: _buildKpiCard('Operational Overhead', Formatters.formatCurrency(opsExp), Icons.apartment_outlined, AppColors.info)),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              if (width < 600) {
+                return Column(
+                  children: [
+                    _buildKpiCard('Total Expenses', Formatters.formatCurrency(totalExp), Icons.account_balance_wallet_outlined, AppColors.primary),
+                    const SizedBox(height: 12),
+                    _buildKpiCard('Project Expenses', Formatters.formatCurrency(projectExp), Icons.business_outlined, AppColors.purple),
+                    const SizedBox(height: 12),
+                    _buildKpiCard('Production Expenses', Formatters.formatCurrency(prodExp), Icons.precision_manufacturing_outlined, AppColors.warning),
+                    const SizedBox(height: 12),
+                    _buildKpiCard('Operational Overhead', Formatters.formatCurrency(opsExp), Icons.apartment_outlined, AppColors.info),
+                  ],
+                );
+              } else if (width < 1050) {
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: _buildKpiCard('Total Expenses', Formatters.formatCurrency(totalExp), Icons.account_balance_wallet_outlined, AppColors.primary)),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildKpiCard('Project Expenses', Formatters.formatCurrency(projectExp), Icons.business_outlined, AppColors.purple)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: _buildKpiCard('Production Expenses', Formatters.formatCurrency(prodExp), Icons.precision_manufacturing_outlined, AppColors.warning)),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildKpiCard('Operational Overhead', Formatters.formatCurrency(opsExp), Icons.apartment_outlined, AppColors.info)),
+                      ],
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: _buildKpiCard('Total Expenses', Formatters.formatCurrency(totalExp), Icons.account_balance_wallet_outlined, AppColors.primary)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildKpiCard('Project Expenses', Formatters.formatCurrency(projectExp), Icons.business_outlined, AppColors.purple)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildKpiCard('Production Expenses', Formatters.formatCurrency(prodExp), Icons.precision_manufacturing_outlined, AppColors.warning)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildKpiCard('Operational Overhead', Formatters.formatCurrency(opsExp), Icons.apartment_outlined, AppColors.info)),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 24),
 
           // Filters Bar
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: TextField(
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                  decoration: const InputDecoration(
-                    hintText: 'Search expenses by name, voucher no, payee, project, paid by...',
-                    prefixIcon: Icon(Icons.search, size: 18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 700;
+              if (isSmall) {
+                return Column(
+                  children: [
+                    TextField(
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      decoration: const InputDecoration(
+                        hintText: 'Search expenses by name, voucher no, payee, project, paid by...',
+                        prefixIcon: Icon(Icons.search, size: 18),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<ExpenseCategory?>(
+                      value: _selectedCategory,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Filter Category'),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All Categories')),
+                        ...ExpenseCategory.values.map((c) => DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()))),
+                      ],
+                      onChanged: (v) => setState(() => _selectedCategory = v),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String?>(
+                      value: _selectedProjectId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Filter Project'),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All Projects')),
+                        ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
+                      ],
+                      onChanged: (v) => setState(() => _selectedProjectId = v),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      decoration: const InputDecoration(
+                        hintText: 'Search expenses by name, voucher no, payee, project, paid by...',
+                        prefixIcon: Icon(Icons.search, size: 18),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<ExpenseCategory?>(
-                  value: _selectedCategory,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Filter Category'),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All Categories')),
-                    ...ExpenseCategory.values.map((c) => DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()))),
-                  ],
-                  onChanged: (v) => setState(() => _selectedCategory = v),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<String?>(
-                  value: _selectedProjectId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Filter Project'),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All Projects')),
-                    ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
-                  ],
-                  onChanged: (v) => setState(() => _selectedProjectId = v),
-                ),
-              ),
-            ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<ExpenseCategory?>(
+                      value: _selectedCategory,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Filter Category'),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All Categories')),
+                        ...ExpenseCategory.values.map((c) => DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()))),
+                      ],
+                      onChanged: (v) => setState(() => _selectedCategory = v),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<String?>(
+                      value: _selectedProjectId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Filter Project'),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All Projects')),
+                        ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
+                      ],
+                      onChanged: (v) => setState(() => _selectedProjectId = v),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
@@ -542,7 +744,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
 
   Widget _buildKpiCard(String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.lgBorderRadius,
@@ -551,21 +753,33 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: color.withOpacity(0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 22),
+            child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: AppTextStyles.bodySmall),
-              const SizedBox(height: 2),
-              Text(value, style: AppTextStyles.h2),
-            ],
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(value, style: AppTextStyles.h2.copyWith(fontSize: 16)),
+                ),
+              ],
+            ),
           ),
         ],
       ),

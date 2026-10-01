@@ -239,8 +239,12 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          title: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Text(title, style: AppTextStyles.h2),
               ErpButton(
@@ -252,9 +256,11 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                     context: context,
                     builder: (ocrCtx) => Dialog(
                       backgroundColor: Colors.transparent,
-                      child: SizedBox(
-                        width: 800,
-                        height: 600,
+                      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
+                        width: double.infinity,
+                        height: MediaQuery.of(context).size.height * 0.88,
                         child: DocumentOcrUploader(
                           docType: partyType == PartyType.customer
                               ? OcrDocType.customerDoc
@@ -277,8 +283,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
               ),
             ],
           ),
-          content: SizedBox(
-            width: 520,
+          content: Container(
+            constraints: const BoxConstraints(maxWidth: 540),
+            width: double.infinity,
             child: Form(
               key: formKey,
               child: SingleChildScrollView(
@@ -805,10 +812,10 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 1. Header & Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isStacked = constraints.maxWidth < 850;
+                final titleBlock = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(_isRevision ? 'Create Quotation Revision (Rev $_revisionNumber)' : 'Create New Quotation', style: AppTextStyles.h1),
@@ -820,9 +827,11 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                       style: AppTextStyles.subtitle,
                     ),
                   ],
-                ),
-                Wrap(
+                );
+
+                final actionButtons = Wrap(
                   spacing: 12,
+                  runSpacing: 8,
                   children: [
                     ErpButton(
                       text: 'Cancel',
@@ -840,8 +849,28 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                       onPressed: () => _saveQuotation(false),
                     ),
                   ],
-                ),
-              ],
+                );
+
+                if (isStacked) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      titleBlock,
+                      const SizedBox(height: 16),
+                      actionButtons,
+                    ],
+                  );
+                }
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: titleBlock),
+                    const SizedBox(width: 16),
+                    actionButtons,
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 24),
 
@@ -858,13 +887,15 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                 children: [
                   Text('Customer & Commercial Details', style: AppTextStyles.h3),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Row(
-                          children: [
-                            Expanded(
+                  LayoutBuilder(
+                    builder: (context, partyBox) {
+                      final isNarrow = partyBox.maxWidth < 750;
+
+                      final radioGroup = Row(
+                        children: [
+                          Expanded(
+                            child: Material(
+                              color: Colors.transparent,
                               child: RadioListTile<PartyType>(
                                 dense: true,
                                 contentPadding: EdgeInsets.zero,
@@ -885,7 +916,10 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                 },
                               ),
                             ),
-                            Expanded(
+                          ),
+                          Expanded(
+                            child: Material(
+                              color: Colors.transparent,
                               child: RadioListTile<PartyType>(
                                 dense: true,
                                 contentPadding: EdgeInsets.zero,
@@ -906,7 +940,10 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                 },
                               ),
                             ),
-                            Expanded(
+                          ),
+                          Expanded(
+                            child: Material(
+                              color: Colors.transparent,
                               child: RadioListTile<PartyType>(
                                 dense: true,
                                 contentPadding: EdgeInsets.zero,
@@ -926,72 +963,87 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                 },
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 2,
-                        child: DropdownButtonFormField<String>(
-                          value: ((_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId)) ||
-                                  (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId)) ||
-                                  (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId)))
-                              ? _selectedPartyId
-                              : null,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            labelText: _partyType == PartyType.customer
-                                ? 'Select Customer *'
-                                : _partyType == PartyType.dealer
-                                    ? 'Select Dealer *'
-                                    : 'Select Architect *',
                           ),
-                          items: [
-                            DropdownMenuItem<String>(
-                              value: '__ADD_NEW__',
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _partyType == PartyType.customer
-                                        ? '+ Add New Customer'
-                                        : _partyType == PartyType.dealer
-                                            ? '+ Add New Dealer'
-                                            : '+ Add New Architect',
-                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const DropdownMenuItem<String>(
-                              enabled: false,
-                              value: '__DIVIDER__',
-                              child: Divider(height: 1),
-                            ),
-                            if (_partyType == PartyType.customer)
-                              ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
-                            else if (_partyType == PartyType.dealer)
-                              ...db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
-                            else
-                              ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
-                          ],
-                          onChanged: (val) {
-                            if (val == '__ADD_NEW__') {
-                              _openQuickAddPartyDialog(_partyType);
-                              return;
-                            }
-                            if (val == '__DIVIDER__') return;
-                            setState(() {
-                              _selectedPartyId = val;
-                              if (val != null) {
-                                _autoFillPartyDetails(val, _partyType, db);
-                              }
-                            });
-                          },
+                        ],
+                      );
+
+                      final dropdownField = DropdownButtonFormField<String>(
+                        value: ((_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId)) ||
+                                (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId)) ||
+                                (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId)))
+                            ? _selectedPartyId
+                            : null,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: _partyType == PartyType.customer
+                              ? 'Select Customer *'
+                              : _partyType == PartyType.dealer
+                                  ? 'Select Dealer *'
+                                  : 'Select Architect *',
                         ),
-                      ),
-                    ],
+                        items: [
+                          DropdownMenuItem<String>(
+                            value: '__ADD_NEW__',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _partyType == PartyType.customer
+                                      ? '+ Add New Customer'
+                                      : _partyType == PartyType.dealer
+                                          ? '+ Add New Dealer'
+                                          : '+ Add New Architect',
+                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const DropdownMenuItem<String>(
+                            enabled: false,
+                            value: '__DIVIDER__',
+                            child: Divider(height: 1),
+                          ),
+                          if (_partyType == PartyType.customer)
+                            ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                          else if (_partyType == PartyType.dealer)
+                            ...db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                          else
+                            ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
+                        ],
+                        onChanged: (val) {
+                          if (val == '__ADD_NEW__') {
+                            _openQuickAddPartyDialog(_partyType);
+                            return;
+                          }
+                          if (val == '__DIVIDER__') return;
+                          setState(() {
+                            _selectedPartyId = val;
+                            if (val != null) {
+                              _autoFillPartyDetails(val, _partyType, db);
+                            }
+                          });
+                        },
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            radioGroup,
+                            const SizedBox(height: 12),
+                            dropdownField,
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Expanded(flex: 3, child: radioGroup),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 2, child: dropdownField),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
 
@@ -1130,24 +1182,46 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 650;
+                      final headerText = Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Product Line Items', style: AppTextStyles.h3),
                           const SizedBox(height: 2),
-                          Text('Product data is loaded from Finished Product Masters. Stock is NOT reduced at quotation.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                          Text(
+                            'Product data is loaded from Finished Product Masters. Stock is NOT reduced at quotation.',
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                          ),
                         ],
-                      ),
-                      ErpButton(
+                      );
+                      final button = ErpButton(
                         text: 'Add Product Row',
                         icon: Icons.add,
                         isOutlined: true,
                         onPressed: _addNewProductRow,
-                      ),
-                    ],
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            headerText,
+                            const SizedBox(height: 12),
+                            button,
+                          ],
+                        );
+                      }
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: headerText),
+                          const SizedBox(width: 12),
+                          button,
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
 
@@ -1166,95 +1240,76 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.grey.shade200),
                         ),
-                        child: Column(
-                          children: [
-                            Row(
+                        child: LayoutBuilder(
+                          builder: (context, itemConstraints) {
+                            final isItemNarrow = itemConstraints.maxWidth < 800;
+
+                            final productPicker = DropdownButtonFormField<String>(
+                              value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
+                                  ? item.finishedProductId
+                                  : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: 'Finished Product *'),
+                              items: db.finishedProducts.map((fp) {
+                                return DropdownMenuItem(
+                                  value: fp.id,
+                                  child: Text(
+                                    '${fp.name} (${fp.itemCode}) - Avail: ${fp.availableStock} ${fp.unit}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  final fp = db.finishedProducts.firstWhere((p) => p.id == val);
+                                  setState(() {
+                                    item.finishedProductId = fp.id;
+                                    item.finishedProductName = fp.name;
+                                    item.finishedProductCode = fp.itemCode;
+                                    item.unit = fp.unit;
+                                    item.rate = _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice;
+                                    item.gstPercent = fp.gstPercent;
+                                    item.availableStockSnapshot = fp.availableStock;
+                                  });
+                                }
+                              },
+                            );
+
+                            final qtyField = TextFormField(
+                              initialValue: item.quantity.toString(),
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(labelText: 'Quantity (${item.unit})'),
+                              onChanged: (val) => setState(() => item.quantity = double.tryParse(val) ?? 1.0),
+                            );
+
+                            final rateField = TextFormField(
+                              initialValue: item.rate.toString(),
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(labelText: 'Unit Rate (₹)'),
+                              onChanged: (val) => setState(() => item.rate = double.tryParse(val) ?? 0.0),
+                            );
+
+                            final discountField = TextFormField(
+                              initialValue: item.discount.toString(),
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(labelText: 'Discount (₹)'),
+                              onChanged: (val) => setState(() => item.discount = double.tryParse(val) ?? 0.0),
+                            );
+
+                            final gstField = TextFormField(
+                              initialValue: item.gstPercent.toString(),
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(labelText: 'GST %'),
+                              onChanged: (val) => setState(() => item.gstPercent = double.tryParse(val) ?? 18.0),
+                            );
+
+                            final totalAndActions = Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                CircleAvatar(
-                                  radius: 12,
-                                  backgroundColor: AppColors.primaryLight,
-                                  child: Text('${idx + 1}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                                ),
-                                const SizedBox(width: 12),
-                                // Product Picker
-                                Expanded(
-                                  flex: 3,
-                                  child: DropdownButtonFormField<String>(
-                                    value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
-                                        ? item.finishedProductId
-                                        : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
-                                    isExpanded: true,
-                                    decoration: const InputDecoration(labelText: 'Finished Product *'),
-                                    items: db.finishedProducts.map((fp) {
-                                      return DropdownMenuItem(
-                                        value: fp.id,
-                                        child: Text('${fp.name} (${fp.itemCode}) - Avail: ${fp.availableStock} ${fp.unit}'),
-                                      );
-                                    }).toList(),
-                                    onChanged: (val) {
-                                      if (val != null) {
-                                        final fp = db.finishedProducts.firstWhere((p) => p.id == val);
-                                        setState(() {
-                                          item.finishedProductId = fp.id;
-                                          item.finishedProductName = fp.name;
-                                          item.finishedProductCode = fp.itemCode;
-                                          item.unit = fp.unit;
-                                          item.rate = _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice;
-                                          item.gstPercent = fp.gstPercent;
-                                          item.availableStockSnapshot = fp.availableStock;
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                // Quantity
-                                Expanded(
-                                  flex: 1,
-                                  child: TextFormField(
-                                    initialValue: item.quantity.toString(),
-                                    keyboardType: TextInputType.number,
-                                    decoration: InputDecoration(labelText: 'Quantity (${item.unit})'),
-                                    onChanged: (val) => setState(() => item.quantity = double.tryParse(val) ?? 1.0),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                // Unit Price / Rate
-                                Expanded(
-                                  flex: 1,
-                                  child: TextFormField(
-                                    initialValue: item.rate.toString(),
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(labelText: 'Unit Rate (₹)'),
-                                    onChanged: (val) => setState(() => item.rate = double.tryParse(val) ?? 0.0),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                // Discount
-                                Expanded(
-                                  flex: 1,
-                                  child: TextFormField(
-                                    initialValue: item.discount.toString(),
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(labelText: 'Discount (₹)'),
-                                    onChanged: (val) => setState(() => item.discount = double.tryParse(val) ?? 0.0),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                // GST %
-                                Expanded(
-                                  flex: 1,
-                                  child: TextFormField(
-                                    initialValue: item.gstPercent.toString(),
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(labelText: 'GST %'),
-                                    onChanged: (val) => setState(() => item.gstPercent = double.tryParse(val) ?? 18.0),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                // Line Total & Action Buttons
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text('Line Total', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
                                     Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodyBold.copyWith(fontSize: 14)),
@@ -1272,17 +1327,117 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                   onPressed: () => _removeRow(idx),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              initialValue: item.productDescription,
-                              decoration: const InputDecoration(
-                                labelText: 'Product Description / Custom Specifications for Quote PDF',
-                                isDense: true,
-                              ),
-                              onChanged: (val) => item.productDescription = val,
-                            ),
-                          ],
+                            );
+
+                            if (isItemNarrow) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 12,
+                                        backgroundColor: AppColors.primaryLight,
+                                        child: Text('${idx + 1}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(child: productPicker),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        icon: const Icon(Icons.copy, size: 18, color: Colors.grey),
+                                        tooltip: 'Duplicate Row',
+                                        onPressed: () => _duplicateRow(idx),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                                        tooltip: 'Remove Row',
+                                        onPressed: () => _removeRow(idx),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(child: qtyField),
+                                      const SizedBox(width: 8),
+                                      Expanded(child: rateField),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(child: discountField),
+                                      const SizedBox(width: 8),
+                                      Expanded(child: gstField),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'Line Total:',
+                                          style: AppTextStyles.bodyBold,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        Formatters.formatCurrency(item.lineTotal),
+                                        style: AppTextStyles.h3.copyWith(color: AppColors.primary),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextFormField(
+                                    initialValue: item.productDescription,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Product Description / Custom Specifications for Quote PDF',
+                                      isDense: true,
+                                    ),
+                                    onChanged: (val) => item.productDescription = val,
+                                  ),
+                                ],
+                              );
+                            }
+
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 12,
+                                      backgroundColor: AppColors.primaryLight,
+                                      child: Text('${idx + 1}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(flex: 3, child: productPicker),
+                                    const SizedBox(width: 12),
+                                    Expanded(flex: 1, child: qtyField),
+                                    const SizedBox(width: 12),
+                                    Expanded(flex: 1, child: rateField),
+                                    const SizedBox(width: 12),
+                                    Expanded(flex: 1, child: discountField),
+                                    const SizedBox(width: 12),
+                                    Expanded(flex: 1, child: gstField),
+                                    const SizedBox(width: 16),
+                                    totalAndActions,
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  initialValue: item.productDescription,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Product Description / Custom Specifications for Quote PDF',
+                                    isDense: true,
+                                  ),
+                                  onChanged: (val) => item.productDescription = val,
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       );
                     },
@@ -1293,103 +1448,142 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
             const SizedBox(height: 24),
 
             // 4. Totals & Terms Card
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Left: Terms and Notes
-                Expanded(
-                  flex: 3,
-                  child: Container(
-                    padding: AppSpacing.cardPadding,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: AppRadius.lgBorderRadius,
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Terms & Conditions & Commercial Notes', style: AppTextStyles.h3),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _termsCtrl,
-                          maxLines: 4,
-                          decoration: const InputDecoration(labelText: 'Terms & Conditions (Printed on PDF)'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _notesCtrl,
-                          maxLines: 2,
-                          decoration: const InputDecoration(labelText: 'Internal Sales Notes'),
-                        ),
-                      ],
-                    ),
+            LayoutBuilder(
+              builder: (context, totalsConstraints) {
+                final isNarrowTotals = totalsConstraints.maxWidth < 850;
+
+                final termsCard = Container(
+                  padding: AppSpacing.cardPadding,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.lgBorderRadius,
+                    border: Border.all(color: AppColors.border),
                   ),
-                ),
-                const SizedBox(width: 20),
-                // Right: Financial Summary Box
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    padding: AppSpacing.cardPadding,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: AppRadius.lgBorderRadius,
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Terms & Conditions & Commercial Notes', style: AppTextStyles.h3),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _termsCtrl,
+                        maxLines: 4,
+                        decoration: const InputDecoration(labelText: 'Terms & Conditions (Printed on PDF)'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _notesCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(labelText: 'Internal Sales Notes'),
+                      ),
+                    ],
+                  ),
+                );
+
+                final summaryCard = Container(
+                  padding: AppSpacing.cardPadding,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.lgBorderRadius,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, headerConstraints) {
+                          final isNarrowHeader = headerConstraints.maxWidth < 360;
+                          final title = Text(
+                            'Quotation Totals',
+                            style: AppTextStyles.h3,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          );
+                          final chip = ChoiceChip(
+                            label: Text(
+                              _isInterStateTax ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST+SGST)',
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                            selected: _isInterStateTax,
+                            selectedColor: Colors.purple.withOpacity(0.15),
+                            onSelected: (val) => setState(() => _isInterStateTax = val),
+                          );
+
+                          if (isNarrowHeader) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                title,
+                                const SizedBox(height: 8),
+                                chip,
+                              ],
+                            );
+                          }
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(child: title),
+                              const SizedBox(width: 8),
+                              chip,
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      _buildSummaryRow('Subtotal Amount', Formatters.formatCurrency(_subtotalAmount)),
+                      if (_totalDiscount > 0)
+                        _buildSummaryRow('Total Discount', '- ${Formatters.formatCurrency(_totalDiscount)}', color: AppColors.dangerText),
+                      _buildSummaryRow('Taxable Amount', Formatters.formatCurrency(_totalTaxable)),
+                      if (!_isInterStateTax) ...[
+                        _buildSummaryRow('CGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
+                        _buildSummaryRow('SGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
+                      ] else ...[
+                        _buildSummaryRow('IGST (18%)', Formatters.formatCurrency(_totalGst), color: Colors.purple),
+                      ],
+                      const Divider(height: 20),
+                      _buildSummaryRow('Grand Total', Formatters.formatCurrency(_grandTotal), isBold: true, fontSize: 16, color: AppColors.primary),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.info.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
                           children: [
-                            Text('Quotation Totals', style: AppTextStyles.h3),
-                            ChoiceChip(
-                              label: Text(_isInterStateTax ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST+SGST)', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                              selected: _isInterStateTax,
-                              selectedColor: Colors.purple.withOpacity(0.15),
-                              onSelected: (val) => setState(() => _isInterStateTax = val),
+                            const Icon(Icons.info_outline, color: AppColors.info, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Quotation rule active: Physical & reserved inventory remain untouched until order confirmation.',
+                                style: AppTextStyles.bodySmall.copyWith(fontSize: 11, color: AppColors.info),
+                              ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        _buildSummaryRow('Subtotal Amount', Formatters.formatCurrency(_subtotalAmount)),
-                        if (_totalDiscount > 0)
-                          _buildSummaryRow('Total Discount', '- ${Formatters.formatCurrency(_totalDiscount)}', color: AppColors.dangerText),
-                        _buildSummaryRow('Taxable Amount', Formatters.formatCurrency(_totalTaxable)),
-                        if (!_isInterStateTax) ...[
-                          _buildSummaryRow('CGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
-                          _buildSummaryRow('SGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
-                        ] else ...[
-                          _buildSummaryRow('IGST (18%)', Formatters.formatCurrency(_totalGst), color: Colors.purple),
-                        ],
-                        const Divider(height: 20),
-                        _buildSummaryRow('Grand Total', Formatters.formatCurrency(_grandTotal), isBold: true, fontSize: 16, color: AppColors.primary),
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppColors.info.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.info_outline, color: AppColors.info, size: 16),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Quotation rule active: Physical & reserved inventory remain untouched until order confirmation.',
-                                  style: AppTextStyles.bodySmall.copyWith(fontSize: 11, color: AppColors.info),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                );
+
+                if (isNarrowTotals) {
+                  return Column(
+                    children: [
+                      termsCard,
+                      const SizedBox(height: 20),
+                      summaryCard,
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 3, child: termsCard),
+                    const SizedBox(width: 20),
+                    Expanded(flex: 2, child: summaryCard),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -1403,8 +1597,27 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontSize: fontSize, fontWeight: isBold ? FontWeight.bold : FontWeight.w500, color: Colors.grey.shade700)),
-          Text(value, style: TextStyle(fontSize: fontSize, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: color ?? Colors.black87)),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+                color: Colors.grey.shade700,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+              color: color ?? Colors.black87,
+            ),
+          ),
         ],
       ),
     );

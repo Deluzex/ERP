@@ -229,12 +229,15 @@ Greetings from Deluzex Lighting Systems.
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.of(context).size.width < 450;
     return Dialog(
       backgroundColor: AppColors.surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
       child: Container(
-        width: 580,
-        padding: const EdgeInsets.all(24),
+        constraints: const BoxConstraints(maxWidth: 580),
+        width: double.infinity,
+        padding: EdgeInsets.all(isCompact ? 16 : 24),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,27 +246,32 @@ Greetings from Deluzex Lighting Systems.
               // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF25D366).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF25D366).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.chat_outlined, color: Color(0xFF25D366), size: 22),
                         ),
-                        child: const Icon(Icons.chat_outlined, color: Color(0xFF25D366), size: 22),
-                      ),
-                      const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Quick WhatsApp Communication', style: AppTextStyles.h2),
-                          const SizedBox(height: 2),
-                          Text('${widget.recipientName} ${widget.partyRole != null ? "(${widget.partyRole})" : ""}', style: AppTextStyles.bodySmall),
-                        ],
-                      ),
-                    ],
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Quick WhatsApp Communication', style: AppTextStyles.h2),
+                              const SizedBox(height: 2),
+                              Text('${widget.recipientName} ${widget.partyRole != null ? "(${widget.partyRole})" : ""}', style: AppTextStyles.bodySmall),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, size: 20),
@@ -327,8 +335,11 @@ Greetings from Deluzex Lighting Systems.
               const SizedBox(height: 20),
 
               // Buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 10,
                 children: [
                   TextButton.icon(
                     icon: const Icon(Icons.copy_outlined, size: 16),
@@ -340,14 +351,15 @@ Greetings from Deluzex Lighting Systems.
                       );
                     },
                   ),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       ErpButton(
                         text: 'Cancel',
                         isOutlined: true,
                         onPressed: () => Navigator.pop(context),
                       ),
-                      const SizedBox(width: 8),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF25D366),

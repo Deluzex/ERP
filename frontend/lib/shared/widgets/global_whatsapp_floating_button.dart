@@ -30,35 +30,40 @@ class GlobalWhatsAppFloatingButton extends ConsumerWidget {
               child: const Icon(Icons.settings, color: Color(0xFF25D366), size: 20),
             ),
             const SizedBox(width: 10),
-            const Text('Configure Global WhatsApp Team Support', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Expanded(
+              child: Text('Configure WhatsApp Support', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
           ],
         ),
-        content: SizedBox(
-          width: 480,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: teamCtrl,
-                decoration: const InputDecoration(labelText: 'Team / Desk Name', hintText: 'e.g. Deluzex ERP Operations Team'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: numberCtrl,
-                decoration: const InputDecoration(labelText: 'Support WhatsApp Number', hintText: '+91 98200 12345'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: linkCtrl,
-                decoration: const InputDecoration(labelText: 'WhatsApp Group / Chat Link (Optional)', hintText: 'https://chat.whatsapp.com/...'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: msgCtrl,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Default Greeting Message'),
-              ),
-            ],
+        content: Container(
+          constraints: const BoxConstraints(maxWidth: 480),
+          width: double.infinity,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: teamCtrl,
+                  decoration: const InputDecoration(labelText: 'Team / Desk Name', hintText: 'e.g. Deluzex ERP Operations Team'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: numberCtrl,
+                  decoration: const InputDecoration(labelText: 'Support WhatsApp Number', hintText: '+91 98200 12345'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: linkCtrl,
+                  decoration: const InputDecoration(labelText: 'WhatsApp Group / Chat Link (Optional)', hintText: 'https://chat.whatsapp.com/...'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: msgCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Default Greeting Message'),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [

@@ -276,79 +276,96 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Side by side cards on desktop
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Categories Column
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Item Categories (${categories.length})', style: AppTextStyles.h3),
-                        ErpButton(
-                          text: 'Add Category',
-                          icon: Icons.add,
-                          isOutlined: true,
-                          onPressed: _openAddCategoryDialog,
+          // Side by side cards on desktop, stacked on mobile/tablet
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final categoriesSection = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Item Categories (${categories.length})',
+                          style: AppTextStyles.h3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    ErpDataTable(
-                      columns: const [
-                        ErpColumn(title: 'Category Name'),
-                        ErpColumn(title: 'Description'),
-                      ],
-                      rows: categories.map((c) {
-                        return [
-                          Text(c.name, style: AppTextStyles.bodyBold),
-                          Text(c.description, style: AppTextStyles.bodySmall),
-                        ];
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 24),
+                      ),
+                      const SizedBox(width: 8),
+                      ErpButton(
+                        text: 'Add Category',
+                        icon: Icons.add,
+                        isOutlined: true,
+                        onPressed: _openAddCategoryDialog,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'Category Name'),
+                      ErpColumn(title: 'Description'),
+                    ],
+                    rows: categories.map((c) {
+                      return [
+                        Text(c.name, style: AppTextStyles.bodyBold),
+                        Text(c.description.trim().isNotEmpty ? c.description : '-', style: AppTextStyles.bodySmall),
+                      ];
+                    }).toList(),
+                  ),
+                ],
+              );
 
-              // Units Column
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Units of Measure (${units.length})', style: AppTextStyles.h3),
-                        ErpButton(
-                          text: 'Add Unit',
-                          icon: Icons.add,
-                          isOutlined: true,
-                          onPressed: _openAddUnitDialog,
+              final unitsSection = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Units of Measure (${units.length})',
+                          style: AppTextStyles.h3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    ErpDataTable(
-                      columns: const [
-                        ErpColumn(title: 'Unit Name'),
-                        ErpColumn(title: 'Standard Symbol'),
-                      ],
-                      rows: units.map((u) {
-                        return [
-                          Text(u.name, style: AppTextStyles.bodyBold),
-                          Text(u.symbol, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                        ];
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+                      ),
+                      const SizedBox(width: 8),
+                      ErpButton(
+                        text: 'Add Unit',
+                        icon: Icons.add,
+                        isOutlined: true,
+                        onPressed: _openAddUnitDialog,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'Unit Name'),
+                      ErpColumn(title: 'Standard Symbol'),
+                    ],
+                    rows: units.map((u) {
+                      return [
+                        Text(u.name, style: AppTextStyles.bodyBold),
+                        Text(u.symbol, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                      ];
+                    }).toList(),
+                  ),
+                ],
+              );
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  categoriesSection,
+                  const SizedBox(height: 36),
+                  unitsSection,
+                ],
+              );
+            },
           ),
         ],
       ),

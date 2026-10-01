@@ -133,13 +133,18 @@ class _AccessRequiredDialogState extends ConsumerState<AccessRequiredDialog> {
     final moduleName = widget.module.label.toUpperCase();
     final actionName = widget.action?.label ?? 'Access';
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 480;
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
       backgroundColor: AppColors.surface,
       elevation: 24,
+      insetPadding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 40, vertical: 24),
       child: Container(
-        width: 480,
-        padding: const EdgeInsets.all(28),
+        constraints: const BoxConstraints(maxWidth: 480),
+        width: double.infinity,
+        padding: EdgeInsets.all(isCompact ? 18 : 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,7 +160,7 @@ class _AccessRequiredDialogState extends ConsumerState<AccessRequiredDialog> {
                   ),
                   child: Icon(Icons.lock_person_rounded, size: 28, color: Colors.amber.shade800),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -165,7 +170,10 @@ class _AccessRequiredDialogState extends ConsumerState<AccessRequiredDialog> {
                         style: AppTextStyles.h2.copyWith(fontSize: 18),
                       ),
                       const SizedBox(height: 2),
-                      Row(
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text('Permission Restricted • ', style: AppTextStyles.caption.copyWith(color: AppColors.textMuted)),
                           Container(
@@ -176,7 +184,7 @@ class _AccessRequiredDialogState extends ConsumerState<AccessRequiredDialog> {
                             ),
                             child: Text(
                               moduleName,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 10.5,
@@ -285,15 +293,16 @@ class _AccessRequiredDialogState extends ConsumerState<AccessRequiredDialog> {
             const SizedBox(height: 24),
 
             // Action Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 12,
+              runSpacing: 10,
               children: [
                 ErpButton(
                   text: 'Cancel',
                   isOutlined: true,
                   onPressed: _isLoading ? null : () => Navigator.of(context).pop(false),
                 ),
-                const SizedBox(width: 12),
                 ErpButton(
                   text: _isLoading ? 'Verifying...' : 'Verify Access',
                   icon: Icons.lock_open_rounded,

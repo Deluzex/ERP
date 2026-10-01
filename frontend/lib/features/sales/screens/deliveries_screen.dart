@@ -44,6 +44,7 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDlgState) => AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           title: Row(
             children: [
               Container(
@@ -55,17 +56,20 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                 child: const Icon(Icons.local_shipping, color: Colors.blue, size: 20),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Update Courier & Tracking Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  Text('Challan No: ${delivery.invoiceNumber}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Update Courier & Tracking Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text('Challan No: ${delivery.invoiceNumber}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  ],
+                ),
               ),
             ],
           ),
-          content: SizedBox(
-            width: 480,
+          content: Container(
+            constraints: const BoxConstraints(maxWidth: 480),
+            width: double.infinity,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -198,6 +202,7 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: Row(
           children: [
             Container(
@@ -206,17 +211,20 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
               child: const Icon(Icons.receipt_long_outlined, color: AppColors.success, size: 20),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Generate Tax Invoice from Delivery', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('Delivery Challan: ${delivery.invoiceNumber} (Delivered Qty only)', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Generate Tax Invoice from Delivery', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('Delivery Challan: ${delivery.invoiceNumber} (Delivered Qty only)', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
             ),
           ],
         ),
-        content: SizedBox(
-          width: 480,
+        content: Container(
+          constraints: const BoxConstraints(maxWidth: 480),
+          width: double.infinity,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,32 +323,48 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Deliveries & Dispatch Challans', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Physical dispatch records, courier tracking details & invoice generation from delivered quantities',
-                      style: AppTextStyles.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              ErpButton(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isStacked = constraints.maxWidth < 650;
+              final titleBlock = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Deliveries & Dispatch Challans', style: AppTextStyles.h1),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Physical dispatch records, courier tracking details & invoice generation from delivered quantities',
+                    style: AppTextStyles.subtitle,
+                  ),
+                ],
+              );
+
+              final actionBtn = ErpButton(
                 text: 'Go to Sales Orders to Dispatch',
                 icon: Icons.shopping_cart_outlined,
                 isOutlined: true,
                 onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders,
-              ),
-            ],
+              );
+
+              if (isStacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBlock,
+                    const SizedBox(height: 12),
+                    actionBtn,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleBlock),
+                  const SizedBox(width: 12),
+                  actionBtn,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 

@@ -15,6 +15,7 @@ class ErpSidebar extends ConsumerStatefulWidget {
 }
 
 class _ErpSidebarState extends ConsumerState<ErpSidebar> {
+  ErpNavSection? _lastSection;
   final Map<String, bool> _expandedGroups = {
     'Inventory': true,
     'Purchase': false,
@@ -96,6 +97,11 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
     final allRoles = db.roles;
     final temporaryGrants = db.temporaryGrants;
 
+    // Auto close navigation drawer on mobile/tablet if open
+    if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
+      Navigator.of(context).pop();
+    }
+
     final hasAccess = currentUser.hasPermission(module, action ?? ErpAction.view, allRoles, temporaryGrants);
 
     if (hasAccess) {
@@ -120,7 +126,10 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
   @override
   Widget build(BuildContext context) {
     final currentSection = ref.watch(currentNavSectionProvider);
-    _autoExpandForSection(currentSection);
+    if (_lastSection != currentSection) {
+      _lastSection = currentSection;
+      _autoExpandForSection(currentSection);
+    }
     final db = ref.watch(databaseServiceProvider);
     final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
     final allRoles = db.roles;

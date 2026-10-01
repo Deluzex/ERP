@@ -48,26 +48,22 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Quotations & Commercial Estimates', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Manage quotes, revision branches, client approval & proforma conversion',
-                      style: AppTextStyles.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              ErpButton(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isStacked = constraints.maxWidth < 650;
+              final titleBlock = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Quotations & Commercial Estimates', style: AppTextStyles.h1),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Manage quotes, revision branches, client approval & proforma conversion',
+                    style: AppTextStyles.subtitle,
+                  ),
+                ],
+              );
+
+              final actionBtn = ErpButton(
                 text: 'Create Quotation',
                 icon: Icons.add,
                 onPressed: () {
@@ -75,8 +71,28 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
                   ref.read(salesCreateSourceDocIdProvider.notifier).state = null;
                   ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
                 },
-              ),
-            ],
+              );
+
+              if (isStacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBlock,
+                    const SizedBox(height: 12),
+                    actionBtn,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleBlock),
+                  const SizedBox(width: 12),
+                  actionBtn,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 

@@ -62,12 +62,14 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
         return StatefulBuilder(
           builder: (context, setDlgState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text(
                 isEdit ? 'Edit Architectural Project' : 'Create Architectural Project',
                 style: AppTextStyles.h2,
               ),
-              content: SizedBox(
-                width: 560,
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 560),
+                width: double.infinity,
                 child: Form(
                   key: formKey,
                   child: SingleChildScrollView(
@@ -115,54 +117,270 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                           decoration: const InputDecoration(labelText: 'Project Name *', hintText: 'E.g., Oberoi Sky City Tower D'),
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String?>(
-                                initialValue: selectedCustomerId,
-                                isExpanded: true,
-                                decoration: const InputDecoration(labelText: 'Customer Account'),
-                                items: [
-                                  const DropdownMenuItem(value: null, child: Text('(No Customer Linked)')),
-                                  ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
-                                ],
-                                onChanged: (val) {
-                                  setDlgState(() {
-                                    selectedCustomerId = val;
-                                    if (val != null) {
-                                      final c = db.customers.where((cust) => cust.id == val).firstOrNull;
-                                      if (c?.linkedArchitectId != null && selectedArchitectId == null) {
-                                        selectedArchitectId = c!.linkedArchitectId;
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isNarrow = constraints.maxWidth < 500;
+                            if (isNarrow) {
+                              return Column(
+                                children: [
+                                  DropdownButtonFormField<String?>(
+                                    initialValue: selectedCustomerId,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(labelText: 'Customer Account'),
+                                    items: [
+                                      const DropdownMenuItem(value: null, child: Text('(No Customer Linked)')),
+                                      ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                                    ],
+                                    onChanged: (val) {
+                                      setDlgState(() {
+                                        selectedCustomerId = val;
+                                        if (val != null) {
+                                          final c = db.customers.where((cust) => cust.id == val).firstOrNull;
+                                          if (c?.linkedArchitectId != null && selectedArchitectId == null) {
+                                            selectedArchitectId = c!.linkedArchitectId;
+                                          }
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String?>(
+                                    initialValue: selectedArchitectId,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(labelText: 'Architect Partner'),
+                                    items: [
+                                      const DropdownMenuItem(value: null, child: Text('(No Architect Linked)')),
+                                      ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
+                                    ],
+                                    onChanged: (val) {
+                                      setDlgState(() {
+                                        selectedArchitectId = val;
+                                        if (val != null) {
+                                          final a = db.architects.where((arch) => arch.id == val).firstOrNull;
+                                          if (a?.linkedCustomerId != null && selectedCustomerId == null) {
+                                            selectedCustomerId = a!.linkedCustomerId;
+                                          }
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: budgetCtrl,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Budget (₹)',
+                                      hintText: 'e.g. 500000.00',
+                                      prefixText: '₹ ',
+                                    ),
+                                    validator: (val) {
+                                      if (val != null && val.trim().isNotEmpty) {
+                                        final num = double.tryParse(val.trim());
+                                        if (num == null || num < 0) {
+                                          return 'Enter valid positive amount';
+                                        }
                                       }
-                                    }
-                                  });
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<String?>(
-                                initialValue: selectedArchitectId,
-                                isExpanded: true,
-                                decoration: const InputDecoration(labelText: 'Architect Partner'),
-                                items: [
-                                  const DropdownMenuItem(value: null, child: Text('(No Architect Linked)')),
-                                  ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
-                                ],
-                                onChanged: (val) {
-                                  setDlgState(() {
-                                    selectedArchitectId = val;
-                                    if (val != null) {
-                                      final a = db.architects.where((arch) => arch.id == val).firstOrNull;
-                                      if (a?.linkedCustomerId != null && selectedCustomerId == null) {
-                                        selectedCustomerId = a!.linkedCustomerId;
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<ProjectStatus>(
+                                    initialValue: selectedStatus,
+                                    decoration: const InputDecoration(labelText: 'Status'),
+                                    items: ProjectStatus.values.map((s) {
+                                      return DropdownMenuItem(value: s, child: Text(s.name.toUpperCase()));
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      if (val != null) setDlgState(() => selectedStatus = val);
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: startDate,
+                                        firstDate: DateTime(2020),
+                                        lastDate: DateTime(2035),
+                                      );
+                                      if (picked != null) {
+                                        setDlgState(() => startDate = picked);
                                       }
-                                    }
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
+                                    },
+                                    child: InputDecorator(
+                                      decoration: const InputDecoration(
+                                        labelText: 'Start Date',
+                                        suffixIcon: Icon(Icons.calendar_today, size: 18),
+                                      ),
+                                      child: Text(Formatters.formatDate(startDate), style: AppTextStyles.bodyMedium),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: expDate,
+                                        firstDate: DateTime(2020),
+                                        lastDate: DateTime(2035),
+                                      );
+                                      if (picked != null) {
+                                        setDlgState(() => expDate = picked);
+                                      }
+                                    },
+                                    child: InputDecorator(
+                                      decoration: const InputDecoration(
+                                        labelText: 'Expected Completion',
+                                        suffixIcon: Icon(Icons.calendar_today, size: 18),
+                                      ),
+                                      child: Text(Formatters.formatDate(expDate), style: AppTextStyles.bodyMedium),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: DropdownButtonFormField<String?>(
+                                        initialValue: selectedCustomerId,
+                                        isExpanded: true,
+                                        decoration: const InputDecoration(labelText: 'Customer Account'),
+                                        items: [
+                                          const DropdownMenuItem(value: null, child: Text('(No Customer Linked)')),
+                                          ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                                        ],
+                                        onChanged: (val) {
+                                          setDlgState(() {
+                                            selectedCustomerId = val;
+                                            if (val != null) {
+                                              final c = db.customers.where((cust) => cust.id == val).firstOrNull;
+                                              if (c?.linkedArchitectId != null && selectedArchitectId == null) {
+                                                selectedArchitectId = c!.linkedArchitectId;
+                                              }
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: DropdownButtonFormField<String?>(
+                                        initialValue: selectedArchitectId,
+                                        isExpanded: true,
+                                        decoration: const InputDecoration(labelText: 'Architect Partner'),
+                                        items: [
+                                          const DropdownMenuItem(value: null, child: Text('(No Architect Linked)')),
+                                          ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
+                                        ],
+                                        onChanged: (val) {
+                                          setDlgState(() {
+                                            selectedArchitectId = val;
+                                            if (val != null) {
+                                              final a = db.architects.where((arch) => arch.id == val).firstOrNull;
+                                              if (a?.linkedCustomerId != null && selectedCustomerId == null) {
+                                                selectedCustomerId = a!.linkedCustomerId;
+                                              }
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: budgetCtrl,
+                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                        decoration: const InputDecoration(
+                                          labelText: 'Budget (₹)',
+                                          hintText: 'e.g. 500000.00',
+                                          prefixText: '₹ ',
+                                        ),
+                                        validator: (val) {
+                                          if (val != null && val.trim().isNotEmpty) {
+                                            final num = double.tryParse(val.trim());
+                                            if (num == null || num < 0) {
+                                              return 'Enter valid positive amount';
+                                            }
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: DropdownButtonFormField<ProjectStatus>(
+                                        initialValue: selectedStatus,
+                                        decoration: const InputDecoration(labelText: 'Status'),
+                                        items: ProjectStatus.values.map((s) {
+                                          return DropdownMenuItem(value: s, child: Text(s.name.toUpperCase()));
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          if (val != null) setDlgState(() => selectedStatus = val);
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: InkWell(
+                                        onTap: () async {
+                                          final picked = await showDatePicker(
+                                            context: context,
+                                            initialDate: startDate,
+                                            firstDate: DateTime(2020),
+                                            lastDate: DateTime(2035),
+                                          );
+                                          if (picked != null) {
+                                            setDlgState(() => startDate = picked);
+                                          }
+                                        },
+                                        child: InputDecorator(
+                                          decoration: const InputDecoration(
+                                            labelText: 'Start Date',
+                                            suffixIcon: Icon(Icons.calendar_today, size: 18),
+                                          ),
+                                          child: Text(Formatters.formatDate(startDate), style: AppTextStyles.bodyMedium),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: InkWell(
+                                        onTap: () async {
+                                          final picked = await showDatePicker(
+                                            context: context,
+                                            initialDate: expDate,
+                                            firstDate: DateTime(2020),
+                                            lastDate: DateTime(2035),
+                                          );
+                                          if (picked != null) {
+                                            setDlgState(() => expDate = picked);
+                                          }
+                                        },
+                                        child: InputDecorator(
+                                          decoration: const InputDecoration(
+                                            labelText: 'Expected Completion',
+                                            suffixIcon: Icon(Icons.calendar_today, size: 18),
+                                          ),
+                                          child: Text(Formatters.formatDate(expDate), style: AppTextStyles.bodyMedium),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
                         ),
                         if (selectedCustomerId != null && selectedArchitectId != null) ...[
                           Builder(builder: (_) {
@@ -182,103 +400,17 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                 children: [
                                   const Icon(Icons.link, size: 14, color: Colors.purple),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    'Dual Entity: Architect "${a?.name}" is linked as Customer "${c?.name}"',
-                                    style: const TextStyle(fontSize: 11.5, color: Colors.purple, fontWeight: FontWeight.bold),
+                                  Expanded(
+                                    child: Text(
+                                      'Dual Entity: Architect "${a?.name}" is linked as Customer "${c?.name}"',
+                                      style: const TextStyle(fontSize: 11.5, color: Colors.purple, fontWeight: FontWeight.bold),
+                                    ),
                                   ),
                                 ],
                               ),
                             );
                           }),
                         ],
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: budgetCtrl,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: const InputDecoration(
-                                  labelText: 'Budget (₹)',
-                                  hintText: 'e.g. 500000.00',
-                                  prefixText: '₹ ',
-                                ),
-                                validator: (val) {
-                                  if (val != null && val.trim().isNotEmpty) {
-                                    final num = double.tryParse(val.trim());
-                                    if (num == null || num < 0) {
-                                      return 'Enter valid positive amount';
-                                    }
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<ProjectStatus>(
-                                initialValue: selectedStatus,
-                                decoration: const InputDecoration(labelText: 'Status'),
-                                items: ProjectStatus.values.map((s) {
-                                  return DropdownMenuItem(value: s, child: Text(s.name.toUpperCase()));
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) setDlgState(() => selectedStatus = val);
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: InkWell(
-                                onTap: () async {
-                                  final picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: startDate,
-                                    firstDate: DateTime(2020),
-                                    lastDate: DateTime(2035),
-                                  );
-                                  if (picked != null) {
-                                    setDlgState(() => startDate = picked);
-                                  }
-                                },
-                                child: InputDecorator(
-                                  decoration: const InputDecoration(
-                                    labelText: 'Start Date',
-                                    suffixIcon: Icon(Icons.calendar_today, size: 18),
-                                  ),
-                                  child: Text(Formatters.formatDate(startDate), style: AppTextStyles.bodyMedium),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: InkWell(
-                                onTap: () async {
-                                  final picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: expDate,
-                                    firstDate: DateTime(2020),
-                                    lastDate: DateTime(2035),
-                                  );
-                                  if (picked != null) {
-                                    setDlgState(() => expDate = picked);
-                                  }
-                                },
-                                child: InputDecorator(
-                                  decoration: const InputDecoration(
-                                    labelText: 'Expected Completion',
-                                    suffixIcon: Icon(Icons.calendar_today, size: 18),
-                                  ),
-                                  child: Text(Formatters.formatDate(expDate), style: AppTextStyles.bodyMedium),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: notesCtrl,
@@ -433,23 +565,34 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 600;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text('Project Master', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Manage architectural projects, client assignments, lead architects, and lifecycle status', style: AppTextStyles.subtitle),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 180),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Project Master', style: AppTextStyles.h1),
+                        const SizedBox(height: 4),
+                        Text('Manage architectural projects, client assignments, lead architects, and lifecycle status', style: AppTextStyles.subtitle),
+                      ],
+                    ),
+                  ),
+                  ErpButton(
+                    text: 'New Project',
+                    icon: Icons.add,
+                    onPressed: () => _openAddEditProjectDialog(),
+                  ),
                 ],
-              ),
-              ErpButton(
-                text: 'New Project',
-                icon: Icons.add,
-                onPressed: () => _openAddEditProjectDialog(),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 24),
 

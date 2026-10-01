@@ -3,15 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:frontend/app/app.dart';
 import 'package:frontend/app/routes/app_routes.dart';
-import 'package:frontend/core/models/commission_model.dart';
 import 'package:frontend/core/models/expense_model.dart';
 import 'package:frontend/core/models/payment_model.dart';
 import 'package:frontend/core/models/purchase_model.dart';
 import 'package:frontend/core/models/sale_model.dart';
-import 'package:frontend/core/models/stock_adjustment_model.dart';
 import 'package:frontend/features/auth/screens/login_screen.dart';
 import 'package:frontend/shared/providers/app_state_providers.dart';
-import 'package:frontend/shared/services/mock_database_service.dart';
 
 void main() {
   setUp(() {

@@ -378,32 +378,37 @@ class _DocumentOcrUploaderState extends State<DocumentOcrUploader> {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
-                      borderRadius: BorderRadius.circular(8),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.document_scanner_rounded, color: AppColors.primary, size: 24),
                     ),
-                    child: const Icon(Icons.document_scanner_rounded, color: AppColors.primary, size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'AI Document Data Extractor (OCR)',
-                        style: AppTextStyles.h3,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'AI Document Data Extractor (OCR)',
+                            style: AppTextStyles.h3,
+                          ),
+                          Text(
+                            'Upload your document from device storage to fetch and auto-fill form data',
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                          ),
+                        ],
                       ),
-                      Text(
-                        'Upload your document from device storage to fetch and auto-fill form data',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
               IconButton(
                 icon: const Icon(Icons.close),
@@ -611,79 +616,152 @@ class _DocumentOcrUploaderState extends State<DocumentOcrUploader> {
                   final isLow = confidence == 'Low';
                   final isMedium = confidence == 'Medium';
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 14),
-                            child: Text(
-                              field,
-                              style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 5,
-                          child: TextFormField(
-                            controller: ctrl,
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: _getFieldBorderColor(confidence), width: 1.5),
-                                borderRadius: AppRadius.smBorderRadius,
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isCompact = constraints.maxWidth < 520;
+                      if (isCompact) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    field,
+                                    style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: _getConfidenceColor(confidence),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '$confidence Match',
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: _getConfidenceColor(confidence),
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: isLow
-                                      ? AppColors.danger
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: ctrl,
+                                decoration: InputDecoration(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: _getFieldBorderColor(confidence), width: 1.5),
+                                    borderRadius: AppRadius.smBorderRadius,
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                      color: isLow
+                                          ? AppColors.danger
+                                          : isMedium
+                                              ? AppColors.warning
+                                              : AppColors.primary,
+                                      width: 2.0,
+                                    ),
+                                    borderRadius: AppRadius.smBorderRadius,
+                                  ),
+                                  suffixIcon: isLow
+                                      ? const Icon(Icons.error_outline, color: AppColors.danger, size: 18)
                                       : isMedium
-                                          ? AppColors.warning
-                                          : AppColors.primary,
-                                  width: 2.0,
+                                          ? const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 18)
+                                          : null,
                                 ),
-                                borderRadius: AppRadius.smBorderRadius,
                               ),
-                              suffixIcon: isLow
-                                  ? const Icon(Icons.error_outline, color: AppColors.danger, size: 18)
-                                  : isMedium
-                                      ? const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 18)
-                                      : null,
-                            ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 110,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 14),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: _getConfidenceColor(confidence),
-                                    shape: BoxShape.circle,
-                                  ),
+                        );
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 14),
+                                child: Text(
+                                  field,
+                                  style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '$confidence Match',
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: _getConfidenceColor(confidence),
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
+                            Expanded(
+                              flex: 5,
+                              child: TextFormField(
+                                controller: ctrl,
+                                decoration: InputDecoration(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: _getFieldBorderColor(confidence), width: 1.5),
+                                    borderRadius: AppRadius.smBorderRadius,
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                      color: isLow
+                                          ? AppColors.danger
+                                          : isMedium
+                                              ? AppColors.warning
+                                              : AppColors.primary,
+                                      width: 2.0,
+                                    ),
+                                    borderRadius: AppRadius.smBorderRadius,
+                                  ),
+                                  suffixIcon: isLow
+                                      ? const Icon(Icons.error_outline, color: AppColors.danger, size: 18)
+                                      : isMedium
+                                          ? const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 18)
+                                          : null,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 110,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 14),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: _getConfidenceColor(confidence),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '$confidence Match',
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: _getConfidenceColor(confidence),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   );
                 }).toList(),
               ),
@@ -691,15 +769,16 @@ class _DocumentOcrUploaderState extends State<DocumentOcrUploader> {
             const Divider(height: 24),
 
             // Dialog Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 10,
+              runSpacing: 10,
               children: [
                 ErpButton(
                   text: 'Cancel',
                   isOutlined: true,
                   onPressed: widget.onCancel,
                 ),
-                const SizedBox(width: 12),
                 ErpButton(
                   text: 'Reprocess OCR',
                   isOutlined: true,
@@ -711,7 +790,6 @@ class _DocumentOcrUploaderState extends State<DocumentOcrUploader> {
                     }
                   },
                 ),
-                const SizedBox(width: 12),
                 ErpButton(
                   text: 'Confirm & Populate Form',
                   icon: Icons.check_circle_outline,

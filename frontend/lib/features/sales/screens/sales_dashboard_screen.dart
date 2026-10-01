@@ -29,26 +29,22 @@ class SalesDashboardScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header & Quick Action Buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Sales Operations Dashboard', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Pipeline tracking: Quotations, Proformas, Orders, Dispatch & Revenue',
-                      style: AppTextStyles.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Wrap(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isStacked = constraints.maxWidth < 750;
+              final titleBlock = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Sales Operations Dashboard', style: AppTextStyles.h1),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Pipeline tracking: Quotations, Proformas, Orders, Dispatch & Revenue',
+                    style: AppTextStyles.subtitle,
+                  ),
+                ],
+              );
+
+              final actionButtons = Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
@@ -70,8 +66,28 @@ class SalesDashboardScreen extends ConsumerWidget {
                     onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
                   ),
                 ],
-              ),
-            ],
+              );
+
+              if (isStacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBlock,
+                    const SizedBox(height: 16),
+                    actionButtons,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleBlock),
+                  const SizedBox(width: 12),
+                  actionButtons,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 24),
 
@@ -86,12 +102,41 @@ class SalesDashboardScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Sales Workflow Stages', style: AppTextStyles.h3.copyWith(fontSize: 15)),
-                    Text('Seamless End-to-End Enterprise Flow', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isNarrow = constraints.maxWidth < 450;
+                    final titleText = Text('Sales Workflow Stages', style: AppTextStyles.h3.copyWith(fontSize: 15));
+                    final subtitleText = Text(
+                      'Seamless End-to-End Enterprise Flow',
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    );
+
+                    if (isNarrow) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          titleText,
+                          const SizedBox(height: 2),
+                          subtitleText,
+                        ],
+                      );
+                    }
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        titleText,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: subtitleText,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
                 SingleChildScrollView(
@@ -309,7 +354,15 @@ class SalesDashboardScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Active Sales Orders', style: AppTextStyles.h3),
+              Expanded(
+                child: Text(
+                  'Active Sales Orders',
+                  style: AppTextStyles.h3,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               TextButton(
                 onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders,
                 child: const Text('View All'),
@@ -381,7 +434,15 @@ class SalesDashboardScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Recent Sales Invoices', style: AppTextStyles.h3),
+              Expanded(
+                child: Text(
+                  'Recent Sales Invoices',
+                  style: AppTextStyles.h3,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               TextButton(
                 onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
                 child: const Text('View All'),

@@ -784,23 +784,25 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Reports & Analytics Hub', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Stock sources, purchase types, expense registers, and GST tax breakup statements',
-                        style: AppTextStyles.subtitle, overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+          // Header
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isStacked = constraints.maxWidth < 650;
+              final titleBlock = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Reports & Analytics Hub', style: AppTextStyles.h1),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Stock sources, purchase types, expense registers, and GST tax breakup statements',
+                    style: AppTextStyles.subtitle,
+                  ),
+                ],
+              );
+
+              final actionBlock = Wrap(
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   ErpButton(
                     text: 'Print Statement',
@@ -808,15 +810,34 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
                     isOutlined: true,
                     onPressed: () => _printOrLayoutReport(activeIndex),
                   ),
-                  const SizedBox(width: 12),
                   ErpButton(
                     text: 'Download PDF Report',
                     icon: Icons.download_outlined,
                     onPressed: () => _downloadReportToDevice(activeIndex),
                   ),
                 ],
-              ),
-            ],
+              );
+
+              if (isStacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBlock,
+                    const SizedBox(height: 12),
+                    actionBlock,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleBlock),
+                  const SizedBox(width: 16),
+                  actionBlock,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
@@ -833,19 +854,33 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           const SizedBox(height: 20),
 
           // KPI Summary Cards
-          Row(
-            children: kpis.entries.map((e) {
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: StatCard(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final crossAxisCount = width >= 1000
+                  ? (kpis.length > 3 ? 4 : kpis.length)
+                  : (width >= 600 ? 2 : 1);
+
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: width < 450 ? 2.2 : (crossAxisCount >= 4 ? 1.8 : 2.0),
+                ),
+                itemCount: kpis.length,
+                itemBuilder: (context, index) {
+                  final e = kpis.entries.elementAt(index);
+                  return StatCard(
                     title: e.key,
                     value: e.value,
                     icon: const Icon(Icons.analytics_outlined, color: AppColors.primary, size: 20),
-                  ),
-                ),
+                  );
+                },
               );
-            }).toList(),
+            },
           ),
           const SizedBox(height: 24),
 
@@ -857,24 +892,47 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
               borderRadius: AppRadius.mdBorderRadius,
               border: Border.all(color: AppColors.border),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final isNarrow = box.maxWidth < 600;
+                final titleRow = Row(
                   children: [
                     const Icon(Icons.assessment_outlined, color: AppColors.primary, size: 20),
                     const SizedBox(width: 10),
-                    Text(
-                      _getReportTitle(activeIndex),
-                      style: AppTextStyles.h3.copyWith(fontSize: 15),
+                    Expanded(
+                      child: Text(
+                        _getReportTitle(activeIndex),
+                        style: AppTextStyles.h3.copyWith(fontSize: 15),
+                      ),
                     ),
                   ],
-                ),
-                Text(
+                );
+
+                final timeText = Text(
                   'As of ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
                   style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
-                ),
-              ],
+                );
+
+                if (isNarrow) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      titleRow,
+                      const SizedBox(height: 6),
+                      timeText,
+                    ],
+                  );
+                }
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: titleRow),
+                    const SizedBox(width: 12),
+                    timeText,
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 16),

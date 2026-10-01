@@ -55,6 +55,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
           final remainingAfter = (proforma.pendingAmount - enteredAmount).clamp(0.0, double.infinity);
 
           return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             title: Row(
               children: [
                 Container(
@@ -63,17 +64,20 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
                   child: const Icon(Icons.payments_outlined, color: AppColors.primary, size: 20),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Record Advance Payment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('Against Proforma: ${proforma.invoiceNumber}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Record Advance Payment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('Against Proforma: ${proforma.invoiceNumber}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    ],
+                  ),
                 ),
               ],
             ),
-            content: SizedBox(
-              width: 480,
+            content: Container(
+              constraints: const BoxConstraints(maxWidth: 480),
+              width: double.infinity,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -215,31 +219,47 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Proforma Invoices', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Commercial advance billing (Not a Tax Invoice) & milestone payment receipts',
-                      style: AppTextStyles.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              ErpButton(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isStacked = constraints.maxWidth < 650;
+              final titleBlock = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Proforma Invoices', style: AppTextStyles.h1),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Commercial advance billing (Not a Tax Invoice) & milestone payment receipts',
+                    style: AppTextStyles.subtitle,
+                  ),
+                ],
+              );
+
+              final actionBtn = ErpButton(
                 text: 'Create Proforma from Quote',
                 icon: Icons.receipt_long_outlined,
                 onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
-              ),
-            ],
+              );
+
+              if (isStacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBlock,
+                    const SizedBox(height: 12),
+                    actionBtn,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleBlock),
+                  const SizedBox(width: 12),
+                  actionBtn,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 

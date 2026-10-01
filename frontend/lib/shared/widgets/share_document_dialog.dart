@@ -105,13 +105,17 @@ class _ShareDocumentDialogState extends ConsumerState<ShareDocumentDialog> {
   @override
   Widget build(BuildContext context) {
     final doc = widget.saleDoc;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 500;
 
     return Dialog(
       backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
+      insetPadding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 32, vertical: 24),
       child: Container(
-        width: 620,
-        padding: const EdgeInsets.all(24),
+        constraints: const BoxConstraints(maxWidth: 600),
+        width: double.infinity,
+        padding: EdgeInsets.all(isCompact ? 18 : 24),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,26 +125,35 @@ class _ShareDocumentDialogState extends ConsumerState<ShareDocumentDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(10),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.share_outlined, color: AppColors.primary, size: 22),
                         ),
-                        child: const Icon(Icons.share_outlined, color: AppColors.primary, size: 22),
-                      ),
-                      const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Direct Document Sharing', style: AppTextStyles.h2),
-                          const SizedBox(height: 2),
-                          Text('${doc.documentType.name.toUpperCase()}: ${doc.invoiceNumber} • ${doc.partyName}', style: AppTextStyles.bodySmall),
-                        ],
-                      ),
-                    ],
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Direct Document Sharing', style: AppTextStyles.h2),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${doc.documentType.name.toUpperCase()}: ${doc.invoiceNumber} • ${doc.partyName}',
+                                style: AppTextStyles.bodySmall,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, size: 20),
@@ -153,29 +166,47 @@ class _ShareDocumentDialogState extends ConsumerState<ShareDocumentDialog> {
               const SizedBox(height: 16),
 
               // Contact Numbers
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _phoneCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Recipient WhatsApp / Mobile *',
-                        prefixIcon: Icon(Icons.phone_android, size: 18),
+              if (isCompact) ...[
+                TextFormField(
+                  controller: _phoneCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Recipient WhatsApp / Mobile *',
+                    prefixIcon: Icon(Icons.phone_android, size: 18),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _emailCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Recipient Email Address',
+                    prefixIcon: Icon(Icons.email_outlined, size: 18),
+                  ),
+                ),
+              ] else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _phoneCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Recipient WhatsApp / Mobile *',
+                          prefixIcon: Icon(Icons.phone_android, size: 18),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _emailCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Recipient Email Address',
-                        prefixIcon: Icon(Icons.email_outlined, size: 18),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _emailCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Recipient Email Address',
+                          prefixIcon: Icon(Icons.email_outlined, size: 18),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 14),
 
               // Pre-filled Message Text
@@ -306,8 +337,11 @@ class _ShareDocumentDialogState extends ConsumerState<ShareDocumentDialog> {
               const SizedBox(height: 14),
 
               // Action Bar Fallbacks
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 10,
                 children: [
                   TextButton.icon(
                     icon: const Icon(Icons.copy_outlined, size: 16),
@@ -319,9 +353,11 @@ class _ShareDocumentDialogState extends ConsumerState<ShareDocumentDialog> {
                       );
                     },
                   ),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      if (widget.onDownloadPdf != null) ...[
+                      if (widget.onDownloadPdf != null)
                         ErpButton(
                           text: 'Download PDF',
                           icon: Icons.download,
@@ -331,8 +367,6 @@ class _ShareDocumentDialogState extends ConsumerState<ShareDocumentDialog> {
                             widget.onDownloadPdf!();
                           },
                         ),
-                        const SizedBox(width: 8),
-                      ],
                       ErpButton(
                         text: 'Done',
                         onPressed: () => Navigator.pop(context),

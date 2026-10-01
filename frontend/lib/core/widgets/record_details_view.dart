@@ -162,13 +162,15 @@ class RecordDetailsView extends ConsumerWidget {
                 tooltip: 'Go Back',
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(subtitle, style: AppTextStyles.subtitle),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTextStyles.h1),
+                    const SizedBox(height: 4),
+                    Text(subtitle, style: AppTextStyles.subtitle),
+                  ],
+                ),
               ),
             ],
           ),
@@ -176,6 +178,36 @@ class RecordDetailsView extends ConsumerWidget {
           detailsWidget,
         ],
       ),
+    );
+  }
+
+  Widget _buildTwoPaneLayout({
+    required Widget left,
+    required Widget right,
+    int leftFlex = 3,
+    int rightFlex = 2,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 850) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              left,
+              const SizedBox(height: 16),
+              right,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: leftFlex, child: left),
+            const SizedBox(width: 16),
+            Expanded(flex: rightFlex, child: right),
+          ],
+        );
+      },
     );
   }
 

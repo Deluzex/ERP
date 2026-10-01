@@ -59,8 +59,11 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
         return StatefulBuilder(
           builder: (dlgCtx, setDlgState) {
             return AlertDialog(
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              title: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   Text(isEdit ? 'Edit Customer' : 'Add Customer Master', style: AppTextStyles.h2),
                   ErpButton(
@@ -72,9 +75,11 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                         context: context,
                         builder: (ocrCtx) => Dialog(
                           backgroundColor: Colors.transparent,
-                          child: SizedBox(
-                            width: 800,
-                            height: 600,
+                          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
+                            width: double.infinity,
+                            height: MediaQuery.of(context).size.height * 0.88,
                             child: DocumentOcrUploader(
                               docType: OcrDocType.customerDoc,
                               onCancel: () => Navigator.of(ocrCtx).pop(),
@@ -93,8 +98,9 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                   ),
                 ],
               ),
-              content: SizedBox(
-                width: 520,
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 540),
+                width: double.infinity,
                 child: Form(
                   key: formKey,
                   child: SingleChildScrollView(
@@ -156,7 +162,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: gstCtrl,
-                          validator: Validators.gst,
+                          validator: (v) => Validators.gst(v, false),
                           decoration: const InputDecoration(
                             labelText: 'GST Number (Optional, 15 chars)',
                             hintText: '24AAAAA0000A1Z5',
@@ -360,24 +366,47 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 550) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Customers Master', style: AppTextStyles.h1),
+                    const SizedBox(height: 4),
+                    Text('Direct end-customers, project developers, and dual-entity Architect-Customers with WhatsApp action',
+                        style: AppTextStyles.subtitle),
+                    const SizedBox(height: 12),
+                    ErpButton(
+                      text: 'Add Customer',
+                      icon: Icons.add,
+                      onPressed: () => _openAddEditCustomerDialog(),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Customers Master', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Direct end-customers, project developers, and dual-entity Architect-Customers with WhatsApp action',
-                      style: AppTextStyles.subtitle),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Customers Master', style: AppTextStyles.h1),
+                        const SizedBox(height: 4),
+                        Text('Direct end-customers, project developers, and dual-entity Architect-Customers with WhatsApp action',
+                            style: AppTextStyles.subtitle),
+                      ],
+                    ),
+                  ),
+                  ErpButton(
+                    text: 'Add Customer',
+                    icon: Icons.add,
+                    onPressed: () => _openAddEditCustomerDialog(),
+                  ),
                 ],
-              ),
-              ErpButton(
-                text: 'Add Customer',
-                icon: Icons.add,
-                onPressed: () => _openAddEditCustomerDialog(),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 24),
 
