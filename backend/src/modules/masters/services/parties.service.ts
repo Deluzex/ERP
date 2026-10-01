@@ -284,7 +284,7 @@ export class PartiesService {
         dto.companyName.trim(),
         dto.mobile.trim(),
         dto.email.trim().toLowerCase(),
-        dto.gstNumber.trim().toUpperCase(),
+        dto.gstNumber ? dto.gstNumber.trim().toUpperCase() : '',
         dto.address.trim(),
         dto.stateCode || '24',
       ],
@@ -316,7 +316,7 @@ export class PartiesService {
     if (dto.companyName !== undefined) { updates.push(`company_name = $${idx++}`); values.push(dto.companyName.trim()); }
     if (dto.mobile !== undefined) { updates.push(`mobile = $${idx++}`); values.push(dto.mobile.trim()); }
     if (dto.email !== undefined) { updates.push(`email = $${idx++}`); values.push(dto.email.trim().toLowerCase()); }
-    if (dto.gstNumber !== undefined) { updates.push(`gst_number = $${idx++}`); values.push(dto.gstNumber.trim().toUpperCase()); }
+    if (dto.gstNumber !== undefined) { updates.push(`gst_number = $${idx++}`); values.push(dto.gstNumber ? dto.gstNumber.trim().toUpperCase() : ''); }
     if (dto.address !== undefined) { updates.push(`address = $${idx++}`); values.push(dto.address.trim()); }
     if (dto.stateCode !== undefined) { updates.push(`state_code = $${idx++}`); values.push(dto.stateCode); }
 

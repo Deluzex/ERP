@@ -279,8 +279,6 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
           // Side by side cards on desktop, stacked on mobile/tablet
           LayoutBuilder(
             builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 900;
-
               final categoriesSection = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -313,7 +311,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                     rows: categories.map((c) {
                       return [
                         Text(c.name, style: AppTextStyles.bodyBold),
-                        Text(c.description, style: AppTextStyles.bodySmall),
+                        Text(c.description.trim().isNotEmpty ? c.description : '-', style: AppTextStyles.bodySmall),
                       ];
                     }).toList(),
                   ),
@@ -359,22 +357,12 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                 ],
               );
 
-              if (isStacked) {
-                return Column(
-                  children: [
-                    categoriesSection,
-                    const SizedBox(height: 28),
-                    unitsSection,
-                  ],
-                );
-              }
-
-              return Row(
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: categoriesSection),
-                  const SizedBox(width: 24),
-                  Expanded(child: unitsSection),
+                  categoriesSection,
+                  const SizedBox(height: 36),
+                  unitsSection,
                 ],
               );
             },

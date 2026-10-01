@@ -107,13 +107,29 @@ export class PurchasesService {
       [...params, limit, offset],
     );
 
+    const purchaseIds = purchasesRes.rows.map((r) => r.id);
+    const itemsByPurchaseId = new Map<string, any[]>();
+
+    if (purchaseIds.length > 0) {
+      const placeholders = purchaseIds.map((_, i) => `$${i + 1}`).join(', ');
+      const itemsRes = await this.db.query<any>(
+        `SELECT * FROM purchase_items WHERE purchase_id IN (${placeholders}) ORDER BY created_at ASC`,
+        purchaseIds,
+      );
+      for (const itemRow of itemsRes.rows) {
+        const pId = itemRow.purchase_id;
+        if (!itemsByPurchaseId.has(pId)) itemsByPurchaseId.set(pId, []);
+        itemsByPurchaseId.get(pId)!.push(this.mapItemRow(itemRow));
+      }
+    }
+
     return {
       summary: {
         totalPurchases: Number(summaryRes.rows[0]?.total_purchases || 0),
         totalPaid: Number(summaryRes.rows[0]?.total_paid || 0),
         totalPending: Number(summaryRes.rows[0]?.total_pending || 0),
       },
-      items: purchasesRes.rows.map((r) => this.mapPurchaseRow(r)),
+      items: purchasesRes.rows.map((r) => this.mapPurchaseRow(r, itemsByPurchaseId.get(r.id) || [])),
       pagination: {
         totalItems: totalCount,
         currentPage: page,

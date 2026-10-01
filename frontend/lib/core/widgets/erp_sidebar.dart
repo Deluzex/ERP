@@ -15,6 +15,7 @@ class ErpSidebar extends ConsumerStatefulWidget {
 }
 
 class _ErpSidebarState extends ConsumerState<ErpSidebar> {
+  ErpNavSection? _lastSection;
   final Map<String, bool> _expandedGroups = {
     'Inventory': true,
     'Purchase': false,
@@ -125,7 +126,10 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
   @override
   Widget build(BuildContext context) {
     final currentSection = ref.watch(currentNavSectionProvider);
-    _autoExpandForSection(currentSection);
+    if (_lastSection != currentSection) {
+      _lastSection = currentSection;
+      _autoExpandForSection(currentSection);
+    }
     final db = ref.watch(databaseServiceProvider);
     final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
     final allRoles = db.roles;

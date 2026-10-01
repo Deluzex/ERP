@@ -99,61 +99,325 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     if (db.vendors.isNotEmpty) {
       _selectedVendorId = db.vendors.first.id;
     }
-    if (db.rawMaterials.isNotEmpty) {
-      final firstRm = db.rawMaterials.first;
-      _items.add(_LineItemDraft(
-        itemType: PurchaseItemType.rawMaterial,
-        itemId: firstRm.id,
-        itemName: firstRm.name,
-        itemCode: firstRm.itemCode,
-        unit: firstRm.unit,
-        quantity: 100.0,
-        rate: firstRm.defaultPurchasePrice,
-        discount: 0.0,
-        gstPercent: firstRm.gstPercent,
-      ));
-    }
   }
 
-  void _addNewLineItem({PurchaseItemType itemType = PurchaseItemType.rawMaterial}) {
+  void _openAddItemDialog({PurchaseItemType initialType = PurchaseItemType.rawMaterial}) {
     final db = ref.read(databaseServiceProvider);
-    if (itemType == PurchaseItemType.rawMaterial) {
-      if (db.rawMaterials.isEmpty) return;
-      final firstRm = db.rawMaterials.first;
-      setState(() {
-        _items.add(_LineItemDraft(
-          itemType: PurchaseItemType.rawMaterial,
-          itemId: firstRm.id,
-          itemName: firstRm.name,
-          itemCode: firstRm.itemCode,
-          unit: firstRm.unit,
-          quantity: 10.0,
-          rate: firstRm.defaultPurchasePrice,
-          gstPercent: firstRm.gstPercent,
-        ));
-      });
-    } else {
-      if (db.finishedProducts.isEmpty) return;
-      final firstFp = db.finishedProducts.first;
-      setState(() {
-        _items.add(_LineItemDraft(
-          itemType: PurchaseItemType.finishedProduct,
-          itemId: firstFp.id,
-          itemName: firstFp.name,
-          itemCode: firstFp.itemCode,
-          unit: firstFp.unit,
-          quantity: 10.0,
-          rate: firstFp.costPrice,
-          gstPercent: firstFp.gstPercent,
-        ));
-      });
+
+    PurchaseItemType selectedType = initialType;
+    String? selectedItemId;
+    String selectedItemName = '';
+    String selectedItemCode = '';
+    String selectedUnit = 'PCS';
+    double defaultRate = 0.0;
+    double defaultGst = 18.0;
+
+    void initForType(PurchaseItemType type) {
+      if (type == PurchaseItemType.rawMaterial && db.rawMaterials.isNotEmpty) {
+        final rm = db.rawMaterials.first;
+        selectedItemId = rm.id;
+        selectedItemName = rm.name;
+        selectedItemCode = rm.itemCode;
+        selectedUnit = rm.unit;
+        defaultRate = rm.defaultPurchasePrice;
+        defaultGst = rm.gstPercent;
+      } else if (type == PurchaseItemType.finishedProduct && db.finishedProducts.isNotEmpty) {
+        final fp = db.finishedProducts.first;
+        selectedItemId = fp.id;
+        selectedItemName = fp.name;
+        selectedItemCode = fp.itemCode;
+        selectedUnit = fp.unit;
+        defaultRate = fp.costPrice;
+        defaultGst = fp.gstPercent;
+      } else {
+        selectedItemId = null;
+        selectedItemName = '';
+        selectedItemCode = '';
+        selectedUnit = 'PCS';
+        defaultRate = 0.0;
+        defaultGst = 18.0;
+      }
     }
+
+    initForType(selectedType);
+
+    final formKey = GlobalKey<FormState>();
+    final qtyCtrl = TextEditingController(text: '1');
+    final rateCtrl = TextEditingController(text: defaultRate > 0 ? defaultRate.toString() : '0');
+    final discCtrl = TextEditingController(text: '0');
+    final gstCtrl = TextEditingController(text: defaultGst.toString());
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) {
+          final qty = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
+          final rate = double.tryParse(rateCtrl.text.trim()) ?? 0.0;
+          final disc = double.tryParse(discCtrl.text.trim()) ?? 0.0;
+          final gst = double.tryParse(gstCtrl.text.trim()) ?? 0.0;
+
+          final subtotal = (qty * rate) - disc;
+          final total = PurchaseLineItem.calculateLineTotal(
+            quantity: qty,
+            rate: rate,
+            discountAmount: disc,
+            gstPercent: gst,
+          );
+
+          return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            title: Row(
+              children: [
+                Icon(
+                  selectedType == PurchaseItemType.rawMaterial ? Icons.grain : Icons.inventory_2,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    selectedType == PurchaseItemType.rawMaterial
+                        ? 'Add Raw Material'
+                        : 'Add Finished Good',
+                    style: AppTextStyles.h3,
+                  ),
+                ),
+              ],
+            ),
+            content: Container(
+              constraints: const BoxConstraints(maxWidth: 500),
+              width: double.infinity,
+              child: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DropdownButtonFormField<PurchaseItemType>(
+                        value: selectedType,
+                        decoration: const InputDecoration(labelText: 'Item Classification *'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: PurchaseItemType.rawMaterial,
+                            child: Text('Raw Material (Components / Metals / Drivers)'),
+                          ),
+                          DropdownMenuItem(
+                            value: PurchaseItemType.finishedProduct,
+                            child: Text('Finished Good (Direct Stock Inward)'),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null && val != selectedType) {
+                            setDlgState(() {
+                              selectedType = val;
+                              initForType(selectedType);
+                              rateCtrl.text = defaultRate > 0 ? defaultRate.toString() : '0';
+                              gstCtrl.text = defaultGst.toString();
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      if (selectedType == PurchaseItemType.rawMaterial)
+                        DropdownButtonFormField<String>(
+                          value: selectedItemId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: 'Select Raw Material *'),
+                          items: db.rawMaterials.map((rm) {
+                            return DropdownMenuItem(
+                              value: rm.id,
+                              child: Text(
+                                '${rm.itemCode} - ${rm.name} (${rm.unit})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          validator: (v) => v == null ? 'Please select a raw material' : null,
+                          onChanged: (val) {
+                            if (val != null) {
+                              final rm = db.rawMaterials.firstWhere((r) => r.id == val);
+                              setDlgState(() {
+                                selectedItemId = rm.id;
+                                selectedItemName = rm.name;
+                                selectedItemCode = rm.itemCode;
+                                selectedUnit = rm.unit;
+                                rateCtrl.text = rm.defaultPurchasePrice.toString();
+                                gstCtrl.text = rm.gstPercent.toString();
+                              });
+                            }
+                          },
+                        )
+                      else
+                        DropdownButtonFormField<String>(
+                          value: selectedItemId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: 'Select Finished Product *'),
+                          items: db.finishedProducts.map((fp) {
+                            return DropdownMenuItem(
+                              value: fp.id,
+                              child: Text(
+                                '${fp.itemCode} - ${fp.name} (${fp.unit})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          validator: (v) => v == null ? 'Please select a finished product' : null,
+                          onChanged: (val) {
+                            if (val != null) {
+                              final fp = db.finishedProducts.firstWhere((f) => f.id == val);
+                              setDlgState(() {
+                                selectedItemId = fp.id;
+                                selectedItemName = fp.name;
+                                selectedItemCode = fp.itemCode;
+                                selectedUnit = fp.unit;
+                                rateCtrl.text = fp.costPrice.toString();
+                                gstCtrl.text = fp.gstPercent.toString();
+                              });
+                            }
+                          },
+                        ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: qtyCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              validator: Validators.positiveNumber,
+                              decoration: InputDecoration(
+                                labelText: 'Quantity ($selectedUnit) *',
+                                hintText: 'E.g., 10',
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: rateCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              validator: Validators.positiveNumber,
+                              decoration: const InputDecoration(
+                                labelText: 'Purchase Rate (₹) *',
+                                hintText: 'E.g., 450.00',
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: discCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              validator: Validators.nonNegativeNumber,
+                              decoration: const InputDecoration(
+                                labelText: 'Discount (₹)',
+                                hintText: '0.00',
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: gstCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              validator: Validators.nonNegativeNumber,
+                              decoration: const InputDecoration(
+                                labelText: 'GST %',
+                                hintText: '18',
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceMuted,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Subtotal', style: AppTextStyles.caption.copyWith(color: AppColors.textMuted)),
+                                Text(Formatters.formatCurrency(subtotal > 0 ? subtotal : 0.0), style: AppTextStyles.bodyMedium),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text('Total (incl. GST)', style: AppTextStyles.caption.copyWith(color: AppColors.textMuted)),
+                                Text(
+                                  Formatters.formatCurrency(total > 0 ? total : 0.0),
+                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              ErpButton(
+                text: 'Add to Order',
+                icon: Icons.add,
+                onPressed: () {
+                  if (!formKey.currentState!.validate()) return;
+                  if (selectedItemId == null) return;
+
+                  final enteredQty = double.tryParse(qtyCtrl.text.trim()) ?? 1.0;
+                  final enteredRate = double.tryParse(rateCtrl.text.trim()) ?? 0.0;
+                  final enteredDisc = double.tryParse(discCtrl.text.trim()) ?? 0.0;
+                  final enteredGst = double.tryParse(gstCtrl.text.trim()) ?? 18.0;
+
+                  setState(() {
+                    _items.add(_LineItemDraft(
+                      itemType: selectedType,
+                      itemId: selectedItemId!,
+                      itemName: selectedItemName,
+                      itemCode: selectedItemCode,
+                      unit: selectedUnit,
+                      quantity: enteredQty,
+                      rate: enteredRate,
+                      discount: enteredDisc,
+                      gstPercent: enteredGst,
+                    ));
+                  });
+
+                  Navigator.of(ctx).pop();
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   void _removeLineItem(int index) {
-    if (_items.length > 1) {
-      setState(() => _items.removeAt(index));
-    }
+    setState(() => _items.removeAt(index));
   }
 
   double get _subtotalAmount => _items.fold(0.0, (sum, i) => sum + i.subtotal);
@@ -229,7 +493,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
           ? _vendorInvoiceCtrl.text.trim()
           : 'INV-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
       invoiceDate: _invoiceDate,
+      purchaseType: purchaseItems.any((i) => i.itemType == PurchaseItemType.finishedProduct)
+          ? PurchaseItemType.finishedProduct
+          : PurchaseItemType.rawMaterial,
       items: purchaseItems,
+      subtotalAmount: _subtotalAmount,
+      gstAmount: _gstTotal,
       totalAmount: _totalAmount,
       paidAmount: _paidAmount,
       pendingAmount: _pendingAmount,
@@ -682,13 +951,13 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                             text: 'Add Raw Material',
                             icon: Icons.grain,
                             isOutlined: true,
-                            onPressed: () => _addNewLineItem(itemType: PurchaseItemType.rawMaterial),
+                            onPressed: () => _openAddItemDialog(initialType: PurchaseItemType.rawMaterial),
                           ),
                           ErpButton(
                             text: 'Add Finished Good',
                             icon: Icons.inventory_2,
                             isOutlined: true,
-                            onPressed: () => _addNewLineItem(itemType: PurchaseItemType.finishedProduct),
+                            onPressed: () => _openAddItemDialog(initialType: PurchaseItemType.finishedProduct),
                           ),
                         ],
                       );
@@ -714,6 +983,31 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  if (_items.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceMuted,
+                        borderRadius: AppRadius.smBorderRadius,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.add_shopping_cart_outlined, size: 36, color: AppColors.textMuted),
+                          const SizedBox(height: 10),
+                          Text('No items added yet', style: AppTextStyles.bodyBold),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Click "Add Raw Material" or "Add Finished Good" above to add items to this purchase.',
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: ConstrainedBox(
@@ -855,6 +1149,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 SizedBox(
                                   width: 100,
                                   child: TextFormField(
+                                    key: ValueKey('qty_${item.itemId}_${item.itemType}_$index'),
                                     initialValue: item.quantity.toString(),
                                     keyboardType: TextInputType.number,
                                     validator: Validators.positiveNumber,
@@ -871,6 +1166,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 SizedBox(
                                   width: 100,
                                   child: TextFormField(
+                                    key: ValueKey('rate_${item.itemId}_${item.itemType}_$index'),
                                     initialValue: item.rate.toString(),
                                     keyboardType: TextInputType.number,
                                     validator: Validators.positiveNumber,
@@ -887,6 +1183,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 SizedBox(
                                   width: 90,
                                   child: TextFormField(
+                                    key: ValueKey('disc_${item.itemId}_${item.itemType}_$index'),
                                     initialValue: item.discount.toString(),
                                     keyboardType: TextInputType.number,
                                     validator: Validators.nonNegativeNumber,
@@ -903,6 +1200,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 SizedBox(
                                   width: 80,
                                   child: TextFormField(
+                                    key: ValueKey('gst_${item.itemId}_${item.itemType}_$index'),
                                     initialValue: item.gstPercent.toString(),
                                     keyboardType: TextInputType.number,
                                     validator: Validators.nonNegativeNumber,

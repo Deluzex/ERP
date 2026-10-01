@@ -153,7 +153,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                         TextFormField(
                           controller: compCtrl,
                           decoration: const InputDecoration(
-                            labelText: 'Studio / Company Name',
+                            labelText: 'Studio / Company Name *',
                             hintText: 'E.g., Sanjay Puri Architects',
                           ),
                         ),
@@ -183,7 +183,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                             Expanded(
                               child: TextFormField(
                                 controller: gstCtrl,
-                                validator: Validators.gst,
+                                validator: (v) => Validators.gst(v, false),
                                 decoration: const InputDecoration(
                                   labelText: 'GST Number (Optional, 15 chars)',
                                   hintText: '24AAAAA0000A1Z5',
