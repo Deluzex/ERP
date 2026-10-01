@@ -220,10 +220,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF16A34A).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.4)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle, size: 11, color: Color(0xFF16A34A)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'v1.0.1 LIVE',
+                                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 20),
-                      Text('Enterprise Portal Login', style: AppTextStyles.h1),
+                      Text('Enterprise Portal Login (v1.0.1)', style: AppTextStyles.h1),
                       const SizedBox(height: 4),
                       Text('Authenticate to access your role-specific dashboard and workspace', style: AppTextStyles.subtitle),
                       const SizedBox(height: 24),
