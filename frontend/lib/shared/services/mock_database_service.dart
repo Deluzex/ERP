@@ -5144,6 +5144,19 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  Future<Purchase> getPurchaseDetailAsync(String id) async {
+    try {
+      final full = await _purchasesApi.getPurchaseById(id);
+      final idx = purchases.indexWhere((p) => p.id == id);
+      if (idx != -1) purchases[idx] = full;
+      notifyListeners();
+      return full;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] getPurchaseDetailAsync failed, using cached row: $e');
+      return purchases.firstWhere((p) => p.id == id);
+    }
+  }
+
   Future<Purchase> updatePurchaseStatusAsync(
     String id, {
     required String status,
