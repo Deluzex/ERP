@@ -96,6 +96,31 @@ class ProductionApiService {
     }
   }
 
+  /// 8.6 Update Production Order Status (planned -> inProgress -> completed)
+  Future<ProductionOrder> updateOrderStatus(
+    String id,
+    String status, {
+    String? reason,
+    double? actualQuantityProduced,
+  }) async {
+    try {
+      final response = await _client.dio.patch(
+        '/production/orders/$id/status',
+        data: {
+          'status': status,
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+          if (actualQuantityProduced != null && actualQuantityProduced > 0)
+            'actualQuantityProduced': actualQuantityProduced,
+        },
+      );
+      final data = _client.unwrap<Map<String, dynamic>>(response);
+      return ProductionOrder.fromJson(data);
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
+
   /// 8.2 Get Bill of Materials recipe
   Future<Map<String, dynamic>?> getBom(String finishedProductId) async {
     try {

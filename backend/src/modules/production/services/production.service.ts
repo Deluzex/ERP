@@ -12,6 +12,7 @@ import {
   CompleteProductionOrderDto,
   CreateProductionOrderDto,
   ProductionStatusEnum,
+  UpdateProductionOrderStatusDto,
 } from '../dto/production-order.dto';
 import { ProductionQueryDto } from '../dto/production-query.dto';
 
@@ -119,6 +120,21 @@ export class ProductionService {
       [...params, limit, offset],
     );
 
+    const orderIds = ordersRes.rows.map((r: any) => r.id);
+    const itemsMap: Record<string, any[]> = {};
+    if (orderIds.length > 0) {
+      const itemsRes = await this.db.query<any>(
+        `SELECT * FROM production_raw_materials WHERE production_order_id = ANY($1) ORDER BY created_at ASC`,
+        [orderIds],
+      );
+      for (const item of itemsRes.rows) {
+        if (!itemsMap[item.production_order_id]) {
+          itemsMap[item.production_order_id] = [];
+        }
+        itemsMap[item.production_order_id].push(this.mapUsageRow(item));
+      }
+    }
+
     return {
       summary: {
         totalOrders: Number(summaryRes.rows[0]?.total_orders || 0),
@@ -127,7 +143,7 @@ export class ProductionService {
         plannedBatches: Number(summaryRes.rows[0]?.planned_batches || 0),
         totalProductionCost: Number(summaryRes.rows[0]?.total_production_cost || 0),
       },
-      orders: ordersRes.rows.map((r) => this.mapOrderRow(r)),
+      orders: ordersRes.rows.map((r) => this.mapOrderRow(r, itemsMap[r.id] || [])),
       pagination: {
         totalItems: totalCount,
         currentPage: page,
@@ -170,12 +186,34 @@ export class ProductionService {
   async create(dto: CreateProductionOrderDto, userId: string, correlationId?: string) {
     return this.uow.runInTransaction(async (client) => {
       // 1. Generate unique production document sequence number
-      const seqRes = await client.query<{ count: string }>(
-        `SELECT COUNT(*)::int as count FROM production_orders`,
-      );
-      const nextSeq = parseInt(seqRes.rows[0]?.count || '0', 10) + 1;
       const currentYear = new Date().getFullYear();
-      const productionNumber = `PRD-${currentYear}-${String(nextSeq).padStart(4, '0')}`;
+      const prefix = `PRD-${currentYear}-`;
+      const maxSeqRes = await client.query<{ max_num: string }>(
+        `SELECT production_number as max_num 
+         FROM production_orders 
+         WHERE production_number LIKE $1 
+         ORDER BY production_number DESC 
+         LIMIT 1`,
+        [`${prefix}%`],
+      );
+      let nextSeq = 1;
+      if (maxSeqRes.rows.length > 0 && maxSeqRes.rows[0]?.max_num) {
+        const lastPart = maxSeqRes.rows[0].max_num.replace(prefix, '');
+        const parsed = parseInt(lastPart, 10);
+        if (!isNaN(parsed)) {
+          nextSeq = parsed + 1;
+        }
+      }
+      let productionNumber = `${prefix}${String(nextSeq).padStart(4, '0')}`;
+      while (true) {
+        const existsRes = await client.query(
+          `SELECT id FROM production_orders WHERE production_number = $1 LIMIT 1`,
+          [productionNumber],
+        );
+        if (existsRes.rows.length === 0) break;
+        nextSeq++;
+        productionNumber = `${prefix}${String(nextSeq).padStart(4, '0')}`;
+      }
 
       const status = dto.status || ProductionStatusEnum.completed;
       const plannedQty = Number(dto.plannedQuantity);
@@ -402,6 +440,199 @@ export class ProductionService {
       );
 
       return this.mapOrderRow(orderRecord, insertedUsages);
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // 8.3.1 Update Production Order Status (planned -> inProgress -> completed)
+  // --------------------------------------------------------------------------
+  async updateStatus(
+    id: string,
+    dto: UpdateProductionOrderStatusDto,
+    userId: string,
+    correlationId?: string,
+  ) {
+    if (dto.status === ProductionStatusEnum.cancelled) {
+      return this.cancel(id, { reason: dto.reason || 'Cancelled' }, userId, correlationId);
+    }
+
+    return this.uow.runInTransaction(async (client) => {
+      const orderRes = await client.query<any>(
+        `SELECT * FROM production_orders WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+
+      if (orderRes.rows.length === 0) {
+        throw new NotFoundException(`Production Order with ID ${id} not found`);
+      }
+      const order = orderRes.rows[0];
+
+      if (order.status === dto.status) {
+        return this.findById(id);
+      }
+
+      if (order.status === ProductionStatusEnum.cancelled) {
+        throw new BadRequestException(`Cannot update status of a cancelled production order`);
+      }
+
+      if (order.status === ProductionStatusEnum.completed) {
+        throw new BadRequestException(`Production order ${order.production_number} is already completed`);
+      }
+
+      // Transition to inProgress
+      if (dto.status === ProductionStatusEnum.inProgress) {
+        const updRes = await client.query<any>(
+          `UPDATE production_orders SET status = 'inProgress', updated_at = now() WHERE id = $1 RETURNING *`,
+          [id],
+        );
+
+        await this.auditService.record(
+          {
+            userId,
+            action: 'production.start',
+            entityType: 'ProductionOrder',
+            entityId: id,
+            beforeSnapshot: order,
+            afterSnapshot: updRes.rows[0],
+            reason: dto.reason || `Production order ${order.production_number} status set to In Progress`,
+            correlationId,
+          },
+          client,
+        );
+
+        return this.findById(id);
+      }
+
+      // Transition to completed (atomic material consumption & finished goods inward)
+      if (dto.status === ProductionStatusEnum.completed) {
+        const usagesRes = await client.query<any>(
+          `SELECT * FROM production_raw_materials WHERE production_order_id = $1 ORDER BY created_at ASC`,
+          [id],
+        );
+
+        // 1. Stock Validation
+        if (!dto.overrideStockValidation) {
+          for (const rm of usagesRes.rows) {
+            const checkRes = await client.query<{ current_stock: string; name: string; unit: string }>(
+              `SELECT rm.current_stock, rm.name, u.symbol as unit
+               FROM raw_materials rm
+               JOIN measurement_units u ON rm.unit_id = u.id
+               WHERE rm.id = $1 AND rm.is_deleted = false`,
+              [rm.raw_material_id],
+            );
+            if (checkRes.rows.length > 0) {
+              const availableStock = Number(checkRes.rows[0].current_stock);
+              const requiredQty = Number(rm.quantity_used);
+              if (availableStock < requiredQty) {
+                throw new BadRequestException(
+                  `Insufficient stock for ${checkRes.rows[0].name}! Available: ${availableStock} ${checkRes.rows[0].unit}, Required: ${requiredQty} ${checkRes.rows[0].unit}`,
+                );
+              }
+            }
+          }
+        }
+
+        // 2. Decrement Raw Materials Stock
+        for (const rm of usagesRes.rows) {
+          const updRm = await client.query<{ current_stock: string }>(
+            `UPDATE raw_materials
+             SET current_stock = GREATEST(0, current_stock - $1), updated_at = now()
+             WHERE id = $2 AND is_deleted = false
+             RETURNING current_stock`,
+            [Number(rm.quantity_used), rm.raw_material_id],
+          );
+          const newBal = Number(updRm.rows[0]?.current_stock || 0);
+
+          await client.query(
+            `INSERT INTO stock_movements (
+               date, item_id, item_type, transaction_type, reference_number,
+               stock_in, stock_out, current_balance, unit, notes, performed_by
+             )
+             VALUES (now(), $1, 'rawMaterial', 'productionConsumption', $2, 0, $3, $4, $5, $6, $7)`,
+            [
+              rm.raw_material_id,
+              order.production_number,
+              Number(rm.quantity_used),
+              newBal,
+              rm.unit || 'unit',
+              `Consumed for production of ${order.finished_product_name} (${order.production_number})`,
+              userId,
+            ],
+          );
+        }
+
+        // 3. Inward Finished Goods Output
+        const actualQty = Number(
+          dto.actualQuantityProduced ?? (Number(order.actual_quantity_produced) > 0 ? Number(order.actual_quantity_produced) : Number(order.planned_quantity))
+        );
+
+        if (actualQty > 0) {
+          const updFp = await client.query<{ current_stock: string }>(
+            `UPDATE finished_products
+             SET current_stock = current_stock + $1,
+                 produced_stock = produced_stock + $1,
+                 updated_at = now()
+             WHERE id = $2 AND is_deleted = false
+             RETURNING current_stock`,
+            [actualQty, order.finished_product_id],
+          );
+          const newFpBal = Number(updFp.rows[0]?.current_stock || 0);
+
+          await client.query(
+            `INSERT INTO stock_movements (
+               date, item_id, item_type, transaction_type, reference_number,
+               stock_in, stock_out, current_balance, unit, notes, performed_by
+             )
+             VALUES (now(), $1, 'finishedProduct', 'productionOutput', $2, $3, 0, $4, $5, $6, $7)`,
+            [
+              order.finished_product_id,
+              order.production_number,
+              actualQty,
+              newFpBal,
+              order.unit || 'unit',
+              `Produced manufacturing batch (${order.production_number})${order.sales_order_number ? ' for SO ' + order.sales_order_number : ''}`,
+              userId,
+            ],
+          );
+
+          if (order.sales_order_id) {
+            await client.query(
+              `UPDATE finished_products
+               SET reserved_stock = reserved_stock + $1, updated_at = now()
+               WHERE id = $2`,
+              [actualQty, order.finished_product_id],
+            );
+          }
+        }
+
+        const updPo = await client.query<any>(
+          `UPDATE production_orders
+           SET status = 'completed',
+               actual_quantity_produced = $1,
+               updated_at = now()
+           WHERE id = $2
+           RETURNING *`,
+          [actualQty, id],
+        );
+
+        await this.auditService.record(
+          {
+            userId,
+            action: 'production.complete',
+            entityType: 'ProductionOrder',
+            entityId: id,
+            beforeSnapshot: order,
+            afterSnapshot: updPo.rows[0],
+            reason: dto.reason || `Production order ${order.production_number} completed`,
+            correlationId,
+          },
+          client,
+        );
+
+        return this.findById(id);
+      }
+
+      throw new BadRequestException(`Unsupported status transition to ${dto.status}`);
     });
   }
 

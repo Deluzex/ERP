@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import { CreateBomDto } from '../dto/bom.dto';
 import {
   CancelProductionOrderDto,
   CreateProductionOrderDto,
+  UpdateProductionOrderStatusDto,
 } from '../dto/production-order.dto';
 import { ProductionQueryDto } from '../dto/production-query.dto';
 import { ProductionService } from '../services/production.service';
@@ -55,6 +57,17 @@ export class ProductionController {
     @Ctx() ctx: RequestContext,
   ) {
     return this.productionService.cancel(id, dto, ctx.userId, ctx.correlationId);
+  }
+
+  @Patch('orders/:id/status')
+  @RequirePermission('production.create')
+  @ApiOperation({ summary: 'Update production order status (planned -> inProgress -> completed)' })
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateProductionOrderStatusDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.productionService.updateStatus(id, dto, ctx.userId, ctx.correlationId);
   }
 
   @Get('bom/:finishedProductId')

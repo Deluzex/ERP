@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -5,8 +6,12 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/commission_model.dart';
+import '../../../core/models/customer_model.dart';
+import '../../../core/models/dealer_model.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/models/purchase_model.dart';
+import '../../../core/models/sale_model.dart';
+import '../../../core/models/vendor_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
@@ -14,6 +19,7 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../shared/services/mock_database_service.dart';
 
 class PaymentCenterScreen extends ConsumerStatefulWidget {
   final PaymentType? initialTab;
@@ -27,10 +33,36 @@ class PaymentCenterScreen extends ConsumerStatefulWidget {
 class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
+  TextEditingController? _customerSearchCtrl;
+  TextEditingController get _safeCustomerSearchCtrl => _customerSearchCtrl ??= TextEditingController();
+  String _customerSearchQuery = '';
+  int _customerPageSize = 10;
+  int _customerCurrentPage = 0;
+  int get _safeCustomerPageSize => _safeInt(_customerPageSize, 10);
+  int get _safeCustomerCurrentPage => _safeInt(_customerCurrentPage, 0);
+
+  TextEditingController? _dealerSearchCtrl;
+  TextEditingController get _safeDealerSearchCtrl => _dealerSearchCtrl ??= TextEditingController();
+  String _dealerSearchQuery = '';
+  int _dealerPageSize = 10;
+  int _dealerCurrentPage = 0;
+  int get _safeDealerPageSize => _safeInt(_dealerPageSize, 10);
+  int get _safeDealerCurrentPage => _safeInt(_dealerCurrentPage, 0);
+
+  TextEditingController? _vendorSearchCtrl;
+  TextEditingController get _safeVendorSearchCtrl => _vendorSearchCtrl ??= TextEditingController();
+  String _vendorSearchQuery = '';
+  int _vendorPageSize = 10;
+  int _vendorCurrentPage = 0;
+  int get _safeVendorPageSize => _safeInt(_vendorPageSize, 10);
+  int get _safeVendorCurrentPage => _safeInt(_vendorCurrentPage, 0);
 
   @override
   void initState() {
     super.initState();
+    _customerSearchCtrl ??= TextEditingController();
+    _dealerSearchCtrl ??= TextEditingController();
+    _vendorSearchCtrl ??= TextEditingController();
     _tabController = TabController(length: 4, vsync: this);
     if (widget.initialTab != null) {
       _tabController.index = widget.initialTab!.index;
@@ -40,6 +72,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       final db = ref.read(databaseServiceProvider);
       db.loadPayments();
       db.loadCommissions();
+      db.loadCustomers();
+      db.loadDealers();
+      db.loadSalesInvoices();
+      db.loadVendors();
+      db.loadPurchases();
     });
   }
 
@@ -82,10 +119,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   void dispose() {
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
+    _customerSearchCtrl?.dispose();
+    _dealerSearchCtrl?.dispose();
+    _vendorSearchCtrl?.dispose();
     super.dispose();
   }
 
-  void _openRecordPaymentDialog(PaymentType type) {
+  void _openRecordPaymentDialog(PaymentType type, {String? preselectedPartyId}) {
     final db = ref.read(databaseServiceProvider);
     final amountCtrl = TextEditingController();
     final refCtrl = TextEditingController();
@@ -96,7 +136,9 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     PaymentMode selectedMode = PaymentMode.bankTransfer;
     final formKey = GlobalKey<FormState>();
 
-    if (type == PaymentType.customerPayment && db.customers.isNotEmpty) {
+    if (preselectedPartyId != null) {
+      selectedPartyId = preselectedPartyId;
+    } else if (type == PaymentType.customerPayment && db.customers.isNotEmpty) {
       selectedPartyId = db.customers.first.id;
     } else if (type == PaymentType.dealerPayment && db.dealers.isNotEmpty) {
       selectedPartyId = db.dealers.first.id;
@@ -503,7 +545,10 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                 ErpButton(
                   text: 'Cancel',
                   isOutlined: true,
-                  onPressed: () => Navigator.of(ctx).pop(),
+                  onPressed: () {
+                    FocusScope.of(ctx).unfocus();
+                    Navigator.of(ctx).pop();
+                  },
                 ),
                 ErpButton(
                   text: 'Save Payment Entry',
@@ -534,6 +579,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     );
 
                     db.addPaymentAsync(payment);
+                    FocusScope.of(ctx).unfocus();
                     Navigator.of(ctx).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -641,23 +687,25 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
           const SizedBox(height: 16),
 
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search payments by payment no, party name, ref doc, UTR, or notes...',
-              prefixIcon: Icon(Icons.search, size: 18),
+          if (_tabController.index > 2) ...[
+            TextField(
+              onChanged: (val) => setState(() => _searchQuery = val),
+              decoration: const InputDecoration(
+                hintText: 'Search payments by payment no, party name, ref doc, UTR, or notes...',
+                prefixIcon: Icon(Icons.search, size: 18),
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
+          ],
 
           SizedBox(
-            height: 560,
+            height: 680,
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildPaymentTable(_filterPayments(db.payments.where((p) => p.paymentType == PaymentType.customerPayment).toList())),
-                _buildPaymentTable(_filterPayments(db.payments.where((p) => p.paymentType == PaymentType.dealerPayment).toList())),
-                _buildPaymentTable(_filterPayments(db.payments.where((p) => p.paymentType == PaymentType.vendorPayment).toList())),
+                _buildCustomerCollectionsTab(db),
+                _buildDealerReceiptsTab(db),
+                _buildVendorDisbursementsTab(db),
                 _buildPaymentTable(_filterPayments(db.payments.where((p) => p.paymentType == PaymentType.commissionPayment).toList())),
               ],
             ),
@@ -667,16 +715,2073 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     );
   }
 
+  static String _safeStr(Object? val) => (val == null) ? '' : val.toString().trim();
+  static String _safeLower(Object? val) => (val == null) ? '' : val.toString().trim().toLowerCase();
+  static int _safeInt(Object? val, int fallback) {
+    if (val == null) return fallback;
+    if (val is int) return val;
+    if (val is num) return val.toInt();
+    return int.tryParse(val.toString()) ?? fallback;
+  }
+  static double _safeDouble(Object? val, [double fallback = 0.0]) {
+    if (val == null) return fallback;
+    if (val is double) return val;
+    if (val is num) return val.toDouble();
+    return double.tryParse(val.toString()) ?? fallback;
+  }
+
+  Widget _buildCustomerCollectionsTab(MockDatabaseService db) {
+    final allSummaries = _computeCustomerSummaries(db);
+    final query = _safeLower(_customerSearchQuery);
+    final filtered = query.isEmpty
+        ? allSummaries
+        : allSummaries.where((s) {
+            final c = s.customer;
+            return _safeLower(c.name).contains(query) ||
+                _safeLower(c.mobile).contains(query) ||
+                _safeLower(c.gstNumber).contains(query) ||
+                _safeLower(c.address).contains(query);
+          }).toList();
+
+    final totalCount = filtered.length;
+    final pageSize = _safeCustomerPageSize;
+    final currentPage = _safeCustomerCurrentPage;
+    final startIndex = currentPage * pageSize;
+    final endIndex = min(startIndex + pageSize, totalCount);
+    final pageSummaries = (startIndex < totalCount) ? filtered.sublist(startIndex, endIndex) : <CustomerAccountSummary>[];
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Manage customer accounts and track balances',
+            style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          _buildCustomerControlsRow(totalCount, pageSummaries.length),
+          const SizedBox(height: 16),
+          _buildCustomerAccountsTable(pageSummaries),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomerControlsRow(int totalCount, int shownCount) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 650;
+        final ctrl = _safeCustomerSearchCtrl;
+        final pageSize = _safeCustomerPageSize;
+        final currentPage = _safeCustomerCurrentPage;
+
+        final searchBox = SizedBox(
+          width: isNarrow ? double.infinity : 320,
+          height: 42,
+          child: TextField(
+            controller: ctrl,
+            onChanged: (val) {
+              setState(() {
+                _customerSearchQuery = val;
+                _customerCurrentPage = 0;
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Search customers...',
+              hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+              prefixIcon: Icon(Icons.search, size: 18, color: Colors.grey.shade500),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+            ),
+          ),
+        );
+
+        final paginationControls = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(width: 8),
+            Container(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
+                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
+                  items: const [
+                    DropdownMenuItem(value: 5, child: Text('5')),
+                    DropdownMenuItem(value: 10, child: Text('10')),
+                    DropdownMenuItem(value: 25, child: Text('25')),
+                    DropdownMenuItem(value: 50, child: Text('50')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _customerPageSize = val;
+                        _customerCurrentPage = 0;
+                      });
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Showing $shownCount of $totalCount customers',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+            ),
+            if (totalCount > pageSize) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.chevron_left, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: currentPage > 0
+                    ? () => setState(() => _customerCurrentPage = currentPage - 1)
+                    : null,
+              ),
+              Text(
+                '${currentPage + 1}/${max(1, (totalCount / pageSize).ceil())}',
+                style: AppTextStyles.bodySmall,
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: (currentPage + 1) * pageSize < totalCount
+                    ? () => setState(() => _customerCurrentPage = currentPage + 1)
+                    : null,
+              ),
+            ],
+          ],
+        );
+
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              searchBox,
+              const SizedBox(height: 10),
+              paginationControls,
+            ],
+          );
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            searchBox,
+            paginationControls,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCustomerAccountsTable(List<CustomerAccountSummary> summaries) {
+    if (summaries.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(48),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.people_outline, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            Text('No matching customers found', style: AppTextStyles.bodyMedium),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth > 0 ? constraints.maxWidth : 900),
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                headingTextStyle: AppTextStyles.tableHeader,
+                dataTextStyle: AppTextStyles.tableCell,
+                dividerThickness: 1,
+                horizontalMargin: 20,
+                columnSpacing: 28,
+                headingRowHeight: 46,
+                dataRowMinHeight: 58,
+                dataRowMaxHeight: 64,
+                columns: [
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.person_outline, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('CUSTOMER NAME', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.currency_rupee, size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text('SALE TOTAL', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.currency_rupee, size: 14, color: Color(0xFF16A34A)),
+                        const SizedBox(width: 4),
+                        Text('PAID AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF16A34A))),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.percent, size: 14, color: Color(0xFF7C3AED)),
+                        const SizedBox(width: 4),
+                        Text('DISCOUNT GIVEN', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF7C3AED))),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.schedule, size: 15, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text('PENDING AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.description_outlined, size: 15, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('ACTIONS', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                ],
+                rows: summaries.map((summary) {
+                  return DataRow(
+                    cells: [
+                      // CUSTOMER NAME
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE0F2FE),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.person, color: Color(0xFF0284C7), size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  summary.customer.name.isNotEmpty ? summary.customer.name : 'Unnamed Customer',
+                                  style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.description_outlined, size: 11, color: Colors.grey.shade500),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${summary.transactionCount} transactions',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // SALE TOTAL
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.saleTotal),
+                          style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                        ),
+                      ),
+                      // PAID AMOUNT
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.paidAmount),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 13,
+                            color: const Color(0xFF16A34A),
+                          ),
+                        ),
+                      ),
+                      // DISCOUNT GIVEN
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.discountGiven),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 13,
+                            color: const Color(0xFF7C3AED),
+                          ),
+                        ),
+                      ),
+                      // PENDING AMOUNT
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.pendingAmount),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 13,
+                            color: summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                          ),
+                        ),
+                      ),
+                      // ACTIONS
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.edit_note_rounded, size: 16),
+                              label: const Text('Transaction', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF0284C7),
+                                side: const BorderSide(color: Color(0xFFBAE6FD)),
+                                backgroundColor: const Color(0xFFF0F9FF),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              onPressed: () => _openRecordPaymentDialog(
+                                PaymentType.customerPayment,
+                                preselectedPartyId: summary.customer.id,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.visibility_outlined, size: 15),
+                              label: const Text('History', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF475569),
+                                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                backgroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              onPressed: () => _openCustomerHistoryDialog(summary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _openCustomerHistoryDialog(CustomerAccountSummary summary) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 960, maxHeight: 680),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE0F2FE),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.person, color: Color(0xFF0284C7)),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              summary.customer.name.isNotEmpty ? summary.customer.name : 'Unnamed Customer',
+                              style: AppTextStyles.h2.copyWith(fontSize: 18),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Customer Ledger & Transaction Statement (Sheet 2)',
+                              style: AppTextStyles.subtitle.copyWith(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        FocusScope.of(ctx).unfocus();
+                        Navigator.of(ctx).pop();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Summary Cards
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
+                    _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
+                    _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                    _buildHistoryStatCard(
+                      'Net Pending',
+                      Formatters.formatCurrency(summary.pendingAmount),
+                      summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+
+                // 8-Column Ledger Table (Sheet 2)
+                Expanded(
+                  child: summary.entries.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
+                              const SizedBox(height: 8),
+                              Text('No transactions recorded yet for this customer.', style: AppTextStyles.bodyMedium),
+                            ],
+                          ),
+                        )
+                      : ErpDataTable(
+                          columns: const [
+                            ErpColumn(title: 'Doc / Name'),
+                            ErpColumn(title: 'Total Pending', isNumeric: true),
+                            ErpColumn(title: 'Type'),
+                            ErpColumn(title: 'Date'),
+                            ErpColumn(title: 'Mode'),
+                            ErpColumn(title: 'Discount', isNumeric: true),
+                            ErpColumn(title: 'New Pending', isNumeric: true),
+                            ErpColumn(title: 'Remarks'),
+                          ],
+                          rows: summary.entries.map((entry) {
+                            return [
+                              Text(entry.docNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
+                              Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
+                              entry.type == 'Sale Invoice'
+                                  ? ErpStatusBadge.info('SALE')
+                                  : ErpStatusBadge.success('RECEIPT'),
+                              Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
+                              ErpStatusBadge.neutral(entry.paymentMode),
+                              Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
+                              Text(
+                                Formatters.formatCurrency(entry.closingPending),
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  fontSize: 12,
+                                  color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                ),
+                              ),
+                              Text(entry.remarks, style: AppTextStyles.bodySmall),
+                            ];
+                          }).toList(),
+                        ),
+                ),
+                const SizedBox(height: 16),
+
+                // Action buttons footer
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ErpButton(
+                      text: 'Close',
+                      isOutlined: true,
+                      onPressed: () {
+                        FocusScope.of(ctx).unfocus();
+                        Navigator.of(ctx).pop();
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    ErpButton(
+                      text: 'Record Transaction',
+                      icon: Icons.edit_note_rounded,
+                      onPressed: () {
+                        FocusScope.of(ctx).unfocus();
+                        Navigator.of(ctx).pop();
+                        _openRecordPaymentDialog(PaymentType.customerPayment, preselectedPartyId: summary.customer.id);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDealerReceiptsTab(MockDatabaseService db) {
+    final allSummaries = _computeDealerSummaries(db);
+    final query = _safeLower(_dealerSearchQuery);
+    final filtered = query.isEmpty
+        ? allSummaries
+        : allSummaries.where((s) {
+            final d = s.dealer;
+            return _safeLower(d.name).contains(query) ||
+                _safeLower(d.companyName).contains(query) ||
+                _safeLower(d.mobile).contains(query) ||
+                _safeLower(d.gstNumber).contains(query) ||
+                _safeLower(d.address).contains(query);
+          }).toList();
+
+    final totalCount = filtered.length;
+    final pageSize = _safeDealerPageSize;
+    final currentPage = _safeDealerCurrentPage;
+    final startIndex = currentPage * pageSize;
+    final endIndex = min(startIndex + pageSize, totalCount);
+    final pageSummaries = (startIndex < totalCount) ? filtered.sublist(startIndex, endIndex) : <DealerAccountSummary>[];
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Manage dealer accounts and track balances (Sheet 2)',
+            style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          _buildDealerControlsRow(totalCount, pageSummaries.length),
+          const SizedBox(height: 16),
+          _buildDealerAccountsTable(pageSummaries),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDealerControlsRow(int totalCount, int shownCount) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 650;
+        final ctrl = _safeDealerSearchCtrl;
+        final pageSize = _safeDealerPageSize;
+        final currentPage = _safeDealerCurrentPage;
+
+        final searchBox = SizedBox(
+          width: isNarrow ? double.infinity : 320,
+          height: 42,
+          child: TextField(
+            controller: ctrl,
+            onChanged: (val) {
+              setState(() {
+                _dealerSearchQuery = val;
+                _dealerCurrentPage = 0;
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Search dealers...',
+              hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+              prefixIcon: Icon(Icons.search, size: 18, color: Colors.grey.shade500),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+            ),
+          ),
+        );
+
+        final paginationControls = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(width: 8),
+            Container(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
+                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
+                  items: const [
+                    DropdownMenuItem(value: 5, child: Text('5')),
+                    DropdownMenuItem(value: 10, child: Text('10')),
+                    DropdownMenuItem(value: 25, child: Text('25')),
+                    DropdownMenuItem(value: 50, child: Text('50')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _dealerPageSize = val;
+                        _dealerCurrentPage = 0;
+                      });
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Showing $shownCount of $totalCount dealers',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+            ),
+            if (totalCount > pageSize) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.chevron_left, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: currentPage > 0
+                    ? () => setState(() => _dealerCurrentPage = currentPage - 1)
+                    : null,
+              ),
+              Text(
+                '${currentPage + 1}/${max(1, (totalCount / pageSize).ceil())}',
+                style: AppTextStyles.bodySmall,
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: (currentPage + 1) * pageSize < totalCount
+                    ? () => setState(() => _dealerCurrentPage = currentPage + 1)
+                    : null,
+              ),
+            ],
+          ],
+        );
+
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              searchBox,
+              const SizedBox(height: 10),
+              paginationControls,
+            ],
+          );
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            searchBox,
+            paginationControls,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDealerAccountsTable(List<DealerAccountSummary> summaries) {
+    if (summaries.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(48),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.storefront_outlined, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            Text('No matching dealers found', style: AppTextStyles.bodyMedium),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth > 0 ? constraints.maxWidth : 900),
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                headingTextStyle: AppTextStyles.tableHeader,
+                dataTextStyle: AppTextStyles.tableCell,
+                dividerThickness: 1,
+                horizontalMargin: 20,
+                columnSpacing: 28,
+                headingRowHeight: 46,
+                dataRowMinHeight: 58,
+                dataRowMaxHeight: 64,
+                columns: [
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.storefront_outlined, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('DEALER NAME', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.currency_rupee, size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text('SALE TOTAL', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.currency_rupee, size: 14, color: Color(0xFF16A34A)),
+                        const SizedBox(width: 4),
+                        Text('PAID AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF16A34A))),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.percent, size: 14, color: Color(0xFF7C3AED)),
+                        const SizedBox(width: 4),
+                        Text('DISCOUNT GIVEN', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF7C3AED))),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    numeric: true,
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.schedule, size: 15, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text('PENDING AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.description_outlined, size: 15, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('ACTIONS', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                ],
+                rows: summaries.map((summary) {
+                  return DataRow(
+                    cells: [
+                      // DEALER NAME
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDCFCE7),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.storefront_outlined, color: Color(0xFF16A34A), size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  summary.dealer.name.isNotEmpty ? summary.dealer.name : 'Unnamed Dealer',
+                                  style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.description_outlined, size: 11, color: Colors.grey.shade500),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      (summary.dealer.companyName.isNotEmpty)
+                                          ? '${summary.dealer.companyName} • ${summary.transactionCount} transactions'
+                                          : '${summary.transactionCount} transactions',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // SALE TOTAL
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.saleTotal),
+                          style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                        ),
+                      ),
+                      // PAID AMOUNT
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.paidAmount),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 13,
+                            color: const Color(0xFF16A34A),
+                          ),
+                        ),
+                      ),
+                      // DISCOUNT GIVEN
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.discountGiven),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 13,
+                            color: const Color(0xFF7C3AED),
+                          ),
+                        ),
+                      ),
+                      // PENDING AMOUNT
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.pendingAmount),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 13,
+                            color: summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                          ),
+                        ),
+                      ),
+                      // ACTIONS
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.edit_note_rounded, size: 16),
+                              label: const Text('Transaction', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF0284C7),
+                                side: const BorderSide(color: Color(0xFFBAE6FD)),
+                                backgroundColor: const Color(0xFFF0F9FF),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              onPressed: () => _openRecordPaymentDialog(
+                                PaymentType.dealerPayment,
+                                preselectedPartyId: summary.dealer.id,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.visibility_outlined, size: 15),
+                              label: const Text('History', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF475569),
+                                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                backgroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              onPressed: () => _openDealerHistoryDialog(summary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _openDealerHistoryDialog(DealerAccountSummary summary) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 960, maxHeight: 680),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.storefront_outlined, color: Color(0xFF16A34A)),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              summary.dealer.name.isNotEmpty ? summary.dealer.name : 'Unnamed Dealer',
+                              style: AppTextStyles.h2.copyWith(fontSize: 18),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Dealer Ledger & Transaction Statement (Sheet 2)',
+                              style: AppTextStyles.subtitle.copyWith(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        FocusScope.of(ctx).unfocus();
+                        Navigator.of(ctx).pop();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Summary Cards
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
+                    _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
+                    _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                    _buildHistoryStatCard(
+                      'Net Pending',
+                      Formatters.formatCurrency(summary.pendingAmount),
+                      summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+
+                // 8-Column Ledger Table (Sheet 2)
+                Expanded(
+                  child: summary.entries.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
+                              const SizedBox(height: 8),
+                              Text('No transactions recorded yet for this dealer.', style: AppTextStyles.bodyMedium),
+                            ],
+                          ),
+                        )
+                      : ErpDataTable(
+                          columns: const [
+                            ErpColumn(title: 'Doc / Name'),
+                            ErpColumn(title: 'Total Pending', isNumeric: true),
+                            ErpColumn(title: 'Type'),
+                            ErpColumn(title: 'Date'),
+                            ErpColumn(title: 'Mode'),
+                            ErpColumn(title: 'Discount', isNumeric: true),
+                            ErpColumn(title: 'New Pending', isNumeric: true),
+                            ErpColumn(title: 'Remarks'),
+                          ],
+                          rows: summary.entries.map((entry) {
+                            return [
+                              Text(entry.docNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
+                              Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
+                              entry.type == 'Sale Invoice'
+                                  ? ErpStatusBadge.info('SALE')
+                                  : ErpStatusBadge.success('RECEIPT'),
+                              Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
+                              ErpStatusBadge.neutral(entry.paymentMode),
+                              Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
+                              Text(
+                                Formatters.formatCurrency(entry.closingPending),
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  fontSize: 12,
+                                  color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                ),
+                              ),
+                              Text(entry.remarks, style: AppTextStyles.bodySmall),
+                            ];
+                          }).toList(),
+                        ),
+                ),
+                const SizedBox(height: 16),
+
+                // Action buttons footer
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ErpButton(
+                      text: 'Close',
+                      isOutlined: true,
+                      onPressed: () {
+                        FocusScope.of(ctx).unfocus();
+                        Navigator.of(ctx).pop();
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    ErpButton(
+                      text: 'Record Transaction',
+                      icon: Icons.edit_note_rounded,
+                      onPressed: () {
+                        FocusScope.of(ctx).unfocus();
+                        Navigator.of(ctx).pop();
+                        _openRecordPaymentDialog(PaymentType.dealerPayment, preselectedPartyId: summary.dealer.id);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<DealerAccountSummary> _computeDealerSummaries(MockDatabaseService db) {
+    final summaries = <DealerAccountSummary>[];
+
+    for (final dealer in db.dealers) {
+      if (dealer.isDeleted) continue;
+
+      final String dId = _safeStr(dealer.id);
+      final String dName = _safeLower(dealer.name);
+      final String dComp = _safeLower(dealer.companyName);
+
+      final dealerSales = db.sales.where((s) {
+        final sPartyId = _safeStr(s.partyId);
+        final sPartyName = _safeLower(s.partyName);
+        final matchesId = dId.isNotEmpty && sPartyId == dId;
+        final matchesName = (dName.isNotEmpty && sPartyName == dName) || (dComp.isNotEmpty && sPartyName == dComp);
+        final isRelevantType = s.documentType == SalesDocumentType.invoice || s.documentType == SalesDocumentType.salesOrder;
+        return (matchesId || matchesName) && isRelevantType;
+      }).toList();
+
+      final dealerPayments = db.payments.where((p) {
+        final pPartyId = _safeStr(p.partyId);
+        final pPartyName = _safeLower(p.partyName);
+        final matchesId = dId.isNotEmpty && pPartyId == dId;
+        final matchesName = (dName.isNotEmpty && pPartyName == dName) || (dComp.isNotEmpty && pPartyName == dComp);
+        final isDealerPayment = p.paymentType == PaymentType.dealerPayment;
+        return (matchesId || matchesName) && isDealerPayment;
+      }).toList();
+
+      final events = <_LedgerRawEvent>[];
+      for (final s in dealerSales) {
+        events.add(_LedgerRawEvent(
+          docNumber: _safeStr(s.invoiceNumber).isNotEmpty ? s.invoiceNumber : 'INV-UNTITLED',
+          isSale: true,
+          date: s.saleDate,
+          amount: s.totalAmount,
+          discount: s.discountAmount,
+          mode: 'INVOICE',
+          notes: (s.notes != null && s.notes!.isNotEmpty) ? s.notes! : 'Tax Invoice',
+        ));
+      }
+      for (final p in dealerPayments) {
+        final modeLabel = p.paymentMode.name.toUpperCase();
+        events.add(_LedgerRawEvent(
+          docNumber: _safeStr(p.paymentNumber).isNotEmpty ? p.paymentNumber : 'PAY-UNTITLED',
+          isSale: false,
+          date: p.paymentDate,
+          amount: p.amount,
+          discount: 0.0,
+          mode: modeLabel,
+          notes: (p.transactionReference != null && p.transactionReference!.isNotEmpty)
+              ? '${p.notes != null && p.notes!.isNotEmpty ? p.notes : "Payment"} (Ref: ${p.transactionReference})'
+              : (p.notes != null && p.notes!.isNotEmpty ? p.notes! : 'Dealer Receipt'),
+        ));
+      }
+      events.sort((a, b) => a.date.compareTo(b.date));
+
+      double runningPending = 0.0;
+      final entries = <CustomerLedgerEntry>[];
+      for (final ev in events) {
+        final opening = runningPending;
+        if (ev.isSale) {
+          runningPending = opening + ev.amount;
+        } else {
+          runningPending = (opening - ev.amount).clamp(0.0, double.infinity);
+        }
+        entries.add(CustomerLedgerEntry(
+          docNumber: ev.docNumber,
+          openingPending: opening,
+          type: ev.isSale ? 'Sale Invoice' : 'Dealer Receipt',
+          date: ev.date,
+          paymentMode: ev.mode,
+          discount: ev.discount,
+          closingPending: runningPending,
+          remarks: ev.notes,
+        ));
+      }
+
+      final double saleTotal = dealerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.totalAmount));
+      final double paidAmount = dealerPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
+      final double discountGiven = dealerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.discountAmount));
+      final double dealerOutstanding = _safeDouble(dealer.outstandingAmount);
+
+      double pendingAmount;
+      if (dealerSales.isNotEmpty || dealerPayments.isNotEmpty) {
+        pendingAmount = (saleTotal - paidAmount - discountGiven).clamp(0.0, double.infinity);
+      } else {
+        pendingAmount = dealerOutstanding;
+      }
+
+      final double effectiveSaleTotal = (dealerSales.isEmpty && dealerPayments.isEmpty && dealerOutstanding > 0)
+          ? dealerOutstanding
+          : saleTotal;
+
+      summaries.add(DealerAccountSummary(
+        dealer: dealer,
+        saleTotal: effectiveSaleTotal,
+        paidAmount: paidAmount,
+        discountGiven: discountGiven,
+        pendingAmount: pendingAmount,
+        transactionCount: events.length,
+        entries: entries,
+      ));
+    }
+
+    return summaries;
+  }
+
+  Widget _buildVendorDisbursementsTab(MockDatabaseService db) {
+    final allSummaries = _computeVendorSummaries(db);
+    final query = _safeLower(_vendorSearchQuery);
+    final filtered = query.isEmpty
+        ? allSummaries
+        : allSummaries.where((s) {
+            final v = s.vendor;
+            return _safeLower(v.name).contains(query) ||
+                _safeLower(v.contactPerson).contains(query) ||
+                _safeLower(v.mobile).contains(query) ||
+                _safeLower(v.email).contains(query) ||
+                _safeLower(v.gstNumber).contains(query) ||
+                _safeLower(v.panNumber).contains(query) ||
+                _safeLower(v.address).contains(query);
+          }).toList();
+
+    final totalCount = filtered.length;
+    final pageSize = _safeVendorPageSize;
+    final currentPage = _safeVendorCurrentPage;
+    final startIndex = currentPage * pageSize;
+    final endIndex = min(startIndex + pageSize, totalCount);
+    final pageSummaries = (startIndex < totalCount) ? filtered.sublist(startIndex, endIndex) : <VendorAccountSummary>[];
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Manage vendor accounts and track balances (Sheet 2)',
+            style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          _buildVendorControlsRow(totalCount, pageSummaries.length),
+          const SizedBox(height: 16),
+          _buildVendorAccountsTable(pageSummaries),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVendorControlsRow(int totalCount, int shownCount) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 650;
+        final ctrl = _safeVendorSearchCtrl;
+        final pageSize = _safeVendorPageSize;
+        final currentPage = _safeVendorCurrentPage;
+
+        final searchBox = SizedBox(
+          width: isNarrow ? double.infinity : 320,
+          height: 42,
+          child: TextField(
+            controller: ctrl,
+            onChanged: (val) {
+              setState(() {
+                _vendorSearchQuery = val;
+                _vendorCurrentPage = 0;
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Search vendors...',
+              hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+              prefixIcon: Icon(Icons.search, size: 18, color: Colors.grey.shade500),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+            ),
+          ),
+        );
+
+        final paginationControls = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(width: 8),
+            Container(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: (pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
+                  icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                  style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600, color: Colors.black87),
+                  items: const [
+                    DropdownMenuItem(value: 10, child: Text('10')),
+                    DropdownMenuItem(value: 25, child: Text('25')),
+                    DropdownMenuItem(value: 50, child: Text('50')),
+                  ],
+                  onChanged: (newSize) {
+                    if (newSize != null) {
+                      setState(() {
+                        _vendorPageSize = newSize;
+                        _vendorCurrentPage = 0;
+                      });
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Showing $shownCount of $totalCount',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+            ),
+            if (totalCount > pageSize) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.chevron_left, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: currentPage > 0
+                    ? () => setState(() => _vendorCurrentPage = currentPage - 1)
+                    : null,
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: (currentPage + 1) * pageSize < totalCount
+                    ? () => setState(() => _vendorCurrentPage = currentPage + 1)
+                    : null,
+              ),
+            ],
+          ],
+        );
+
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              searchBox,
+              const SizedBox(height: 10),
+              paginationControls,
+            ],
+          );
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            searchBox,
+            paginationControls,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildVendorAccountsTable(List<VendorAccountSummary> summaries) {
+    if (summaries.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(48),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            Text('No matching vendors found', style: AppTextStyles.bodyMedium),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth > 0 ? constraints.maxWidth : 900),
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                headingTextStyle: AppTextStyles.tableHeader,
+                dataTextStyle: AppTextStyles.tableCell,
+                dividerThickness: 1,
+                horizontalMargin: 20,
+                columnSpacing: 28,
+                headingRowHeight: 46,
+                dataRowMinHeight: 58,
+                dataRowMaxHeight: 64,
+                columns: [
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.inventory_2_outlined, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('VENDOR NAME', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.shopping_bag_outlined, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('PURCHASE TOTAL', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                    numeric: true,
+                  ),
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_outline, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('PAID AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                    numeric: true,
+                  ),
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.discount_outlined, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('DISCOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                    numeric: true,
+                  ),
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.pending_actions_outlined, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('PENDING AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                    numeric: true,
+                  ),
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.tune_outlined, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('ACTIONS', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                ],
+                rows: summaries.map((summary) {
+                  final initial = summary.vendor.name.trim().isNotEmpty
+                      ? summary.vendor.name.trim().substring(0, 1).toUpperCase()
+                      : 'V';
+
+                  return DataRow(
+                    cells: [
+                      // Vendor Name + Subtitle
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircleAvatar(
+                              radius: 17,
+                              backgroundColor: const Color(0xFFEFF6FF),
+                              child: Text(
+                                initial,
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB), fontSize: 13),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  summary.vendor.name.isNotEmpty ? summary.vendor.name : 'Unnamed Vendor',
+                                  style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${summary.transactionCount} transactions${summary.vendor.contactPerson.isNotEmpty ? " • ${summary.vendor.contactPerson}" : ""}',
+                                  style: AppTextStyles.bodySmall.copyWith(fontSize: 11, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Purchase Total
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.purchaseTotal),
+                          style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                        ),
+                      ),
+                      // Paid Amount
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.paidAmount),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 13,
+                            color: summary.paidAmount > 0 ? const Color(0xFF16A34A) : AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      // Discount
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.discountGiven),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 13,
+                            color: summary.discountGiven > 0 ? const Color(0xFF7C3AED) : AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      // Pending Amount
+                      DataCell(
+                        Text(
+                          Formatters.formatCurrency(summary.pendingAmount),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 13,
+                            color: summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                          ),
+                        ),
+                      ),
+                      // Actions
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.edit_note_rounded, size: 15),
+                              label: const Text('Transaction', style: TextStyle(fontSize: 11)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                side: const BorderSide(color: AppColors.primary),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              onPressed: () {
+                                _openRecordPaymentDialog(
+                                  PaymentType.vendorPayment,
+                                  preselectedPartyId: summary.vendor.id,
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.history_rounded, size: 15),
+                              label: const Text('History', style: TextStyle(fontSize: 11)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF0F172A),
+                                side: BorderSide(color: Colors.grey.shade300),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              onPressed: () => _openVendorHistoryDialog(summary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _openVendorHistoryDialog(VendorAccountSummary summary) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Container(
+            width: 1000,
+            constraints: const BoxConstraints(maxHeight: 700),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB)),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              summary.vendor.name.isNotEmpty ? summary.vendor.name : 'Unnamed Vendor',
+                              style: AppTextStyles.h2.copyWith(fontSize: 18),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Vendor Ledger & Transaction Statement (Sheet 2)',
+                              style: AppTextStyles.subtitle.copyWith(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        FocusScope.of(ctx).unfocus();
+                        Navigator.of(ctx).pop();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Summary Cards
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    _buildHistoryStatCard('Purchase Total', Formatters.formatCurrency(summary.purchaseTotal), Colors.black87),
+                    _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
+                    _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                    _buildHistoryStatCard(
+                      'Net Pending',
+                      Formatters.formatCurrency(summary.pendingAmount),
+                      summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+
+                // 8-Column Ledger Table (Sheet 2)
+                Expanded(
+                  child: summary.entries.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
+                              const SizedBox(height: 10),
+                              Text('No ledger entries recorded yet', style: AppTextStyles.bodyMedium),
+                            ],
+                          ),
+                        )
+                      : ErpDataTable(
+                          columns: const [
+                            ErpColumn(title: 'Doc / Name'),
+                            ErpColumn(title: 'Total Pending (Opening)', isNumeric: true),
+                            ErpColumn(title: 'Type'),
+                            ErpColumn(title: 'Date'),
+                            ErpColumn(title: 'Mode'),
+                            ErpColumn(title: 'Discount', isNumeric: true),
+                            ErpColumn(title: 'New Pending (Closing)', isNumeric: true),
+                            ErpColumn(title: 'Remarks'),
+                          ],
+                          rows: summary.entries.map((entry) {
+                            final isPurchase = entry.type.toLowerCase().contains('purchase') || entry.type.toLowerCase().contains('invoice');
+                            return [
+                              Text(
+                                entry.docNumber,
+                                style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary),
+                              ),
+                              Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
+                              isPurchase
+                                  ? ErpStatusBadge.neutral(entry.type)
+                                  : ErpStatusBadge.success(entry.type),
+                              Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
+                              ErpStatusBadge.neutral(entry.paymentMode),
+                              Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
+                              Text(
+                                Formatters.formatCurrency(entry.closingPending),
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  fontSize: 12,
+                                  color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                ),
+                              ),
+                              Text(entry.remarks, style: AppTextStyles.bodySmall),
+                            ];
+                          }).toList(),
+                        ),
+                ),
+                const SizedBox(height: 16),
+
+                // Action buttons footer
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ErpButton(
+                      text: 'Close',
+                      isOutlined: true,
+                      onPressed: () {
+                        FocusScope.of(ctx).unfocus();
+                        Navigator.of(ctx).pop();
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    ErpButton(
+                      text: 'Record Transaction',
+                      icon: Icons.edit_note_rounded,
+                      onPressed: () {
+                        FocusScope.of(ctx).unfocus();
+                        Navigator.of(ctx).pop();
+                        _openRecordPaymentDialog(PaymentType.vendorPayment, preselectedPartyId: summary.vendor.id);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<VendorAccountSummary> _computeVendorSummaries(MockDatabaseService db) {
+    final summaries = <VendorAccountSummary>[];
+
+    for (final vendor in db.vendors) {
+      if (vendor.isDeleted) continue;
+
+      final String vId = _safeStr(vendor.id);
+      final String vName = _safeLower(vendor.name);
+
+      final vendorPurchases = db.purchases.where((p) {
+        final pVendorId = _safeStr(p.vendorId);
+        final pVendorName = _safeLower(p.vendorName);
+        final matchesId = vId.isNotEmpty && pVendorId == vId;
+        final matchesName = vName.isNotEmpty && pVendorName == vName;
+        final isNotCancelled = p.status != PurchaseStatus.cancelled;
+        return (matchesId || matchesName) && isNotCancelled;
+      }).toList();
+
+      final vendorPayments = db.payments.where((p) {
+        final pPartyId = _safeStr(p.partyId);
+        final pPartyName = _safeLower(p.partyName);
+        final matchesId = vId.isNotEmpty && pPartyId == vId;
+        final matchesName = vName.isNotEmpty && pPartyName == vName;
+        final isVendorPayment = p.paymentType == PaymentType.vendorPayment;
+        return (matchesId || matchesName) && isVendorPayment;
+      }).toList();
+
+      final events = <_LedgerRawEvent>[];
+      for (final p in vendorPurchases) {
+        final docNum = _safeStr(p.purchaseNumber).isNotEmpty
+            ? p.purchaseNumber
+            : (_safeStr(p.vendorInvoiceNumber).isNotEmpty ? p.vendorInvoiceNumber : 'PUR-UNTITLED');
+        events.add(_LedgerRawEvent(
+          docNumber: docNum,
+          isSale: true,
+          date: p.purchaseDate,
+          amount: p.totalAmount,
+          discount: p.discountAmount,
+          mode: 'PURCHASE',
+          notes: (p.notes != null && p.notes!.isNotEmpty) ? p.notes! : 'Purchase Invoice',
+        ));
+      }
+
+      for (final p in vendorPayments) {
+        final modeLabel = p.paymentMode.name.toUpperCase();
+        events.add(_LedgerRawEvent(
+          docNumber: _safeStr(p.paymentNumber).isNotEmpty ? p.paymentNumber : 'PAY-UNTITLED',
+          isSale: false,
+          date: p.paymentDate,
+          amount: p.amount,
+          discount: 0.0,
+          mode: modeLabel,
+          notes: (p.transactionReference != null && p.transactionReference!.isNotEmpty)
+              ? '${p.notes != null && p.notes!.isNotEmpty ? p.notes : "Payment"} (Ref: ${p.transactionReference})'
+              : (p.notes != null && p.notes!.isNotEmpty ? p.notes! : 'Vendor Payment'),
+        ));
+      }
+
+      events.sort((a, b) => a.date.compareTo(b.date));
+
+      double runningPending = 0.0;
+      final entries = <CustomerLedgerEntry>[];
+      for (final ev in events) {
+        final opening = runningPending;
+        if (ev.isSale) {
+          runningPending = opening + ev.amount;
+        } else {
+          runningPending = (opening - ev.amount).clamp(0.0, double.infinity);
+        }
+        entries.add(CustomerLedgerEntry(
+          docNumber: ev.docNumber,
+          openingPending: opening,
+          type: ev.isSale ? 'Purchase Invoice' : 'Vendor Payment',
+          date: ev.date,
+          paymentMode: ev.mode,
+          discount: ev.discount,
+          closingPending: runningPending,
+          remarks: ev.notes,
+        ));
+      }
+
+      final double purchaseTotal = vendorPurchases.fold(0.0, (acc, p) => acc + _safeDouble(p.totalAmount));
+      final double paidAmount = vendorPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
+      final double discountGiven = vendorPurchases.fold(0.0, (acc, p) => acc + _safeDouble(p.discountAmount));
+      final double vendorOutstanding = _safeDouble(vendor.outstandingBalance);
+
+      double pendingAmount;
+      if (vendorPurchases.isNotEmpty || vendorPayments.isNotEmpty) {
+        pendingAmount = (purchaseTotal - paidAmount - discountGiven).clamp(0.0, double.infinity);
+      } else {
+        pendingAmount = vendorOutstanding;
+      }
+
+      final double effectivePurchaseTotal = (vendorPurchases.isEmpty && vendorPayments.isEmpty && vendorOutstanding > 0)
+          ? vendorOutstanding
+          : purchaseTotal;
+
+      summaries.add(VendorAccountSummary(
+        vendor: vendor,
+        purchaseTotal: effectivePurchaseTotal,
+        paidAmount: paidAmount,
+        discountGiven: discountGiven,
+        pendingAmount: pendingAmount,
+        transactionCount: events.length,
+        entries: entries,
+      ));
+    }
+
+    return summaries;
+  }
+
+  Widget _buildHistoryStatCard(String label, String value, Color valueColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          const SizedBox(height: 2),
+          Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: valueColor)),
+        ],
+      ),
+    );
+  }
+
+  List<CustomerAccountSummary> _computeCustomerSummaries(MockDatabaseService db) {
+    final summaries = <CustomerAccountSummary>[];
+
+    for (final customer in db.customers) {
+      if (customer.isDeleted) continue;
+
+      final String cId = _safeStr(customer.id);
+      final String cName = _safeLower(customer.name);
+
+      final customerSales = db.sales.where((s) {
+        final sPartyId = _safeStr(s.partyId);
+        final sPartyName = _safeLower(s.partyName);
+        final matchesId = cId.isNotEmpty && sPartyId == cId;
+        final matchesName = cName.isNotEmpty && sPartyName == cName;
+        final isRelevantType = s.documentType == SalesDocumentType.invoice || s.documentType == SalesDocumentType.salesOrder;
+        return (matchesId || matchesName) && isRelevantType;
+      }).toList();
+
+      final customerPayments = db.payments.where((p) {
+        final pPartyId = _safeStr(p.partyId);
+        final pPartyName = _safeLower(p.partyName);
+        final matchesId = cId.isNotEmpty && pPartyId == cId;
+        final matchesName = cName.isNotEmpty && pPartyName == cName;
+        final isCustomerPayment = p.paymentType == PaymentType.customerPayment;
+        return (matchesId || matchesName) && isCustomerPayment;
+      }).toList();
+
+      final events = <_LedgerRawEvent>[];
+      for (final s in customerSales) {
+        events.add(_LedgerRawEvent(
+          docNumber: _safeStr(s.invoiceNumber).isNotEmpty ? s.invoiceNumber : 'INV-UNTITLED',
+          isSale: true,
+          date: s.saleDate,
+          amount: s.totalAmount,
+          discount: s.discountAmount,
+          mode: 'INVOICE',
+          notes: (s.notes != null && s.notes!.isNotEmpty) ? s.notes! : 'Tax Invoice',
+        ));
+      }
+      for (final p in customerPayments) {
+        final modeLabel = p.paymentMode.name.toUpperCase();
+        events.add(_LedgerRawEvent(
+          docNumber: _safeStr(p.paymentNumber).isNotEmpty ? p.paymentNumber : 'PAY-UNTITLED',
+          isSale: false,
+          date: p.paymentDate,
+          amount: p.amount,
+          discount: 0.0,
+          mode: modeLabel,
+          notes: (p.transactionReference != null && p.transactionReference!.isNotEmpty)
+              ? '${p.notes != null && p.notes!.isNotEmpty ? p.notes : "Payment"} (Ref: ${p.transactionReference})'
+              : (p.notes != null && p.notes!.isNotEmpty ? p.notes! : 'Customer Receipt'),
+        ));
+      }
+      events.sort((a, b) => a.date.compareTo(b.date));
+
+      double runningPending = 0.0;
+      final entries = <CustomerLedgerEntry>[];
+      for (final ev in events) {
+        final opening = runningPending;
+        if (ev.isSale) {
+          runningPending = opening + ev.amount;
+        } else {
+          runningPending = (opening - ev.amount).clamp(0.0, double.infinity);
+        }
+        entries.add(CustomerLedgerEntry(
+          docNumber: ev.docNumber,
+          openingPending: opening,
+          type: ev.isSale ? 'Sale Invoice' : 'Customer Receipt',
+          date: ev.date,
+          paymentMode: ev.mode,
+          discount: ev.discount,
+          closingPending: runningPending,
+          remarks: ev.notes,
+        ));
+      }
+
+      final double saleTotal = customerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.totalAmount));
+      final double paidAmount = customerPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
+      final double discountGiven = customerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.discountAmount));
+      final double custOutstanding = _safeDouble(customer.outstandingAmount);
+
+      double pendingAmount;
+      if (customerSales.isNotEmpty || customerPayments.isNotEmpty) {
+        pendingAmount = (saleTotal - paidAmount - discountGiven).clamp(0.0, double.infinity);
+      } else {
+        pendingAmount = custOutstanding;
+      }
+
+      final double effectiveSaleTotal = (customerSales.isEmpty && customerPayments.isEmpty && custOutstanding > 0)
+          ? custOutstanding
+          : saleTotal;
+
+      summaries.add(CustomerAccountSummary(
+        customer: customer,
+        saleTotal: effectiveSaleTotal,
+        paidAmount: paidAmount,
+        discountGiven: discountGiven,
+        pendingAmount: pendingAmount,
+        transactionCount: events.length,
+        entries: entries,
+      ));
+    }
+
+    return summaries;
+  }
+
   List<ErpPayment> _filterPayments(List<ErpPayment> list) {
-    final query = _searchQuery.trim().toLowerCase();
+    final query = _safeLower(_searchQuery);
     if (query.isEmpty) return list;
     return list.where((p) {
-      return p.paymentNumber.toLowerCase().contains(query) ||
-          p.partyName.toLowerCase().contains(query) ||
-          (p.referenceDocumentNumber != null && p.referenceDocumentNumber!.toLowerCase().contains(query)) ||
-          (p.transactionReference != null && p.transactionReference!.toLowerCase().contains(query)) ||
-          p.paymentMode.name.toLowerCase().contains(query) ||
-          (p.notes != null && p.notes!.toLowerCase().contains(query));
+      return _safeLower(p.paymentNumber).contains(query) ||
+          _safeLower(p.partyName).contains(query) ||
+          _safeLower(p.referenceDocumentNumber).contains(query) ||
+          _safeLower(p.transactionReference).contains(query) ||
+          _safeLower(p.paymentMode.name).contains(query) ||
+          _safeLower(p.notes).contains(query);
     }).toList();
   }
 
@@ -738,4 +2843,106 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       }).toList(),
     );
   }
+}
+
+class CustomerAccountSummary {
+  final Customer customer;
+  final double saleTotal;
+  final double paidAmount;
+  final double discountGiven;
+  final double pendingAmount;
+  final int transactionCount;
+  final List<CustomerLedgerEntry> entries;
+
+  CustomerAccountSummary({
+    required this.customer,
+    required this.saleTotal,
+    required this.paidAmount,
+    required this.discountGiven,
+    required this.pendingAmount,
+    required this.transactionCount,
+    required this.entries,
+  });
+}
+
+class DealerAccountSummary {
+  final Dealer dealer;
+  final double saleTotal;
+  final double paidAmount;
+  final double discountGiven;
+  final double pendingAmount;
+  final int transactionCount;
+  final List<CustomerLedgerEntry> entries;
+
+  DealerAccountSummary({
+    required this.dealer,
+    required this.saleTotal,
+    required this.paidAmount,
+    required this.discountGiven,
+    required this.pendingAmount,
+    required this.transactionCount,
+    required this.entries,
+  });
+}
+
+class VendorAccountSummary {
+  final Vendor vendor;
+  final double purchaseTotal;
+  final double paidAmount;
+  final double discountGiven;
+  final double pendingAmount;
+  final int transactionCount;
+  final List<CustomerLedgerEntry> entries;
+
+  VendorAccountSummary({
+    required this.vendor,
+    required this.purchaseTotal,
+    required this.paidAmount,
+    required this.discountGiven,
+    required this.pendingAmount,
+    required this.transactionCount,
+    required this.entries,
+  });
+}
+
+class CustomerLedgerEntry {
+  final String docNumber;
+  final double openingPending;
+  final String type;
+  final DateTime date;
+  final String paymentMode;
+  final double discount;
+  final double closingPending;
+  final String remarks;
+
+  CustomerLedgerEntry({
+    required this.docNumber,
+    required this.openingPending,
+    required this.type,
+    required this.date,
+    required this.paymentMode,
+    required this.discount,
+    required this.closingPending,
+    required this.remarks,
+  });
+}
+
+class _LedgerRawEvent {
+  final String docNumber;
+  final bool isSale;
+  final DateTime date;
+  final double amount;
+  final double discount;
+  final String mode;
+  final String notes;
+
+  _LedgerRawEvent({
+    required this.docNumber,
+    required this.isSale,
+    required this.date,
+    required this.amount,
+    required this.discount,
+    required this.mode,
+    required this.notes,
+  });
 }

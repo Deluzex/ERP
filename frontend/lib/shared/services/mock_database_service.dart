@@ -1976,99 +1976,102 @@ class MockDatabaseService extends ChangeNotifier {
   // PRODUCTION WORKFLOW (Direct Raw Material Consumption & Finished Goods Addition)
   // -------------------------------------------------------------
   void completeProductionOrder(ProductionOrder order) {
-    // 1. Deduct consumed raw materials
-    for (final usage in order.rawMaterialsUsed) {
-      final rmIndex = rawMaterials.indexWhere((rm) => rm.id == usage.rawMaterialId);
-      if (rmIndex != -1) {
-        final rm = rawMaterials[rmIndex];
-        final newStock = (rm.currentStock - usage.quantityUsed).clamp(0.0, double.infinity);
-        rawMaterials[rmIndex] = rm.copyWith(
+    if (order.status == ProductionStatus.completed) {
+      // 1. Deduct consumed raw materials
+      for (final usage in order.rawMaterialsUsed) {
+        final rmIndex = rawMaterials.indexWhere((rm) => rm.id == usage.rawMaterialId);
+        if (rmIndex != -1) {
+          final rm = rawMaterials[rmIndex];
+          final newStock = (rm.currentStock - usage.quantityUsed).clamp(0.0, double.infinity);
+          rawMaterials[rmIndex] = rm.copyWith(
+            currentStock: newStock,
+            updatedAt: DateTime.now(),
+          );
+
+          _recordStockTransaction(
+            itemId: rm.id,
+            itemName: rm.name,
+            itemCode: rm.itemCode,
+            itemType: ItemType.rawMaterial,
+            transactionType: StockMovementType.productionConsumption,
+            referenceNumber: order.productionNumber,
+            stockIn: 0.0,
+            stockOut: usage.quantityUsed,
+            newBalance: newStock,
+            unit: rm.unit,
+            notes: 'Consumed for production of ${order.finishedProductName}',
+          );
+        }
+      }
+
+      // 2. Add finished product output
+      final fpIndex = finishedProducts.indexWhere((fp) => fp.id == order.finishedProductId);
+      if (fpIndex != -1) {
+        final fp = finishedProducts[fpIndex];
+        final producedQty = order.actualQuantityProduced > 0 ? order.actualQuantityProduced : order.plannedQuantity;
+        final newStock = fp.currentStock + producedQty;
+        finishedProducts[fpIndex] = fp.copyWith(
           currentStock: newStock,
           updatedAt: DateTime.now(),
         );
 
         _recordStockTransaction(
-          itemId: rm.id,
-          itemName: rm.name,
-          itemCode: rm.itemCode,
-          itemType: ItemType.rawMaterial,
-          transactionType: StockMovementType.productionConsumption,
+          itemId: fp.id,
+          itemName: fp.name,
+          itemCode: fp.itemCode,
+          itemType: ItemType.finishedProduct,
+          transactionType: StockMovementType.productionOutput,
           referenceNumber: order.productionNumber,
-          stockIn: 0.0,
-          stockOut: usage.quantityUsed,
+          stockIn: producedQty,
+          stockOut: 0.0,
           newBalance: newStock,
-          unit: rm.unit,
-          notes: 'Consumed for production of ${order.finishedProductName}',
+          unit: fp.unit,
+          notes: 'Produced batch of $producedQty units${order.salesOrderNumber != null ? " for SO ${order.salesOrderNumber}" : ""}',
         );
-      }
-    }
 
-    // 2. Add finished product output
-    final fpIndex = finishedProducts.indexWhere((fp) => fp.id == order.finishedProductId);
-    if (fpIndex != -1) {
-      final fp = finishedProducts[fpIndex];
-      final newStock = fp.currentStock + order.actualQuantityProduced;
-      finishedProducts[fpIndex] = fp.copyWith(
-        currentStock: newStock,
-        updatedAt: DateTime.now(),
-      );
+        // 3. If this production order was created for a Sales Order shortage, allocate & reserve stock
+        if (order.salesOrderId != null) {
+          final soIndex = sales.indexWhere((s) => s.id == order.salesOrderId);
+          if (soIndex != -1) {
+            final so = sales[soIndex];
+            final updatedItems = so.items.map((item) {
+              if (item.finishedProductId == order.finishedProductId) {
+                final newProduced = item.producedQuantity + producedQty;
+                final newReserved = (item.reservedQuantity + producedQty).clamp(0.0, item.quantity);
+                return item.copyWith(
+                  producedQuantity: newProduced,
+                  reservedQuantity: newReserved,
+                );
+              }
+              return item;
+            }).toList();
 
-      _recordStockTransaction(
-        itemId: fp.id,
-        itemName: fp.name,
-        itemCode: fp.itemCode,
-        itemType: ItemType.finishedProduct,
-        transactionType: StockMovementType.productionOutput,
-        referenceNumber: order.productionNumber,
-        stockIn: order.actualQuantityProduced,
-        stockOut: 0.0,
-        newBalance: newStock,
-        unit: fp.unit,
-        notes: 'Produced batch of ${order.actualQuantityProduced} units${order.salesOrderNumber != null ? " for SO ${order.salesOrderNumber}" : ""}',
-      );
+            // Reserve in finished product master
+            finishedProducts[fpIndex] = finishedProducts[fpIndex].copyWith(
+              reservedStock: finishedProducts[fpIndex].reservedStock + producedQty,
+            );
 
-      // 3. If this production order was created for a Sales Order shortage, allocate & reserve stock
-      if (order.salesOrderId != null) {
-        final soIndex = sales.indexWhere((s) => s.id == order.salesOrderId);
-        if (soIndex != -1) {
-          final so = sales[soIndex];
-          final updatedItems = so.items.map((item) {
-            if (item.finishedProductId == order.finishedProductId) {
-              final newProduced = item.producedQuantity + order.actualQuantityProduced;
-              final newReserved = (item.reservedQuantity + order.actualQuantityProduced).clamp(0.0, item.quantity);
-              return item.copyWith(
-                producedQuantity: newProduced,
-                reservedQuantity: newReserved,
-              );
-            }
-            return item;
-          }).toList();
+            // Check if all items now have full reservation
+            final isFullyReserved = updatedItems.every((i) => i.reservedQuantity >= i.quantity);
+            final updatedStatus = isFullyReserved ? SalesOrderStatus.readyForDispatch : SalesOrderStatus.productionPending;
 
-          // Reserve in finished product master
-          finishedProducts[fpIndex] = finishedProducts[fpIndex].copyWith(
-            reservedStock: finishedProducts[fpIndex].reservedStock + order.actualQuantityProduced,
-          );
-
-          // Check if all items now have full reservation
-          final isFullyReserved = updatedItems.every((i) => i.reservedQuantity >= i.quantity);
-          final updatedStatus = isFullyReserved ? SalesOrderStatus.readyForDispatch : SalesOrderStatus.productionPending;
-
-          sales[soIndex] = so.copyWith(
-            items: updatedItems,
-            salesOrderStatus: updatedStatus,
-            activityLogs: [
-              ...so.activityLogs,
-              DocumentActivityLog(
-                id: IdGenerator.generateId('LOG'),
-                action: 'Production Batch Completed',
-                performedBy: currentUser.name,
-                timestamp: DateTime.now(),
-                details: 'Produced & reserved ${order.actualQuantityProduced} units via ${order.productionNumber}',
-                statusBefore: so.salesOrderStatus?.name,
-                statusAfter: updatedStatus.name,
-              ),
-            ],
-          );
+            sales[soIndex] = so.copyWith(
+              items: updatedItems,
+              salesOrderStatus: updatedStatus,
+              activityLogs: [
+                ...so.activityLogs,
+                DocumentActivityLog(
+                  id: IdGenerator.generateId('LOG'),
+                  action: 'Production Batch Completed',
+                  performedBy: currentUser.name,
+                  timestamp: DateTime.now(),
+                  details: 'Produced & reserved $producedQty units via ${order.productionNumber}',
+                  statusBefore: so.salesOrderStatus?.name,
+                  statusAfter: updatedStatus.name,
+                ),
+              ],
+            );
+          }
         }
       }
     }
@@ -2077,10 +2080,166 @@ class MockDatabaseService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateProductionOrderStatus({
+    required String orderId,
+    required ProductionStatus newStatus,
+    String? reason,
+  }) {
+    final idx = productionOrders.indexWhere((o) => o.id == orderId);
+    if (idx == -1) return;
+    final order = productionOrders[idx];
+    if (order.status == newStatus) return;
+
+    if (newStatus == ProductionStatus.completed) {
+      // 1. Verify stock availability
+      for (final usage in order.rawMaterialsUsed) {
+        final rmIndex = rawMaterials.indexWhere((rm) => rm.id == usage.rawMaterialId);
+        if (rmIndex != -1) {
+          final rm = rawMaterials[rmIndex];
+          if (rm.currentStock < usage.quantityUsed) {
+            throw Exception('Insufficient stock for ${rm.name} (${rm.itemCode}). Available: ${rm.currentStock} ${rm.unit}, Required: ${usage.quantityUsed} ${rm.unit}');
+          }
+        }
+      }
+
+      final producedQty = order.actualQuantityProduced > 0 ? order.actualQuantityProduced : order.plannedQuantity;
+
+      // 2. Deduct consumed raw materials
+      for (final usage in order.rawMaterialsUsed) {
+        final rmIndex = rawMaterials.indexWhere((rm) => rm.id == usage.rawMaterialId);
+        if (rmIndex != -1) {
+          final rm = rawMaterials[rmIndex];
+          final newStock = (rm.currentStock - usage.quantityUsed).clamp(0.0, double.infinity);
+          rawMaterials[rmIndex] = rm.copyWith(
+            currentStock: newStock,
+            updatedAt: DateTime.now(),
+          );
+
+          _recordStockTransaction(
+            itemId: rm.id,
+            itemName: rm.name,
+            itemCode: rm.itemCode,
+            itemType: ItemType.rawMaterial,
+            transactionType: StockMovementType.productionConsumption,
+            referenceNumber: order.productionNumber,
+            stockIn: 0.0,
+            stockOut: usage.quantityUsed,
+            newBalance: newStock,
+            unit: rm.unit,
+            notes: 'Consumed for production of ${order.finishedProductName}',
+          );
+        }
+      }
+
+      // 3. Add finished goods output
+      final fpIndex = finishedProducts.indexWhere((fp) => fp.id == order.finishedProductId);
+      if (fpIndex != -1) {
+        final fp = finishedProducts[fpIndex];
+        final newStock = fp.currentStock + producedQty;
+        finishedProducts[fpIndex] = fp.copyWith(
+          currentStock: newStock,
+          updatedAt: DateTime.now(),
+        );
+
+        _recordStockTransaction(
+          itemId: fp.id,
+          itemName: fp.name,
+          itemCode: fp.itemCode,
+          itemType: ItemType.finishedProduct,
+          transactionType: StockMovementType.productionOutput,
+          referenceNumber: order.productionNumber,
+          stockIn: producedQty,
+          stockOut: 0.0,
+          newBalance: newStock,
+          unit: fp.unit,
+          notes: 'Produced batch of $producedQty units',
+        );
+      }
+
+      productionOrders[idx] = order.copyWith(
+        status: ProductionStatus.completed,
+        actualQuantityProduced: producedQty,
+      );
+      notifyListeners();
+      return;
+    }
+
+    if (newStatus == ProductionStatus.inProgress) {
+      productionOrders[idx] = order.copyWith(status: ProductionStatus.inProgress);
+      notifyListeners();
+      return;
+    }
+
+    if (newStatus == ProductionStatus.cancelled) {
+      deleteProductionOrder(orderId: orderId, reason: reason);
+      return;
+    }
+
+    productionOrders[idx] = order.copyWith(status: newStatus);
+    notifyListeners();
+  }
+
   void deleteProductionOrder({required String orderId, String? reason}) {
     final index = productionOrders.indexWhere((o) => o.id == orderId);
     if (index != -1) {
       final order = productionOrders[index];
+
+      // If the order was completed, revert the stock changes locally
+      if (order.status == ProductionStatus.completed) {
+        // Revert raw materials consumed
+        for (final usage in order.rawMaterialsUsed) {
+          final rmIndex = rawMaterials.indexWhere((rm) => rm.id == usage.rawMaterialId);
+          if (rmIndex != -1) {
+            final rm = rawMaterials[rmIndex];
+            final newStock = rm.currentStock + usage.quantityUsed;
+            rawMaterials[rmIndex] = rm.copyWith(
+              currentStock: newStock,
+              updatedAt: DateTime.now(),
+            );
+
+            _recordStockTransaction(
+              itemId: rm.id,
+              itemName: rm.name,
+              itemCode: rm.itemCode,
+              itemType: ItemType.rawMaterial,
+              transactionType: StockMovementType.adjustment,
+              referenceNumber: order.productionNumber,
+              stockIn: usage.quantityUsed,
+              stockOut: 0.0,
+              newBalance: newStock,
+              unit: rm.unit,
+              notes: 'Reversed consumption: Cancelled production batch ${order.productionNumber}',
+            );
+          }
+        }
+
+        // Revert finished goods produced
+        final fpIndex = finishedProducts.indexWhere((fp) => fp.id == order.finishedProductId);
+        final producedQty = order.actualQuantityProduced > 0 ? order.actualQuantityProduced : order.plannedQuantity;
+        if (fpIndex != -1 && producedQty > 0) {
+          final fp = finishedProducts[fpIndex];
+          final newStock = (fp.currentStock - producedQty).clamp(0.0, double.infinity);
+          finishedProducts[fpIndex] = fp.copyWith(
+            currentStock: newStock,
+            updatedAt: DateTime.now(),
+          );
+
+          _recordStockTransaction(
+            itemId: fp.id,
+            itemName: fp.name,
+            itemCode: fp.itemCode,
+            itemType: ItemType.finishedProduct,
+            transactionType: StockMovementType.adjustment,
+            referenceNumber: order.productionNumber,
+            stockIn: 0.0,
+            stockOut: producedQty,
+            newBalance: newStock,
+            unit: fp.unit,
+            notes: 'Reversed output: Cancelled production batch ${order.productionNumber}',
+          );
+        }
+      }
+
       productionOrders[index] = order.copyWith(
         isDeleted: true,
         deletedReason: reason,
@@ -5772,7 +5931,33 @@ class MockDatabaseService extends ChangeNotifier {
     try {
       final res = await _productionApi.getProductionOrders(limit: 100);
       final remoteOrders = res['orders'] as List<ProductionOrder>? ?? [];
-      productionOrders = remoteOrders;
+
+      // Preserve rawMaterialsUsed if local order already had them, and preserve local-only orders
+      final localMap = {for (final o in productionOrders) o.id: o};
+      final remoteIds = {for (final o in remoteOrders) o.id};
+      final localOnly = productionOrders.where((o) => !remoteIds.contains(o.id)).toList();
+
+      final merged = remoteOrders.map((remote) {
+        final existing = localMap[remote.id];
+        if (existing != null) {
+          final preserveStatus = (existing.status == ProductionStatus.inProgress && remote.status == ProductionStatus.planned) ||
+              (existing.status == ProductionStatus.completed && remote.status != ProductionStatus.completed);
+          final statusToUse = preserveStatus ? existing.status : remote.status;
+          final materialsToUse = remote.rawMaterialsUsed.isNotEmpty ? remote.rawMaterialsUsed : existing.rawMaterialsUsed;
+          final actualQtyToUse = (existing.status == ProductionStatus.completed && remote.actualQuantityProduced == 0)
+              ? existing.actualQuantityProduced
+              : remote.actualQuantityProduced;
+
+          return remote.copyWith(
+            status: statusToUse,
+            rawMaterialsUsed: materialsToUse,
+            actualQuantityProduced: actualQtyToUse,
+          );
+        }
+        return remote;
+      }).toList();
+
+      productionOrders = [...localOnly, ...merged];
       notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadProductionOrders fallback to local: $e');
@@ -5781,43 +5966,90 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  Future<ProductionOrder> getProductionOrderByIdAsync(String id) async {
+    final localIdx = productionOrders.indexWhere((o) => o.id == id);
+    if (localIdx != -1 && productionOrders[localIdx].rawMaterialsUsed.isNotEmpty) {
+      return productionOrders[localIdx];
+    }
+    try {
+      final remote = await _productionApi.getOrderById(id);
+      if (localIdx != -1) {
+        productionOrders[localIdx] = remote;
+      } else {
+        productionOrders.insert(0, remote);
+      }
+      notifyListeners();
+      return remote;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] getProductionOrderByIdAsync fallback: $e');
+      if (localIdx != -1) return productionOrders[localIdx];
+      rethrow;
+    }
+  }
+
   Future<ProductionOrder> completeProductionOrderAsync(ProductionOrder order) async {
     try {
-      final payload = {
-        'productionNumber': order.productionNumber,
+      final payload = <String, dynamic>{
         'finishedProductId': order.finishedProductId,
+        if (order.finishedProductName.isNotEmpty) 'finishedProductName': order.finishedProductName,
+        if (order.finishedProductCode.isNotEmpty) 'finishedProductCode': order.finishedProductCode,
+        if (order.unit.isNotEmpty) 'unit': order.unit,
         'plannedQuantity': order.plannedQuantity,
-        'actualQuantityProduced': order.actualQuantityProduced > 0 ? order.actualQuantityProduced : order.plannedQuantity,
-        'status': 'completed',
+        'actualQuantityProduced': order.status == ProductionStatus.completed
+            ? (order.actualQuantityProduced > 0 ? order.actualQuantityProduced : order.plannedQuantity)
+            : 0.0,
+        'status': order.status.name,
         'rawMaterialCost': order.rawMaterialCost,
         'labourCost': order.labourCost,
         'otherExpenses': order.otherExpenses,
+        'totalProductionCost': order.totalProductionCost,
+        'costPerUnit': order.costPerUnit,
         'productionDate': order.productionDate.toIso8601String(),
-        'salesOrderId': order.salesOrderId,
-        'projectId': order.projectId,
-        'notes': order.notes,
-        'rawMaterials': order.rawMaterialsUsed.map((m) => {
+        if (order.salesOrderId != null && order.salesOrderId!.isNotEmpty) 'salesOrderId': order.salesOrderId,
+        if (order.salesOrderNumber != null && order.salesOrderNumber!.isNotEmpty) 'salesOrderNumber': order.salesOrderNumber,
+        if (order.projectId != null && order.projectId!.isNotEmpty) 'projectId': order.projectId,
+        if (order.projectName != null && order.projectName!.isNotEmpty) 'projectName': order.projectName,
+        if (order.notes != null && order.notes!.isNotEmpty) 'notes': order.notes,
+        'rawMaterialsUsed': order.rawMaterialsUsed.map((m) => {
           'rawMaterialId': m.rawMaterialId,
+          'rawMaterialName': m.rawMaterialName,
+          'rawMaterialCode': m.rawMaterialCode,
           'quantityUsed': m.quantityUsed,
+          'unit': m.unit,
           'unitCost': m.unitCost,
+          'totalCost': m.totalCost,
         }).toList(),
       };
 
       final created = await _productionApi.createOrder(payload);
-      productionOrders.removeWhere((o) => o.id == created.id);
-      productionOrders.insert(0, created);
+      final fullOrder = created.rawMaterialsUsed.isNotEmpty
+          ? created
+          : created.copyWith(rawMaterialsUsed: order.rawMaterialsUsed);
 
-      // Refresh raw materials, finished products, and stock movements
+      productionOrders.removeWhere((o) => o.id == fullOrder.id);
+      productionOrders.insert(0, fullOrder);
+
+      // Refresh production orders, raw materials, finished products, and stock movements
       await Future.wait([
+        loadProductionOrders(forceRefresh: true),
         loadRawMaterials(forceRefresh: true),
         loadFinishedProducts(forceRefresh: true),
         loadStockMovements(forceRefresh: true),
       ]);
+
+      if (!productionOrders.any((o) => o.id == fullOrder.id)) {
+        productionOrders.insert(0, fullOrder);
+      }
       notifyListeners();
-      return created;
+      return fullOrder;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] completeProductionOrderAsync remote failed: $e');
-      rethrow;
+      if (kDebugMode) debugPrint('[MockDatabaseService] completeProductionOrderAsync remote failed, fallback to local: $e');
+      completeProductionOrder(order);
+      if (!productionOrders.any((o) => o.id == order.id)) {
+        productionOrders.insert(0, order);
+      }
+      notifyListeners();
+      return order;
     }
   }
 
@@ -5842,7 +6074,56 @@ class MockDatabaseService extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] deleteProductionOrderAsync remote failed, fallback: $e');
       deleteProductionOrder(orderId: orderId, reason: reason);
+      final idx = productionOrders.indexWhere((o) => o.id == orderId);
+      if (idx != -1) return productionOrders[idx];
       rethrow;
+    }
+  }
+
+  Future<void> updateProductionOrderStatusAsync({
+    required String orderId,
+    required ProductionStatus newStatus,
+    String? reason,
+    double? actualQuantityProduced,
+  }) async {
+    if (newStatus == ProductionStatus.cancelled) {
+      await deleteProductionOrderAsync(orderId: orderId, reason: reason ?? 'Cancelled by manager');
+      await loadProductionOrders(forceRefresh: true);
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final updated = await _productionApi.updateOrderStatus(
+        orderId,
+        newStatus.name,
+        reason: reason,
+        actualQuantityProduced: actualQuantityProduced,
+      );
+
+      final idx = productionOrders.indexWhere((o) => o.id == orderId);
+      if (idx != -1) {
+        final existing = productionOrders[idx];
+        productionOrders[idx] = updated.rawMaterialsUsed.isNotEmpty
+            ? updated
+            : updated.copyWith(rawMaterialsUsed: existing.rawMaterialsUsed);
+      }
+
+      // If completed, refresh inventory masters and stock movements from backend
+      if (newStatus == ProductionStatus.completed) {
+        await Future.wait([
+          loadRawMaterials(forceRefresh: true),
+          loadFinishedProducts(forceRefresh: true),
+          loadStockMovements(forceRefresh: true),
+        ]);
+      }
+      await loadProductionOrders(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updateProductionOrderStatusAsync remote failed, fallback to local: $e');
+      // Perform state transition locally with complete validation and inventory ledger management
+      updateProductionOrderStatus(orderId: orderId, newStatus: newStatus, reason: reason);
+      notifyListeners();
     }
   }
 
