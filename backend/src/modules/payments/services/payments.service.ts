@@ -118,6 +118,7 @@ export class PaymentsService {
          p.reference_document_id,
          p.reference_document_number,
          p.amount,
+         p.discount,
          p.payment_mode,
          p.payment_date,
          p.transaction_reference,
@@ -173,8 +174,10 @@ export class PaymentsService {
   // 11.2 Record Payment Voucher with Atomic Rebalancing
   // --------------------------------------------------------------------------
   async recordPayment(dto: CreatePaymentDto, userId?: string, correlationId?: string) {
-    if (dto.amount <= 0) {
-      throw new BadRequestException('Payment amount must be greater than zero');
+    const discount = dto.discount || 0;
+    const totalDeduction = dto.amount + discount;
+    if (totalDeduction <= 0) {
+      throw new BadRequestException('Payment amount or discount must be greater than zero');
     }
 
     return this.uow.runInTransaction(async (client) => {
@@ -196,6 +199,7 @@ export class PaymentsService {
            reference_document_id,
            reference_document_number,
            amount,
+           discount,
            payment_mode,
            payment_date,
            transaction_reference,
@@ -208,7 +212,7 @@ export class PaymentsService {
            project_name,
            created_by
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, now()), $10, $11, 'completed', $12, $13, $14, $15, $16, $17)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, now()), $11, $12, 'completed', $13, $14, $15, $16, $17, $18)
          RETURNING *`,
         [
           paymentNumber,
@@ -218,6 +222,7 @@ export class PaymentsService {
           dto.referenceDocumentId || null,
           dto.referenceDocumentNumber || null,
           dto.amount,
+          discount,
           dto.paymentMode,
           dto.paymentDate || null,
           dto.transactionReference || null,
@@ -240,13 +245,13 @@ export class PaymentsService {
            SET outstanding_amount = GREATEST(0.00, COALESCE(outstanding_amount, 0) - $1),
                updated_at = now()
            WHERE id = $2`,
-          [dto.amount, dto.partyId],
+          [totalDeduction, dto.partyId],
         );
 
         // If linked to a Tax Invoice / Sale, update invoice paid/pending balances
         if (dto.referenceDocumentId) {
           const invRes = await client.query<any>(
-            `SELECT id, total_amount, paid_amount, pending_amount 
+            `SELECT id, total_amount, paid_amount, pending_amount, discount_amount 
              FROM sales 
              WHERE id = $1 FOR UPDATE`,
             [dto.referenceDocumentId],
@@ -254,19 +259,63 @@ export class PaymentsService {
           if (invRes.rows.length) {
             const currentPaid = parseFloat(invRes.rows[0].paid_amount || '0');
             const totalAmount = parseFloat(invRes.rows[0].total_amount || '0');
+            const currentDiscount = parseFloat(invRes.rows[0].discount_amount || '0');
             const newPaid = currentPaid + dto.amount;
-            const newPending = Math.max(0, totalAmount - newPaid);
+            const newDiscount = currentDiscount + discount;
+            const newPending = Math.max(0, totalAmount - newPaid - newDiscount);
             const newStatus = newPending <= 0 ? 'paid' : 'partialPaid';
 
             await client.query(
               `UPDATE sales
                SET paid_amount = $1,
-                   pending_amount = $2,
-                   status = $3,
+                   discount_amount = $2,
+                   pending_amount = $3,
+                   status = $4,
                    updated_at = now()
-               WHERE id = $4`,
-              [newPaid, newPending, newStatus, dto.referenceDocumentId],
+               WHERE id = $5`,
+              [newPaid, newDiscount, newPending, newStatus, dto.referenceDocumentId],
             );
+          }
+        } else {
+          // FIFO auto-reconciliation against unpaid sales invoices
+          const unpaidSales = await client.query<any>(
+            `SELECT id, total_amount, paid_amount, pending_amount, discount_amount 
+             FROM sales 
+             WHERE party_id = $1 AND pending_amount > 0 AND document_type IN ('invoice', 'salesOrder')
+             ORDER BY sale_date ASC, created_at ASC 
+             FOR UPDATE`,
+            [dto.partyId],
+          );
+          let remAmt = dto.amount;
+          let remDisc = discount;
+          for (const inv of unpaidSales.rows) {
+            if (remAmt <= 0 && remDisc <= 0) break;
+            const curPaid = parseFloat(inv.paid_amount || '0');
+            const totAmt = parseFloat(inv.total_amount || '0');
+            const curDisc = parseFloat(inv.discount_amount || '0');
+            const curPending = parseFloat(inv.pending_amount || '0');
+
+            const applyDisc = Math.min(remDisc, curPending);
+            const applyAmt = Math.min(remAmt, curPending - applyDisc);
+
+            const newPaid = curPaid + applyAmt;
+            const newDisc = curDisc + applyDisc;
+            const newPending = Math.max(0, totAmt - newPaid - newDisc);
+            const newStatus = newPending <= 0 ? 'paid' : 'partialPaid';
+
+            await client.query(
+              `UPDATE sales
+               SET paid_amount = $1,
+                   discount_amount = $2,
+                   pending_amount = $3,
+                   status = $4,
+                   updated_at = now()
+               WHERE id = $5`,
+              [newPaid, newDisc, newPending, newStatus, inv.id],
+            );
+
+            remAmt -= applyAmt;
+            remDisc -= applyDisc;
           }
         }
       } else if (dto.paymentType === 'dealerPayment') {
@@ -276,13 +325,13 @@ export class PaymentsService {
            SET outstanding_amount = GREATEST(0.00, COALESCE(outstanding_amount, 0) - $1),
                updated_at = now()
            WHERE id = $2`,
-          [dto.amount, dto.partyId],
+          [totalDeduction, dto.partyId],
         );
 
         // If linked to Sales Document
         if (dto.referenceDocumentId) {
           const invRes = await client.query<any>(
-            `SELECT id, total_amount, paid_amount, pending_amount 
+            `SELECT id, total_amount, paid_amount, pending_amount, discount_amount 
              FROM sales 
              WHERE id = $1 FOR UPDATE`,
             [dto.referenceDocumentId],
@@ -290,19 +339,63 @@ export class PaymentsService {
           if (invRes.rows.length) {
             const currentPaid = parseFloat(invRes.rows[0].paid_amount || '0');
             const totalAmount = parseFloat(invRes.rows[0].total_amount || '0');
+            const currentDiscount = parseFloat(invRes.rows[0].discount_amount || '0');
             const newPaid = currentPaid + dto.amount;
-            const newPending = Math.max(0, totalAmount - newPaid);
+            const newDiscount = currentDiscount + discount;
+            const newPending = Math.max(0, totalAmount - newPaid - newDiscount);
             const newStatus = newPending <= 0 ? 'paid' : 'partialPaid';
 
             await client.query(
               `UPDATE sales
                SET paid_amount = $1,
-                   pending_amount = $2,
-                   status = $3,
+                   discount_amount = $2,
+                   pending_amount = $3,
+                   status = $4,
                    updated_at = now()
-               WHERE id = $4`,
-              [newPaid, newPending, newStatus, dto.referenceDocumentId],
+               WHERE id = $5`,
+              [newPaid, newDiscount, newPending, newStatus, dto.referenceDocumentId],
             );
+          }
+        } else {
+          // FIFO auto-reconciliation against unpaid sales invoices
+          const unpaidSales = await client.query<any>(
+            `SELECT id, total_amount, paid_amount, pending_amount, discount_amount 
+             FROM sales 
+             WHERE party_id = $1 AND pending_amount > 0 AND document_type IN ('invoice', 'salesOrder')
+             ORDER BY sale_date ASC, created_at ASC 
+             FOR UPDATE`,
+            [dto.partyId],
+          );
+          let remAmt = dto.amount;
+          let remDisc = discount;
+          for (const inv of unpaidSales.rows) {
+            if (remAmt <= 0 && remDisc <= 0) break;
+            const curPaid = parseFloat(inv.paid_amount || '0');
+            const totAmt = parseFloat(inv.total_amount || '0');
+            const curDisc = parseFloat(inv.discount_amount || '0');
+            const curPending = parseFloat(inv.pending_amount || '0');
+
+            const applyDisc = Math.min(remDisc, curPending);
+            const applyAmt = Math.min(remAmt, curPending - applyDisc);
+
+            const newPaid = curPaid + applyAmt;
+            const newDisc = curDisc + applyDisc;
+            const newPending = Math.max(0, totAmt - newPaid - newDisc);
+            const newStatus = newPending <= 0 ? 'paid' : 'partialPaid';
+
+            await client.query(
+              `UPDATE sales
+               SET paid_amount = $1,
+                   discount_amount = $2,
+                   pending_amount = $3,
+                   status = $4,
+                   updated_at = now()
+               WHERE id = $5`,
+              [newPaid, newDisc, newPending, newStatus, inv.id],
+            );
+
+            remAmt -= applyAmt;
+            remDisc -= applyDisc;
           }
         }
       } else if (dto.paymentType === 'vendorPayment') {
@@ -312,13 +405,13 @@ export class PaymentsService {
            SET outstanding_balance = GREATEST(0.00, COALESCE(outstanding_balance, 0) - $1),
                updated_at = now()
            WHERE id = $2`,
-          [dto.amount, dto.partyId],
+          [totalDeduction, dto.partyId],
         );
 
         // If linked to a Purchase Order / Inward Bill
         if (dto.referenceDocumentId) {
           const purRes = await client.query<any>(
-            `SELECT id, total_amount, paid_amount, pending_amount 
+            `SELECT id, total_amount, paid_amount, pending_amount, discount_amount 
              FROM purchases 
              WHERE id = $1 FOR UPDATE`,
             [dto.referenceDocumentId],
@@ -326,19 +419,63 @@ export class PaymentsService {
           if (purRes.rows.length) {
             const currentPaid = parseFloat(purRes.rows[0].paid_amount || '0');
             const totalAmount = parseFloat(purRes.rows[0].total_amount || '0');
+            const currentDiscount = parseFloat(purRes.rows[0].discount_amount || '0');
             const newPaid = currentPaid + dto.amount;
-            const newPending = Math.max(0, totalAmount - newPaid);
+            const newDiscount = currentDiscount + discount;
+            const newPending = Math.max(0, totalAmount - newPaid - newDiscount);
             const newStatus = newPending <= 0 ? 'paid' : 'partialPaid';
 
             await client.query(
               `UPDATE purchases
                SET paid_amount = $1,
-                   pending_amount = $2,
-                   status = $3,
+                   discount_amount = $2,
+                   pending_amount = $3,
+                   status = $4,
                    updated_at = now()
-               WHERE id = $4`,
-              [newPaid, newPending, newStatus, dto.referenceDocumentId],
+               WHERE id = $5`,
+              [newPaid, newDiscount, newPending, newStatus, dto.referenceDocumentId],
             );
+          }
+        } else {
+          // FIFO auto-reconciliation against unpaid purchase bills
+          const unpaidPurchases = await client.query<any>(
+            `SELECT id, total_amount, paid_amount, pending_amount, discount_amount 
+             FROM purchases 
+             WHERE vendor_id = $1 AND pending_amount > 0 AND status != 'cancelled'
+             ORDER BY purchase_date ASC, created_at ASC 
+             FOR UPDATE`,
+            [dto.partyId],
+          );
+          let remAmt = dto.amount;
+          let remDisc = discount;
+          for (const pur of unpaidPurchases.rows) {
+            if (remAmt <= 0 && remDisc <= 0) break;
+            const curPaid = parseFloat(pur.paid_amount || '0');
+            const totAmt = parseFloat(pur.total_amount || '0');
+            const curDisc = parseFloat(pur.discount_amount || '0');
+            const curPending = parseFloat(pur.pending_amount || '0');
+
+            const applyDisc = Math.min(remDisc, curPending);
+            const applyAmt = Math.min(remAmt, curPending - applyDisc);
+
+            const newPaid = curPaid + applyAmt;
+            const newDisc = curDisc + applyDisc;
+            const newPending = Math.max(0, totAmt - newPaid - newDisc);
+            const newStatus = newPending <= 0 ? 'paid' : 'partialPaid';
+
+            await client.query(
+              `UPDATE purchases
+               SET paid_amount = $1,
+                   discount_amount = $2,
+                   pending_amount = $3,
+                   status = $4,
+                   updated_at = now()
+               WHERE id = $5`,
+              [newPaid, newDisc, newPending, newStatus, pur.id],
+            );
+
+            remAmt -= applyAmt;
+            remDisc -= applyDisc;
           }
         }
       } else if (dto.paymentType === 'commissionPayment') {
@@ -681,6 +818,7 @@ export class PaymentsService {
       referenceDocumentId: row.reference_document_id,
       referenceDocumentNumber: row.reference_document_number,
       amount: parseFloat(row.amount || '0'),
+      discount: parseFloat(row.discount || '0'),
       paymentMode: row.payment_mode,
       paymentDate: row.payment_date,
       transactionReference: row.transaction_reference,

@@ -19,12 +19,16 @@ class ErpDataTable extends StatelessWidget {
   final List<ErpColumn> columns;
   final List<List<Widget>> rows;
   final Widget? emptyState;
+  final double? columnSpacing;
+  final double? horizontalMargin;
 
   const ErpDataTable({
     super.key,
     required this.columns,
     required this.rows,
     this.emptyState,
+    this.columnSpacing,
+    this.horizontalMargin,
   });
 
   @override
@@ -61,8 +65,8 @@ class ErpDataTable extends StatelessWidget {
                 headingTextStyle: AppTextStyles.tableHeader,
                 dataTextStyle: AppTextStyles.tableCell,
                 dividerThickness: 1,
-                horizontalMargin: 20,
-                columnSpacing: 28,
+                horizontalMargin: horizontalMargin ?? 20,
+                columnSpacing: columnSpacing ?? 28,
                 columns: columns.map((col) {
                   return DataColumn(
                     numeric: col.isNumeric,

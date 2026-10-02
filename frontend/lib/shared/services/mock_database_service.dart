@@ -3609,13 +3609,14 @@ class MockDatabaseService extends ChangeNotifier {
     payments.insert(0, payment);
 
     // 1. Update Party Balance
+    final totalDeduction = payment.amount + payment.discount;
     switch (payment.paymentType) {
       case PaymentType.customerPayment:
         final cIndex = customers.indexWhere((c) => c.id == payment.partyId);
         if (cIndex != -1) {
           final c = customers[cIndex];
           customers[cIndex] = c.copyWith(
-            outstandingAmount: (c.outstandingAmount - payment.amount).clamp(0.0, double.infinity),
+            outstandingAmount: (c.outstandingAmount - totalDeduction).clamp(0.0, double.infinity),
           );
         }
         break;
@@ -3624,7 +3625,7 @@ class MockDatabaseService extends ChangeNotifier {
         if (dIndex != -1) {
           final d = dealers[dIndex];
           dealers[dIndex] = d.copyWith(
-            outstandingAmount: (d.outstandingAmount - payment.amount).clamp(0.0, double.infinity),
+            outstandingAmount: (d.outstandingAmount - totalDeduction).clamp(0.0, double.infinity),
           );
         }
         break;
@@ -3633,7 +3634,7 @@ class MockDatabaseService extends ChangeNotifier {
         if (vIndex != -1) {
           final v = vendors[vIndex];
           vendors[vIndex] = v.copyWith(
-            outstandingBalance: (v.outstandingBalance - payment.amount).clamp(0.0, double.infinity),
+            outstandingBalance: (v.outstandingBalance - totalDeduction).clamp(0.0, double.infinity),
           );
         }
         break;
@@ -3642,12 +3643,13 @@ class MockDatabaseService extends ChangeNotifier {
     }
 
     // 2. Reconcile Linked Invoice or Document
-    if (payment.referenceDocumentId != null) {
+    if (payment.referenceDocumentId != null && payment.referenceDocumentId!.isNotEmpty) {
       final sIndex = sales.indexWhere((s) => s.id == payment.referenceDocumentId);
       if (sIndex != -1) {
         final s = sales[sIndex];
         final newPaid = s.paidAmount + payment.amount;
-        final newPending = (s.totalAmount - newPaid).clamp(0.0, double.infinity);
+        final newDiscount = s.discountAmount + payment.discount;
+        final newPending = (s.totalAmount - newPaid - newDiscount).clamp(0.0, double.infinity);
         final newStatus = newPending <= 0.01 ? SaleStatus.paid : SaleStatus.partialPaid;
         final updatedLogs = [
           DocumentActivityLog(
@@ -3655,7 +3657,7 @@ class MockDatabaseService extends ChangeNotifier {
             action: payment.isFullPayment ? 'FULL PAYMENT RECEIVED' : 'PARTIAL PAYMENT RECEIVED',
             performedBy: currentUser.name,
             timestamp: DateTime.now(),
-            details: 'Recorded ${payment.entryModeLabel} of ${Formatters.formatCurrency(payment.amount)} via ${payment.paymentMode.name.toUpperCase()}. New Balance: ${Formatters.formatCurrency(newPending)}',
+            details: 'Recorded ${payment.entryModeLabel} of ${Formatters.formatCurrency(payment.amount)}${payment.discount > 0 ? " (Discount: ${Formatters.formatCurrency(payment.discount)})" : ""} via ${payment.paymentMode.name.toUpperCase()}. New Balance: ${Formatters.formatCurrency(newPending)}',
             statusBefore: s.status.name,
             statusAfter: newStatus.name,
           ),
@@ -3663,6 +3665,7 @@ class MockDatabaseService extends ChangeNotifier {
         ];
         sales[sIndex] = s.copyWith(
           paidAmount: newPaid,
+          discountAmount: newDiscount,
           pendingAmount: newPending,
           status: newStatus,
           linkedPaymentIds: [...s.linkedPaymentIds, payment.id],
@@ -3674,13 +3677,73 @@ class MockDatabaseService extends ChangeNotifier {
       if (pIndex != -1) {
         final p = purchases[pIndex];
         final newPaid = p.paidAmount + payment.amount;
-        final newPending = (p.totalAmount - newPaid).clamp(0.0, double.infinity);
+        final newDiscount = p.discountAmount + payment.discount;
+        final newPending = (p.totalAmount - newPaid - newDiscount).clamp(0.0, double.infinity);
         final newStatus = newPending <= 0.01 ? PurchaseStatus.paid : PurchaseStatus.partialPaid;
         purchases[pIndex] = p.copyWith(
           paidAmount: newPaid,
+          discountAmount: newDiscount,
           pendingAmount: newPending,
           status: newStatus,
         );
+      }
+    } else {
+      // FIFO auto-reconciliation
+      if (payment.paymentType == PaymentType.customerPayment || payment.paymentType == PaymentType.dealerPayment) {
+        final unpaidSales = sales
+            .where((s) => s.partyId == payment.partyId && s.pendingAmount > 0)
+            .toList()
+          ..sort((a, b) => a.saleDate.compareTo(b.saleDate));
+        double remAmt = payment.amount;
+        double remDisc = payment.discount;
+        for (final s in unpaidSales) {
+          if (remAmt <= 0 && remDisc <= 0) break;
+          final sIndex = sales.indexWhere((item) => item.id == s.id);
+          if (sIndex != -1) {
+            final cur = sales[sIndex];
+            final applyDisc = remDisc.clamp(0.0, cur.pendingAmount);
+            final applyAmt = remAmt.clamp(0.0, cur.pendingAmount - applyDisc);
+            final newPaid = cur.paidAmount + applyAmt;
+            final newDisc = cur.discountAmount + applyDisc;
+            final newPending = (cur.totalAmount - newPaid - newDisc).clamp(0.0, double.infinity);
+            sales[sIndex] = cur.copyWith(
+              paidAmount: newPaid,
+              discountAmount: newDisc,
+              pendingAmount: newPending,
+              status: newPending <= 0.01 ? SaleStatus.paid : SaleStatus.partialPaid,
+              linkedPaymentIds: [...cur.linkedPaymentIds, payment.id],
+            );
+            remAmt -= applyAmt;
+            remDisc -= applyDisc;
+          }
+        }
+      } else if (payment.paymentType == PaymentType.vendorPayment) {
+        final unpaidPurchases = purchases
+            .where((p) => p.vendorId == payment.partyId && p.pendingAmount > 0 && p.status != PurchaseStatus.cancelled)
+            .toList()
+          ..sort((a, b) => a.purchaseDate.compareTo(b.purchaseDate));
+        double remAmt = payment.amount;
+        double remDisc = payment.discount;
+        for (final p in unpaidPurchases) {
+          if (remAmt <= 0 && remDisc <= 0) break;
+          final pIndex = purchases.indexWhere((item) => item.id == p.id);
+          if (pIndex != -1) {
+            final cur = purchases[pIndex];
+            final applyDisc = remDisc.clamp(0.0, cur.pendingAmount);
+            final applyAmt = remAmt.clamp(0.0, cur.pendingAmount - applyDisc);
+            final newPaid = cur.paidAmount + applyAmt;
+            final newDisc = cur.discountAmount + applyDisc;
+            final newPending = (cur.totalAmount - newPaid - newDisc).clamp(0.0, double.infinity);
+            purchases[pIndex] = cur.copyWith(
+              paidAmount: newPaid,
+              discountAmount: newDisc,
+              pendingAmount: newPending,
+              status: newPending <= 0.01 ? PurchaseStatus.paid : PurchaseStatus.partialPaid,
+            );
+            remAmt -= applyAmt;
+            remDisc -= applyDisc;
+          }
+        }
       }
     }
 
@@ -6169,6 +6232,7 @@ class MockDatabaseService extends ChangeNotifier {
         'referenceDocumentId': payment.referenceDocumentId,
         'referenceDocumentNumber': payment.referenceDocumentNumber,
         'amount': payment.amount,
+        'discount': payment.discount,
         'paymentMode': payment.paymentMode.name,
         'paymentDate': payment.paymentDate.toIso8601String(),
         'transactionReference': payment.transactionReference,
