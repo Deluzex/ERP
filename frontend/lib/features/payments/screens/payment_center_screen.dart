@@ -81,8 +81,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   }
 
   void _handleTabChange() {
-    setState(() {});
     if (!_tabController.indexIsChanging) {
+      setState(() {});
       final targetSection = _getSectionForIndex(_tabController.index);
       if (ref.read(currentNavSectionProvider) != targetSection) {
         ref.read(currentNavSectionProvider.notifier).state = targetSection;
@@ -154,6 +154,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
 
       if (targetIndex != null && _tabController.index != targetIndex) {
         _tabController.animateTo(targetIndex);
+        setState(() {});
       }
     });
 
@@ -212,6 +213,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
             unselectedLabelColor: AppColors.textSecondary,
             indicatorColor: AppColors.primary,
             onTap: (index) {
+              setState(() {});
               final targetSection = _getSectionForIndex(index);
               if (ref.read(currentNavSectionProvider) != targetSection) {
                 ref.read(currentNavSectionProvider.notifier).state = targetSection;
@@ -239,8 +241,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
 
           SizedBox(
             height: 680,
-            child: TabBarView(
-              controller: _tabController,
+            child: IndexedStack(
+              index: _tabController.index,
               children: [
                 _buildCustomerCollectionsTab(db),
                 _buildDealerReceiptsTab(db),
@@ -1598,7 +1600,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Manage vendor accounts and track balances (Sheet 2)',
+            'Manage vendor accounts and track balances',
             style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 14),
@@ -1667,10 +1669,10 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<int>(
-                  value: (pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
-                  icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                  style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600, color: Colors.black87),
+                  value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
+                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
                   items: const [
+                    DropdownMenuItem(value: 5, child: Text('5')),
                     DropdownMenuItem(value: 10, child: Text('10')),
                     DropdownMenuItem(value: 25, child: Text('25')),
                     DropdownMenuItem(value: 50, child: Text('50')),
@@ -1688,7 +1690,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
             ),
             const SizedBox(width: 12),
             Text(
-              'Showing $shownCount of $totalCount',
+              'Showing $shownCount of $totalCount vendors',
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
             ),
             if (totalCount > pageSize) ...[
@@ -1700,6 +1702,10 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                 onPressed: currentPage > 0
                     ? () => setState(() => _vendorCurrentPage = currentPage - 1)
                     : null,
+              ),
+              Text(
+                '${currentPage + 1} / ${((totalCount - 1) ~/ pageSize) + 1}',
+                style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
               ),
               IconButton(
                 icon: const Icon(Icons.chevron_right, size: 18),
@@ -1798,54 +1804,54 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
+                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.shopping_bag_outlined, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
+                        Icon(Icons.currency_rupee, size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
                         Text('PURCHASE TOTAL', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                       ],
                     ),
-                    numeric: true,
                   ),
                   DataColumn(
+                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle_outline, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('PAID AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                        const Icon(Icons.currency_rupee, size: 14, color: Color(0xFF16A34A)),
+                        const SizedBox(width: 4),
+                        Text('PAID AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF16A34A))),
                       ],
                     ),
-                    numeric: true,
                   ),
                   DataColumn(
+                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.discount_outlined, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('DISCOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                        const Icon(Icons.percent, size: 14, color: Color(0xFF7C3AED)),
+                        const SizedBox(width: 4),
+                        Text('DISCOUNT GIVEN', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF7C3AED))),
                       ],
                     ),
-                    numeric: true,
                   ),
                   DataColumn(
+                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.pending_actions_outlined, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
+                        Icon(Icons.schedule, size: 15, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
                         Text('PENDING AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                       ],
                     ),
-                    numeric: true,
                   ),
                   DataColumn(
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.tune_outlined, size: 16, color: Colors.grey.shade600),
+                        Icon(Icons.description_outlined, size: 15, color: Colors.grey.shade600),
                         const SizedBox(width: 6),
                         Text('ACTIONS', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                       ],
@@ -1853,72 +1859,79 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                   ),
                 ],
                 rows: summaries.map((summary) {
-                  final initial = summary.vendor.name.trim().isNotEmpty
-                      ? summary.vendor.name.trim().substring(0, 1).toUpperCase()
-                      : 'V';
-
                   return DataRow(
                     cells: [
-                      // Vendor Name + Subtitle
+                      // VENDOR NAME
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            CircleAvatar(
-                              radius: 17,
-                              backgroundColor: const Color(0xFFEFF6FF),
-                              child: Text(
-                                initial,
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB), fontSize: 13),
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(8),
                               ),
+                              child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB), size: 18),
                             ),
                             const SizedBox(width: 12),
                             Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
                                   summary.vendor.name.isNotEmpty ? summary.vendor.name : 'Unnamed Vendor',
                                   style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 2),
-                                Text(
-                                  '${summary.transactionCount} transactions${summary.vendor.contactPerson.isNotEmpty ? " • ${summary.vendor.contactPerson}" : ""}',
-                                  style: AppTextStyles.bodySmall.copyWith(fontSize: 11, color: AppColors.textSecondary),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.description_outlined, size: 11, color: Colors.grey.shade500),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      (summary.vendor.contactPerson.isNotEmpty)
+                                          ? '${summary.vendor.contactPerson} • ${summary.transactionCount} transactions'
+                                          : '${summary.transactionCount} transactions',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ],
                         ),
                       ),
-                      // Purchase Total
+                      // PURCHASE TOTAL
                       DataCell(
                         Text(
                           Formatters.formatCurrency(summary.purchaseTotal),
                           style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
                         ),
                       ),
-                      // Paid Amount
+                      // PAID AMOUNT
                       DataCell(
                         Text(
                           Formatters.formatCurrency(summary.paidAmount),
                           style: AppTextStyles.bodyBold.copyWith(
                             fontSize: 13,
-                            color: summary.paidAmount > 0 ? const Color(0xFF16A34A) : AppColors.textSecondary,
+                            color: const Color(0xFF16A34A),
                           ),
                         ),
                       ),
-                      // Discount
+                      // DISCOUNT GIVEN
                       DataCell(
                         Text(
                           Formatters.formatCurrency(summary.discountGiven),
                           style: AppTextStyles.bodyBold.copyWith(
                             fontSize: 13,
-                            color: summary.discountGiven > 0 ? const Color(0xFF7C3AED) : AppColors.textSecondary,
+                            color: const Color(0xFF7C3AED),
                           ),
                         ),
                       ),
-                      // Pending Amount
+                      // PENDING AMOUNT
                       DataCell(
                         Text(
                           Formatters.formatCurrency(summary.pendingAmount),
@@ -1928,34 +1941,34 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           ),
                         ),
                       ),
-                      // Actions
+                      // ACTIONS
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             OutlinedButton.icon(
-                              icon: const Icon(Icons.edit_note_rounded, size: 15),
-                              label: const Text('Transaction', style: TextStyle(fontSize: 11)),
+                              icon: const Icon(Icons.edit_note_rounded, size: 16),
+                              label: const Text('Transaction', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.primary,
-                                side: const BorderSide(color: AppColors.primary),
+                                foregroundColor: const Color(0xFF2563EB),
+                                side: const BorderSide(color: Color(0xFFBFDBFE)),
+                                backgroundColor: const Color(0xFFEFF6FF),
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
-                              onPressed: () {
-                                _openRecordPaymentDialog(
-                                  PaymentType.vendorPayment,
-                                  preselectedPartyId: summary.vendor.id,
-                                );
-                              },
+                              onPressed: () => _openRecordPaymentDialog(
+                                PaymentType.vendorPayment,
+                                preselectedPartyId: summary.vendor.id,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             OutlinedButton.icon(
-                              icon: const Icon(Icons.history_rounded, size: 15),
-                              label: const Text('History', style: TextStyle(fontSize: 11)),
+                              icon: const Icon(Icons.visibility_outlined, size: 15),
+                              label: const Text('History', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF0F172A),
-                                side: BorderSide(color: Colors.grey.shade300),
+                                foregroundColor: const Color(0xFF475569),
+                                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                backgroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
