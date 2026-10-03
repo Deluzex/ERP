@@ -242,3 +242,27 @@ export class CancelProductionOrderDto {
   @IsNotEmpty()
   reason!: string;
 }
+
+export class UpdateProductionOrderStatusDto {
+  @ApiProperty({ enum: ProductionStatusEnum, description: 'New order status' })
+  @IsEnum(ProductionStatusEnum)
+  @IsNotEmpty()
+  status!: ProductionStatusEnum;
+
+  @ApiPropertyOptional({ description: 'Actual quantity produced upon completion' })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  actualQuantityProduced?: number;
+
+  @ApiPropertyOptional({ description: 'Reason or notes for status update' })
+  @IsString()
+  @IsOptional()
+  reason?: string;
+
+  @ApiPropertyOptional({ description: 'Allow negative stock override', default: false })
+  @IsBoolean()
+  @IsOptional()
+  overrideStockValidation?: boolean = false;
+}
+
