@@ -718,7 +718,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Customer Ledger & Transaction Statement (Sheet 2)',
+                              'Customer Ledger & Transaction Statement (${summary.entries.length} Transactions)',
                               style: AppTextStyles.subtitle.copyWith(fontSize: 12),
                             ),
                           ],
@@ -769,18 +769,20 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           ),
                         )
                       : ErpDataTable(
+                          enableVerticalScroll: true,
+                          fixedHeader: true,
                           columnSpacing: 14,
                           horizontalMargin: 16,
                           columns: const [
-                            ErpColumn(title: 'Doc / Name'),
-                            ErpColumn(title: 'Total Pending', isNumeric: true),
-                            ErpColumn(title: 'Type'),
-                            ErpColumn(title: 'Date'),
-                            ErpColumn(title: 'Mode'),
-                            ErpColumn(title: 'Payment Amount', isNumeric: true),
-                            ErpColumn(title: 'Discount', isNumeric: true),
-                            ErpColumn(title: 'New Pending', isNumeric: true),
-                            ErpColumn(title: 'Remarks'),
+                            ErpColumn(title: 'Doc / Name', width: 145),
+                            ErpColumn(title: 'Total Pending', isNumeric: true, width: 105),
+                            ErpColumn(title: 'Type', width: 85),
+                            ErpColumn(title: 'Date', width: 95),
+                            ErpColumn(title: 'Mode', width: 120),
+                            ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                            ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                            ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
+                            ErpColumn(title: 'Remarks', width: 160),
                           ],
                           rows: summary.entries.map((entry) {
                             return [
@@ -1308,7 +1310,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Dealer Ledger & Transaction Statement (Sheet 2)',
+                              'Dealer Ledger & Transaction Statement (${summary.entries.length} Transactions)',
                               style: AppTextStyles.subtitle.copyWith(fontSize: 12),
                             ),
                           ],
@@ -1359,18 +1361,20 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           ),
                         )
                       : ErpDataTable(
+                          enableVerticalScroll: true,
+                          fixedHeader: true,
                           columnSpacing: 14,
                           horizontalMargin: 16,
                           columns: const [
-                            ErpColumn(title: 'Doc / Name'),
-                            ErpColumn(title: 'Total Pending', isNumeric: true),
-                            ErpColumn(title: 'Type'),
-                            ErpColumn(title: 'Date'),
-                            ErpColumn(title: 'Mode'),
-                            ErpColumn(title: 'Payment Amount', isNumeric: true),
-                            ErpColumn(title: 'Discount', isNumeric: true),
-                            ErpColumn(title: 'New Pending', isNumeric: true),
-                            ErpColumn(title: 'Remarks'),
+                            ErpColumn(title: 'Doc / Name', width: 145),
+                            ErpColumn(title: 'Total Pending', isNumeric: true, width: 105),
+                            ErpColumn(title: 'Type', width: 85),
+                            ErpColumn(title: 'Date', width: 95),
+                            ErpColumn(title: 'Mode', width: 120),
+                            ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                            ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                            ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
+                            ErpColumn(title: 'Remarks', width: 160),
                           ],
                           rows: summary.entries.map((entry) {
                             return [
@@ -1500,7 +1504,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               : (p.notes != null && p.notes!.isNotEmpty ? p.notes! : 'Dealer Receipt'),
         ));
       }
-      events.sort((a, b) => a.date.compareTo(b.date));
+      events.sort((a, b) {
+        final cmp = a.date.compareTo(b.date);
+        if (cmp != 0) return cmp;
+        return a.docNumber.compareTo(b.docNumber);
+      });
 
       final double saleTotal = dealerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.totalAmount));
       final double paidAmount = dealerPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
@@ -1540,6 +1548,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           remarks: ev.notes,
         ));
       }
+
+      // Present transactions newest to oldest (descending date, then descending docNumber)
+      entries.sort((a, b) {
+        final cmp = b.date.compareTo(a.date);
+        if (cmp != 0) return cmp;
+        return b.docNumber.compareTo(a.docNumber);
+      });
 
       summaries.add(DealerAccountSummary(
         dealer: dealer,
@@ -1997,7 +2012,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Vendor Ledger & Transaction Statement (Sheet 2)',
+                              'Vendor Ledger & Transaction Statement (${summary.entries.length} Transactions)',
                               style: AppTextStyles.subtitle.copyWith(fontSize: 12),
                             ),
                           ],
@@ -2048,18 +2063,20 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           ),
                         )
                       : ErpDataTable(
+                          enableVerticalScroll: true,
+                          fixedHeader: true,
                           columnSpacing: 14,
                           horizontalMargin: 16,
                           columns: const [
-                            ErpColumn(title: 'Doc / Name'),
-                            ErpColumn(title: 'Total Pending (Opening)', isNumeric: true),
-                            ErpColumn(title: 'Type'),
-                            ErpColumn(title: 'Date'),
-                            ErpColumn(title: 'Mode'),
-                            ErpColumn(title: 'Payment Amount', isNumeric: true),
-                            ErpColumn(title: 'Discount', isNumeric: true),
-                            ErpColumn(title: 'New Pending (Closing)', isNumeric: true),
-                            ErpColumn(title: 'Remarks'),
+                            ErpColumn(title: 'Doc / Name', width: 145),
+                            ErpColumn(title: 'Total Pending (Opening)', isNumeric: true, width: 110),
+                            ErpColumn(title: 'Type', width: 85),
+                            ErpColumn(title: 'Date', width: 95),
+                            ErpColumn(title: 'Mode', width: 120),
+                            ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                            ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                            ErpColumn(title: 'New Pending (Closing)', isNumeric: true, width: 110),
+                            ErpColumn(title: 'Remarks', width: 160),
                           ],
                           rows: summary.entries.map((entry) {
                             final isPurchase = entry.type.toLowerCase().contains('purchase') || entry.type.toLowerCase().contains('invoice');
@@ -2197,7 +2214,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         ));
       }
 
-      events.sort((a, b) => a.date.compareTo(b.date));
+      events.sort((a, b) {
+        final cmp = a.date.compareTo(b.date);
+        if (cmp != 0) return cmp;
+        return a.docNumber.compareTo(b.docNumber);
+      });
 
       final double purchaseTotal = vendorPurchases.fold(0.0, (acc, p) => acc + _safeDouble(p.totalAmount));
       final double paidAmount = vendorPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
@@ -2237,6 +2258,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           remarks: ev.notes,
         ));
       }
+
+      // Present transactions newest to oldest (descending date, then descending docNumber)
+      entries.sort((a, b) {
+        final cmp = b.date.compareTo(a.date);
+        if (cmp != 0) return cmp;
+        return b.docNumber.compareTo(a.docNumber);
+      });
 
       summaries.add(VendorAccountSummary(
         vendor: vendor,
@@ -2324,7 +2352,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               : (p.notes != null && p.notes!.isNotEmpty ? p.notes! : 'Customer Receipt'),
         ));
       }
-      events.sort((a, b) => a.date.compareTo(b.date));
+      events.sort((a, b) {
+        final cmp = a.date.compareTo(b.date);
+        if (cmp != 0) return cmp;
+        return a.docNumber.compareTo(b.docNumber);
+      });
 
       final double saleTotal = customerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.totalAmount));
       final double paidAmount = customerPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
@@ -2364,6 +2396,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           remarks: ev.notes,
         ));
       }
+
+      // Present transactions newest to oldest (descending date, then descending docNumber)
+      entries.sort((a, b) {
+        final cmp = b.date.compareTo(a.date);
+        if (cmp != 0) return cmp;
+        return b.docNumber.compareTo(a.docNumber);
+      });
 
       summaries.add(CustomerAccountSummary(
         customer: customer,
