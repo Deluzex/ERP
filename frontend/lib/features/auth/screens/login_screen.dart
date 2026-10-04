@@ -190,6 +190,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 height: 38,
                                 fit: BoxFit.contain,
                                 alignment: Alignment.centerLeft,
+                                color: AppColors.textPrimary,
+                                colorBlendMode: BlendMode.srcIn,
                                 errorBuilder: (context, error, stackTrace) => Container(
                                   width: 36,
                                   height: 36,
