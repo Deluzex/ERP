@@ -5,6 +5,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/models/production_model.dart';
 import '../../../core/models/purchase_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
@@ -440,14 +441,31 @@ class PurchaseRoleDashboard extends ConsumerWidget {
 // =====================================================================
 // 3. PRODUCTION ROLE DASHBOARD
 // =====================================================================
-class ProductionRoleDashboard extends ConsumerWidget {
+class ProductionRoleDashboard extends ConsumerStatefulWidget {
   const ProductionRoleDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductionRoleDashboard> createState() => _ProductionRoleDashboardState();
+}
+
+class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final db = ref.read(databaseServiceProvider);
+      db.loadProductionOrders(forceRefresh: true);
+      db.loadRawMaterials(forceRefresh: true);
+      db.loadFinishedProducts(forceRefresh: true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
-    final pendingOrders = db.productionOrders.where((po) => po.status.name == 'planned' || po.status.name == 'inProgress').toList();
-    final completedOrders = db.productionOrders.where((po) => po.status.name == 'completed').toList();
+    final activeOrders = db.productionOrders.where((po) => !po.isDeleted).toList();
+    final pendingOrders = activeOrders.where((po) => po.status.name == 'planned' || po.status.name == 'inProgress').toList();
+    final completedOrders = activeOrders.where((po) => po.status.name == 'completed').toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -509,7 +527,7 @@ class ProductionRoleDashboard extends ConsumerWidget {
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
               title: 'Total Work Orders',
-              value: '${db.productionOrders.length}',
+              value: '${activeOrders.length}',
               subtitle: 'All-time production jobs',
               icon: Icons.precision_manufacturing_outlined,
               color: Colors.indigo,
@@ -551,7 +569,7 @@ class ProductionRoleDashboard extends ConsumerWidget {
               ErpColumn(title: 'Estimated Cost (₹)', isNumeric: true),
               ErpColumn(title: 'Status'),
             ],
-            rows: db.productionOrders.take(7).map((po) {
+            rows: activeOrders.take(7).map((po) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(po.id, 'production', ErpNavSection.productionOrders),
@@ -562,13 +580,26 @@ class ProductionRoleDashboard extends ConsumerWidget {
                 Text('${po.plannedQuantity} ${po.unit}', style: AppTextStyles.bodySmall),
                 Text(po.projectName ?? 'General Stock', style: AppTextStyles.bodySmall),
                 Text(Formatters.formatCurrency(po.totalProductionCost), style: AppTextStyles.bodyBold),
-                ErpStatusBadge.info(po.statusLabel),
+                _buildProductionStatusBadge(po.status, po.statusLabel),
               ];
             }).toList(),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildProductionStatusBadge(ProductionStatus status, String label) {
+    switch (status) {
+      case ProductionStatus.planned:
+        return ErpStatusBadge.warning('WAITING APPROVAL');
+      case ProductionStatus.inProgress:
+        return ErpStatusBadge.info(label);
+      case ProductionStatus.completed:
+        return ErpStatusBadge.success(label);
+      case ProductionStatus.cancelled:
+        return ErpStatusBadge.danger(label);
+    }
   }
 }
 
