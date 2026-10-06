@@ -68,7 +68,7 @@ class RawMaterialsApiService {
     try {
       final response = await _client.dio.put(
         '/masters/raw-materials/${rm.id}',
-        data: rm.toJson(),
+        data: rm.toUpdateJson(),
       );
       final data = _client.unwrap<Map<String, dynamic>>(response);
       return RawMaterial.fromJson(data);

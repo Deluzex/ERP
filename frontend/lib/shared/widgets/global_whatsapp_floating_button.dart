@@ -7,6 +7,8 @@ import '../providers/app_state_providers.dart';
 class GlobalWhatsAppFloatingButton extends ConsumerWidget {
   const GlobalWhatsAppFloatingButton({super.key});
 
+  static const double _buttonSize = 46.0;
+
   void _openConfigDialog(BuildContext context, WidgetRef ref) {
     final db = ref.read(databaseServiceProvider);
     final config = db.globalSupportConfig;
@@ -24,7 +26,7 @@ class GlobalWhatsAppFloatingButton extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF25D366).withOpacity(0.15),
+                color: const Color(0xFF25D366).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.settings, color: Color(0xFF25D366), size: 20),
@@ -108,44 +110,25 @@ class GlobalWhatsAppFloatingButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(databaseServiceProvider);
-    final config = db.globalSupportConfig;
-
     return Positioned(
       bottom: 24,
       right: 24,
       child: Material(
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+        elevation: 6,
+        shape: const CircleBorder(),
         color: const Color(0xFF25D366),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(30),
-          onTap: () => _launchWhatsApp(context, ref),
-          onLongPress: () => _openConfigDialog(context, ref),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.chat_bubble, color: Colors.white, size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  config.teamName.isNotEmpty ? 'Team Support' : 'WhatsApp Chat',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () => _openConfigDialog(context, ref),
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.25),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.tune, color: Colors.white, size: 14),
-                  ),
-                ),
-              ],
+        child: Tooltip(
+          message: 'Team Support',
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => _launchWhatsApp(context, ref),
+            onLongPress: () => _openConfigDialog(context, ref),
+            child: const SizedBox(
+              width: _buttonSize,
+              height: _buttonSize,
+              child: Center(
+                child: Icon(Icons.chat_bubble, color: Colors.white, size: 24),
+              ),
             ),
           ),
         ),

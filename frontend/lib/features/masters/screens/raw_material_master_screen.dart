@@ -130,10 +130,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     initialValue: selectedCategory.isNotEmpty ? selectedCategory : null,
                                     decoration: const InputDecoration(labelText: 'Category *'),
                                     items: db.categories.map((c) {
-                                      return DropdownMenuItem(value: c.id, child: Text(c.name));
+                                      return DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis));
                                     }).toList(),
                                     onChanged: isSubmitting ? null : (val) {
                                       if (val != null) setDlgState(() => selectedCategory = val);
@@ -141,10 +142,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
                                     decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
                                     items: db.units.map((u) {
-                                      return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
+                                      return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis));
                                     }).toList(),
                                     onChanged: isSubmitting ? null : (val) {
                                       if (val != null) setDlgState(() => selectedUnitId = val);
@@ -217,10 +219,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                   children: [
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         initialValue: selectedCategory.isNotEmpty ? selectedCategory : null,
                                         decoration: const InputDecoration(labelText: 'Category *'),
                                         items: db.categories.map((c) {
-                                          return DropdownMenuItem(value: c.id, child: Text(c.name));
+                                          return DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis));
                                         }).toList(),
                                         onChanged: isSubmitting ? null : (val) {
                                           if (val != null) setDlgState(() => selectedCategory = val);
@@ -230,10 +233,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
                                         decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
                                         items: db.units.map((u) {
-                                          return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
+                                          return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis));
                                         }).toList(),
                                         onChanged: isSubmitting ? null : (val) {
                                           if (val != null) setDlgState(() => selectedUnitId = val);
@@ -290,15 +294,16 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
 
                         // Supplier / Vendor Info
                         DropdownButtonFormField<String?>(
+                          isExpanded: true,
                           initialValue: selectedVendorId,
                           decoration: const InputDecoration(
                             labelText: 'Preferred Supplier / Vendor',
                             hintText: 'Select default procurement source',
                           ),
                           items: [
-                            const DropdownMenuItem(value: null, child: Text('No Preferred Vendor Assigned')),
+                            const DropdownMenuItem(value: null, child: Text('No Preferred Vendor Assigned', overflow: TextOverflow.ellipsis)),
                             ...db.vendors.where((v) => !v.isDeleted).map((v) {
-                              return DropdownMenuItem(value: v.id, child: Text('${v.name} (${v.id})'));
+                              return DropdownMenuItem(value: v.id, child: Text('${v.name} (${v.id})', overflow: TextOverflow.ellipsis));
                             }),
                           ],
                           onChanged: isSubmitting ? null : (val) => setDlgState(() => selectedVendorId = val),

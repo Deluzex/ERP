@@ -144,4 +144,19 @@ class FinishedProduct {
       'gstPercent': gstPercent,
     };
   }
+
+  Map<String, dynamic> toUpdateJson() {
+    return {
+      'name': name,
+      'categoryId': categoryId,
+      if (unitId != null && unitId!.isNotEmpty) 'unitId': unitId,
+      if (hsnSacCode != null && hsnSacCode!.isNotEmpty) 'hsnSacCode': hsnSacCode,
+      'currentStock': currentStock,
+      'minimumStock': minimumStock,
+      'costPrice': costPrice,
+      'dealerSellingPrice': dealerSellingPrice,
+      'customerSellingPrice': customerSellingPrice,
+      'gstPercent': gstPercent,
+    };
+  }
 }

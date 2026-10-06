@@ -6,7 +6,6 @@ import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/purchase_model.dart';
-import '../../../core/models/stock_movement_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
@@ -24,6 +23,8 @@ class InventoryRoleDashboard extends ConsumerWidget {
     final db = ref.watch(databaseServiceProvider);
     final lowStockRM = db.lowStockRawMaterials;
     final lowStockFP = db.lowStockFinishedProducts;
+    final activeRawMaterials = db.rawMaterials.where((r) => !r.isDeleted).toList();
+    final activeFinishedProducts = db.finishedProducts.where((p) => !p.isDeleted).toList();
     final recentMovements = db.stockMovements.take(6).toList();
 
     return SingleChildScrollView(
@@ -93,14 +94,14 @@ class InventoryRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Raw Material Valuation',
               value: Formatters.formatCurrency(db.rawMaterialStockValue),
-              subtitle: '${db.rawMaterials.length} Unique items',
+              subtitle: '${activeRawMaterials.length} Unique items',
               icon: Icons.view_in_ar_rounded,
               color: Colors.blue,
             ),
             _buildMetricCard(
               title: 'Finished Goods Valuation',
               value: Formatters.formatCurrency(db.finishedProductStockValue),
-              subtitle: '${db.finishedProducts.length} Product SKUs',
+              subtitle: '${activeFinishedProducts.length} Product SKUs',
               icon: Icons.inventory_outlined,
               color: Colors.teal,
             ),
@@ -395,7 +396,7 @@ class PurchaseRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Vendor Payables Due',
               value: Formatters.formatCurrency(db.pendingVendorPayments),
-              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} Vendors pending payment',
+              subtitle: '${db.vendors.where((v) => !v.isDeleted && v.outstandingBalance > 0).length} Vendors pending payment',
               icon: Icons.account_balance_outlined,
               color: Colors.red,
             ),
@@ -649,14 +650,14 @@ class AccountsPaymentRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Customer Receivables',
               value: Formatters.formatCurrency(db.pendingCustomerPayments),
-              subtitle: '${db.customers.where((c) => c.outstandingAmount > 0).length} Clients pending dues',
+              subtitle: '${db.customers.where((c) => !c.isDeleted && c.outstandingAmount > 0).length} Clients pending dues',
               icon: Icons.account_balance_wallet_outlined,
               color: Colors.teal,
             ),
             _buildMetricCard(
               title: 'Vendor Payables Due',
               value: Formatters.formatCurrency(db.pendingVendorPayments),
-              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} Suppliers awaiting payment',
+              subtitle: '${db.vendors.where((v) => !v.isDeleted && v.outstandingBalance > 0).length} Suppliers awaiting payment',
               icon: Icons.payment_outlined,
               color: Colors.red,
             ),
@@ -720,8 +721,10 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
-    final activeProjects = db.projects.where((p) => p.status.name == 'inProgress' || p.status.name == 'planning').toList();
-    final completedProjects = db.projects.where((p) => p.status.name == 'completed').toList();
+    final nonDeletedProjects = db.projects.where((p) => !p.isDeleted).toList();
+    final activeProjects = nonDeletedProjects.where((p) => p.status.name == 'inProgress' || p.status.name == 'planning' || p.status.name == 'active').toList();
+    final completedProjects = nonDeletedProjects.where((p) => p.status.name == 'completed').toList();
+    final activeArchitects = db.architects.where((a) => !a.isDeleted).toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -789,8 +792,8 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
               title: 'Total Projects',
-              value: '${db.projects.length}',
-              subtitle: Formatters.formatCurrency(db.projects.fold(0.0, (sum, p) => sum + p.totalSalesAmount)),
+              value: '${nonDeletedProjects.length}',
+              subtitle: Formatters.formatCurrency(nonDeletedProjects.fold(0.0, (sum, p) => sum + p.totalSalesAmount)),
               icon: Icons.apartment_rounded,
               color: Colors.deepPurple,
             ),
@@ -810,7 +813,7 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
             ),
             _buildMetricCard(
               title: 'Architect Partners',
-              value: '${db.architects.length}',
+              value: '${activeArchitects.length}',
               subtitle: 'Registered Specifiers',
               icon: Icons.architecture_rounded,
               color: Colors.purple,
@@ -830,7 +833,7 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
               ErpColumn(title: 'Billed (₹)', isNumeric: true),
               ErpColumn(title: 'Status'),
             ],
-            rows: db.projects.take(7).map((prj) {
+            rows: nonDeletedProjects.take(7).map((prj) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(prj.id, 'project', ErpNavSection.projectList),
@@ -853,12 +856,45 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
 // =====================================================================
 // 5.1. MASTERS ROLE DASHBOARD
 // =====================================================================
-class MastersRoleDashboard extends ConsumerWidget {
+class MastersRoleDashboard extends ConsumerStatefulWidget {
   const MastersRoleDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MastersRoleDashboard> createState() => _MastersRoleDashboardState();
+}
+
+class _MastersRoleDashboardState extends ConsumerState<MastersRoleDashboard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final db = ref.read(databaseServiceProvider);
+      db.loadProjects();
+      db.loadVendors();
+      db.loadArchitects();
+      db.loadCustomers();
+      db.loadDealers();
+      db.loadPurchases();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+
+    final activeCustomers = db.customers.where((c) => !c.isDeleted).toList();
+    final activeVendors = db.vendors.where((v) => !v.isDeleted).toList();
+    final activeDealers = db.dealers.where((d) => !d.isDeleted).toList();
+    final activeArchitects = db.architects.where((a) => !a.isDeleted).toList();
+    final activeProjects = db.projects.where((p) => !p.isDeleted).toList();
+    final activeRawMaterials = db.rawMaterials.where((r) => !r.isDeleted).toList();
+    final activeFinishedProducts = db.finishedProducts.where((p) => !p.isDeleted).toList();
+
+    // Dynamically calculate projects linked to architects
+    final linkedProjectsCount = activeProjects
+        .where((p) => p.architectId != null && p.architectId!.isNotEmpty)
+        .length;
+    final displayProjectsCount = linkedProjectsCount > 0 ? linkedProjectsCount : activeProjects.length;
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -878,29 +914,29 @@ class MastersRoleDashboard extends ConsumerWidget {
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
               title: 'Customers Master',
-              value: '${db.customers.length} Clients',
-              subtitle: '${db.customers.where((c) => c.outstandingAmount > 0).length} with active balances',
+              value: '${activeCustomers.length} Clients',
+              subtitle: '${activeCustomers.where((c) => c.outstandingAmount > 0).length} with active balances',
               icon: Icons.people_outline,
               color: Colors.blue,
             ),
             _buildMetricCard(
               title: 'Vendors Master',
-              value: '${db.vendors.length} Suppliers',
-              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} with active payables',
+              value: '${activeVendors.length} Suppliers',
+              subtitle: '${activeVendors.where((v) => v.outstandingBalance > 0).length} with active payables',
               icon: Icons.storefront_outlined,
               color: Colors.purple,
             ),
             _buildMetricCard(
               title: 'Dealers Master',
-              value: '${db.dealers.length} Retailers',
+              value: '${activeDealers.length} Retailers',
               subtitle: 'Active distribution network',
               icon: Icons.store_mall_directory_outlined,
               color: Colors.teal,
             ),
             _buildMetricCard(
               title: 'Architect Partners',
-              value: '${db.architects.length} Specifiers',
-              subtitle: '${db.projects.length} linked projects',
+              value: '${activeArchitects.length} Specifiers',
+              subtitle: '$displayProjectsCount linked projects',
               icon: Icons.architecture_rounded,
               color: Colors.deepPurple,
             ),
@@ -909,15 +945,15 @@ class MastersRoleDashboard extends ConsumerWidget {
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
               title: 'Raw Material Items',
-              value: '${db.rawMaterials.length} Items',
-              subtitle: '${db.lowStockRawMaterials.length} below buffer level',
+              value: '${activeRawMaterials.length} Items',
+              subtitle: '${activeRawMaterials.where((rm) => rm.isLowStock).length} below buffer level',
               icon: Icons.view_in_ar_outlined,
               color: Colors.indigo,
             ),
             _buildMetricCard(
               title: 'Finished Product SKUs',
-              value: '${db.finishedProducts.length} Products',
-              subtitle: '${db.lowStockFinishedProducts.length} below buffer level',
+              value: '${activeFinishedProducts.length} Products',
+              subtitle: '${activeFinishedProducts.where((fp) => fp.isLowStock).length} below buffer level',
               icon: Icons.inventory_2_outlined,
               color: Colors.green,
             ),
@@ -1017,6 +1053,8 @@ class MastersRoleDashboard extends ConsumerWidget {
               );
             },
           ),
+          /*
+          // NOTE: Temporarily commented out pending final decision on removal
           const SizedBox(height: 28),
 
           // Architect & Partner Overview Table
@@ -1031,7 +1069,7 @@ class MastersRoleDashboard extends ConsumerWidget {
               ErpColumn(title: 'Approved Commission', isNumeric: true),
               ErpColumn(title: 'Commission Earned', isNumeric: true),
             ],
-            rows: db.architects.take(6).map((arc) {
+            rows: (activeArchitects.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt))).take(6).map((arc) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(arc.id, 'architect', ErpNavSection.architects),
@@ -1045,6 +1083,7 @@ class MastersRoleDashboard extends ConsumerWidget {
               ];
             }).toList(),
           ),
+          */
         ],
       ),
     );

@@ -95,6 +95,22 @@ class CategoriesUnitsApiService {
     }
   }
 
+  Future<MeasurementUnit> updateUnit({required String id, required String name, required String symbol}) async {
+    try {
+      final response = await _client.dio.put(
+        '/masters/units/$id',
+        data: {
+          'name': name.trim(),
+          'symbol': symbol.trim().toUpperCase(),
+        },
+      );
+      final data = _client.unwrap<Map<String, dynamic>>(response);
+      return MeasurementUnit.fromJson(data);
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
   Future<void> deleteUnit(String id) async {
     try {
       await _client.dio.delete('/masters/units/$id');

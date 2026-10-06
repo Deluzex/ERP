@@ -795,6 +795,21 @@ class MockDatabaseService extends ChangeNotifier {
         notes: 'Hand-blown glass pendants and warm dimming fixtures',
         createdAt: DateTime.now().subtract(const Duration(days: 40)),
       ),
+      Project(
+        id: 'PRJ-003',
+        name: 'The St. Regis Penthouse Luxury Suites',
+        customerId: 'CUST-003',
+        customerName: 'The St. Regis Penthouse (Mr. Singhania)',
+        architectId: 'ARCH-001',
+        architectName: 'Ar. Sanjay Puri',
+        startDate: DateTime.now().subtract(const Duration(days: 25)),
+        expectedCompletionDate: DateTime.now().add(const Duration(days: 60)),
+        status: ProjectStatus.active,
+        totalSalesAmount: 520000.0,
+        totalCommissionAmount: 26000.0,
+        notes: 'Bespoke architectural pendant lighting and automation controls',
+        createdAt: DateTime.now().subtract(const Duration(days: 25)),
+      ),
     ];
 
     // Raw Materials
@@ -2879,13 +2894,76 @@ class MockDatabaseService extends ChangeNotifier {
     }
 
     sales.insert(0, invoice);
+    _applySaleToProject(invoice);
     notifyListeners();
     return invoice;
+  }
+
+  void _applySaleToProject(Sale sale) {
+    if (sale.projectId != null &&
+        sale.projectId!.isNotEmpty &&
+        sale.documentType == SalesDocumentType.invoice &&
+        sale.status != SaleStatus.cancelled) {
+      final prjIndex = projects.indexWhere((p) => p.id == sale.projectId);
+      if (prjIndex != -1) {
+        final prj = projects[prjIndex];
+        projects[prjIndex] = prj.copyWith(
+          totalSalesAmount: prj.totalSalesAmount + sale.totalAmount,
+          totalCommissionAmount: prj.totalCommissionAmount + sale.architectCommissionAmount,
+        );
+      }
+    }
+  }
+
+  void _generateCommissionForSale(Sale sale) {
+    if (sale.architectId != null &&
+        sale.architectCommissionAmount > 0 &&
+        sale.documentType == SalesDocumentType.invoice &&
+        sale.status != SaleStatus.cancelled) {
+      final exists = commissions.any((c) =>
+          c.saleInvoiceId == sale.id ||
+          (sale.invoiceNumber.isNotEmpty && c.saleInvoiceNumber == sale.invoiceNumber));
+      if (!exists) {
+        final architect = architects.where((a) => a.id == sale.architectId).firstOrNull;
+        if (architect != null) {
+          final saleVal = sale.taxableAmount > 0 ? sale.taxableAmount : sale.totalAmount;
+          final rate = architect.defaultCommissionRate > 0
+              ? architect.defaultCommissionRate
+              : (saleVal > 0 ? (sale.architectCommissionAmount / saleVal * 100) : 0.0);
+          final comm = ArchitectCommission(
+            id: IdGenerator.generateId('COM'),
+            commissionNumber: IdGenerator.generateDocNumber('COM', ++_commissionCounter),
+            architectId: architect.id,
+            architectName: architect.name,
+            saleInvoiceId: sale.id,
+            saleInvoiceNumber: sale.invoiceNumber,
+            projectId: sale.projectId,
+            projectName: sale.projectName,
+            saleAmount: saleVal,
+            commissionRate: rate,
+            commissionAmount: sale.architectCommissionAmount,
+            status: CommissionStatus.generated,
+            generatedDate: DateTime.now(),
+          );
+          commissions.insert(0, comm);
+
+          final archIndex = architects.indexWhere((a) => a.id == architect.id);
+          if (archIndex != -1) {
+            architects[archIndex] = architects[archIndex].copyWith(
+              totalCommissionEarned: architects[archIndex].totalCommissionEarned + sale.architectCommissionAmount,
+              pendingCommission: architects[archIndex].pendingCommission + sale.architectCommissionAmount,
+            );
+          }
+        }
+      }
+    }
   }
 
   // --- 6. DIRECT SALE (IMMEDIATE COUNTER SALE) ---
   void createSale(Sale sale) {
     sales.insert(0, sale);
+    _applySaleToProject(sale);
+    _generateCommissionForSale(sale);
     notifyListeners();
   }
 
@@ -4355,6 +4433,16 @@ class MockDatabaseService extends ChangeNotifier {
     return saved;
   }
 
+  Future<MeasurementUnit> updateUnitAsync({required String id, required String name, required String symbol}) async {
+    final updated = await _categoriesUnitsApi.updateUnit(id: id, name: name, symbol: symbol);
+    final idx = units.indexWhere((u) => u.id == id);
+    if (idx != -1) {
+      units[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
   Future<void> deleteUnitAsync(String id) async {
     await _categoriesUnitsApi.deleteUnit(id);
     units.removeWhere((u) => u.id == id);
@@ -4376,19 +4464,25 @@ class MockDatabaseService extends ChangeNotifier {
 
   Future<RawMaterial> addRawMaterialAsync(RawMaterial rm) async {
     final saved = await _rawMaterialsApi.createRawMaterial(rm);
-    rawMaterials.insert(0, saved);
+    final effectiveRm = (saved.currentStock == 0 && rm.currentStock > 0)
+        ? saved.copyWith(currentStock: rm.currentStock, openingStock: rm.openingStock)
+        : saved;
+    rawMaterials.insert(0, effectiveRm);
     notifyListeners();
-    return saved;
+    return effectiveRm;
   }
 
   Future<RawMaterial> updateRawMaterialAsync(RawMaterial rm) async {
     final updated = await _rawMaterialsApi.updateRawMaterial(rm);
+    final effectiveRm = (updated.currentStock == 0 && rm.currentStock > 0)
+        ? updated.copyWith(currentStock: rm.currentStock)
+        : updated;
     final idx = rawMaterials.indexWhere((item) => item.id == rm.id);
     if (idx != -1) {
-      rawMaterials[idx] = updated;
+      rawMaterials[idx] = effectiveRm;
       notifyListeners();
     }
-    return updated;
+    return effectiveRm;
   }
 
   Future<void> deleteRawMaterialAsync(String id) async {
@@ -4415,19 +4509,25 @@ class MockDatabaseService extends ChangeNotifier {
 
   Future<FinishedProduct> addFinishedProductAsync(FinishedProduct fp) async {
     final saved = await _finishedProductsApi.createFinishedProduct(fp);
-    finishedProducts.insert(0, saved);
+    final effectiveFp = (saved.currentStock == 0 && fp.currentStock > 0)
+        ? saved.copyWith(currentStock: fp.currentStock, openingStock: fp.openingStock)
+        : saved;
+    finishedProducts.insert(0, effectiveFp);
     notifyListeners();
-    return saved;
+    return effectiveFp;
   }
 
   Future<FinishedProduct> updateFinishedProductAsync(FinishedProduct fp) async {
     final updated = await _finishedProductsApi.updateFinishedProduct(fp);
+    final effectiveFp = (updated.currentStock == 0 && fp.currentStock > 0)
+        ? updated.copyWith(currentStock: fp.currentStock)
+        : updated;
     final idx = finishedProducts.indexWhere((item) => item.id == fp.id);
     if (idx != -1) {
-      finishedProducts[idx] = updated;
+      finishedProducts[idx] = effectiveFp;
       notifyListeners();
     }
-    return updated;
+    return effectiveFp;
   }
 
   Future<void> deleteFinishedProductAsync(String id) async {
@@ -4998,8 +5098,8 @@ class MockDatabaseService extends ChangeNotifier {
 
   double get totalSalesAmount => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount);
   double get totalPurchaseAmount => purchases.fold(0.0, (sum, p) => sum + p.totalAmount);
-  double get rawMaterialStockValue => rawMaterials.fold(0.0, (sum, rm) => sum + rm.totalValuation);
-  double get finishedProductStockValue => finishedProducts.fold(0.0, (sum, fp) => sum + fp.totalValuation);
+  double get rawMaterialStockValue => rawMaterials.where((rm) => !rm.isDeleted).fold(0.0, (sum, rm) => sum + rm.totalValuation);
+  double get finishedProductStockValue => finishedProducts.where((fp) => !fp.isDeleted).fold(0.0, (sum, fp) => sum + fp.totalValuation);
   double get totalStockValue => rawMaterialStockValue + finishedProductStockValue;
 
   double get todaySalesAmount {
@@ -5009,12 +5109,12 @@ class MockDatabaseService extends ChangeNotifier {
         .fold(0.0, (sum, s) => sum + s.totalAmount);
   }
 
-  double get pendingCustomerPayments => customers.fold(0.0, (sum, c) => sum + c.outstandingAmount);
+  double get pendingCustomerPayments => customers.where((c) => !c.isDeleted).fold(0.0, (sum, c) => sum + c.outstandingAmount);
   double get pendingVendorPayments => vendors.where((v) => !v.isDeleted).fold(0.0, (sum, v) => sum + v.outstandingBalance);
-  double get pendingCommissionAmount => architects.fold(0.0, (sum, a) => sum + a.pendingCommission + a.approvedCommission);
+  double get pendingCommissionAmount => architects.where((a) => !a.isDeleted).fold(0.0, (sum, a) => sum + a.pendingCommission + a.approvedCommission);
 
-  List<RawMaterial> get lowStockRawMaterials => rawMaterials.where((rm) => rm.isLowStock).toList();
-  List<FinishedProduct> get lowStockFinishedProducts => finishedProducts.where((fp) => fp.isLowStock).toList();
+  List<RawMaterial> get lowStockRawMaterials => rawMaterials.where((rm) => !rm.isDeleted && rm.isLowStock).toList();
+  List<FinishedProduct> get lowStockFinishedProducts => finishedProducts.where((fp) => !fp.isDeleted && fp.isLowStock).toList();
   int get totalLowStockCount => lowStockRawMaterials.length + lowStockFinishedProducts.length;
 
   int get nextPurchaseNumber => ++_purchaseCounter;
@@ -5856,7 +5956,12 @@ class MockDatabaseService extends ChangeNotifier {
         notes: notes,
       );
       sales.insert(0, created);
-      await loadSalesDeliveries(forceRefresh: true);
+      _applySaleToProject(created);
+      _generateCommissionForSale(created);
+      await Future.wait([
+        loadSalesDeliveries(forceRefresh: true),
+        loadProjects(forceRefresh: true),
+      ]);
       notifyListeners();
       return created;
     } catch (e) {
@@ -5879,9 +5984,12 @@ class MockDatabaseService extends ChangeNotifier {
         notes: sale.notes,
       );
       sales.insert(0, created);
+      _applySaleToProject(created);
+      _generateCommissionForSale(created);
       await Future.wait([
         loadFinishedProducts(forceRefresh: true),
         loadStockMovements(forceRefresh: true),
+        loadProjects(forceRefresh: true),
       ]);
       notifyListeners();
       return created;
@@ -6291,6 +6399,26 @@ class MockDatabaseService extends ChangeNotifier {
       return updated;
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] approveCommissionAsync remote failed: $e');
+      approveCommission(commissionId);
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) return commissions[idx];
+      rethrow;
+    }
+  }
+
+  Future<ArchitectCommission> rejectCommissionAsync(String commissionId, {String? reason}) async {
+    try {
+      final updated = await _paymentsApi.rejectCommission(commissionId, reason: reason);
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) commissions[idx] = updated;
+      await loadArchitects(forceRefresh: true);
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] rejectCommissionAsync remote failed: $e');
+      rejectCommission(commissionId, reason);
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) return commissions[idx];
       rethrow;
     }
   }
@@ -6320,7 +6448,12 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return result;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] disburseCommissionAsync remote failed: $e');
+      if (kDebugMode) debugPrint('[MockDatabaseService] disburseCommissionAsync remote failed, fallback to local: $e');
+      disburseCommission(commissionId, paymentMode, transactionRef ?? 'TXN-DISB-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}');
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) {
+        return {'commission': commissions[idx], 'payment': payments.first};
+      }
       rethrow;
     }
   }

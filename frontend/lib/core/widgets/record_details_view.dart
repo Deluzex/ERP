@@ -1723,20 +1723,43 @@ class RecordDetailsView extends ConsumerWidget {
         // =========================================================
         // SECTION L: COMMISSION SUMMARY & LIFECYCLE LEDGER
         // =========================================================
-        Text('SECTION L: Commission Summary & Lifecycle Ledger', style: AppTextStyles.h2),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(child: _buildSummaryMetricCard('Commission Rate', '${a.defaultCommissionRate}% Rate', Icons.percent, Colors.purple)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildSummaryMetricCard('Total Generated', Formatters.formatCurrency(a.totalCommissionEarned), Icons.receipt_long, Colors.blue)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildSummaryMetricCard('Pending Review', Formatters.formatCurrency(a.pendingCommission), Icons.hourglass_top, Colors.amber.shade800)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildSummaryMetricCard('Approved Payouts', Formatters.formatCurrency(a.approvedCommission), Icons.check_circle_outline, Colors.teal)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildSummaryMetricCard('Paid to Date', Formatters.formatCurrency(a.paidCommission), Icons.paid_outlined, Colors.green)),
-          ],
+        Builder(
+          builder: (context) {
+            final commEarned = architectCommissions.where((c) => c.status != CommissionStatus.rejected).fold(0.0, (s, c) => s + c.commissionAmount);
+            final commPending = architectCommissions.where((c) => c.status == CommissionStatus.generated).fold(0.0, (s, c) => s + c.commissionAmount);
+            final commApproved = architectCommissions.where((c) => c.status == CommissionStatus.approved).fold(0.0, (s, c) => s + c.commissionAmount);
+            final commPaid = architectCommissions.where((c) => c.status == CommissionStatus.paid).fold(0.0, (s, c) => s + c.commissionAmount);
+
+            final invComms = architectInvoices
+                .where((s) => s.documentType == SalesDocumentType.invoice && s.status != SaleStatus.cancelled)
+                .fold(0.0, (s, sale) => s + sale.architectCommissionAmount);
+
+            final displayTotalGenerated = commEarned > 0 ? commEarned : (a.totalCommissionEarned > 0 ? a.totalCommissionEarned : invComms);
+            final displayPendingReview = commPending > 0 ? commPending : (a.pendingCommission > 0 ? a.pendingCommission : (commEarned == 0 ? invComms : 0.0));
+            final displayApprovedPayouts = commApproved > 0 ? commApproved : a.approvedCommission;
+            final displayPaidToDate = commPaid > 0 ? commPaid : a.paidCommission;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('SECTION L: Commission Summary & Lifecycle Ledger', style: AppTextStyles.h2),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _buildSummaryMetricCard('Commission Rate', '${a.defaultCommissionRate}% Rate', Icons.percent, Colors.purple)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildSummaryMetricCard('Total Generated', Formatters.formatCurrency(displayTotalGenerated), Icons.receipt_long, Colors.blue)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildSummaryMetricCard('Pending Review', Formatters.formatCurrency(displayPendingReview), Icons.hourglass_top, Colors.amber.shade800)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildSummaryMetricCard('Approved Payouts', Formatters.formatCurrency(displayApprovedPayouts), Icons.check_circle_outline, Colors.teal)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildSummaryMetricCard('Paid to Date', Formatters.formatCurrency(displayPaidToDate), Icons.paid_outlined, Colors.green)),
+                  ],
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 16),
         if (architectCommissions.isEmpty)
@@ -1794,38 +1817,98 @@ class RecordDetailsView extends ConsumerWidget {
                       IconButton(
                         icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 18),
                         tooltip: 'Approve Commission Voucher',
-                        onPressed: () {
-                          db.approveCommission(comm.id);
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Commission Voucher ${comm.commissionNumber} Approved!'),
-                            backgroundColor: AppColors.success,
-                          ));
+                        onPressed: () async {
+                          try {
+                            await db.approveCommissionAsync(comm.id);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Commission Voucher ${comm.commissionNumber} Approved!'),
+                                backgroundColor: AppColors.success,
+                              ));
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Failed to approve: $e'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          }
                         },
                       ),
                       IconButton(
                         icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 18),
                         tooltip: 'Reject Commission Voucher',
-                        onPressed: () {
-                          db.rejectCommission(comm.id, 'Declined during partner audit');
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
-                            backgroundColor: AppColors.danger,
-                          ));
+                        onPressed: () async {
+                          try {
+                            await db.rejectCommissionAsync(comm.id, reason: 'Declined during partner audit');
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Failed to reject: $e'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          }
                         },
                       ),
                     ],
-                    if (comm.status == CommissionStatus.approved)
+                    if (comm.status == CommissionStatus.approved) ...[
                       IconButton(
                         icon: const Icon(Icons.payments_outlined, color: Colors.purple, size: 18),
                         tooltip: 'Disburse / Pay Commission',
-                        onPressed: () {
-                          db.disburseCommission(comm.id, PaymentMode.bankTransfer, 'TXN-DISB-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}');
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Disbursed ${Formatters.formatCurrency(comm.commissionAmount)} to ${comm.architectName}!'),
-                            backgroundColor: AppColors.success,
-                          ));
+                        onPressed: () async {
+                          try {
+                            await db.disburseCommissionAsync(
+                              commissionId: comm.id,
+                              paymentMode: PaymentMode.bankTransfer,
+                              transactionRef: 'TXN-DISB-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Disbursed ${Formatters.formatCurrency(comm.commissionAmount)} to ${comm.architectName}!'),
+                                backgroundColor: AppColors.success,
+                              ));
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Failed to disburse: $e'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          }
                         },
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 18),
+                        tooltip: 'Reject / Cancel Commission Voucher',
+                        onPressed: () async {
+                          try {
+                            await db.rejectCommissionAsync(comm.id, reason: 'Declined after approval');
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Failed to reject: $e'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          }
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ];

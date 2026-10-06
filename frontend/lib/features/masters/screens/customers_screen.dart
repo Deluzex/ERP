@@ -358,6 +358,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
           c.name.toLowerCase().contains(query) ||
           c.mobile.toLowerCase().contains(query) ||
           c.email.toLowerCase().contains(query) ||
+          c.gstNumber.toLowerCase().contains(query) ||
           c.address.toLowerCase().contains(query);
     }).toList();
 

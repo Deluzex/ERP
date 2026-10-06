@@ -132,26 +132,32 @@ export class SalesService {
     const taxableAmount = Math.max(0, subtotal - totalDiscount);
     const grandTotal = taxableAmount + totalGst;
 
+    let projName: string | null = null;
+    if (dto.projectId) {
+      const pRes = await this.db.query<{ name: string }>(`SELECT name FROM projects WHERE id = $1`, [dto.projectId]);
+      if (pRes.rows.length > 0) projName = pRes.rows[0].name;
+    }
+
     const saleRes = await this.db.query<{ id: string }>(
       `INSERT INTO sales (
         invoice_number, document_type, party_type, party_id, party_name,
         customer_contact_person, customer_mobile, customer_email, customer_gst_number,
-        billing_address, shipping_address, architect_id, architect_name,
+        billing_address, shipping_address, project_id, project_name, architect_id, architect_name,
         sales_executive, valid_until, subtotal_amount, discount_amount, taxable_amount,
         cgst_amount, sgst_amount, igst_amount, gst_amount, total_amount, pending_amount,
         is_inter_state_tax, quotation_status, status, notes, terms_and_conditions, created_by
       ) VALUES (
         $1, 'quotation', $2, $3, $4,
         $5, $6, $7, $8,
-        $9, $10, $11, $12,
-        $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23,
-        $24, $25, 'draft', $26, $27, $28
+        $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18, $19,
+        $20, $21, $22, $23, $24, $25,
+        $26, $27, 'draft', $28, $29, $30
       ) RETURNING id`,
       [
         invoiceNumber, dto.partyType, dto.partyId, party.name,
         (party as any).contact_person ?? null, party.mobile, party.email, party.gst_number,
-        party.address, party.address, dto.architectId ?? null, archName,
+        party.address, party.address, dto.projectId ?? null, projName, dto.architectId ?? null, archName,
         dto.salesExecutive ?? null, validUntil, subtotal, totalDiscount, taxableAmount,
         dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? totalGst : 0, totalGst, grandTotal, grandTotal,
         dto.isInterStateTax ?? false, dto.isDraft ? 'draft' : 'sent', dto.notes ?? null, dto.termsAndConditions ?? null, userId ?? null,
@@ -312,7 +318,7 @@ export class SalesService {
       `INSERT INTO sales (
         invoice_number, document_type, party_type, party_id, party_name,
         customer_contact_person, customer_mobile, customer_email, customer_gst_number,
-        billing_address, shipping_address, architect_id, architect_name,
+        billing_address, shipping_address, project_id, project_name, architect_id, architect_name,
         sales_executive, subtotal_amount, discount_amount, taxable_amount,
         cgst_amount, sgst_amount, igst_amount, gst_amount, total_amount, pending_amount,
         is_inter_state_tax, proforma_status, status, quotation_reference_id, parent_quotation_number,
@@ -320,16 +326,16 @@ export class SalesService {
       ) VALUES (
         $1, 'proformaInvoice', $2, $3, $4,
         $5, $6, $7, $8,
-        $9, $10, $11, $12,
-        $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22,
-        $23, 'issued', 'active', $24, $25,
-        $26, $27, $28
+        $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18,
+        $19, $20, $21, $22, $23, $24,
+        $25, 'issued', 'active', $26, $27,
+        $28, $29, $30
       ) RETURNING id`,
       [
         piNumber, q.partyType, q.partyId, q.partyName,
         q.customerContactPerson, q.customerMobile, q.customerEmail, q.customerGstNumber,
-        q.billingAddress, q.shippingAddress, q.architectId, q.architectName,
+        q.billingAddress, q.shippingAddress, q.projectId ?? null, q.projectName ?? null, q.architectId, q.architectName,
         q.salesExecutive, q.subtotalAmount, q.discountAmount, q.taxableAmount,
         q.cgstAmount, q.sgstAmount, q.igstAmount, q.gstAmount, q.totalAmount, q.totalAmount,
         q.isInterStateTax, q.id, q.invoiceNumber,

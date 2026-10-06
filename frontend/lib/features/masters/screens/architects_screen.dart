@@ -7,6 +7,7 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/architect_model.dart';
 import '../../../core/models/commission_model.dart';
 import '../../../core/models/purchase_model.dart';
+import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
@@ -187,6 +188,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                 decoration: const InputDecoration(
                                   labelText: 'GST Number (Optional, 15 chars)',
                                   hintText: '24AAAAA0000A1Z5',
+                                  errorMaxLines: 2,
                                 ),
                               ),
                             ),
@@ -195,8 +197,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                               child: TextFormField(
                                 controller: rateCtrl,
                                 keyboardType: TextInputType.number,
-                                validator: Validators.nonNegativeNumber,
-                                decoration: const InputDecoration(labelText: 'Default Commission Rate (%) *'),
+                                validator: (v) => Validators.percentage(v, 'Must be between 0% and 100%'),
+                                decoration: const InputDecoration(
+                                  labelText: 'Default Commission Rate (%) *',
+                                  errorMaxLines: 2,
+                                ),
                               ),
                             ),
                           ],
@@ -438,17 +443,28 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
             ),
             ErpButton(
               text: 'Record Payout',
-              onPressed: () {
+              onPressed: () async {
                 final db = ref.read(databaseServiceProvider);
-                db.payCommission(
-                  commissionId: comm.id,
-                  paymentMode: selectedMode,
-                  ref: refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : 'COMM-PAY-${DateTime.now().millisecondsSinceEpoch}',
-                );
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Commission Paid & Ledger Updated!'), backgroundColor: AppColors.success),
-                );
+                final payRef = refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : 'COMM-PAY-${DateTime.now().millisecondsSinceEpoch}';
+                try {
+                  await db.disburseCommissionAsync(
+                    commissionId: comm.id,
+                    paymentMode: selectedMode,
+                    transactionRef: payRef,
+                  );
+                } catch (e) {
+                  db.payCommission(
+                    commissionId: comm.id,
+                    paymentMode: selectedMode,
+                    ref: payRef,
+                  );
+                }
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Commission Paid & Ledger Updated!'), backgroundColor: AppColors.success),
+                  );
+                }
               },
             ),
           ],
@@ -571,6 +587,21 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                               ? db.customers.where((c) => c.id == a.linkedCustomerId).firstOrNull
                               : null;
 
+                          final aComms = db.commissions.where((c) => c.architectId == a.id).toList();
+                          final commEarned = aComms.where((c) => c.status != CommissionStatus.rejected).fold(0.0, (s, c) => s + c.commissionAmount);
+                          final commPending = aComms.where((c) => c.status == CommissionStatus.generated).fold(0.0, (s, c) => s + c.commissionAmount);
+                          final commApproved = aComms.where((c) => c.status == CommissionStatus.approved).fold(0.0, (s, c) => s + c.commissionAmount);
+                          final commPaid = aComms.where((c) => c.status == CommissionStatus.paid).fold(0.0, (s, c) => s + c.commissionAmount);
+
+                          final invComms = db.sales
+                              .where((s) => s.architectId == a.id && s.documentType == SalesDocumentType.invoice && s.status != SaleStatus.cancelled)
+                              .fold(0.0, (s, sale) => s + sale.architectCommissionAmount);
+
+                          final displayEarned = commEarned > 0 ? commEarned : (a.totalCommissionEarned > 0 ? a.totalCommissionEarned : invComms);
+                          final displayPending = commPending > 0 ? commPending : (a.pendingCommission > 0 ? a.pendingCommission : (commEarned == 0 ? invComms : 0.0));
+                          final displayApproved = commApproved > 0 ? commApproved : a.approvedCommission;
+                          final displayPaid = commPaid > 0 ? commPaid : a.paidCommission;
+
                           return [
                             // 1. Architect Name (Clickable -> Architect Detail Page)
                             InkWell(
@@ -637,10 +668,10 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                             Text(a.companyName.isNotEmpty ? a.companyName : '-', style: AppTextStyles.bodyMedium),
                             Text(a.mobile, style: AppTextStyles.bodySmall),
                             Text('${a.defaultCommissionRate}%', style: AppTextStyles.bodyMedium),
-                            Text(Formatters.formatCurrency(a.totalCommissionEarned), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
-                            Text(Formatters.formatCurrency(a.pendingCommission), style: AppTextStyles.bodySmall.copyWith(color: AppColors.warningText)),
-                            Text(Formatters.formatCurrency(a.approvedCommission), style: AppTextStyles.bodySmall.copyWith(color: AppColors.infoText)),
-                            Text(Formatters.formatCurrency(a.paidCommission), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                            Text(Formatters.formatCurrency(displayEarned), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
+                            Text(Formatters.formatCurrency(displayPending), style: AppTextStyles.bodySmall.copyWith(color: AppColors.warningText)),
+                            Text(Formatters.formatCurrency(displayApproved), style: AppTextStyles.bodySmall.copyWith(color: AppColors.infoText)),
+                            Text(Formatters.formatCurrency(displayPaid), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -730,28 +761,85 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (comm.status == CommissionStatus.generated)
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.info,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    ),
-                                    onPressed: () => db.approveCommission(comm.id),
-                                    child: const Text('Approve', style: TextStyle(fontSize: 11)),
+                                if (comm.status == CommissionStatus.generated) ...[
+                                  IconButton(
+                                    icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 18),
+                                    tooltip: 'Approve Commission Voucher',
+                                    onPressed: () async {
+                                      try {
+                                        await db.approveCommissionAsync(comm.id);
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Commission Voucher ${comm.commissionNumber} Approved!'),
+                                            backgroundColor: AppColors.success,
+                                          ));
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Failed to approve: $e'),
+                                            backgroundColor: AppColors.danger,
+                                          ));
+                                        }
+                                      }
+                                    },
                                   ),
-                                if (comm.status == CommissionStatus.approved)
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.success,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    ),
+                                  IconButton(
+                                    icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 18),
+                                    tooltip: 'Reject Commission Voucher',
+                                    onPressed: () async {
+                                      try {
+                                        await db.rejectCommissionAsync(comm.id, reason: 'Declined during partner audit');
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
+                                            backgroundColor: AppColors.danger,
+                                          ));
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Failed to reject: $e'),
+                                            backgroundColor: AppColors.danger,
+                                          ));
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ],
+                                if (comm.status == CommissionStatus.approved) ...[
+                                  IconButton(
+                                    icon: const Icon(Icons.payments_outlined, color: Colors.purple, size: 18),
+                                    tooltip: 'Disburse / Pay Commission',
                                     onPressed: () => _openPayCommissionDialog(comm),
-                                    child: const Text('Pay Commission', style: TextStyle(fontSize: 11)),
                                   ),
+                                  IconButton(
+                                    icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 18),
+                                    tooltip: 'Reject / Cancel Commission Voucher',
+                                    onPressed: () async {
+                                      try {
+                                        await db.rejectCommissionAsync(comm.id, reason: 'Declined after approval');
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
+                                            backgroundColor: AppColors.danger,
+                                          ));
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Failed to reject: $e'),
+                                            backgroundColor: AppColors.danger,
+                                          ));
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ],
                                 if (comm.status == CommissionStatus.paid)
                                   Text('Ref: ${comm.paymentReference ?? "Paid"}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
+                                if (comm.status == CommissionStatus.rejected)
+                                  Text('Rejected', style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
                               ],
                             ),
                           ];

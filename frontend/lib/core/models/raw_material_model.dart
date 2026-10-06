@@ -132,4 +132,19 @@ class RawMaterial {
       'preferredVendorIds': preferredVendorIds,
     };
   }
+
+  Map<String, dynamic> toUpdateJson() {
+    return {
+      'name': name,
+      'categoryId': categoryId,
+      if (unitId != null && unitId!.isNotEmpty) 'unitId': unitId,
+      if (hsnSacCode != null && hsnSacCode!.isNotEmpty) 'hsnSacCode': hsnSacCode,
+      'currentStock': currentStock,
+      'minimumStock': minimumStock,
+      'reorderLevel': reorderLevel,
+      'defaultPurchasePrice': defaultPurchasePrice,
+      'gstPercent': gstPercent,
+      'preferredVendorIds': preferredVendorIds,
+    };
+  }
 }
