@@ -58,8 +58,8 @@ class PurchaseLineItem {
     double? igstAmount,
     required this.lineTotal,
   })  : taxableAmount = taxableAmount ?? ((quantity * rate) - discountAmount).clamp(0.0, double.infinity),
-        cgstAmount = cgstAmount ?? ((((quantity * rate) - discountAmount) * (gstPercent / 2)) / 100.0),
-        sgstAmount = sgstAmount ?? ((((quantity * rate) - discountAmount) * (gstPercent / 2)) / 100.0),
+        cgstAmount = cgstAmount ?? (((((quantity * rate) - discountAmount).clamp(0.0, double.infinity)) * (gstPercent / 2)) / 100.0),
+        sgstAmount = sgstAmount ?? (((((quantity * rate) - discountAmount).clamp(0.0, double.infinity)) * (gstPercent / 2)) / 100.0),
         igstAmount = igstAmount ?? 0.0;
 
   String get displayName => itemType == PurchaseItemType.finishedProduct
@@ -80,7 +80,9 @@ class PurchaseLineItem {
     double discountAmount = 0.0,
     double gstPercent = 18.0,
   }) {
-    final subtotal = (quantity * rate) - discountAmount;
+    final gross = (quantity * rate).clamp(0.0, double.infinity);
+    final clampedDiscount = discountAmount.clamp(0.0, gross);
+    final subtotal = gross - clampedDiscount;
     final gstAmount = (subtotal * gstPercent) / 100.0;
     return subtotal + gstAmount;
   }

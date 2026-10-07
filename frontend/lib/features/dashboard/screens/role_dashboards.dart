@@ -428,13 +428,28 @@ class PurchaseRoleDashboard extends ConsumerWidget {
                 Text(p.projectName ?? 'Warehouse Stock', style: AppTextStyles.bodySmall),
                 Text('${p.items.length}', style: AppTextStyles.bodySmall),
                 Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
-                ErpStatusBadge.info(p.statusLabel),
+                _buildPurchaseStatusBadge(p.status, p.statusLabel),
               ];
             }).toList(),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildPurchaseStatusBadge(PurchaseStatus status, String label) {
+    switch (status) {
+      case PurchaseStatus.paid:
+        return ErpStatusBadge.success(label);
+      case PurchaseStatus.partialPaid:
+        return ErpStatusBadge.warning(label);
+      case PurchaseStatus.saved:
+        return ErpStatusBadge.info(label);
+      case PurchaseStatus.draft:
+        return ErpStatusBadge.neutral(label);
+      case PurchaseStatus.cancelled:
+        return ErpStatusBadge.danger(label);
+    }
   }
 }
 
