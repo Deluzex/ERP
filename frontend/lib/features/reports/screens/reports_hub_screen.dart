@@ -7,10 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../core/models/project_model.dart';
-import '../../../core/models/sale_model.dart';
 import '../../../core/models/purchase_model.dart';
-import '../../../core/models/production_model.dart';
-import '../../../core/models/expense_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/report_pdf_generator.dart';
 import '../../../core/widgets/erp_button.dart';
@@ -868,7 +865,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
                   crossAxisCount: crossAxisCount,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: width < 450 ? 2.2 : (crossAxisCount >= 4 ? 1.8 : 2.0),
+                  childAspectRatio: width < 450 ? 2.6 : (crossAxisCount >= 4 ? 3.2 : 2.6),
                 ),
                 itemCount: kpis.length,
                 itemBuilder: (context, index) {

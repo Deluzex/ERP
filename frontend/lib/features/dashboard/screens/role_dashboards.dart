@@ -1189,6 +1189,8 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseServiceProvider);
+
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
@@ -1203,16 +1205,58 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
+          // 4 Executive Audit KPI Metrics
+          _buildResponsiveMetricGrid(context, [
+            _buildMetricCard(
+              title: 'Total Stock Valuation',
+              value: Formatters.formatCurrency(db.totalStockValue),
+              subtitle: 'Raw Materials & Finished Goods',
+              icon: Icons.inventory_2_outlined,
+              color: Colors.blue,
+            ),
+            _buildMetricCard(
+              title: 'Gross Invoiced Revenue',
+              value: Formatters.formatCurrency(db.totalInvoicedRevenue),
+              subtitle: '${db.sales.length} Invoices Generated',
+              icon: Icons.point_of_sale_outlined,
+              color: Colors.green,
+            ),
+            _buildMetricCard(
+              title: 'Procurement Spending',
+              value: Formatters.formatCurrency(db.purchases.fold(0.0, (s, p) => s + p.totalAmount)),
+              subtitle: '${db.purchases.length} Purchase Orders',
+              icon: Icons.shopping_bag_outlined,
+              color: Colors.purple,
+            ),
+            _buildMetricCard(
+              title: 'Total Business Assets',
+              value: Formatters.formatCurrency(db.totalStockValue + db.pendingCustomerPayments),
+              subtitle: 'Inventory + Receivables',
+              icon: Icons.account_balance_outlined,
+              color: Colors.teal,
+            ),
+          ]),
+          const SizedBox(height: 28),
+
           Text('Available ERP Analytical Reports', style: AppTextStyles.h2),
           const SizedBox(height: 16),
 
           LayoutBuilder(
             builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth >= 1100
+              final width = constraints.maxWidth;
+              final crossAxisCount = width >= 1100
                   ? 3
-                  : constraints.maxWidth >= 650
+                  : width >= 650
                       ? 2
                       : 1;
+
+              final aspectRatio = width >= 1400
+                  ? 2.35
+                  : width >= 1100
+                      ? 2.1
+                      : width >= 650
+                          ? 2.15
+                          : 2.4;
 
               return GridView.count(
                 crossAxisCount: crossAxisCount,
@@ -1220,7 +1264,7 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
                 mainAxisSpacing: 16,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: crossAxisCount == 1 ? 1.5 : (crossAxisCount == 2 ? 1.25 : 1.35),
+                childAspectRatio: aspectRatio,
                 children: [
                   _buildReportHubCard(
                     title: 'Inventory & Stock Valuation',
@@ -1289,22 +1333,34 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
           color: AppColors.surface,
           borderRadius: AppRadius.lgBorderRadius,
           border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 22),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(icon, color: color, size: 22),
+                ),
+                Icon(Icons.arrow_forward_rounded, color: color.withValues(alpha: 0.6), size: 16),
+              ],
             ),
             const SizedBox(height: 12),
             Text(title, style: AppTextStyles.h3, maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 4),
             Text(
               description,
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.3),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
