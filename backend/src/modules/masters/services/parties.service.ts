@@ -362,7 +362,22 @@ export class PartiesService {
     }
 
     const res = await this.db.query(
-      `SELECT * FROM architects WHERE ${conditions.join(' AND ')} ORDER BY name ASC`,
+      `SELECT a.*,
+         COALESCE(c_agg.total_earned, 0) as comm_earned,
+         COALESCE(c_agg.pending_total, 0) as comm_pending,
+         COALESCE(c_agg.approved_total, 0) as comm_approved,
+         COALESCE(c_agg.paid_total, 0) as comm_paid
+       FROM architects a
+       LEFT JOIN (
+         SELECT architect_id,
+           SUM(commission_amount) as total_earned,
+           SUM(CASE WHEN status = 'generated' THEN commission_amount ELSE 0 END) as pending_total,
+           SUM(CASE WHEN status = 'approved' THEN commission_amount ELSE 0 END) as approved_total,
+           SUM(CASE WHEN status = 'paid' THEN commission_amount ELSE 0 END) as paid_total
+         FROM architect_commissions
+         GROUP BY architect_id
+       ) c_agg ON c_agg.architect_id = a.id
+       WHERE ${conditions.map((c) => `a.${c}`).join(' AND ')} ORDER BY a.name ASC`,
       values,
     );
 
@@ -375,10 +390,10 @@ export class PartiesService {
       gstNumber: r.gst_number,
       address: r.address,
       defaultCommissionRate: parseFloat(r.default_commission_rate) || 5.0,
-      totalCommissionEarned: Money.format(r.total_commission_earned),
-      pendingCommission: Money.format(r.pending_commission),
-      approvedCommission: Money.format(r.approved_commission),
-      paidCommission: Money.format(r.paid_commission),
+      totalCommissionEarned: Money.format(parseFloat(r.total_commission_earned) > 0 ? r.total_commission_earned : r.comm_earned),
+      pendingCommission: Money.format(parseFloat(r.pending_commission) > 0 ? r.pending_commission : r.comm_pending),
+      approvedCommission: Money.format(parseFloat(r.approved_commission) > 0 ? r.approved_commission : r.comm_approved),
+      paidCommission: Money.format(parseFloat(r.paid_commission) > 0 ? r.paid_commission : r.comm_paid),
       linkedCustomerId: r.linked_customer_id,
       isAlsoCustomer: r.is_also_customer,
       isDeleted: r.is_deleted,
@@ -388,7 +403,25 @@ export class PartiesService {
   }
 
   async findArchitectById(id: string): Promise<ArchitectRecord> {
-    const res = await this.db.query('SELECT * FROM architects WHERE id = $1', [id]);
+    const res = await this.db.query(
+      `SELECT a.*,
+         COALESCE(c_agg.total_earned, 0) as comm_earned,
+         COALESCE(c_agg.pending_total, 0) as comm_pending,
+         COALESCE(c_agg.approved_total, 0) as comm_approved,
+         COALESCE(c_agg.paid_total, 0) as comm_paid
+       FROM architects a
+       LEFT JOIN (
+         SELECT architect_id,
+           SUM(commission_amount) as total_earned,
+           SUM(CASE WHEN status = 'generated' THEN commission_amount ELSE 0 END) as pending_total,
+           SUM(CASE WHEN status = 'approved' THEN commission_amount ELSE 0 END) as approved_total,
+           SUM(CASE WHEN status = 'paid' THEN commission_amount ELSE 0 END) as paid_total
+         FROM architect_commissions
+         GROUP BY architect_id
+       ) c_agg ON c_agg.architect_id = a.id
+       WHERE a.id = $1`,
+      [id],
+    );
     const r = res.rows[0];
     if (!r) throw new NotFoundError('Architect', id);
 
@@ -401,10 +434,10 @@ export class PartiesService {
       gstNumber: r.gst_number,
       address: r.address,
       defaultCommissionRate: parseFloat(r.default_commission_rate) || 5.0,
-      totalCommissionEarned: Money.format(r.total_commission_earned),
-      pendingCommission: Money.format(r.pending_commission),
-      approvedCommission: Money.format(r.approved_commission),
-      paidCommission: Money.format(r.paid_commission),
+      totalCommissionEarned: Money.format(parseFloat(r.total_commission_earned) > 0 ? r.total_commission_earned : r.comm_earned),
+      pendingCommission: Money.format(parseFloat(r.pending_commission) > 0 ? r.pending_commission : r.comm_pending),
+      approvedCommission: Money.format(parseFloat(r.approved_commission) > 0 ? r.approved_commission : r.comm_approved),
+      paidCommission: Money.format(parseFloat(r.paid_commission) > 0 ? r.paid_commission : r.comm_paid),
       linkedCustomerId: r.linked_customer_id,
       isAlsoCustomer: r.is_also_customer,
       isDeleted: r.is_deleted,

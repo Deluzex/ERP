@@ -10,6 +10,8 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class RawMaterialMasterScreen extends ConsumerStatefulWidget {
@@ -21,8 +23,12 @@ class RawMaterialMasterScreen extends ConsumerStatefulWidget {
 
 class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScreen> {
   String _searchQuery = '';
-  String? _selectedCategoryFilter;
-  bool _lowStockOnly = false;
+  String _selectedCategoryFilter = 'ALL';
+  String _stockFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -462,13 +468,38 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
     final materials = db.rawMaterials.where((rm) {
       if (rm.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          rm.name.toLowerCase().contains(query) ||
-          rm.itemCode.toLowerCase().contains(query) ||
-          rm.categoryName.toLowerCase().contains(query) ||
-          rm.unit.toLowerCase().contains(query) ||
-          rm.preferredVendorNames.any((v) => v.toLowerCase().contains(query));
+      if (query.isNotEmpty) {
+        final matches = rm.name.toLowerCase().contains(query) ||
+            rm.itemCode.toLowerCase().contains(query) ||
+            rm.categoryName.toLowerCase().contains(query) ||
+            rm.unit.toLowerCase().contains(query) ||
+            rm.preferredVendorNames.any((v) => v.toLowerCase().contains(query));
+        if (!matches) return false;
+      }
+      if (_selectedCategoryFilter != 'ALL' && rm.categoryId != _selectedCategoryFilter && rm.categoryName != _selectedCategoryFilter) {
+        return false;
+      }
+      if (_stockFilter == 'LOW' && !rm.isLowStock) return false;
+      if (_stockFilter == 'OUT_OF_STOCK' && rm.currentStock > 0) return false;
+      if (_stockFilter == 'IN_STOCK' && rm.currentStock <= 0) return false;
+      if (_startDate != null && rm.createdAt.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && rm.createdAt.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = materials.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedMaterials = totalRecords == 0 ? <RawMaterial>[] : materials.sublist(startIndex, endIndex);
+
+    final categoryFilterItems = <DropdownMenuItem<String>>[
+      const DropdownMenuItem(value: 'ALL', child: Text('All Categories')),
+      ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+    ];
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -507,17 +538,62 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          // Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search raw materials by name, SKU/code, category, UOM, or vendor...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search raw materials by SKU, name, vendor...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _selectedCategoryFilter,
+                items: categoryFilterItems,
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _selectedCategoryFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpFilterDropdown<String>(
+                value: _stockFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                  DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                  DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                  DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _stockFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           // Data Table
           ErpDataTable(
@@ -532,7 +608,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
               ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
-            rows: materials.map((rm) {
+            rows: pagedMaterials.map((rm) {
               final vendorDisplay = rm.preferredVendorNames.isNotEmpty
                   ? rm.preferredVendorNames.join(', ')
                   : 'Unassigned';
@@ -570,6 +646,17 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

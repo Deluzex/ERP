@@ -11,6 +11,8 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -24,6 +26,12 @@ class CustomersScreen extends ConsumerStatefulWidget {
 
 class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   String _searchQuery = '';
+  String _roleFilter = 'ALL';
+  String _balanceFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -354,13 +362,31 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     final customers = db.customers.where((c) {
       if (c.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          c.name.toLowerCase().contains(query) ||
-          c.mobile.toLowerCase().contains(query) ||
-          c.email.toLowerCase().contains(query) ||
-          c.gstNumber.toLowerCase().contains(query) ||
-          c.address.toLowerCase().contains(query);
+      if (query.isNotEmpty) {
+        final matches = c.name.toLowerCase().contains(query) ||
+            c.mobile.toLowerCase().contains(query) ||
+            c.email.toLowerCase().contains(query) ||
+            c.gstNumber.toLowerCase().contains(query) ||
+            c.address.toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_roleFilter == 'DIRECT' && (c.isAlsoArchitect || c.linkedArchitectId != null)) return false;
+      if (_roleFilter == 'ARCHITECT' && (!c.isAlsoArchitect && c.linkedArchitectId == null)) return false;
+      if (_balanceFilter == 'WITH_BALANCE' && c.outstandingAmount <= 0) return false;
+      if (_balanceFilter == 'ZERO_BALANCE' && c.outstandingAmount > 0) return false;
+      if (_startDate != null && c.createdAt.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && c.createdAt.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = customers.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedCustomers = totalRecords == 0 ? <Customer>[] : customers.sublist(startIndex, endIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -409,16 +435,65 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search customer by name, mobile, email, company, GST, or address...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search customer by name, mobile, GST...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _roleFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Customer Types')),
+                  DropdownMenuItem(value: 'DIRECT', child: Text('Direct Clients Only')),
+                  DropdownMenuItem(value: 'ARCHITECT', child: Text('Architect Linked / Dual')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _roleFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpFilterDropdown<String>(
+                value: _balanceFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                  DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Outstanding')),
+                  DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _balanceFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           ErpDataTable(
             columns: const [
@@ -431,7 +506,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
               ErpColumn(title: 'Actions'),
             ],
-            rows: customers.map((c) {
+            rows: pagedCustomers.map((c) {
               final linkedArch = c.linkedArchitectId != null
                   ? db.architects.where((a) => a.id == c.linkedArchitectId).firstOrNull
                   : null;
@@ -542,6 +617,17 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

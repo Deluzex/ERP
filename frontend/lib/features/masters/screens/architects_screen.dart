@@ -15,6 +15,8 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -28,7 +30,19 @@ class ArchitectsScreen extends ConsumerStatefulWidget {
 
 class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _searchQuery = '';
+  String _archSearchQuery = '';
+  String _archCustomerFilter = 'ALL';
+  DateTime? _archStartDate;
+  DateTime? _archEndDate;
+  int _archCurrentPage = 0;
+  int _archPageSize = 25;
+
+  String _commSearchQuery = '';
+  String _commStatusFilter = 'ALL';
+  DateTime? _commStartDate;
+  DateTime? _commEndDate;
+  int _commCurrentPage = 0;
+  int _commPageSize = 25;
 
   @override
   void initState() {
@@ -476,16 +490,62 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+
+    // Tab 1: Architects filtering & pagination
     final architects = db.architects.where((a) {
       if (a.isDeleted) return false;
-      final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          a.name.toLowerCase().contains(query) ||
-          a.companyName.toLowerCase().contains(query) ||
-          a.mobile.toLowerCase().contains(query) ||
-          a.email.toLowerCase().contains(query) ||
-          (a.address != null && a.address!.toLowerCase().contains(query));
+      final query = _archSearchQuery.trim().toLowerCase();
+      if (query.isNotEmpty) {
+        final matches = a.name.toLowerCase().contains(query) ||
+            a.companyName.toLowerCase().contains(query) ||
+            a.mobile.toLowerCase().contains(query) ||
+            a.email.toLowerCase().contains(query) ||
+            a.address.toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_archCustomerFilter == 'DUAL_CUSTOMER' && (!a.isAlsoCustomer && a.linkedCustomerId == null)) return false;
+      if (_archCustomerFilter == 'INDEPENDENT' && (a.isAlsoCustomer || a.linkedCustomerId != null)) return false;
+      if (_archStartDate != null && a.createdAt.isBefore(DateTime(_archStartDate!.year, _archStartDate!.month, _archStartDate!.day))) return false;
+      if (_archEndDate != null && a.createdAt.isAfter(DateTime(_archEndDate!.year, _archEndDate!.month, _archEndDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final archTotalRecords = architects.length;
+    final archSafePageSize = _archPageSize <= 0 ? 25 : _archPageSize;
+    final archTotalPages = (archTotalRecords <= 0) ? 1 : (archTotalRecords / archSafePageSize).ceil();
+    final archMaxPage = archTotalPages > 0 ? archTotalPages - 1 : 0;
+    final archSafeCurrentPage = _archCurrentPage.clamp(0, archMaxPage);
+    final archStartIndex = archSafeCurrentPage * archSafePageSize;
+    final archEndIndex = (archStartIndex + archSafePageSize).clamp(0, archTotalRecords);
+    final pagedArchitects = archTotalRecords == 0 ? <Architect>[] : architects.sublist(archStartIndex, archEndIndex);
+
+    // Tab 2: Commissions filtering & pagination
+    final commissions = db.commissions.where((comm) {
+      final query = _commSearchQuery.trim().toLowerCase();
+      if (query.isNotEmpty) {
+        final matches = comm.commissionNumber.toLowerCase().contains(query) ||
+            comm.architectName.toLowerCase().contains(query) ||
+            comm.saleInvoiceNumber.toLowerCase().contains(query) ||
+            (comm.projectName != null && comm.projectName!.toLowerCase().contains(query));
+        if (!matches) return false;
+      }
+      if (_commStatusFilter == 'PENDING' && comm.status != CommissionStatus.generated) return false;
+      if (_commStatusFilter == 'APPROVED' && comm.status != CommissionStatus.approved) return false;
+      if (_commStatusFilter == 'PAID' && comm.status != CommissionStatus.paid) return false;
+      if (_commStatusFilter == 'REJECTED' && comm.status != CommissionStatus.rejected) return false;
+      if (_commStartDate != null && comm.generatedDate.isBefore(DateTime(_commStartDate!.year, _commStartDate!.month, _commStartDate!.day))) return false;
+      if (_commEndDate != null && comm.generatedDate.isAfter(DateTime(_commEndDate!.year, _commEndDate!.month, _commEndDate!.day, 23, 59, 59))) return false;
+      return true;
+    }).toList();
+
+    final commTotalRecords = commissions.length;
+    final commSafePageSize = _commPageSize <= 0 ? 25 : _commPageSize;
+    final commTotalPages = (commTotalRecords <= 0) ? 1 : (commTotalRecords / commSafePageSize).ceil();
+    final commMaxPage = commTotalPages > 0 ? commTotalPages - 1 : 0;
+    final commSafeCurrentPage = _commCurrentPage.clamp(0, commMaxPage);
+    final commStartIndex = commSafeCurrentPage * commSafePageSize;
+    final commEndIndex = (commStartIndex + commSafePageSize).clamp(0, commTotalRecords);
+    final pagedCommissions = commTotalRecords == 0 ? <ArchitectCommission>[] : commissions.sublist(commStartIndex, commEndIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -552,7 +612,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
           const SizedBox(height: 20),
 
           SizedBox(
-            height: 600,
+            height: 720,
             child: TabBarView(
               controller: _tabController,
               children: [
@@ -560,14 +620,48 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search architect by name, studio or mobile...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 280,
+                          child: ErpSearchInput(
+                            hintText: 'Search architect by name, studio...',
+                            initialValue: _archSearchQuery,
+                            onChanged: (val) => setState(() {
+                              _archSearchQuery = val;
+                              _archCurrentPage = 0;
+                            }),
+                          ),
+                        ),
+                        ErpFilterDropdown<String>(
+                          value: _archCustomerFilter,
+                          items: const [
+                            DropdownMenuItem(value: 'ALL', child: Text('All Architects')),
+                            DropdownMenuItem(value: 'DUAL_CUSTOMER', child: Text('Dual Arch-Customer / Linked')),
+                            DropdownMenuItem(value: 'INDEPENDENT', child: Text('Independent Studios')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setState(() {
+                              _archCustomerFilter = val;
+                              _archCurrentPage = 0;
+                            });
+                          },
+                        ),
+                        ErpDateFilterBox(
+                          startDate: _archStartDate,
+                          endDate: _archEndDate,
+                          onDateRangeSelected: (start, end) => setState(() {
+                            _archStartDate = start;
+                            _archEndDate = end;
+                            _archCurrentPage = 0;
+                          }),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     Expanded(
                       child: ErpDataTable(
                         columns: const [
@@ -582,7 +676,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           ErpColumn(title: 'Paid to Date', isNumeric: true),
                           ErpColumn(title: 'Actions'),
                         ],
-                        rows: architects.map((a) {
+                        rows: pagedArchitects.map((a) {
                           final linkedCust = a.linkedCustomerId != null
                               ? db.customers.where((c) => c.id == a.linkedCustomerId).firstOrNull
                               : null;
@@ -708,6 +802,17 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                         }).toList(),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    ErpPaginationBar(
+                      currentPage: archSafeCurrentPage,
+                      pageSize: archSafePageSize,
+                      totalRecords: archTotalRecords,
+                      onPageChanged: (newPage) => setState(() => _archCurrentPage = newPage),
+                      onPageSizeChanged: (newSize) => setState(() {
+                        _archPageSize = newSize;
+                        _archCurrentPage = 0;
+                      }),
+                    ),
                   ],
                 ),
 
@@ -715,7 +820,49 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Commission Transactions & Approval Center', style: AppTextStyles.h3),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 280,
+                          child: ErpSearchInput(
+                            hintText: 'Search voucher, architect, invoice...',
+                            initialValue: _commSearchQuery,
+                            onChanged: (val) => setState(() {
+                              _commSearchQuery = val;
+                              _commCurrentPage = 0;
+                            }),
+                          ),
+                        ),
+                        ErpFilterDropdown<String>(
+                          value: _commStatusFilter,
+                          items: const [
+                            DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                            DropdownMenuItem(value: 'PENDING', child: Text('Pending Review')),
+                            DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+                            DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+                            DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setState(() {
+                              _commStatusFilter = val;
+                              _commCurrentPage = 0;
+                            });
+                          },
+                        ),
+                        ErpDateFilterBox(
+                          startDate: _commStartDate,
+                          endDate: _commEndDate,
+                          onDateRangeSelected: (start, end) => setState(() {
+                            _commStartDate = start;
+                            _commEndDate = end;
+                            _commCurrentPage = 0;
+                          }),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 14),
                     Expanded(
                       child: ErpDataTable(
@@ -731,7 +878,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           ErpColumn(title: 'Status'),
                           ErpColumn(title: 'Workflow Actions'),
                         ],
-                        rows: db.commissions.map((comm) {
+                        rows: pagedCommissions.map((comm) {
                           ErpStatusBadge badge;
                           switch (comm.status) {
                             case CommissionStatus.generated:
@@ -845,6 +992,17 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           ];
                         }).toList(),
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    ErpPaginationBar(
+                      currentPage: commSafeCurrentPage,
+                      pageSize: commSafePageSize,
+                      totalRecords: commTotalRecords,
+                      onPageChanged: (newPage) => setState(() => _commCurrentPage = newPage),
+                      onPageSizeChanged: (newSize) => setState(() {
+                        _commPageSize = newSize;
+                        _commCurrentPage = 0;
+                      }),
                     ),
                   ],
                 ),

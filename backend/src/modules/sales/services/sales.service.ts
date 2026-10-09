@@ -865,6 +865,15 @@ export class SalesService {
           taxable, parseFloat(archRes.rows[0].default_commission_rate), commissionAmount,
         ],
       );
+
+      await this.db.query(
+        `UPDATE architects
+         SET pending_commission = COALESCE(pending_commission, 0) + $1,
+             total_commission_earned = COALESCE(total_commission_earned, 0) + $1,
+             updated_at = now()
+         WHERE id = $2`,
+        [commissionAmount, dlv.architectId],
+      );
     }
 
     // 3. Record initial payment receipt if provided
@@ -1042,6 +1051,15 @@ export class SalesService {
           sale_amount, commission_rate, commission_amount, status, generated_date
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'generated', now())`,
         [comNum, dto.architectId, archName, invId, invNumber, taxableAmount, commissionRate, commissionAmount],
+      );
+
+      await this.db.query(
+        `UPDATE architects
+         SET pending_commission = COALESCE(pending_commission, 0) + $1,
+             total_commission_earned = COALESCE(total_commission_earned, 0) + $1,
+             updated_at = now()
+         WHERE id = $2`,
+        [commissionAmount, dto.architectId],
       );
     }
 

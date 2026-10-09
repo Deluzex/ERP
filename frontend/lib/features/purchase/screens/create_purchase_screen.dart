@@ -130,10 +130,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final database = ref.read(databaseServiceProvider);
       await Future.wait([
-        database.loadProjects(forceRefresh: true),
-        database.loadVendors(forceRefresh: true),
-        database.loadRawMaterials(forceRefresh: true),
-        database.loadFinishedProducts(forceRefresh: true),
+        database.loadProjects(forceRefresh: false),
+        database.loadVendors(forceRefresh: false),
+        database.loadRawMaterials(forceRefresh: false),
+        database.loadFinishedProducts(forceRefresh: false),
       ]);
       if (mounted) {
         setState(() {

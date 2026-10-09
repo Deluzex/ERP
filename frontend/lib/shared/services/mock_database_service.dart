@@ -49,6 +49,8 @@ class MockDatabaseService extends ChangeNotifier {
   // Master Lists
   List<ItemCategory> categories = [];
   List<MeasurementUnit> units = [];
+  List<ExpenseCategoryMasterItem> expenseCategoryMasterList = [];
+  List<PaymentModeMasterItem> paymentModeMasterList = [];
   List<RawMaterial> rawMaterials = [];
   List<FinishedProduct> finishedProducts = [];
   List<Vendor> vendors = [];
@@ -605,6 +607,132 @@ class MockDatabaseService extends ChangeNotifier {
       MeasurementUnit(id: 'U-3', name: 'Kilograms', symbol: 'KG'),
       MeasurementUnit(id: 'U-4', name: 'Boxes', symbol: 'BOX'),
       MeasurementUnit(id: 'U-5', name: 'Rolls', symbol: 'ROL'),
+    ];
+
+    // Expense Categories Master
+    expenseCategoryMasterList = [
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-1',
+        name: 'Transportation & Logistics',
+        code: 'TRANSPORT',
+        description: 'Freight, vehicle hire, and site material delivery charges',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-2',
+        name: 'Courier & Packaging',
+        code: 'COURIER',
+        description: 'Domestic express parcels, blueprints, and sample dispatches',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-3',
+        name: 'Fuel & Conveyance',
+        code: 'FUEL',
+        description: 'Diesel, petrol, client site visits, and local travel allowance',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-4',
+        name: 'Direct Labour & Overtime',
+        code: 'LABOUR',
+        description: 'Contract factory workers, loading/unloading, and site installation wages',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-5',
+        name: 'Electricity & Utilities',
+        code: 'UTILITIES',
+        description: 'Factory power bills, backup generator diesel, and water utility',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-6',
+        name: 'Plant & Machinery Maintenance',
+        code: 'MAINTENANCE',
+        description: 'Machine servicing, tooling replacement, and workshop upkeep',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-7',
+        name: 'Office & Administrative',
+        code: 'OFFICE',
+        description: 'Stationery, pantry supplies, software subscriptions, and internet',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-8',
+        name: 'Production Consumables',
+        code: 'PRODUCTION',
+        description: 'Safety gear, cutting blades, adhesives, and workshop consumables',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-9',
+        name: 'Project Site Expenses',
+        code: 'PROJECT',
+        description: 'Architect sample mocks, scaffold hire, and site coordination fees',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-10',
+        name: 'General & Miscellaneous',
+        code: 'OTHER',
+        description: 'Incidental business expenses and petty cash charges',
+        isActive: true,
+      ),
+    ];
+
+    // Payment Modes Master
+    paymentModeMasterList = [
+      PaymentModeMasterItem(
+        id: 'PM-1',
+        name: 'Bank Transfer (NEFT / RTGS / IMPS)',
+        code: 'BANK_TRANSFER',
+        type: 'Bank / Electronic',
+        description: 'Direct account-to-account online bank settlement with UTR reference',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-2',
+        name: 'UPI / QR Code',
+        code: 'UPI',
+        type: 'Digital',
+        description: 'Instant mobile UPI payment via Google Pay, PhonePe, or BHIM',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-3',
+        name: 'Cheque / Demand Draft',
+        code: 'CHEQUE',
+        type: 'Banking Instrument',
+        description: 'Clearing cheque or banker draft with cheque number and drawer bank',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-4',
+        name: 'Cash',
+        code: 'CASH',
+        type: 'Cash',
+        description: 'Direct physical cash receipt or cash voucher payment',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-5',
+        name: 'Company Credit / Debit Card',
+        code: 'CARD',
+        type: 'Card',
+        description: 'Corporate POS card swipe or online payment gateway transaction',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-6',
+        name: 'Credit Note / Ledger Adjustment',
+        code: 'CREDIT_NOTE',
+        type: 'Ledger Adjustment',
+        description: 'Contra settlement against sales returns or dealer debit balances',
+        isActive: true,
+      ),
     ];
 
     // Vendors
@@ -4171,6 +4299,8 @@ class MockDatabaseService extends ChangeNotifier {
 
   bool _isLoadingProjects = false;
   bool get isLoadingProjects => _isLoadingProjects;
+  bool _hasLoadedProjects = false;
+  bool get hasLoadedProjects => _hasLoadedProjects;
 
   bool _isLoadingVendors = false;
   bool get isLoadingVendors => _isLoadingVendors;
@@ -4195,6 +4325,7 @@ class MockDatabaseService extends ChangeNotifier {
         loadCustomers(forceRefresh: forceRefresh),
         loadDealers(forceRefresh: forceRefresh),
         loadArchitects(forceRefresh: forceRefresh),
+        loadProjects(forceRefresh: forceRefresh),
         loadStockMovements(forceRefresh: forceRefresh),
         loadStockAdjustments(forceRefresh: forceRefresh),
         loadLowStockAlerts(forceRefresh: forceRefresh),
@@ -4446,6 +4577,120 @@ class MockDatabaseService extends ChangeNotifier {
   Future<void> deleteUnitAsync(String id) async {
     await _categoriesUnitsApi.deleteUnit(id);
     units.removeWhere((u) => u.id == id);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Expense Categories Master CRUD
+  // -------------------------------------------------------------
+  Future<ExpenseCategoryMasterItem> addExpenseCategoryAsync({
+    required String name,
+    required String code,
+    required String description,
+  }) async {
+    final newId = 'EXP-CAT-${expenseCategoryMasterList.length + 1}';
+    final item = ExpenseCategoryMasterItem(
+      id: newId,
+      name: name,
+      code: code.trim().toUpperCase(),
+      description: description,
+      isActive: true,
+    );
+    expenseCategoryMasterList.insert(0, item);
+    notifyListeners();
+    return item;
+  }
+
+  Future<ExpenseCategoryMasterItem> updateExpenseCategoryAsync({
+    required String id,
+    required String name,
+    required String code,
+    required String description,
+  }) async {
+    final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
+    if (idx != -1) {
+      expenseCategoryMasterList[idx] = expenseCategoryMasterList[idx].copyWith(
+        name: name,
+        code: code.trim().toUpperCase(),
+        description: description,
+      );
+      notifyListeners();
+      return expenseCategoryMasterList[idx];
+    }
+    throw Exception('Expense category not found');
+  }
+
+  Future<void> toggleExpenseCategoryStatusAsync(String id) async {
+    final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
+    if (idx != -1) {
+      expenseCategoryMasterList[idx] = expenseCategoryMasterList[idx].copyWith(
+        isActive: !expenseCategoryMasterList[idx].isActive,
+      );
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteExpenseCategoryAsync(String id) async {
+    expenseCategoryMasterList.removeWhere((c) => c.id == id);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Payment Modes Master CRUD
+  // -------------------------------------------------------------
+  Future<PaymentModeMasterItem> addPaymentModeAsync({
+    required String name,
+    required String code,
+    required String type,
+    required String description,
+  }) async {
+    final newId = 'PM-${paymentModeMasterList.length + 1}';
+    final item = PaymentModeMasterItem(
+      id: newId,
+      name: name,
+      code: code.trim().toUpperCase(),
+      type: type,
+      description: description,
+      isActive: true,
+    );
+    paymentModeMasterList.insert(0, item);
+    notifyListeners();
+    return item;
+  }
+
+  Future<PaymentModeMasterItem> updatePaymentModeAsync({
+    required String id,
+    required String name,
+    required String code,
+    required String type,
+    required String description,
+  }) async {
+    final idx = paymentModeMasterList.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      paymentModeMasterList[idx] = paymentModeMasterList[idx].copyWith(
+        name: name,
+        code: code.trim().toUpperCase(),
+        type: type,
+        description: description,
+      );
+      notifyListeners();
+      return paymentModeMasterList[idx];
+    }
+    throw Exception('Payment mode not found');
+  }
+
+  Future<void> togglePaymentModeStatusAsync(String id) async {
+    final idx = paymentModeMasterList.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      paymentModeMasterList[idx] = paymentModeMasterList[idx].copyWith(
+        isActive: !paymentModeMasterList[idx].isActive,
+      );
+      notifyListeners();
+    }
+  }
+
+  Future<void> deletePaymentModeAsync(String id) async {
+    paymentModeMasterList.removeWhere((p) => p.id == id);
     notifyListeners();
   }
 
@@ -4992,13 +5237,13 @@ class MockDatabaseService extends ChangeNotifier {
 
   Future<void> loadProjects({bool forceRefresh = false, String? search, String? status}) async {
     if (_isLoadingProjects && !forceRefresh) return;
+    if (_hasLoadedProjects && !forceRefresh && search == null && status == null) return;
     _isLoadingProjects = true;
     try {
       final remote = await _projectsApi.getProjects(search: search, status: status);
-      if (remote.isNotEmpty || forceRefresh) {
-        projects = remote;
-        notifyListeners();
-      }
+      projects = remote;
+      _hasLoadedProjects = true;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadProjects fallback: $e');
     } finally {
@@ -5010,6 +5255,7 @@ class MockDatabaseService extends ChangeNotifier {
     try {
       final saved = await _projectsApi.createProject(project);
       projects.insert(0, saved);
+      _hasLoadedProjects = true;
       notifyListeners();
       return saved;
     } catch (e) {
@@ -5089,8 +5335,21 @@ class MockDatabaseService extends ChangeNotifier {
   int get ordersReadyForDispatchCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.readyForDispatch).length;
   int get ordersPartiallyDeliveredCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.partiallyDelivered).length;
 
-  double get totalInvoicedRevenue => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount);
-  double get totalSalesReturnsAmount => approvedSalesReturns.fold(0.0, (sum, s) => sum + s.totalAmount);
+  double get totalInvoicedRevenue => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount.abs());
+  double get totalSalesReturnsAmount {
+    if (salesDashboardMetrics.containsKey('totalSalesReturnsAmount')) {
+      final v = salesDashboardMetrics['totalSalesReturnsAmount'];
+      if (v != null) {
+        final val = (v as num).toDouble().abs();
+        if (val > 0) return val;
+      }
+    }
+    final approved = approvedSalesReturns.fold(0.0, (sum, s) => sum + s.totalAmount.abs());
+    if (approved > 0) return approved;
+    return salesReturns
+        .where((s) => s.salesReturnStatus != SalesReturnStatus.rejected)
+        .fold(0.0, (sum, s) => sum + s.totalAmount.abs());
+  }
   double get netSalesRevenue => (totalSalesAmount - totalSalesReturnsAmount).clamp(0.0, double.infinity);
   double get salesReturnRatePercentage => totalSalesAmount > 0 ? (totalSalesReturnsAmount / totalSalesAmount) * 100 : 0.0;
   int get pendingRefundsCount => salesReturns.where((r) => r.refundStatus == RefundStatus.pending).length;
@@ -5109,9 +5368,53 @@ class MockDatabaseService extends ChangeNotifier {
         .fold(0.0, (sum, s) => sum + s.totalAmount);
   }
 
-  double get pendingCustomerPayments => customers.where((c) => !c.isDeleted).fold(0.0, (sum, c) => sum + c.outstandingAmount);
-  double get pendingVendorPayments => vendors.where((v) => !v.isDeleted).fold(0.0, (sum, v) => sum + v.outstandingBalance);
-  double get pendingCommissionAmount => architects.where((a) => !a.isDeleted).fold(0.0, (sum, a) => sum + a.pendingCommission + a.approvedCommission);
+  double get pendingCustomerPayments {
+    final fromCustomers = customers.where((c) => !c.isDeleted).fold(0.0, (sum, c) => sum + c.outstandingAmount);
+    final fromInvoices = salesInvoices.where((s) => s.status != SaleStatus.cancelled).fold(0.0, (sum, s) => sum + s.pendingAmount);
+    if (fromCustomers > 0 && fromCustomers >= fromInvoices) {
+      return fromCustomers;
+    }
+    if (fromInvoices > 0) {
+      return fromInvoices;
+    }
+    return fromCustomers;
+  }
+
+  double get pendingVendorPayments {
+    final fromVendors = vendors.where((v) => !v.isDeleted).fold(0.0, (sum, v) => sum + v.outstandingBalance);
+    final fromPurchases = purchases.where((p) => p.status != PurchaseStatus.cancelled).fold(0.0, (sum, p) => sum + p.pendingAmount);
+    if (fromVendors > 0 && fromVendors >= fromPurchases) {
+      return fromVendors;
+    }
+    if (fromPurchases > 0) {
+      return fromPurchases;
+    }
+    return fromVendors;
+  }
+
+  double get pendingCommissionAmount {
+    // 1. Calculate from active commission vouchers (generated or approved)
+    final fromCommissions = commissions
+        .where((c) => c.status == CommissionStatus.generated || c.status == CommissionStatus.approved)
+        .fold(0.0, (sum, c) => sum + c.commissionAmount);
+
+    // 2. Calculate from architect entity dues
+    final fromArchitects = architects
+        .where((a) => !a.isDeleted)
+        .fold(0.0, (sum, a) => sum + a.pendingCommission + a.approvedCommission);
+
+    if (fromCommissions > 0 && fromCommissions >= fromArchitects) {
+      return fromCommissions;
+    }
+    if (fromArchitects > 0) {
+      return fromArchitects;
+    }
+
+    // 3. Fallback to active sales invoices with architect commission
+    return salesInvoices
+        .where((s) => s.architectId != null && s.architectCommissionAmount > 0 && s.status != SaleStatus.cancelled)
+        .fold(0.0, (sum, s) => sum + s.architectCommissionAmount);
+  }
 
   List<RawMaterial> get lowStockRawMaterials => rawMaterials.where((rm) => !rm.isDeleted && rm.isLowStock).toList();
   List<FinishedProduct> get lowStockFinishedProducts => finishedProducts.where((fp) => !fp.isDeleted && fp.isLowStock).toList();

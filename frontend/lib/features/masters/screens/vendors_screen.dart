@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -11,9 +12,12 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 
 class VendorsScreen extends ConsumerStatefulWidget {
   const VendorsScreen({super.key});
@@ -24,6 +28,11 @@ class VendorsScreen extends ConsumerStatefulWidget {
 
 class _VendorsScreenState extends ConsumerState<VendorsScreen> {
   String _searchQuery = '';
+  String _duesFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -346,16 +355,32 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
     final db = ref.watch(databaseServiceProvider);
     final vendors = db.vendors.where((v) {
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          v.name.toLowerCase().contains(query) ||
-          v.contactPerson.toLowerCase().contains(query) ||
-          v.mobile.toLowerCase().contains(query) ||
-          v.email.toLowerCase().contains(query) ||
-          v.gstNumber.toLowerCase().contains(query) ||
-          v.panNumber.toLowerCase().contains(query) ||
-          v.address.toLowerCase().contains(query) ||
-          v.paymentTerms.toLowerCase().contains(query);
+      if (query.isNotEmpty) {
+        final matches = v.name.toLowerCase().contains(query) ||
+            v.contactPerson.toLowerCase().contains(query) ||
+            v.mobile.toLowerCase().contains(query) ||
+            v.email.toLowerCase().contains(query) ||
+            v.gstNumber.toLowerCase().contains(query) ||
+            v.panNumber.toLowerCase().contains(query) ||
+            v.address.toLowerCase().contains(query) ||
+            v.paymentTerms.toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_duesFilter == 'HAS_DUES' && v.outstandingBalance <= 0) return false;
+      if (_duesFilter == 'ZERO_DUES' && v.outstandingBalance > 0) return false;
+      if (_startDate != null && v.createdAt.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && v.createdAt.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = vendors.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedVendors = totalRecords == 0 ? <Vendor>[] : vendors.sublist(startIndex, endIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -402,16 +427,51 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search vendors by name, contact person, mobile, email, GST, or PAN...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search vendors by name, contact, GST...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _duesFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Vendors')),
+                  DropdownMenuItem(value: 'HAS_DUES', child: Text('Has Dues / Payable')),
+                  DropdownMenuItem(value: 'ZERO_DUES', child: Text('Zero Balance / Settled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _duesFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           ErpDataTable(
             columns: const [
@@ -419,15 +479,26 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
               ErpColumn(title: 'Contact Person'),
               ErpColumn(title: 'Mobile / Email'),
               ErpColumn(title: 'GST Number'),
-              ErpColumn(title: 'Payment Terms'),
-              ErpColumn(title: 'Credit Limit', isNumeric: true),
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
               ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
-            rows: vendors.map((v) {
+            rows: pagedVendors.map((v) {
               return [
-                Text(v.name, style: AppTextStyles.bodyBold),
+                InkWell(
+                  onTap: () {
+                    ref.read(activeRecordDetailsStackProvider.notifier).push(v.id, 'vendor', ErpNavSection.vendors);
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(v.name, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                      if (v.address.isNotEmpty)
+                        Text(v.address, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
+                    ],
+                  ),
+                ),
                 Text(v.contactPerson, style: AppTextStyles.bodyMedium),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,8 +509,6 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                   ],
                 ),
                 Text(v.gstNumber.trim().isNotEmpty ? v.gstNumber : '-', style: AppTextStyles.bodySmall),
-                Text(v.paymentTerms, style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(v.creditLimit), style: AppTextStyles.bodySmall),
                 Text(
                   Formatters.formatCurrency(v.outstandingBalance),
                   style: AppTextStyles.bodyBold.copyWith(
@@ -447,25 +516,66 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                   ),
                 ),
                 v.isDeleted
-                    ? ErpStatusBadge.danger('DELETED (${v.deleteReason ?? "Reason not specified"})')
+                    ? Tooltip(
+                        message: v.deleteReason != null ? 'Deleted: ${v.deleteReason}' : 'Deleted vendor',
+                        child: ErpStatusBadge.danger('DELETED'),
+                      )
                     : ErpStatusBadge.success('ACTIVE'),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
+                      icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                      tooltip: 'View Vendor Details',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        ref.read(activeRecordDetailsStackProvider.notifier).push(v.id, 'vendor', ErpNavSection.vendors);
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.chat, color: Colors.green, size: 18),
+                      tooltip: 'Quick WhatsApp Message',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
+                        context,
+                        customerName: v.name,
+                        customerPhone: v.mobile,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       tooltip: 'Edit Vendor',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
                       onPressed: v.isDeleted ? null : () => _openAddEditVendorDialog(v),
                     ),
+                    const SizedBox(width: 4),
                     IconButton(
                       icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
                       tooltip: 'Delete with Reason',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
                       onPressed: v.isDeleted ? null : () => _confirmDeleteVendor(v),
                     ),
                   ],
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

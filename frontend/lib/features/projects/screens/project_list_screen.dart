@@ -13,6 +13,8 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ProjectListScreen extends ConsumerStatefulWidget {
@@ -24,6 +26,11 @@ class ProjectListScreen extends ConsumerStatefulWidget {
 
 class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
   String _searchQuery = '';
+  String _statusFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -771,14 +778,31 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
     final db = ref.watch(databaseServiceProvider);
     final projects = db.projects.where((p) {
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          p.name.toLowerCase().contains(query) ||
-          (p.projectCode.isNotEmpty && p.projectCode.toLowerCase().contains(query)) ||
-          (p.customerName != null && p.customerName!.toLowerCase().contains(query)) ||
-          (p.architectName != null && p.architectName!.toLowerCase().contains(query)) ||
-          (p.notes != null && p.notes!.toLowerCase().contains(query)) ||
-          p.status.toString().toLowerCase().contains(query);
+      if (query.isNotEmpty) {
+        final matches = p.name.toLowerCase().contains(query) ||
+            (p.projectCode.isNotEmpty && p.projectCode.toLowerCase().contains(query)) ||
+            (p.customerName != null && p.customerName!.toLowerCase().contains(query)) ||
+            (p.architectName != null && p.architectName!.toLowerCase().contains(query)) ||
+            (p.notes != null && p.notes!.toLowerCase().contains(query)) ||
+            p.status.toString().toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_statusFilter != 'ALL' && p.status.name.toLowerCase() != _statusFilter.toLowerCase()) {
+        return false;
+      }
+      if (_startDate != null && p.startDate.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && p.startDate.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = projects.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedProjects = totalRecords == 0 ? <Project>[] : projects.sublist(startIndex, endIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -814,16 +838,54 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search projects by code, name, customer, architect, status, or notes...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search projects by code, name, client...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _statusFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Project Statuses')),
+                  DropdownMenuItem(value: 'planned', child: Text('Planned')),
+                  DropdownMenuItem(value: 'active', child: Text('Active / In Progress')),
+                  DropdownMenuItem(value: 'completed', child: Text('Completed')),
+                  DropdownMenuItem(value: 'closed', child: Text('Closed')),
+                  DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _statusFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           ErpDataTable(
             columns: const [
@@ -838,7 +900,7 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
               ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
-            rows: projects.map((p) {
+            rows: pagedProjects.map((p) {
               ErpStatusBadge badge;
               switch (p.status) {
                 case ProjectStatus.active:
@@ -930,6 +992,17 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

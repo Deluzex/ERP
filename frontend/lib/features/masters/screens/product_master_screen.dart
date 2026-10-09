@@ -10,6 +10,8 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ProductMasterScreen extends ConsumerStatefulWidget {
@@ -21,6 +23,12 @@ class ProductMasterScreen extends ConsumerStatefulWidget {
 
 class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
   String _searchQuery = '';
+  String _selectedCategoryFilter = 'ALL';
+  String _stockFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -502,12 +510,37 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
     final products = db.finishedProducts.where((fp) {
       if (fp.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          fp.name.toLowerCase().contains(query) ||
-          fp.itemCode.toLowerCase().contains(query) ||
-          fp.categoryName.toLowerCase().contains(query) ||
-          fp.unit.toLowerCase().contains(query);
+      if (query.isNotEmpty) {
+        final matches = fp.name.toLowerCase().contains(query) ||
+            fp.itemCode.toLowerCase().contains(query) ||
+            fp.categoryName.toLowerCase().contains(query) ||
+            fp.unit.toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_selectedCategoryFilter != 'ALL' && fp.categoryId != _selectedCategoryFilter && fp.categoryName != _selectedCategoryFilter) {
+        return false;
+      }
+      if (_stockFilter == 'LOW' && !fp.isLowStock) return false;
+      if (_stockFilter == 'OUT_OF_STOCK' && fp.currentStock > 0) return false;
+      if (_stockFilter == 'IN_STOCK' && fp.currentStock <= 0) return false;
+      if (_startDate != null && fp.createdAt.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && fp.createdAt.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = products.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedProducts = totalRecords == 0 ? <FinishedProduct>[] : products.sublist(startIndex, endIndex);
+
+    final categoryFilterItems = <DropdownMenuItem<String>>[
+      const DropdownMenuItem(value: 'ALL', child: Text('All Categories')),
+      ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+    ];
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -546,17 +579,62 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          // Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search product master by name, SKU/code, category or UOM...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search product by SKU, name, category...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _selectedCategoryFilter,
+                items: categoryFilterItems,
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _selectedCategoryFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpFilterDropdown<String>(
+                value: _stockFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                  DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                  DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                  DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _stockFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           // Data Table
           ErpDataTable(
@@ -572,7 +650,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
               ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
-            rows: products.map((fp) {
+            rows: pagedProducts.map((fp) {
               return [
                 Text(fp.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
                 Text(fp.name, style: AppTextStyles.bodyBold),
@@ -610,6 +688,17 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

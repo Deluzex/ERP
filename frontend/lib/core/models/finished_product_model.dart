@@ -49,7 +49,8 @@ class FinishedProduct {
         producedStock = producedStock ?? currentStock;
 
   bool get isLowStock => currentStock <= minimumStock;
-  double get totalValuation => currentStock * costPrice;
+  double get effectiveCostPrice => costPrice > 0 ? costPrice : (dealerSellingPrice > 0 ? dealerSellingPrice * 0.7 : (customerSellingPrice > 0 ? customerSellingPrice * 0.6 : 0.0));
+  double get totalValuation => currentStock * effectiveCostPrice;
   double get availableStock => (currentStock - reservedStock).clamp(0.0, double.infinity);
 
   FinishedProduct copyWith({

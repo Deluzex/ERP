@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -10,8 +11,11 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 
 class DealersScreen extends ConsumerStatefulWidget {
   const DealersScreen({super.key});
@@ -22,6 +26,11 @@ class DealersScreen extends ConsumerStatefulWidget {
 
 class _DealersScreenState extends ConsumerState<DealersScreen> {
   String _searchQuery = '';
+  String _balanceFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -301,15 +310,31 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
     final dealers = db.dealers.where((d) {
       if (d.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          d.name.toLowerCase().contains(query) ||
-          d.contactPerson.toLowerCase().contains(query) ||
-          d.companyName.toLowerCase().contains(query) ||
-          d.mobile.toLowerCase().contains(query) ||
-          d.email.toLowerCase().contains(query) ||
-          d.gstNumber.toLowerCase().contains(query) ||
-          d.address.toLowerCase().contains(query);
+      if (query.isNotEmpty) {
+        final matches = d.name.toLowerCase().contains(query) ||
+            d.contactPerson.toLowerCase().contains(query) ||
+            d.companyName.toLowerCase().contains(query) ||
+            d.mobile.toLowerCase().contains(query) ||
+            d.email.toLowerCase().contains(query) ||
+            d.gstNumber.toLowerCase().contains(query) ||
+            d.address.toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_balanceFilter == 'WITH_BALANCE' && d.outstandingAmount <= 0) return false;
+      if (_balanceFilter == 'ZERO_BALANCE' && d.outstandingAmount > 0) return false;
+      if (_startDate != null && d.createdAt.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && d.createdAt.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = dealers.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedDealers = totalRecords == 0 ? <Dealer>[] : dealers.sublist(startIndex, endIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -356,16 +381,51 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search dealer by showroom name, contact person, mobile, email, or company...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search dealer by name, showroom, GST...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _balanceFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                  DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Receivables / Balance')),
+                  DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _balanceFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           ErpDataTable(
             columns: const [
@@ -374,13 +434,25 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
               ErpColumn(title: 'Contact Person'),
               ErpColumn(title: 'Mobile / Email'),
               ErpColumn(title: 'GST Number'),
-              ErpColumn(title: 'Showroom Address'),
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
               ErpColumn(title: 'Actions'),
             ],
-            rows: dealers.map((d) {
+            rows: pagedDealers.map((d) {
               return [
-                Text(d.name, style: AppTextStyles.bodyBold),
+                InkWell(
+                  onTap: () {
+                    ref.read(activeRecordDetailsStackProvider.notifier).push(d.id, 'dealer', ErpNavSection.dealers);
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(d.name, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                      if (d.address.isNotEmpty)
+                        Text(d.address, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
+                    ],
+                  ),
+                ),
                 Text(d.companyName, style: AppTextStyles.bodyMedium),
                 Text(d.contactPerson, style: AppTextStyles.bodySmall),
                 Column(
@@ -393,7 +465,6 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                   ],
                 ),
                 Text(d.gstNumber.isNotEmpty ? d.gstNumber : '-', style: AppTextStyles.bodySmall),
-                Text(d.address, style: AppTextStyles.bodySmall),
                 Text(
                   Formatters.formatCurrency(d.outstandingAmount),
                   style: AppTextStyles.bodyBold.copyWith(
@@ -404,19 +475,57 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
+                      icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                      tooltip: 'View Complete Dealer Profile',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        ref.read(activeRecordDetailsStackProvider.notifier).push(d.id, 'dealer', ErpNavSection.dealers);
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.chat, color: Colors.green, size: 18),
+                      tooltip: 'Quick WhatsApp Message',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
+                        context,
+                        customerName: d.name,
+                        customerPhone: d.mobile,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       tooltip: 'Edit Dealer',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
                       onPressed: () => _openAddEditDealerDialog(d),
                     ),
+                    const SizedBox(width: 4),
                     IconButton(
                       icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
                       tooltip: 'Delete Dealer',
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
                       onPressed: () => _confirmDeleteDealer(d),
                     ),
                   ],
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),
