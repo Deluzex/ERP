@@ -10,6 +10,8 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ProductionOrdersScreen extends ConsumerStatefulWidget {
@@ -21,6 +23,11 @@ class ProductionOrdersScreen extends ConsumerStatefulWidget {
 
 class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen> {
   String _searchQuery = '';
+  String _statusFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -774,15 +781,49 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final orders = db.productionOrders.where((o) => !o.isDeleted).where((o) {
+      if (_statusFilter != 'ALL') {
+        switch (_statusFilter) {
+          case 'PLANNED':
+            if (o.status != ProductionStatus.planned) return false;
+            break;
+          case 'IN_PROGRESS':
+            if (o.status != ProductionStatus.inProgress) return false;
+            break;
+          case 'COMPLETED':
+            if (o.status != ProductionStatus.completed) return false;
+            break;
+          case 'CANCELLED':
+            if (o.status != ProductionStatus.cancelled) return false;
+            break;
+        }
+      }
+      if (_startDate != null && o.productionDate.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) {
+        return false;
+      }
+      if (_endDate != null && o.productionDate.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) {
+        return false;
+      }
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          o.productionNumber.toLowerCase().contains(query) ||
-          o.finishedProductName.toLowerCase().contains(query) ||
-          o.finishedProductCode.toLowerCase().contains(query) ||
-          o.statusLabel.toLowerCase().contains(query) ||
-          (o.notes != null && o.notes!.toLowerCase().contains(query)) ||
-          o.rawMaterialsUsed.any((rm) => rm.rawMaterialName.toLowerCase().contains(query));
+      if (query.isNotEmpty) {
+        final matches = o.productionNumber.toLowerCase().contains(query) ||
+            o.finishedProductName.toLowerCase().contains(query) ||
+            o.finishedProductCode.toLowerCase().contains(query) ||
+            o.statusLabel.toLowerCase().contains(query) ||
+            (o.notes != null && o.notes!.toLowerCase().contains(query)) ||
+            o.rawMaterialsUsed.any((rm) => rm.rawMaterialName.toLowerCase().contains(query));
+        if (!matches) return false;
+      }
+      return true;
     }).toList();
+
+    final totalRecords = orders.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedOrders = totalRecords == 0 ? <ProductionOrder>[] : orders.sublist(startIndex, endIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -841,16 +882,55 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search production by batch number, product name or code...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 300,
+                child: ErpSearchInput(
+                  hintText: 'Search by batch no, product name or SKU...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _statusFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                  DropdownMenuItem(value: 'PLANNED', child: Text('Waiting Approval')),
+                  DropdownMenuItem(value: 'IN_PROGRESS', child: Text('In Progress')),
+                  DropdownMenuItem(value: 'COMPLETED', child: Text('Completed')),
+                  DropdownMenuItem(value: 'CANCELLED', child: Text('Cancelled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _statusFilter = val;
+                      _currentPage = 0;
+                    });
+                  }
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           ErpDataTable(
             columns: const [
@@ -864,9 +944,9 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
               ErpColumn(title: 'Total Batch Cost', isNumeric: true),
               ErpColumn(title: 'Cost Per Unit', isNumeric: true),
               ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
+              ErpColumn(title: 'Actions', width: 90, alignment: Alignment.center),
             ],
-            rows: orders.map((o) {
+            rows: pagedOrders.map((o) {
               return [
                 Text(o.productionNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
                 Text(Formatters.formatDate(o.productionDate), style: AppTextStyles.bodySmall),
@@ -874,13 +954,13 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(o.finishedProductCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                    Text(o.finishedProductName, style: AppTextStyles.bodySmall),
+                    Text(o.finishedProductCode.isNotEmpty ? o.finishedProductCode : '-', style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                    Text(o.finishedProductName.isNotEmpty ? o.finishedProductName : '-', style: AppTextStyles.bodySmall),
                   ],
                 ),
-                Text('${Formatters.formatNumber(o.plannedQuantity)} ${o.unit}', style: AppTextStyles.bodySmall),
+                Text('${Formatters.formatNumber(o.plannedQuantity)} ${o.unit}'.trim(), style: AppTextStyles.bodySmall),
                 Text(
-                  '${Formatters.formatNumber(o.actualQuantityProduced)} ${o.unit}',
+                  '${Formatters.formatNumber(o.actualQuantityProduced)} ${o.unit}'.trim(),
                   style: AppTextStyles.bodyBold.copyWith(
                     color: o.status == ProductionStatus.completed ? AppColors.successText : AppColors.textSecondary,
                   ),
@@ -893,6 +973,17 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                 _buildRowActions(o),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

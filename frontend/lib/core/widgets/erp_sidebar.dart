@@ -258,13 +258,13 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                           onTap: () => _handleNavigation(context, ErpNavSection.purchaseDashboard, ErpModule.purchase),
                         ),
                         _buildSubNavItem(
-                          title: 'Purchase Orders',
+                          title: 'Purchase Invoices',
                           isRestricted: !canAccessPurchase,
                           isSelected: currentSection == ErpNavSection.purchaseList,
                           onTap: () => _handleNavigation(context, ErpNavSection.purchaseList, ErpModule.purchase),
                         ),
                         _buildSubNavItem(
-                          title: 'Create Purchase',
+                          title: 'Create Direct Purchase',
                           isRestricted: !canAccessPurchase,
                           isSelected: currentSection == ErpNavSection.createPurchase,
                           onTap: () => _handleNavigation(context, ErpNavSection.createPurchase, ErpModule.purchase, ErpAction.create),
@@ -288,13 +288,13 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                         onTap: () => _handleNavigation(context, ErpNavSection.productionDashboard, ErpModule.production),
                       ),
                       _buildSubNavItem(
-                        title: 'Work Orders',
+                        title: 'Production Orders',
                         isRestricted: !canAccessProduction,
                         isSelected: currentSection == ErpNavSection.productionOrders,
                         onTap: () => _handleNavigation(context, ErpNavSection.productionOrders, ErpModule.production),
                       ),
                       _buildSubNavItem(
-                        title: 'Create Work Order',
+                        title: 'Create Production Order',
                         isRestricted: !canAccessProduction,
                         isSelected: currentSection == ErpNavSection.createProduction,
                         onTap: () => _handleNavigation(context, ErpNavSection.createProduction, ErpModule.production, ErpAction.create),

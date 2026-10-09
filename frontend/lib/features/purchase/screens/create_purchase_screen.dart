@@ -711,7 +711,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Create Purchase Order', style: AppTextStyles.h1),
+                          Text('Create Direct Purchase', style: AppTextStyles.h1),
                           const SizedBox(height: 4),
                           Text('Inward Raw Materials or Finished Goods directly into stock with GST tax breakup',
                               style: AppTextStyles.subtitle),

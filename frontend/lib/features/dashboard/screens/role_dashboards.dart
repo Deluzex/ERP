@@ -342,12 +342,12 @@ class PurchaseRoleDashboard extends ConsumerWidget {
                   runSpacing: 8,
                   children: [
                     ErpButton(
-                      text: 'Create Purchase Order',
+                      text: 'Create Direct Purchase',
                       icon: Icons.add_shopping_cart,
                       onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
                     ),
                     ErpButton(
-                      text: 'Purchase List',
+                      text: 'Purchase Invoices',
                       icon: Icons.list_alt_rounded,
                       isOutlined: true,
                       onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
@@ -376,7 +376,7 @@ class PurchaseRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Total Purchases Placed',
               value: Formatters.formatCurrency(db.totalPurchaseAmount),
-              subtitle: '${db.purchases.length} Purchase Orders',
+              subtitle: '${db.purchases.length} Purchase Invoices',
               icon: Icons.shopping_bag_outlined,
               color: Colors.purple,
             ),
@@ -405,12 +405,12 @@ class PurchaseRoleDashboard extends ConsumerWidget {
           const SizedBox(height: 28),
 
           // Recent Purchase Orders Table
-          Text('Recent Purchase Orders', style: AppTextStyles.h2),
+          Text('Recent Purchase Invoices', style: AppTextStyles.h2),
           const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
-              ErpColumn(title: 'PO Number'),
-              ErpColumn(title: 'PO Date'),
+              ErpColumn(title: 'Invoice Number'),
+              ErpColumn(title: 'Invoice Date'),
               ErpColumn(title: 'Vendor Name'),
               ErpColumn(title: 'Project Tag'),
               ErpColumn(title: 'Items Count', isNumeric: true),
@@ -515,12 +515,12 @@ class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboar
                   runSpacing: 8,
                   children: [
                     ErpButton(
-                      text: 'Create Work Order',
+                      text: 'Create Production Order',
                       icon: Icons.add_circle_outline,
                       onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
                     ),
                     ErpButton(
-                      text: 'Production Orders List',
+                      text: 'Production Orders',
                       icon: Icons.precision_manufacturing_outlined,
                       isOutlined: true,
                       onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
@@ -541,7 +541,7 @@ class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboar
           // 4 Key Metrics
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
-              title: 'Total Work Orders',
+              title: 'Total Production Orders',
               value: '${activeOrders.length}',
               subtitle: 'All-time production jobs',
               icon: Icons.precision_manufacturing_outlined,
@@ -576,7 +576,7 @@ class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboar
           const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
-              ErpColumn(title: 'Work Order No'),
+              ErpColumn(title: 'Order No'),
               ErpColumn(title: 'Start Date'),
               ErpColumn(title: 'Product to Produce'),
               ErpColumn(title: 'Target Qty', isNumeric: true),
