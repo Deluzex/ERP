@@ -1082,8 +1082,8 @@ class _MastersRoleDashboardState extends ConsumerState<MastersRoleDashboard> {
                     onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProducts,
                   ),
                   _buildMasterShortcutCard(
-                    title: 'Categories & Units',
-                    subtitle: 'Tax rates & measurement symbols',
+                    title: 'Category Master',
+                    subtitle: 'Item, expense & payment categories',
                     icon: Icons.category_outlined,
                     color: Colors.amber.shade800,
                     onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.categoriesUnits,

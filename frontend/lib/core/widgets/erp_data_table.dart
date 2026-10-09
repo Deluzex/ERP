@@ -7,11 +7,13 @@ class ErpColumn {
   final String title;
   final double? width;
   final bool isNumeric;
+  final Alignment? alignment;
 
   const ErpColumn({
     required this.title,
     this.width,
     this.isNumeric = false,
+    this.alignment,
   });
 }
 
@@ -118,7 +120,8 @@ class _ErpDataTableState extends State<ErpDataTable> {
                           SizedBox(
                             width: _getColWidth(i, extraWidth),
                             child: Align(
-                              alignment: widget.columns[i].isNumeric ? Alignment.centerRight : Alignment.centerLeft,
+                              alignment: widget.columns[i].alignment ??
+                                  (widget.columns[i].isNumeric ? Alignment.centerRight : Alignment.centerLeft),
                               child: Text(
                                 widget.columns[i].title.toUpperCase(),
                                 style: AppTextStyles.tableHeader.copyWith(fontSize: 11),
@@ -226,12 +229,22 @@ class _ErpDataTableState extends State<ErpDataTable> {
               horizontalMargin: widget.horizontalMargin ?? 20,
               columnSpacing: widget.columnSpacing ?? 28,
               columns: widget.columns.map((col) {
+                Widget label = Text(
+                  col.title.toUpperCase(),
+                  style: AppTextStyles.tableHeader.copyWith(fontSize: 11),
+                );
+                if (col.width != null || col.alignment != null) {
+                  label = SizedBox(
+                    width: col.width,
+                    child: Align(
+                      alignment: col.alignment ?? (col.isNumeric ? Alignment.centerRight : Alignment.centerLeft),
+                      child: label,
+                    ),
+                  );
+                }
                 return DataColumn(
                   numeric: col.isNumeric,
-                  label: Text(
-                    col.title.toUpperCase(),
-                    style: AppTextStyles.tableHeader.copyWith(fontSize: 11),
-                  ),
+                  label: label,
                 );
               }).toList(),
               rows: widget.rows.map((cells) {
