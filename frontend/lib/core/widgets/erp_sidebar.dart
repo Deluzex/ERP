@@ -264,7 +264,7 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                           onTap: () => _handleNavigation(context, ErpNavSection.purchaseList, ErpModule.purchase),
                         ),
                         _buildSubNavItem(
-                          title: 'Create Direct Purchase',
+                          title: 'Create Purchase',
                           isRestricted: !canAccessPurchase,
                           isSelected: currentSection == ErpNavSection.createPurchase,
                           onTap: () => _handleNavigation(context, ErpNavSection.createPurchase, ErpModule.purchase, ErpAction.create),
@@ -288,13 +288,13 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                         onTap: () => _handleNavigation(context, ErpNavSection.productionDashboard, ErpModule.production),
                       ),
                       _buildSubNavItem(
-                        title: 'Production Orders',
+                        title: 'Production Invoices',
                         isRestricted: !canAccessProduction,
                         isSelected: currentSection == ErpNavSection.productionOrders,
                         onTap: () => _handleNavigation(context, ErpNavSection.productionOrders, ErpModule.production),
                       ),
                       _buildSubNavItem(
-                        title: 'Create Production Order',
+                        title: 'Create Production',
                         isRestricted: !canAccessProduction,
                         isSelected: currentSection == ErpNavSection.createProduction,
                         onTap: () => _handleNavigation(context, ErpNavSection.createProduction, ErpModule.production, ErpAction.create),
@@ -529,6 +529,15 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                         ),
                       ],
                     ),
+
+                  // Chat Support
+                  _buildNavItem(
+                    icon: Icons.chat_bubble_outline,
+                    title: 'Chat Support',
+                    isRestricted: false,
+                    isSelected: currentSection == ErpNavSection.chatSupport,
+                    onTap: () => _handleNavigation(context, ErpNavSection.chatSupport, ErpModule.dashboard),
+                  ),
 
                   // 9. Settings
                   if (canAccessSettings)

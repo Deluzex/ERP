@@ -58,6 +58,8 @@ enum ErpNavSection {
   projectReports,
   commissionReports,
   financialReports,
+  // Chat Support
+  chatSupport,
   // Settings
   settings,
 }

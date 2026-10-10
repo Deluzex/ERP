@@ -378,6 +378,8 @@ class AppUser {
       case ErpNavSection.commissionReports:
       case ErpNavSection.financialReports:
         return ErpModule.reports;
+      case ErpNavSection.chatSupport:
+        return ErpModule.dashboard;
       case ErpNavSection.settings:
         return ErpModule.settings;
     }

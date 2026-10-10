@@ -37,10 +37,11 @@ import '../features/sales/screens/sales_invoice_list_screen.dart';
 import '../features/sales/screens/sales_orders_screen.dart';
 import '../features/sales/screens/sales_returns_screen.dart';
 import '../features/expenses/screens/expenses_screen.dart';
+import '../features/chat/screens/chat_support_screen.dart';
 import '../features/settings/screens/settings_screen.dart';
 import '../shared/providers/app_state_providers.dart';
 import '../shared/widgets/access_required_dialog.dart';
-import '../shared/widgets/global_whatsapp_floating_button.dart';
+// import '../shared/widgets/global_whatsapp_floating_button.dart';
 import 'routes/app_routes.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_radius.dart';
@@ -232,6 +233,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         case ErpNavSection.financialReports:
           contentWidget = ReportsHubScreen(reportType: currentSection);
           break;
+        case ErpNavSection.chatSupport:
+          contentWidget = const ChatSupportScreen();
+          break;
         case ErpNavSection.settings:
           contentWidget = const SettingsScreen();
           break;
@@ -269,8 +273,8 @@ class _AppShellState extends ConsumerState<AppShell> {
             ],
           ),
 
-          // Floating WhatsApp Quick Support Button in bottom-right corner
-          const GlobalWhatsAppFloatingButton(),
+          // Floating WhatsApp Quick Support Button in bottom-right corner (commented out)
+          // const GlobalWhatsAppFloatingButton(),
         ],
       ),
     );
