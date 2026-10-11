@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../../app/routes/app_routes.dart';
 import '../../core/models/architect_model.dart';
+import '../../core/models/bom_model.dart';
 import '../../core/models/category_unit_model.dart';
 import '../../core/models/commission_model.dart';
 import '../../core/models/customer_model.dart';
@@ -53,6 +54,7 @@ class MockDatabaseService extends ChangeNotifier {
   List<PaymentModeMasterItem> paymentModeMasterList = [];
   List<RawMaterial> rawMaterials = [];
   List<FinishedProduct> finishedProducts = [];
+  List<BillOfMaterial> boms = [];
   List<Vendor> vendors = [];
   List<Customer> customers = [];
   List<Dealer> dealers = [];
@@ -746,6 +748,8 @@ class MockDatabaseService extends ChangeNotifier {
         gstNumber: '27AAACA1234F1Z5',
         panNumber: 'AAACA1234F',
         address: 'Plot 42, GIDC Industrial Estate, Surat, Gujarat',
+        state: 'Gujarat',
+        pincode: '395007',
         paymentTerms: 'Net 30 Days',
         creditLimit: 500000.0,
         outstandingBalance: 145000.0,
@@ -760,6 +764,8 @@ class MockDatabaseService extends ChangeNotifier {
         gstNumber: '29AABCL5543K1ZQ',
         panNumber: 'AABCL5543K',
         address: 'Electronic City Phase 1, Bengaluru, Karnataka',
+        state: 'Karnataka',
+        pincode: '560100',
         paymentTerms: 'Net 15 Days',
         creditLimit: 800000.0,
         outstandingBalance: 230000.0,
@@ -774,6 +780,8 @@ class MockDatabaseService extends ChangeNotifier {
         gstNumber: '07AAECP8876H1Z2',
         panNumber: 'AAECP8876H',
         address: 'Okhla Industrial Area Phase III, New Delhi',
+        state: 'Delhi',
+        pincode: '110020',
         paymentTerms: 'Immediate / Advance',
         creditLimit: 300000.0,
         outstandingBalance: 65000.0,
@@ -790,6 +798,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'procurement@oberoiskycity.com',
         gstNumber: '27AABCO8890K1Z9',
         address: 'Borivali East, Western Express Highway, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400066',
         outstandingAmount: 380000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 80)),
       ),
@@ -800,6 +810,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'projects@grandhyattmumbai.com',
         gstNumber: '27AACCG1122D1ZP',
         address: 'Santacruz East, Mumbai, Maharashtra',
+        state: 'Maharashtra',
+        pincode: '400055',
         outstandingAmount: 0.0,
         createdAt: DateTime.now().subtract(const Duration(days: 45)),
       ),
@@ -810,6 +822,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'singhania.estate@gmail.com',
         gstNumber: '27AAFPS3322E1Z3',
         address: 'Lower Parel, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400013',
         outstandingAmount: 125000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 30)),
       ),
@@ -820,6 +834,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'studio@sanjaypuriarchitects.com',
         gstNumber: '27AABCS5566N1Z1',
         address: 'Worli Sea Face, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400018',
         outstandingAmount: 65000.0,
         linkedArchitectId: 'ARCH-001',
         isAlsoArchitect: true,
@@ -838,6 +854,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'karan@luxelightings.in',
         gstNumber: '29AABFL4433J1Z8',
         address: 'Indiranagar 100ft Road, Bengaluru, Karnataka',
+        state: 'Karnataka',
+        pincode: '560038',
         outstandingAmount: 210000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 100)),
       ),
@@ -850,6 +868,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'anita@aurastudio.com',
         gstNumber: '27AAGCA9988M1ZL',
         address: 'Koregaon Park, Pune, Maharashtra',
+        state: 'Maharashtra',
+        pincode: '411001',
         outstandingAmount: 95000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 70)),
       ),
@@ -1086,6 +1106,231 @@ class MockDatabaseService extends ChangeNotifier {
         gstPercent: 18.0,
         createdAt: DateTime.now().subtract(const Duration(days: 70)),
         updatedAt: DateTime.now(),
+      ),
+    ];
+
+    // Seed Bill of Materials (BOM Recipes)
+    boms = [
+      BillOfMaterial(
+        id: 'BOM-001',
+        finishedProductId: 'FP-001',
+        finishedProductName: 'Aarix Axis Wall Light',
+        finishedProductCode: 'DLX-WL-001',
+        name: 'Standard Aarix Wall Light Assembly',
+        description: 'Complete assembly kit for Aarix Axis architectural wall fixture',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Active',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-01',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 1.2,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-02',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-03',
+            rawMaterialId: 'RM-003',
+            rawMaterialName: 'Tridonic Constant Current LED Driver 40W Dimmable',
+            rawMaterialCode: 'RAW-DRV-40W',
+            quantityPerUnit: 1.0,
+            unit: 'PCS',
+            unitCost: 620.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-04',
+            rawMaterialId: 'RM-005',
+            rawMaterialName: 'Brass CNC Machined End Caps (Brushed Gold)',
+            rawMaterialCode: 'RAW-BRS-CAP',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 280.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 60)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 10)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-002',
+        finishedProductId: 'FP-002',
+        finishedProductName: 'Aarix Linear Suspension Pendant 1200mm',
+        finishedProductCode: 'DLX-PD-002',
+        name: '1200mm Architectural Linear Pendant Recipe',
+        description: 'Suspended architectural lighting fixture with anti-glare opal diffuser',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Active',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-05',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 2.4,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-06',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 4.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-07',
+            rawMaterialId: 'RM-003',
+            rawMaterialName: 'Tridonic Constant Current LED Driver 40W Dimmable',
+            rawMaterialCode: 'RAW-DRV-40W',
+            quantityPerUnit: 1.0,
+            unit: 'PCS',
+            unitCost: 620.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-08',
+            rawMaterialId: 'RM-004',
+            rawMaterialName: 'Opal Frosted Acrylic Diffuser Sheet 3mm',
+            rawMaterialCode: 'RAW-DIF-OPAL',
+            quantityPerUnit: 1.0,
+            unit: 'PCS',
+            unitCost: 420.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-09',
+            rawMaterialId: 'RM-005',
+            rawMaterialName: 'Brass CNC Machined End Caps (Brushed Gold)',
+            rawMaterialCode: 'RAW-BRS-CAP',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 280.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 45)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 5)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-003',
+        finishedProductId: 'FP-003',
+        finishedProductName: 'Aura Halo Minimalist Ring Light 900mm',
+        finishedProductCode: 'DLX-CH-003',
+        name: '900mm Circular Chandelier Halo Assembly',
+        description: 'Ring pendant with dual high-output LED drivers and opal diffusion',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Active',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-10',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 3.0,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-11',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 6.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-12',
+            rawMaterialId: 'RM-003',
+            rawMaterialName: 'Tridonic Constant Current LED Driver 40W Dimmable',
+            rawMaterialCode: 'RAW-DRV-40W',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 620.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-13',
+            rawMaterialId: 'RM-004',
+            rawMaterialName: 'Opal Frosted Acrylic Diffuser Sheet 3mm',
+            rawMaterialCode: 'RAW-DIF-OPAL',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 420.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 30)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 2)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-004',
+        finishedProductId: 'FP-001',
+        finishedProductName: 'Aarix Axis Wall Light',
+        finishedProductCode: 'DLX-WL-001',
+        name: 'Aarix Wall Light (Custom Finish Formula)',
+        description: 'Draft BOM formula for architectural custom finish variants',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Draft',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-14',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 1.2,
+            wastagePercent: 3.0,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-15',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 15)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 1)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-005',
+        finishedProductId: 'FP-002',
+        finishedProductName: 'Aarix Linear Suspension Pendant 1200mm',
+        finishedProductCode: 'DLX-PD-002',
+        name: 'Legacy Linear Pendant Formulation (v1 Archive)',
+        description: 'Archived formula replaced by standard linear assembly recipe',
+        outputQuantity: 1.0,
+        isActive: false,
+        status: 'Inactive',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-16',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 2.5,
+            wastagePercent: 5.0,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 120)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 90)),
       ),
     ];
 
@@ -4070,6 +4315,43 @@ class MockDatabaseService extends ChangeNotifier {
 
   void deleteExpense(String id) {
     expenses.removeWhere((e) => e.id == id);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // BILL OF MATERIALS (BOM) MANAGEMENT
+  // -------------------------------------------------------------
+  BillOfMaterial? getBomForProduct(String finishedProductId) {
+    try {
+      return boms.firstWhere((b) => b.finishedProductId == finishedProductId && b.isActive);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void addBom(BillOfMaterial bom) {
+    // Deactivate previous active BOMs for this product
+    for (var i = 0; i < boms.length; i++) {
+      if (boms[i].finishedProductId == bom.finishedProductId) {
+        boms[i] = boms[i].copyWith(isActive: false);
+      }
+    }
+    boms.insert(0, bom);
+    notifyListeners();
+  }
+
+  void updateBom(BillOfMaterial bom) {
+    final index = boms.indexWhere((b) => b.id == bom.id);
+    if (index != -1) {
+      boms[index] = bom;
+      notifyListeners();
+    } else {
+      addBom(bom);
+    }
+  }
+
+  void deleteBom(String id) {
+    boms.removeWhere((b) => b.id == id);
     notifyListeners();
   }
 

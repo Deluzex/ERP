@@ -424,6 +424,8 @@ class RecordDetailsView extends ConsumerWidget {
                     _buildInfoRow('GST Registration', v.gstNumber.isNotEmpty ? v.gstNumber : '-'),
                     _buildInfoRow('PAN Number', v.panNumber.isNotEmpty ? v.panNumber : '-'),
                     _buildInfoRow('Factory / Address', v.address.isNotEmpty ? v.address : '-'),
+                    _buildInfoRow('State', v.state.isNotEmpty ? v.state : '-'),
+                    _buildInfoRow('PIN Code', v.pincode.isNotEmpty ? v.pincode : '-'),
                     _buildInfoRow('Account Created Date', Formatters.formatDate(v.createdAt)),
                     if (v.isDeleted)
                       _buildInfoRow(
@@ -460,9 +462,13 @@ class RecordDetailsView extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Outstanding Payables Due:', style: AppTextStyles.bodyBold),
-                        Text(
-                          Formatters.formatCurrency(v.outstandingBalance),
-                          style: AppTextStyles.h2.copyWith(color: v.outstandingBalance > 0 ? AppColors.dangerText : AppColors.successText),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            Formatters.formatCurrency(v.outstandingBalance),
+                            textAlign: TextAlign.end,
+                            style: AppTextStyles.h2.copyWith(color: v.outstandingBalance > 0 ? AppColors.dangerText : AppColors.successText),
+                          ),
                         ),
                       ],
                     ),
@@ -474,8 +480,9 @@ class RecordDetailsView extends ConsumerWidget {
                         borderRadius: AppRadius.smBorderRadius,
                         border: Border.all(color: v.outstandingBalance > 0 ? Colors.red.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text('Payable Status:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
                           Text(
@@ -900,6 +907,8 @@ class RecordDetailsView extends ConsumerWidget {
                     _buildInfoRow('Contact Number', c.mobile),
                     _buildInfoRow('Email Address', c.email),
                     _buildInfoRow('Registered Address', c.address),
+                    _buildInfoRow('State', c.state.isNotEmpty ? c.state : '-'),
+                    _buildInfoRow('PIN Code', c.pincode.isNotEmpty ? c.pincode : '-'),
                     _buildInfoRow('Account Created Date', Formatters.formatDate(c.createdAt)),
                   ],
                 ),
@@ -927,7 +936,10 @@ class RecordDetailsView extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Net Sales Revenue:', style: AppTextStyles.bodyBold),
-                        Text(Formatters.formatCurrency(netSalesRevenue), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(Formatters.formatCurrency(netSalesRevenue), textAlign: TextAlign.end, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -935,9 +947,13 @@ class RecordDetailsView extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Total Receivables Due:', style: AppTextStyles.bodyMedium),
-                        Text(
-                          Formatters.formatCurrency(c.outstandingAmount),
-                          style: AppTextStyles.h2.copyWith(color: c.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            Formatters.formatCurrency(c.outstandingAmount),
+                            textAlign: TextAlign.end,
+                            style: AppTextStyles.h2.copyWith(color: c.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                          ),
                         ),
                       ],
                     ),
@@ -949,8 +965,9 @@ class RecordDetailsView extends ConsumerWidget {
                         borderRadius: AppRadius.smBorderRadius,
                         border: Border.all(color: c.creditBalance > 0 ? AppColors.primary.withOpacity(0.3) : Colors.grey.shade200),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text('Customer Store Credit:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
                           Text(
@@ -1090,6 +1107,8 @@ class RecordDetailsView extends ConsumerWidget {
                     _buildInfoRow('Email Address', d.email.isNotEmpty ? d.email : '-'),
                     _buildInfoRow('GST Identification', d.gstNumber.isNotEmpty ? d.gstNumber : '-'),
                     _buildInfoRow('Showroom Address', d.address.isNotEmpty ? d.address : '-'),
+                    _buildInfoRow('State', d.state.isNotEmpty ? d.state : '-'),
+                    _buildInfoRow('PIN Code', d.pincode.isNotEmpty ? d.pincode : '-'),
                     _buildInfoRow('Account Created Date', Formatters.formatDate(d.createdAt)),
                   ],
                 ),
@@ -1117,7 +1136,10 @@ class RecordDetailsView extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Net Channel Revenue:', style: AppTextStyles.bodyBold),
-                        Text(Formatters.formatCurrency(netSalesRevenue), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(Formatters.formatCurrency(netSalesRevenue), textAlign: TextAlign.end, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -1125,9 +1147,13 @@ class RecordDetailsView extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Total Receivables Due:', style: AppTextStyles.bodyMedium),
-                        Text(
-                          Formatters.formatCurrency(d.outstandingAmount),
-                          style: AppTextStyles.h2.copyWith(color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            Formatters.formatCurrency(d.outstandingAmount),
+                            textAlign: TextAlign.end,
+                            style: AppTextStyles.h2.copyWith(color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                          ),
                         ),
                       ],
                     ),
@@ -1139,8 +1165,9 @@ class RecordDetailsView extends ConsumerWidget {
                         borderRadius: AppRadius.smBorderRadius,
                         border: Border.all(color: d.outstandingAmount > 0 ? Colors.red.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text('Account Standing:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
                           Text(
@@ -3953,9 +3980,13 @@ class RecordDetailsView extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: AppTextStyles.bodyMedium),
-          Text(
-            value,
-            style: valueColor != null ? AppTextStyles.bodyBold.copyWith(color: valueColor) : AppTextStyles.bodyBold,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: valueColor != null ? AppTextStyles.bodyBold.copyWith(color: valueColor) : AppTextStyles.bodyBold,
+            ),
           ),
         ],
       ),

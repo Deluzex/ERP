@@ -667,115 +667,110 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
   }
 
   Widget _buildRowActions(ProductionOrder o) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.textSecondary),
-          tooltip: 'View Details',
-          onPressed: () => _showOrderDetailsDialog(o),
+    return Padding(
+      padding: const EdgeInsets.only(left: 14.0),
+      child: PopupMenuButton<String>(
+        tooltip: 'Actions',
+        icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+      onSelected: (val) {
+        switch (val) {
+          case 'view':
+            _showOrderDetailsDialog(o);
+            break;
+          case 'start':
+            _startProduction(o);
+            break;
+          case 'complete':
+            _completeProductionBatch(o);
+            break;
+          case 'cancel':
+            _confirmCancelAndSoftDelete(o);
+            break;
+        }
+      },
+      itemBuilder: (ctx) => [
+        const PopupMenuItem(
+          value: 'view',
+          child: Row(
+            children: [
+              Icon(Icons.visibility_outlined, size: 18, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('View Details'),
+            ],
+          ),
         ),
-        PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert, size: 18),
-          tooltip: 'Manager Actions',
-          onSelected: (val) {
-            switch (val) {
-              case 'view':
-                _showOrderDetailsDialog(o);
-                break;
-              case 'start':
-                _startProduction(o);
-                break;
-              case 'complete':
-                _completeProductionBatch(o);
-                break;
-              case 'cancel':
-                _confirmCancelAndSoftDelete(o);
-                break;
-            }
-          },
-          itemBuilder: (ctx) => [
-            const PopupMenuItem(
-              value: 'view',
-              child: Row(
-                children: [
-                  Icon(Icons.visibility_outlined, size: 16),
-                  SizedBox(width: 8),
-                  Text('View Details'),
-                ],
-              ),
+        if (o.status == ProductionStatus.planned) ...[
+          const PopupMenuItem(
+            value: 'start',
+            child: Row(
+              children: [
+                Icon(Icons.play_arrow_outlined, size: 18, color: AppColors.info),
+                SizedBox(width: 8),
+                Text('Start Production', style: TextStyle(color: AppColors.info)),
+              ],
             ),
-            if (o.status == ProductionStatus.planned) ...[
-              const PopupMenuItem(
-                value: 'start',
-                child: Row(
-                  children: [
-                    Icon(Icons.play_arrow_outlined, size: 16, color: AppColors.info),
-                    SizedBox(width: 8),
-                    Text('Start Production', style: TextStyle(color: AppColors.info)),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'complete',
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle_outline, size: 16, color: AppColors.success),
-                    SizedBox(width: 8),
-                    Text('Complete Batch', style: TextStyle(color: AppColors.success)),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'cancel',
-                child: Row(
-                  children: [
-                    Icon(Icons.cancel_outlined, size: 16, color: AppColors.danger),
-                    SizedBox(width: 8),
-                    Text('Cancel Order', style: TextStyle(color: AppColors.danger)),
-                  ],
-                ),
-              ),
-            ],
-            if (o.status == ProductionStatus.inProgress) ...[
-              const PopupMenuItem(
-                value: 'complete',
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle_outline, size: 16, color: AppColors.success),
-                    SizedBox(width: 8),
-                    Text('Complete Batch', style: TextStyle(color: AppColors.success)),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'cancel',
-                child: Row(
-                  children: [
-                    Icon(Icons.cancel_outlined, size: 16, color: AppColors.danger),
-                    SizedBox(width: 8),
-                    Text('Cancel Order', style: TextStyle(color: AppColors.danger)),
-                  ],
-                ),
-              ),
-            ],
-            if (o.status == ProductionStatus.completed) ...[
-              const PopupMenuItem(
-                value: 'cancel',
-                child: Row(
-                  children: [
-                    Icon(Icons.undo_outlined, size: 16, color: AppColors.danger),
-                    SizedBox(width: 8),
-                    Text('Cancel & Rollback', style: TextStyle(color: AppColors.danger)),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
+          ),
+          const PopupMenuItem(
+            value: 'complete',
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+                SizedBox(width: 8),
+                Text('Complete Batch', style: TextStyle(color: AppColors.success)),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'cancel',
+            child: Row(
+              children: [
+                Icon(Icons.cancel_outlined, size: 18, color: AppColors.danger),
+                SizedBox(width: 8),
+                Text('Cancel Order', style: TextStyle(color: AppColors.danger)),
+              ],
+            ),
+          ),
+        ],
+        if (o.status == ProductionStatus.inProgress) ...[
+          const PopupMenuItem(
+            value: 'complete',
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+                SizedBox(width: 8),
+                Text('Complete Batch', style: TextStyle(color: AppColors.success)),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'cancel',
+            child: Row(
+              children: [
+                Icon(Icons.cancel_outlined, size: 18, color: AppColors.danger),
+                SizedBox(width: 8),
+                Text('Cancel Order', style: TextStyle(color: AppColors.danger)),
+              ],
+            ),
+          ),
+        ],
+        if (o.status == ProductionStatus.completed) ...[
+          const PopupMenuItem(
+            value: 'cancel',
+            child: Row(
+              children: [
+                Icon(Icons.undo_outlined, size: 18, color: AppColors.danger),
+                SizedBox(width: 8),
+                Text('Cancel & Rollback', style: TextStyle(color: AppColors.danger)),
+              ],
+            ),
+          ),
+        ],
       ],
-    );
-  }
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {

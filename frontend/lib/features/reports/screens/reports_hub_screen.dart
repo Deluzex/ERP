@@ -1298,7 +1298,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 900;
+        final isCompact = constraints.maxWidth < 600;
 
         final searchBox = SizedBox(
           width: isCompact ? double.infinity : 260,
@@ -1338,26 +1338,12 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ),
         );
 
-        if (isCompact) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              searchBox,
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: filterControls,
-              ),
-            ],
-          );
-        }
-
-        return Row(
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             searchBox,
-            const SizedBox(width: 10),
             ...filterControls,
           ],
         );
@@ -1649,7 +1635,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
                   crossAxisCount: crossAxisCount,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: width < 450 ? 2.6 : (crossAxisCount >= 4 ? 3.2 : 2.6),
+                  childAspectRatio: width < 450 ? 2.4 : (crossAxisCount >= 4 ? 2.8 : 2.4),
                 ),
                 itemCount: kpis.length,
                 itemBuilder: (context, index) {

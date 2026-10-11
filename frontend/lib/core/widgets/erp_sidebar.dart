@@ -462,6 +462,12 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                           onTap: () => _handleNavigation(context, ErpNavSection.finishedProducts, ErpModule.masters),
                         ),
                         _buildSubNavItem(
+                          title: 'BOM Master',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.billOfMaterials,
+                          onTap: () => _handleNavigation(context, ErpNavSection.billOfMaterials, ErpModule.masters),
+                        ),
+                        _buildSubNavItem(
                           title: 'Category Master',
                           isRestricted: !canAccessMasters,
                           isSelected: currentSection == ErpNavSection.categoriesUnits,

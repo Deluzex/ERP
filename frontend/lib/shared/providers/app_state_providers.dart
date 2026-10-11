@@ -119,6 +119,9 @@ final currentNavSectionProvider = StateProvider<ErpNavSection>((ref) {
 final salesCreateDocTypeProvider = StateProvider<SalesDocumentType?>((ref) => null);
 final salesCreateSourceDocIdProvider = StateProvider<String?>((ref) => null);
 
+// Selected production product ID (used when navigating from BOM to CreateProduction)
+final selectedProductionProductIdProvider = StateProvider<String?>((ref) => null);
+
 // Global Search Query
 final globalSearchQueryProvider = StateProvider<String>((ref) => '');
 

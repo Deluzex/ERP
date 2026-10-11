@@ -52,6 +52,8 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final panCtrl = TextEditingController(text: existing?.panNumber ?? '');
     final addressCtrl = TextEditingController(text: existing?.address ?? '');
+    final stateCtrl = TextEditingController(text: existing?.state ?? '');
+    final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     final termsCtrl = TextEditingController(text: existing?.paymentTerms ?? 'Net 30 Days');
     final creditCtrl = TextEditingController(text: existing?.creditLimit.toString() ?? '500000');
     final formKey = GlobalKey<FormState>();
@@ -96,6 +98,8 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                 mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
                                 emailCtrl.text = data['Email'] ?? emailCtrl.text;
                                 addressCtrl.text = data['Address'] ?? addressCtrl.text;
+                                if (data.containsKey('State')) stateCtrl.text = data['State']!;
+                                if (data.containsKey('Pincode')) pincodeCtrl.text = data['Pincode']!;
                                 if (data.containsKey('Payment Terms')) {
                                   termsCtrl.text = data['Payment Terms']!;
                                 }
@@ -226,6 +230,33 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                           maxLines: 2,
                           decoration: const InputDecoration(labelText: 'Factory / Registered Address *'),
                         ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: stateCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'State',
+                                  hintText: 'E.g., Gujarat',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: pincodeCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'PIN Code',
+                                  hintText: 'E.g., 382481',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -260,6 +291,8 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                 gstNumber: gstCtrl.text.trim().toUpperCase(),
                                 panNumber: panCtrl.text.trim().toUpperCase(),
                                 address: addressCtrl.text.trim(),
+                                state: stateCtrl.text.trim(),
+                                pincode: pincodeCtrl.text.trim(),
                                 paymentTerms: termsCtrl.text.trim(),
                                 creditLimit: creditVal,
                               ));
@@ -273,6 +306,8 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                 gstNumber: gstCtrl.text.trim().toUpperCase(),
                                 panNumber: panCtrl.text.trim().toUpperCase(),
                                 address: addressCtrl.text.trim(),
+                                state: stateCtrl.text.trim(),
+                                pincode: pincodeCtrl.text.trim(),
                                 paymentTerms: termsCtrl.text.trim(),
                                 creditLimit: creditVal,
                                 outstandingBalance: 0.0,
@@ -363,6 +398,8 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
             v.gstNumber.toLowerCase().contains(query) ||
             v.panNumber.toLowerCase().contains(query) ||
             v.address.toLowerCase().contains(query) ||
+            v.state.toLowerCase().contains(query) ||
+            v.pincode.toLowerCase().contains(query) ||
             v.paymentTerms.toLowerCase().contains(query);
         if (!matches) return false;
       }
@@ -478,6 +515,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
               ErpColumn(title: 'Vendor Name'),
               ErpColumn(title: 'Contact Person'),
               ErpColumn(title: 'Mobile / Email'),
+              ErpColumn(title: 'State'),
               ErpColumn(title: 'GST Number'),
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
               ErpColumn(title: 'Status'),
@@ -494,8 +532,17 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(v.name, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                      if (v.address.isNotEmpty)
-                        Text(v.address, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
+                      if (v.address.isNotEmpty || v.state.isNotEmpty || v.pincode.isNotEmpty)
+                        Text(
+                          [
+                            if (v.address.isNotEmpty) v.address,
+                            if (v.state.isNotEmpty) v.state,
+                            if (v.pincode.isNotEmpty) v.pincode,
+                          ].join(', '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                        ),
                     ],
                   ),
                 ),
@@ -508,6 +555,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                     Text(v.email, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
                   ],
                 ),
+                Text(v.state.isNotEmpty ? v.state : '-', style: AppTextStyles.bodyMedium),
                 Text(v.gstNumber.trim().isNotEmpty ? v.gstNumber : '-', style: AppTextStyles.bodySmall),
                 Text(
                   Formatters.formatCurrency(v.outstandingBalance),
@@ -521,45 +569,73 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                         child: ErpStatusBadge.danger('DELETED'),
                       )
                     : ErpStatusBadge.success('ACTIVE'),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
-                      tooltip: 'View Vendor Details',
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(),
-                      onPressed: () {
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'view':
                         ref.read(activeRecordDetailsStackProvider.notifier).push(v.id, 'vendor', ErpNavSection.vendors);
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.chat, color: Colors.green, size: 18),
-                      tooltip: 'Quick WhatsApp Message',
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(),
-                      onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
-                        context,
-                        customerName: v.name,
-                        customerPhone: v.mobile,
+                        break;
+                      case 'whatsapp':
+                        WhatsAppQuickChatDialog.showCustomerQuickChat(
+                          context,
+                          customerName: v.name,
+                          customerPhone: v.mobile,
+                        );
+                        break;
+                      case 'edit':
+                        if (!v.isDeleted) _openAddEditVendorDialog(v);
+                        break;
+                      case 'delete':
+                        if (!v.isDeleted) _confirmDeleteVendor(v);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('View Details'),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Vendor',
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(),
-                      onPressed: v.isDeleted ? null : () => _openAddEditVendorDialog(v),
+                    const PopupMenuItem(
+                      value: 'whatsapp',
+                      child: Row(
+                        children: [
+                          Icon(Icons.chat, color: Colors.green, size: 18),
+                          SizedBox(width: 8),
+                          Text('WhatsApp Chat'),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                      tooltip: 'Delete with Reason',
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(),
-                      onPressed: v.isDeleted ? null : () => _confirmDeleteVendor(v),
+                    PopupMenuItem(
+                      value: 'edit',
+                      enabled: !v.isDeleted,
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 18, color: v.isDeleted ? Colors.grey : AppColors.textPrimary),
+                          const SizedBox(width: 8),
+                          Text('Edit Vendor', style: TextStyle(color: v.isDeleted ? Colors.grey : null)),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      enabled: !v.isDeleted,
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: v.isDeleted ? Colors.grey : AppColors.danger, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Delete with Reason', style: TextStyle(color: v.isDeleted ? Colors.grey : AppColors.danger)),
+                        ],
+                      ),
                     ),
                   ],
                 ),

@@ -50,6 +50,8 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
     final emailCtrl = TextEditingController(text: existing?.email ?? '');
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final addrCtrl = TextEditingController(text: existing?.address ?? '');
+    final stateCtrl = TextEditingController(text: existing?.state ?? '');
+    final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     final formKey = GlobalKey<FormState>();
 
     bool isSubmitting = false;
@@ -93,6 +95,8 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                                 mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
                                 emailCtrl.text = data['Email'] ?? emailCtrl.text;
                                 addrCtrl.text = data['Address'] ?? addrCtrl.text;
+                                if (data.containsKey('State')) stateCtrl.text = data['State']!;
+                                if (data.containsKey('Pincode')) pincodeCtrl.text = data['Pincode']!;
                                 Navigator.of(ocrCtx).pop();
                               },
                             ),
@@ -192,6 +196,33 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                           validator: (v) => Validators.requiredField(v, 'Showroom / Business address required'),
                           decoration: const InputDecoration(labelText: 'Showroom / Business Address *'),
                         ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: stateCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'State',
+                                  hintText: 'E.g., Gujarat',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: pincodeCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'PIN Code',
+                                  hintText: 'E.g., 382481',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -225,6 +256,8 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                                 email: emailCtrl.text.trim(),
                                 gstNumber: gstCtrl.text.trim(),
                                 address: addrCtrl.text.trim(),
+                                state: stateCtrl.text.trim(),
+                                pincode: pincodeCtrl.text.trim(),
                               ));
                             } else {
                               final newDealer = Dealer(
@@ -236,6 +269,8 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                                 email: emailCtrl.text.trim(),
                                 gstNumber: gstCtrl.text.trim(),
                                 address: addrCtrl.text.trim(),
+                                state: stateCtrl.text.trim(),
+                                pincode: pincodeCtrl.text.trim(),
                                 outstandingAmount: 0.0,
                                 createdAt: DateTime.now(),
                               );
@@ -317,7 +352,9 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
             d.mobile.toLowerCase().contains(query) ||
             d.email.toLowerCase().contains(query) ||
             d.gstNumber.toLowerCase().contains(query) ||
-            d.address.toLowerCase().contains(query);
+            d.address.toLowerCase().contains(query) ||
+            d.state.toLowerCase().contains(query) ||
+            d.pincode.toLowerCase().contains(query);
         if (!matches) return false;
       }
       if (_balanceFilter == 'WITH_BALANCE' && d.outstandingAmount <= 0) return false;
@@ -432,6 +469,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
               ErpColumn(title: 'Showroom / Dealer Name'),
               ErpColumn(title: 'Company Entity'),
               ErpColumn(title: 'Contact Person'),
+              ErpColumn(title: 'State'),
               ErpColumn(title: 'Mobile / Email'),
               ErpColumn(title: 'GST Number'),
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
@@ -448,13 +486,23 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(d.name, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                      if (d.address.isNotEmpty)
-                        Text(d.address, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
+                      if (d.address.isNotEmpty || d.state.isNotEmpty || d.pincode.isNotEmpty)
+                        Text(
+                          [
+                            if (d.address.isNotEmpty) d.address,
+                            if (d.state.isNotEmpty) d.state,
+                            if (d.pincode.isNotEmpty) d.pincode,
+                          ].join(', '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                        ),
                     ],
                   ),
                 ),
                 Text(d.companyName, style: AppTextStyles.bodyMedium),
                 Text(d.contactPerson, style: AppTextStyles.bodySmall),
+                Text(d.state.isNotEmpty ? d.state : '-', style: AppTextStyles.bodyMedium),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -471,45 +519,71 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                     color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText,
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
-                      tooltip: 'View Complete Dealer Profile',
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(),
-                      onPressed: () {
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'view':
                         ref.read(activeRecordDetailsStackProvider.notifier).push(d.id, 'dealer', ErpNavSection.dealers);
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.chat, color: Colors.green, size: 18),
-                      tooltip: 'Quick WhatsApp Message',
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(),
-                      onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
-                        context,
-                        customerName: d.name,
-                        customerPhone: d.mobile,
+                        break;
+                      case 'whatsapp':
+                        WhatsAppQuickChatDialog.showCustomerQuickChat(
+                          context,
+                          customerName: d.name,
+                          customerPhone: d.mobile,
+                        );
+                        break;
+                      case 'edit':
+                        _openAddEditDealerDialog(d);
+                        break;
+                      case 'delete':
+                        _confirmDeleteDealer(d);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('View Dealer Profile'),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Dealer',
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(),
-                      onPressed: () => _openAddEditDealerDialog(d),
+                    PopupMenuItem(
+                      value: 'whatsapp',
+                      child: Row(
+                        children: [
+                          Icon(Icons.chat, color: Colors.green, size: 18),
+                          SizedBox(width: 8),
+                          Text('WhatsApp Chat'),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                      tooltip: 'Delete Dealer',
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(),
-                      onPressed: () => _confirmDeleteDealer(d),
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 18),
+                          SizedBox(width: 8),
+                          Text('Edit Dealer'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                          SizedBox(width: 8),
+                          Text('Delete Dealer', style: TextStyle(color: AppColors.danger)),
+                        ],
+                      ),
                     ),
                   ],
                 ),

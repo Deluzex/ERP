@@ -49,6 +49,7 @@ enum ErpNavSection {
   architects,
   rawMaterials,
   finishedProducts,
+  billOfMaterials,
   // 7. Reports
   reportsDashboard,
   inventoryReports,

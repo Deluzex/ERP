@@ -311,7 +311,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildCustomerControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 650;
+        final isNarrow = constraints.maxWidth < 780;
         final ctrl = _safeCustomerSearchCtrl;
         final pageSize = _safeCustomerPageSize;
         final currentPage = _safeCustomerCurrentPage;
@@ -350,9 +350,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
         );
 
-        final paginationControls = Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        final paginationControls = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
             const SizedBox(width: 8),
             Container(
@@ -413,7 +415,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               ),
             ],
           ],
-        );
+        ),
+      );
 
         if (isNarrow) {
           return Column(
@@ -901,7 +904,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildDealerControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 650;
+        final isNarrow = constraints.maxWidth < 780;
         final ctrl = _safeDealerSearchCtrl;
         final pageSize = _safeDealerPageSize;
         final currentPage = _safeDealerCurrentPage;
@@ -940,9 +943,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
         );
 
-        final paginationControls = Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        final paginationControls = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
             const SizedBox(width: 8),
             Container(
@@ -1003,7 +1008,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               ),
             ],
           ],
-        );
+        ),
+      );
 
         if (isNarrow) {
           return Column(
@@ -1615,7 +1621,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildVendorControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 650;
+        final isNarrow = constraints.maxWidth < 780;
         final ctrl = _safeVendorSearchCtrl;
         final pageSize = _safeVendorPageSize;
         final currentPage = _safeVendorCurrentPage;
@@ -1654,9 +1660,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
         );
 
-        final paginationControls = Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        final paginationControls = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
             const SizedBox(width: 8),
             Container(
@@ -1717,7 +1725,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               ),
             ],
           ],
-        );
+        ),
+      );
 
         if (isNarrow) {
           return Column(

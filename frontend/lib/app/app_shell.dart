@@ -13,6 +13,7 @@ import '../features/inventory/screens/raw_material_stock_screen.dart';
 import '../features/inventory/screens/stock_adjustment_screen.dart';
 import '../features/inventory/screens/stock_movement_screen.dart';
 import '../features/masters/screens/architects_screen.dart';
+import '../features/masters/screens/bom_screen.dart';
 import '../features/masters/screens/categories_units_screen.dart';
 import '../features/masters/screens/customers_screen.dart';
 import '../features/masters/screens/dealers_screen.dart';
@@ -219,6 +220,9 @@ class _AppShellState extends ConsumerState<AppShell> {
           break;
         case ErpNavSection.architects:
           contentWidget = const ArchitectsScreen();
+          break;
+        case ErpNavSection.billOfMaterials:
+          contentWidget = const BomScreen();
           break;
         // Reports
         case ErpNavSection.reportsDashboard:
