@@ -528,19 +528,42 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                   ),
                 ),
                 badge,
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.visibility_outlined, size: 18),
-                      tooltip: 'View Purchase Details',
-                      onPressed: () => _showPurchaseDetailsDialog(p),
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'view':
+                        _showPurchaseDetailsDialog(p);
+                        break;
+                      case 'cancel':
+                        _confirmCancelPurchase(p);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('View Purchase Details'),
+                        ],
+                      ),
                     ),
                     if (p.status != PurchaseStatus.cancelled)
-                      IconButton(
-                        icon: const Icon(Icons.cancel_outlined, color: AppColors.danger, size: 18),
-                        tooltip: 'Cancel Purchase',
-                        onPressed: () => _confirmCancelPurchase(p),
+                      const PopupMenuItem(
+                        value: 'cancel',
+                        child: Row(
+                          children: [
+                            Icon(Icons.cancel_outlined, color: AppColors.danger, size: 18),
+                            SizedBox(width: 8),
+                            Text('Cancel Purchase'),
+                          ],
+                        ),
                       ),
                   ],
                 ),

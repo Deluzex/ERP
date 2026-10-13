@@ -1015,10 +1015,28 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                   SizedBox(
                     width: actionsWidth,
                     child: Center(
-                      child: IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        tooltip: 'Edit Category',
-                        onPressed: () => _openEditCategoryDialog(c),
+                      child: PopupMenuButton<String>(
+                        tooltip: 'Actions',
+                        icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onSelected: (action) {
+                          if (action == 'edit') {
+                            _openEditCategoryDialog(c);
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                                SizedBox(width: 8),
+                                Text('Edit Category'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1106,10 +1124,28 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                   SizedBox(
                     width: actionsWidth,
                     child: Center(
-                      child: IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        tooltip: 'Edit Expense Category',
-                        onPressed: () => _openEditExpenseCategoryDialog(exp),
+                      child: PopupMenuButton<String>(
+                        tooltip: 'Actions',
+                        icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onSelected: (action) {
+                          if (action == 'edit') {
+                            _openEditExpenseCategoryDialog(exp);
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                                SizedBox(width: 8),
+                                Text('Edit Expense Category'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1197,10 +1233,28 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                   SizedBox(
                     width: actionsWidth,
                     child: Center(
-                      child: IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        tooltip: 'Edit Payment Mode',
-                        onPressed: () => _openEditPaymentModeDialog(pm),
+                      child: PopupMenuButton<String>(
+                        tooltip: 'Actions',
+                        icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onSelected: (action) {
+                          if (action == 'edit') {
+                            _openEditPaymentModeDialog(pm);
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                                SizedBox(width: 8),
+                                Text('Edit Payment Mode'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1303,10 +1357,28 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                   SizedBox(
                     width: actionsWidth,
                     child: Center(
-                      child: IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        tooltip: 'Edit Unit',
-                        onPressed: () => _openEditUnitDialog(u),
+                      child: PopupMenuButton<String>(
+                        tooltip: 'Actions',
+                        icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onSelected: (action) {
+                          if (action == 'edit') {
+                            _openEditUnitDialog(u);
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                                SizedBox(width: 8),
+                                Text('Edit Unit'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

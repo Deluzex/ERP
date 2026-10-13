@@ -25,6 +25,8 @@ class ErpDataTable extends StatefulWidget {
   final double? horizontalMargin;
   final bool enableVerticalScroll;
   final bool fixedHeader;
+  final double? dataRowMinHeight;
+  final double? dataRowMaxHeight;
 
   const ErpDataTable({
     super.key,
@@ -35,6 +37,8 @@ class ErpDataTable extends StatefulWidget {
     this.horizontalMargin,
     this.enableVerticalScroll = false,
     this.fixedHeader = false,
+    this.dataRowMinHeight,
+    this.dataRowMaxHeight,
   });
 
   @override
@@ -228,6 +232,8 @@ class _ErpDataTableState extends State<ErpDataTable> {
               dividerThickness: 1,
               horizontalMargin: widget.horizontalMargin ?? 20,
               columnSpacing: widget.columnSpacing ?? 28,
+              dataRowMinHeight: widget.dataRowMinHeight ?? 48,
+              dataRowMaxHeight: widget.dataRowMaxHeight ?? 58,
               columns: widget.columns.map((col) {
                 Widget label = Text(
                   col.title.toUpperCase(),

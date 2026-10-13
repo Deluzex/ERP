@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -615,7 +616,16 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
 
               return [
                 Text(rm.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                Text(rm.name, style: AppTextStyles.bodyBold),
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(rm.id, 'rawMaterial', ErpNavSection.rawMaterials),
+                  child: Text(
+                    rm.name,
+                    style: AppTextStyles.bodyBold.copyWith(
+                      color: AppColors.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
                 Text(rm.categoryName, style: AppTextStyles.bodySmall),
                 Text(rm.unit, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
                 Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
@@ -629,18 +639,54 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                 rm.isLowStock
                     ? ErpStatusBadge.danger('LOW STOCK')
                     : ErpStatusBadge.success('AVAILABLE'),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Material',
-                      onPressed: () => _openAddEditDialog(rm),
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'view':
+                        ref.read(activeRecordDetailsStackProvider.notifier).push(rm.id, 'rawMaterial', ErpNavSection.rawMaterials);
+                        break;
+                      case 'edit':
+                        _openAddEditDialog(rm);
+                        break;
+                      case 'delete':
+                        _confirmDelete(rm);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('View Material Details'),
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                      tooltip: 'Delete Material',
-                      onPressed: () => _confirmDelete(rm),
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('Edit Material'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                          SizedBox(width: 8),
+                          Text('Delete Material'),
+                        ],
+                      ),
                     ),
                   ],
                 ),

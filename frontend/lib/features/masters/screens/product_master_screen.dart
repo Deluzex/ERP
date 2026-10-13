@@ -671,18 +671,41 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                 fp.isLowStock
                     ? ErpStatusBadge.danger('LOW STOCK')
                     : ErpStatusBadge.success('AVAILABLE'),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Product',
-                      onPressed: () => _openAddEditDialog(fp),
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'edit':
+                        _openAddEditDialog(fp);
+                        break;
+                      case 'delete':
+                        _confirmDelete(fp);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('Edit Product'),
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                      tooltip: 'Delete Product',
-                      onPressed: () => _confirmDelete(fp),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                          SizedBox(width: 8),
+                          Text('Delete Product'),
+                        ],
+                      ),
                     ),
                   ],
                 ),

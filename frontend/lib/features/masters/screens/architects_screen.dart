@@ -69,6 +69,8 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     final emailCtrl = TextEditingController(text: existing?.email ?? '');
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final addrCtrl = TextEditingController(text: existing?.address ?? '');
+    final stateCtrl = TextEditingController(text: existing?.state ?? '');
+    final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     final rateCtrl = TextEditingController(text: existing?.defaultCommissionRate.toString() ?? '5.0');
     String? linkedCustomerId = (existing?.linkedCustomerId != null &&
             db.customers.any((c) => c.id == existing!.linkedCustomerId))
@@ -117,6 +119,8 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                 mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
                                 emailCtrl.text = data['Email'] ?? emailCtrl.text;
                                 addrCtrl.text = data['Address'] ?? addrCtrl.text;
+                                if (data.containsKey('State')) stateCtrl.text = data['State']!;
+                                if (data.containsKey('Pincode')) pincodeCtrl.text = data['Pincode']!;
                                 Navigator.of(ocrCtx).pop();
                               },
                             ),
@@ -227,6 +231,33 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           validator: (v) => Validators.requiredField(v, 'Studio address required'),
                           decoration: const InputDecoration(labelText: 'Studio Address *'),
                         ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: stateCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'State',
+                                  hintText: 'E.g., Gujarat',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: pincodeCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'PIN Code',
+                                  hintText: 'E.g., 395006',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 16),
 
                         // Dual Entity: Architect as Customer
@@ -325,6 +356,8 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                             email: emailCtrl.text.trim(),
                             gstNumber: gstCtrl.text.trim(),
                             address: addrCtrl.text.trim(),
+                            state: stateCtrl.text.trim(),
+                            pincode: pincodeCtrl.text.trim(),
                             defaultCommissionRate: rateVal,
                             isAlsoCustomer: isAlsoCustomer || linkedCustomerId != null,
                             linkedCustomerId: linkedCustomerId,
@@ -500,7 +533,9 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
             a.companyName.toLowerCase().contains(query) ||
             a.mobile.toLowerCase().contains(query) ||
             a.email.toLowerCase().contains(query) ||
-            a.address.toLowerCase().contains(query);
+            a.address.toLowerCase().contains(query) ||
+            a.state.toLowerCase().contains(query) ||
+            a.pincode.toLowerCase().contains(query);
         if (!matches) return false;
       }
       if (_archCustomerFilter == 'DUAL_CUSTOMER' && (!a.isAlsoCustomer && a.linkedCustomerId == null)) return false;
@@ -668,6 +703,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           ErpColumn(title: 'Architect Name'),
                           ErpColumn(title: 'Architect-Customer Name'),
                           ErpColumn(title: 'Studio / Company'),
+                          ErpColumn(title: 'State'),
                           ErpColumn(title: 'Contact'),
                           ErpColumn(title: 'Default Rate (%)', isNumeric: true),
                           ErpColumn(title: 'Total Earned', isNumeric: true),
@@ -713,7 +749,19 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       decoration: TextDecoration.underline,
                                     ),
                                   ),
-                                  Text('ID: ${a.id}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                  if (a.address.isNotEmpty || a.state.isNotEmpty || a.pincode.isNotEmpty)
+                                    Text(
+                                      [
+                                        if (a.address.isNotEmpty) a.address,
+                                        if (a.state.isNotEmpty) a.state,
+                                        if (a.pincode.isNotEmpty) a.pincode,
+                                      ].join(', '),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                                    )
+                                  else
+                                    Text('ID: ${a.id}', style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
                                 ],
                               ),
                             ),
@@ -760,41 +808,79 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                     child: const Text('Not Linked', style: TextStyle(fontSize: 10.5, color: Colors.grey)),
                                   ),
                             Text(a.companyName.isNotEmpty ? a.companyName : '-', style: AppTextStyles.bodyMedium),
+                            Text(a.state.isNotEmpty ? a.state : '-', style: AppTextStyles.bodyMedium),
                             Text(a.mobile, style: AppTextStyles.bodySmall),
                             Text('${a.defaultCommissionRate}%', style: AppTextStyles.bodyMedium),
                             Text(Formatters.formatCurrency(displayEarned), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
                             Text(Formatters.formatCurrency(displayPending), style: AppTextStyles.bodySmall.copyWith(color: AppColors.warningText)),
                             Text(Formatters.formatCurrency(displayApproved), style: AppTextStyles.bodySmall.copyWith(color: AppColors.infoText)),
                             Text(Formatters.formatCurrency(displayPaid), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
-                                  tooltip: 'View Complete Architect Detail Page',
-                                  onPressed: () {
+                            PopupMenuButton<String>(
+                              tooltip: 'Actions',
+                              icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onSelected: (action) {
+                                switch (action) {
+                                  case 'view':
                                     ref.read(activeRecordDetailsStackProvider.notifier).push(a.id, 'architect', ErpNavSection.architects);
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.chat, color: Colors.green, size: 18),
-                                  tooltip: 'Quick WhatsApp Message',
-                                  onPressed: () => WhatsAppQuickChatDialog.showArchitectQuickChat(
-                                    context,
-                                    architectName: a.name,
-                                    architectPhone: a.mobile,
-                                    firmName: a.companyName,
+                                    break;
+                                  case 'whatsapp':
+                                    WhatsAppQuickChatDialog.showArchitectQuickChat(
+                                      context,
+                                      architectName: a.name,
+                                      architectPhone: a.mobile,
+                                      firmName: a.companyName,
+                                    );
+                                    break;
+                                  case 'edit':
+                                    _openAddEditArchitectDialog(a);
+                                    break;
+                                  case 'delete':
+                                    _confirmDeleteArchitect(a);
+                                    break;
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'view',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('View Architect Profile'),
+                                    ],
                                   ),
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined, size: 18),
-                                  tooltip: 'Edit Architect',
-                                  onPressed: () => _openAddEditArchitectDialog(a),
+                                PopupMenuItem(
+                                  value: 'whatsapp',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.chat, color: Colors.green, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('WhatsApp Chat'),
+                                    ],
+                                  ),
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                                  tooltip: 'Delete Architect',
-                                  onPressed: () => _confirmDeleteArchitect(a),
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit_outlined, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Edit Architect'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Delete Architect', style: TextStyle(color: AppColors.danger)),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),

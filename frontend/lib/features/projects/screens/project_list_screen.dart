@@ -963,32 +963,72 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                     child: badge,
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.published_with_changes, color: AppColors.primary, size: 18),
-                      tooltip: 'Update Project Status',
-                      onPressed: () => _openUpdateProjectStatusDialog(p),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
-                      tooltip: 'View 10-Section Project Breakdown',
-                      onPressed: () {
-                        ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'project', ErpNavSection.projectList);
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Project',
-                      onPressed: () => _openAddEditProjectDialog(p),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                      tooltip: 'Delete Project',
-                      onPressed: () => _confirmDeleteProject(p),
-                    ),
-                  ],
+                Padding(
+                  padding: const EdgeInsets.only(left: 10.0),
+                  child: PopupMenuButton<String>(
+                    tooltip: 'Actions',
+                    icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onSelected: (action) {
+                      switch (action) {
+                        case 'view':
+                          ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'project', ErpNavSection.projectList);
+                          break;
+                        case 'status':
+                          _openUpdateProjectStatusDialog(p);
+                          break;
+                        case 'edit':
+                          _openAddEditProjectDialog(p);
+                          break;
+                        case 'delete':
+                          _confirmDeleteProject(p);
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'view',
+                        child: Row(
+                          children: [
+                            Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                            SizedBox(width: 8),
+                            Text('View Project Details'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'status',
+                        child: Row(
+                          children: [
+                            Icon(Icons.published_with_changes, color: AppColors.primary, size: 18),
+                            SizedBox(width: 8),
+                            Text('Update Project Status'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                            SizedBox(width: 8),
+                            Text('Edit Project'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                            SizedBox(width: 8),
+                            Text('Delete Project'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ];
             }).toList(),

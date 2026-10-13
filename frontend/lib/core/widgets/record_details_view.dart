@@ -1445,6 +1445,8 @@ class RecordDetailsView extends ConsumerWidget {
                     _buildInfoRow('Mobile Number', a.mobile),
                     _buildInfoRow('Email Address', a.email.isNotEmpty ? a.email : '-'),
                     _buildInfoRow('Studio Address', a.address.isNotEmpty ? a.address : '-'),
+                    _buildInfoRow('State', a.state.isNotEmpty ? a.state : '-'),
+                    _buildInfoRow('PIN Code', a.pincode.isNotEmpty ? a.pincode : '-'),
                     _buildInfoRow('GST Number', a.gstNumber.isNotEmpty ? a.gstNumber : '-'),
                     _buildInfoRow('Partner Registered Date', Formatters.formatDate(DateTime.now().subtract(const Duration(days: 120)))),
                     const SizedBox(height: 8),
