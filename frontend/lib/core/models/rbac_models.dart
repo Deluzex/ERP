@@ -366,6 +366,7 @@ class AppUser {
       case ErpNavSection.architects:
       case ErpNavSection.rawMaterials:
       case ErpNavSection.finishedProducts:
+      case ErpNavSection.billOfMaterials:
       case ErpNavSection.projectList:
       case ErpNavSection.createProject:
         return ErpModule.masters;
@@ -378,6 +379,8 @@ class AppUser {
       case ErpNavSection.commissionReports:
       case ErpNavSection.financialReports:
         return ErpModule.reports;
+      case ErpNavSection.chatSupport:
+        return ErpModule.dashboard;
       case ErpNavSection.settings:
         return ErpModule.settings;
     }

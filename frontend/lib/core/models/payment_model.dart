@@ -16,6 +16,7 @@ class ErpPayment {
   final String? referenceDocumentId; // Invoice ID, Purchase ID, Commission ID
   final String? referenceDocumentNumber;
   final double amount;
+  final double discount;
   final PaymentMode paymentMode;
   final DateTime paymentDate;
   final String? transactionReference; // Cheque No / UPI Ref / Bank Ref
@@ -38,6 +39,7 @@ class ErpPayment {
     this.referenceDocumentId,
     this.referenceDocumentNumber,
     required this.amount,
+    this.discount = 0.0,
     required this.paymentMode,
     required this.paymentDate,
     this.transactionReference,
@@ -94,6 +96,7 @@ class ErpPayment {
       referenceDocumentId: json['referenceDocumentId']?.toString(),
       referenceDocumentNumber: json['referenceDocumentNumber']?.toString(),
       amount: (json['amount'] is num) ? (json['amount'] as num).toDouble() : double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
+      discount: (json['discount'] is num) ? (json['discount'] as num).toDouble() : double.tryParse(json['discount']?.toString() ?? '0') ?? 0.0,
       paymentMode: parseMode(json['paymentMode']),
       paymentDate: json['paymentDate'] != null ? DateTime.tryParse(json['paymentDate'].toString()) ?? DateTime.now() : DateTime.now(),
       transactionReference: json['transactionReference']?.toString(),
@@ -119,6 +122,7 @@ class ErpPayment {
       if (referenceDocumentId != null) 'referenceDocumentId': referenceDocumentId,
       if (referenceDocumentNumber != null) 'referenceDocumentNumber': referenceDocumentNumber,
       'amount': amount,
+      'discount': discount,
       'paymentMode': paymentMode.name,
       'paymentDate': paymentDate.toIso8601String(),
       if (transactionReference != null) 'transactionReference': transactionReference,
@@ -142,6 +146,7 @@ class ErpPayment {
     String? referenceDocumentId,
     String? referenceDocumentNumber,
     double? amount,
+    double? discount,
     PaymentMode? paymentMode,
     DateTime? paymentDate,
     String? transactionReference,
@@ -164,6 +169,7 @@ class ErpPayment {
       referenceDocumentId: referenceDocumentId ?? this.referenceDocumentId,
       referenceDocumentNumber: referenceDocumentNumber ?? this.referenceDocumentNumber,
       amount: amount ?? this.amount,
+      discount: discount ?? this.discount,
       paymentMode: paymentMode ?? this.paymentMode,
       paymentDate: paymentDate ?? this.paymentDate,
       transactionReference: transactionReference ?? this.transactionReference,

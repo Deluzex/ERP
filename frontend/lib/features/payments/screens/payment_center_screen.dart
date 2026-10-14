@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
@@ -14,7 +15,6 @@ import '../../../core/models/sale_model.dart';
 import '../../../core/models/vendor_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
-import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
@@ -81,8 +81,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   }
 
   void _handleTabChange() {
-    setState(() {});
     if (!_tabController.indexIsChanging) {
+      setState(() {});
       final targetSection = _getSectionForIndex(_tabController.index);
       if (ref.read(currentNavSectionProvider) != targetSection) {
         ref.read(currentNavSectionProvider.notifier).state = targetSection;
@@ -126,474 +126,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   }
 
   void _openRecordPaymentDialog(PaymentType type, {String? preselectedPartyId}) {
-    final db = ref.read(databaseServiceProvider);
-    final amountCtrl = TextEditingController();
-    final refCtrl = TextEditingController();
-    final notesCtrl = TextEditingController();
-    String? selectedPartyId;
-    String? selectedLinkedDocId;
-    bool isFullPayment = true;
-    PaymentMode selectedMode = PaymentMode.bankTransfer;
-    final formKey = GlobalKey<FormState>();
-
-    if (preselectedPartyId != null) {
-      selectedPartyId = preselectedPartyId;
-    } else if (type == PaymentType.customerPayment && db.customers.isNotEmpty) {
-      selectedPartyId = db.customers.first.id;
-    } else if (type == PaymentType.dealerPayment && db.dealers.isNotEmpty) {
-      selectedPartyId = db.dealers.first.id;
-    } else if (type == PaymentType.vendorPayment && db.vendors.isNotEmpty) {
-      selectedPartyId = db.vendors.first.id;
-    } else if (type == PaymentType.commissionPayment && db.architects.isNotEmpty) {
-      selectedPartyId = db.architects.first.id;
-    }
-
-    String title;
-    switch (type) {
-      case PaymentType.customerPayment:
-        title = 'Record Customer Receipt';
-        break;
-      case PaymentType.dealerPayment:
-        title = 'Record Dealer Receipt';
-        break;
-      case PaymentType.vendorPayment:
-        title = 'Record Vendor Payment';
-        break;
-      case PaymentType.commissionPayment:
-        title = 'Record Commission Payout';
-        break;
-    }
-
     showDialog(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDlgState) {
-            double outstanding = 0.0;
-            String partyName = '';
-            List<DropdownMenuItem<String>> linkedDocItems = [];
-            double selectedDocPending = 0.0;
-            double selectedDocTotal = 0.0;
-            String? selectedDocNumber;
-            String? selectedProjectId;
-            String? selectedProjectName;
-
-            if (type == PaymentType.customerPayment && selectedPartyId != null) {
-              final c = db.customers.firstWhere((cust) => cust.id == selectedPartyId, orElse: () => db.customers.first);
-              outstanding = c.outstandingAmount;
-              partyName = c.name;
-              final sales = db.sales.where((s) => s.partyId == selectedPartyId && s.pendingAmount > 0);
-              linkedDocItems = sales.map((s) => DropdownMenuItem(value: s.id, child: Text('${s.invoiceNumber} (Pending: ₹${s.pendingAmount})'))).toList();
-
-              if (selectedLinkedDocId != null) {
-                final sale = db.sales.where((s) => s.id == selectedLinkedDocId).firstOrNull;
-                if (sale != null) {
-                  selectedDocPending = sale.pendingAmount;
-                  selectedDocTotal = sale.totalAmount;
-                  selectedDocNumber = sale.invoiceNumber;
-                  selectedProjectId = sale.projectId;
-                  selectedProjectName = sale.projectName;
-                }
-              }
-            } else if (type == PaymentType.dealerPayment && selectedPartyId != null) {
-              final d = db.dealers.firstWhere((dlr) => dlr.id == selectedPartyId, orElse: () => db.dealers.first);
-              outstanding = d.outstandingAmount;
-              partyName = d.name;
-              final sales = db.sales.where((s) => s.partyId == selectedPartyId && s.pendingAmount > 0);
-              linkedDocItems = sales.map((s) => DropdownMenuItem(value: s.id, child: Text('${s.invoiceNumber} (Pending: ₹${s.pendingAmount})'))).toList();
-
-              if (selectedLinkedDocId != null) {
-                final sale = db.sales.where((s) => s.id == selectedLinkedDocId).firstOrNull;
-                if (sale != null) {
-                  selectedDocPending = sale.pendingAmount;
-                  selectedDocTotal = sale.totalAmount;
-                  selectedDocNumber = sale.invoiceNumber;
-                  selectedProjectId = sale.projectId;
-                  selectedProjectName = sale.projectName;
-                }
-              }
-            } else if (type == PaymentType.vendorPayment && selectedPartyId != null) {
-              final v = db.vendors.firstWhere((ven) => ven.id == selectedPartyId, orElse: () => db.vendors.first);
-              outstanding = v.outstandingBalance;
-              partyName = v.name;
-              final purchases = db.purchases.where((p) => p.vendorId == selectedPartyId && p.pendingAmount > 0);
-              linkedDocItems = purchases.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.purchaseNumber} (Pending: ₹${p.pendingAmount})'))).toList();
-
-              if (selectedLinkedDocId != null) {
-                final pur = db.purchases.where((p) => p.id == selectedLinkedDocId).firstOrNull;
-                if (pur != null) {
-                  selectedDocPending = pur.pendingAmount;
-                  selectedDocTotal = pur.totalAmount;
-                  selectedDocNumber = pur.purchaseNumber;
-                  selectedProjectId = pur.projectId;
-                  selectedProjectName = pur.projectName;
-                }
-              }
-            } else if (type == PaymentType.commissionPayment && selectedPartyId != null) {
-              final a = db.architects.firstWhere((arc) => arc.id == selectedPartyId, orElse: () => db.architects.first);
-              outstanding = a.pendingCommission;
-              partyName = a.name;
-
-              final commissions = db.commissions.where((cm) => cm.architectId == selectedPartyId && cm.status != CommissionStatus.paid);
-              linkedDocItems = commissions.map((cm) => DropdownMenuItem(value: cm.id, child: Text('${cm.commissionNumber} (Amt: ₹${cm.commissionAmount})'))).toList();
-
-              if (selectedLinkedDocId != null) {
-                final comm = db.commissions.where((c) => c.id == selectedLinkedDocId).firstOrNull;
-                if (comm != null) {
-                  selectedDocPending = comm.commissionAmount;
-                  selectedDocTotal = comm.commissionAmount;
-                  selectedDocNumber = comm.commissionNumber;
-                  selectedProjectId = comm.projectId;
-                  selectedProjectName = comm.projectName;
-                }
-              }
-            }
-
-            // Sync amount when full payment is toggled
-            if (isFullPayment && selectedLinkedDocId != null && selectedDocPending > 0) {
-              amountCtrl.text = selectedDocPending.toStringAsFixed(0);
-            }
-
-            final currentEnteredAmt = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
-            final calculatedRemaining = selectedLinkedDocId != null
-                ? (selectedDocPending - currentEnteredAmt).clamp(0.0, double.infinity)
-                : (outstanding - currentEnteredAmt).clamp(0.0, double.infinity);
-
-            return AlertDialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              title: Text(title, style: AppTextStyles.h2),
-              content: Container(
-                constraints: const BoxConstraints(maxWidth: 540),
-                width: double.infinity,
-                child: Form(
-                  key: formKey,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Party Outstanding Badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Flexible(
-                                child: Text('Current Total Outstanding:', style: AppTextStyles.bodyMedium, overflow: TextOverflow.ellipsis),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                Formatters.formatCurrency(outstanding),
-                                style: AppTextStyles.bodyBold.copyWith(
-                                  color: outstanding > 0 ? AppColors.dangerText : AppColors.successText,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Party Selector
-                        if (type == PaymentType.customerPayment) ...[
-                          DropdownButtonFormField<String>(
-                            value: selectedPartyId,
-                            isExpanded: true,
-                            decoration: const InputDecoration(labelText: 'Select Customer *'),
-                            items: db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis))).toList(),
-                            onChanged: (val) {
-                              setDlgState(() {
-                                selectedPartyId = val;
-                                selectedLinkedDocId = null;
-                                amountCtrl.clear();
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                        ] else if (type == PaymentType.dealerPayment) ...[
-                          DropdownButtonFormField<String>(
-                            value: selectedPartyId,
-                            isExpanded: true,
-                            decoration: const InputDecoration(labelText: 'Select Dealer *'),
-                            items: db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, overflow: TextOverflow.ellipsis))).toList(),
-                            onChanged: (val) {
-                              setDlgState(() {
-                                selectedPartyId = val;
-                                selectedLinkedDocId = null;
-                                amountCtrl.clear();
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                        ] else if (type == PaymentType.vendorPayment) ...[
-                          DropdownButtonFormField<String>(
-                            value: selectedPartyId,
-                            isExpanded: true,
-                            decoration: const InputDecoration(labelText: 'Select Vendor *'),
-                            items: db.vendors.map((v) => DropdownMenuItem(value: v.id, child: Text(v.name, overflow: TextOverflow.ellipsis))).toList(),
-                            onChanged: (val) {
-                              setDlgState(() {
-                                selectedPartyId = val;
-                                selectedLinkedDocId = null;
-                                amountCtrl.clear();
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                        ] else if (type == PaymentType.commissionPayment) ...[
-                          DropdownButtonFormField<String>(
-                            value: selectedPartyId,
-                            isExpanded: true,
-                            decoration: const InputDecoration(labelText: 'Select Architect / Partner *'),
-                            items: db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name, overflow: TextOverflow.ellipsis))).toList(),
-                            onChanged: (val) {
-                              setDlgState(() {
-                                selectedPartyId = val;
-                                selectedLinkedDocId = null;
-                                amountCtrl.clear();
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-
-                        // Linked Document Selection
-                        if (linkedDocItems.isNotEmpty) ...[
-                          DropdownButtonFormField<String>(
-                            value: selectedLinkedDocId,
-                            isExpanded: true,
-                            decoration: const InputDecoration(labelText: 'Link to Unpaid Invoice / Document'),
-                            items: [
-                              const DropdownMenuItem(value: null, child: Text('On Account / Advance Payment (No specific doc)')),
-                              ...linkedDocItems,
-                            ],
-                            onChanged: (val) {
-                              setDlgState(() {
-                                selectedLinkedDocId = val;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-
-                        // Full vs Partial Payment Selection
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Payment Settlement Type:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 6),
-                              Material(
-                                color: Colors.transparent,
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final isNarrow = constraints.maxWidth < 450;
-                                    if (isNarrow) {
-                                      return Column(
-                                        children: [
-                                          RadioListTile<bool>(
-                                            title: const Text('Full Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                            subtitle: selectedDocPending > 0
-                                                ? Text('Clear full balance ₹${selectedDocPending.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11))
-                                                : null,
-                                            value: true,
-                                            groupValue: isFullPayment,
-                                            contentPadding: EdgeInsets.zero,
-                                            dense: true,
-                                            onChanged: (val) {
-                                              if (val != null) {
-                                                setDlgState(() {
-                                                  isFullPayment = val;
-                                                  if (selectedDocPending > 0) {
-                                                    amountCtrl.text = selectedDocPending.toStringAsFixed(0);
-                                                  }
-                                                });
-                                              }
-                                            },
-                                          ),
-                                          RadioListTile<bool>(
-                                            title: const Text('Partial Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                            subtitle: const Text('Enter installment amount', style: TextStyle(fontSize: 11)),
-                                            value: false,
-                                            groupValue: isFullPayment,
-                                            contentPadding: EdgeInsets.zero,
-                                            dense: true,
-                                            onChanged: (val) {
-                                              if (val != null) {
-                                                setDlgState(() {
-                                                  isFullPayment = val;
-                                                });
-                                              }
-                                            },
-                                          ),
-                                        ],
-                                      );
-                                    }
-                                    return Row(
-                                      children: [
-                                        Expanded(
-                                          child: RadioListTile<bool>(
-                                            title: const Text('Full Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                            subtitle: selectedDocPending > 0
-                                                ? Text('Clear full balance ₹${selectedDocPending.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11))
-                                                : null,
-                                            value: true,
-                                            groupValue: isFullPayment,
-                                            contentPadding: EdgeInsets.zero,
-                                            dense: true,
-                                            onChanged: (val) {
-                                              if (val != null) {
-                                                setDlgState(() {
-                                                  isFullPayment = val;
-                                                  if (selectedDocPending > 0) {
-                                                    amountCtrl.text = selectedDocPending.toStringAsFixed(0);
-                                                  }
-                                                });
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: RadioListTile<bool>(
-                                            title: const Text('Partial Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                            subtitle: const Text('Enter installment amount', style: TextStyle(fontSize: 11)),
-                                            value: false,
-                                            groupValue: isFullPayment,
-                                            contentPadding: EdgeInsets.zero,
-                                            dense: true,
-                                            onChanged: (val) {
-                                              if (val != null) {
-                                                setDlgState(() {
-                                                  isFullPayment = val;
-                                                });
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-
-                        TextFormField(
-                          controller: amountCtrl,
-                          keyboardType: TextInputType.number,
-                          validator: (val) {
-                            final err = Validators.positiveNumber(val);
-                            if (err != null) return err;
-                            final parsed = double.tryParse(val ?? '0') ?? 0;
-                            if (selectedLinkedDocId != null && selectedDocPending > 0 && parsed > (selectedDocPending + 0.01)) {
-                              return 'Payment exceeds document pending balance of ₹${selectedDocPending.toStringAsFixed(0)}';
-                            }
-                            return null;
-                          },
-                          onChanged: (_) => setDlgState(() {}),
-                          decoration: InputDecoration(
-                            labelText: 'Payment Amount (₹) *',
-                            helperText: selectedLinkedDocId != null
-                                ? 'Remaining Balance after this payment: ₹${calculatedRemaining.toStringAsFixed(0)}'
-                                : null,
-                            helperStyle: TextStyle(
-                              color: calculatedRemaining > 0 ? AppColors.warningText : AppColors.successText,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<PaymentMode>(
-                          isExpanded: true,
-                          value: selectedMode,
-                          decoration: const InputDecoration(labelText: 'Payment Mode'),
-                          items: PaymentMode.values.map((mode) {
-                            return DropdownMenuItem(value: mode, child: Text(mode.toString().split('.').last.toUpperCase(), overflow: TextOverflow.ellipsis));
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) setDlgState(() => selectedMode = val);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: refCtrl,
-                          decoration: const InputDecoration(labelText: 'Transaction Reference / UTR / Cheque No'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: notesCtrl,
-                          decoration: const InputDecoration(labelText: 'Notes / Remarks'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              actions: [
-                ErpButton(
-                  text: 'Cancel',
-                  isOutlined: true,
-                  onPressed: () {
-                    FocusScope.of(ctx).unfocus();
-                    Navigator.of(ctx).pop();
-                  },
-                ),
-                ErpButton(
-                  text: 'Save Payment Entry',
-                  icon: Icons.check,
-                  onPressed: () {
-                    if (!formKey.currentState!.validate()) return;
-                    final amt = double.parse(amountCtrl.text.trim());
-
-                    final payment = ErpPayment(
-                      id: IdGenerator.generateId('PAY'),
-                      paymentNumber: IdGenerator.generateDocNumber('PAY', db.nextAdjustmentNumber + 100),
-                      paymentType: type,
-                      partyId: selectedPartyId!,
-                      partyName: partyName,
-                      referenceDocumentId: selectedLinkedDocId,
-                      referenceDocumentNumber: selectedDocNumber,
-                      amount: amt,
-                      paymentMode: selectedMode,
-                      paymentDate: DateTime.now(),
-                      transactionReference: refCtrl.text.trim(),
-                      notes: notesCtrl.text.trim(),
-                      isFullPayment: isFullPayment || (selectedDocPending > 0 && amt >= selectedDocPending),
-                      totalDocumentAmount: selectedDocTotal > 0 ? selectedDocTotal : amt,
-                      remainingAmount: calculatedRemaining,
-                      projectId: selectedProjectId,
-                      projectName: selectedProjectName,
-                      createdAt: DateTime.now(),
-                    );
-
-                    db.addPaymentAsync(payment);
-                    FocusScope.of(ctx).unfocus();
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Payment ${payment.paymentNumber} recorded! Invoice & balance updated.'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
+      barrierDismissible: false,
+      builder: (ctx) => _RecordPaymentDialog(
+        type: type,
+        preselectedPartyId: preselectedPartyId,
+      ),
     );
   }
 
@@ -615,6 +154,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
 
       if (targetIndex != null && _tabController.index != targetIndex) {
         _tabController.animateTo(targetIndex);
+        setState(() {});
       }
     });
 
@@ -673,6 +213,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
             unselectedLabelColor: AppColors.textSecondary,
             indicatorColor: AppColors.primary,
             onTap: (index) {
+              setState(() {});
               final targetSection = _getSectionForIndex(index);
               if (ref.read(currentNavSectionProvider) != targetSection) {
                 ref.read(currentNavSectionProvider.notifier).state = targetSection;
@@ -700,8 +241,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
 
           SizedBox(
             height: 680,
-            child: TabBarView(
-              controller: _tabController,
+            child: IndexedStack(
+              index: _tabController.index,
               children: [
                 _buildCustomerCollectionsTab(db),
                 _buildDealerReceiptsTab(db),
@@ -770,7 +311,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildCustomerControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 650;
+        final isNarrow = constraints.maxWidth < 780;
         final ctrl = _safeCustomerSearchCtrl;
         final pageSize = _safeCustomerPageSize;
         final currentPage = _safeCustomerCurrentPage;
@@ -809,9 +350,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
         );
 
-        final paginationControls = Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        final paginationControls = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
             const SizedBox(width: 8),
             Container(
@@ -872,7 +415,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               ),
             ],
           ],
-        );
+        ),
+      );
 
         if (isNarrow) {
           return Column(
@@ -1149,7 +693,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 960, maxHeight: 680),
+            constraints: const BoxConstraints(maxWidth: 1140, maxHeight: 680),
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1179,7 +723,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Customer Ledger & Transaction Statement (Sheet 2)',
+                              'Customer Ledger & Transaction Statement (${summary.entries.length} Transactions)',
                               style: AppTextStyles.subtitle.copyWith(fontSize: 12),
                             ),
                           ],
@@ -1216,7 +760,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                 const Divider(height: 1),
                 const SizedBox(height: 12),
 
-                // 8-Column Ledger Table (Sheet 2)
+                // 9-Column Ledger Table (Sheet 2)
                 Expanded(
                   child: summary.entries.isEmpty
                       ? Center(
@@ -1230,15 +774,20 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           ),
                         )
                       : ErpDataTable(
+                          enableVerticalScroll: true,
+                          fixedHeader: true,
+                          columnSpacing: 14,
+                          horizontalMargin: 16,
                           columns: const [
-                            ErpColumn(title: 'Doc / Name'),
-                            ErpColumn(title: 'Total Pending', isNumeric: true),
-                            ErpColumn(title: 'Type'),
-                            ErpColumn(title: 'Date'),
-                            ErpColumn(title: 'Mode'),
-                            ErpColumn(title: 'Discount', isNumeric: true),
-                            ErpColumn(title: 'New Pending', isNumeric: true),
-                            ErpColumn(title: 'Remarks'),
+                            ErpColumn(title: 'Doc / Name', width: 145),
+                            ErpColumn(title: 'Total Pending', isNumeric: true, width: 105),
+                            ErpColumn(title: 'Type', width: 85),
+                            ErpColumn(title: 'Date', width: 95),
+                            ErpColumn(title: 'Mode', width: 120),
+                            ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                            ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                            ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
+                            ErpColumn(title: 'Remarks', width: 160),
                           ],
                           rows: summary.entries.map((entry) {
                             return [
@@ -1249,6 +798,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                   : ErpStatusBadge.success('RECEIPT'),
                               Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
                               ErpStatusBadge.neutral(entry.paymentMode),
+                              Text(
+                                Formatters.formatCurrency(entry.amount),
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  fontSize: 12,
+                                  color: entry.type == 'Sale Invoice' ? Colors.black87 : const Color(0xFF16A34A),
+                                ),
+                              ),
                               Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
                               Text(
                                 Formatters.formatCurrency(entry.closingPending),
@@ -1257,7 +813,18 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                   color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
                                 ),
                               ),
-                              Text(entry.remarks, style: AppTextStyles.bodySmall),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 160),
+                                child: Tooltip(
+                                  message: entry.remarks,
+                                  child: Text(
+                                    entry.remarks.isNotEmpty ? entry.remarks : '—',
+                                    style: AppTextStyles.bodySmall,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
                             ];
                           }).toList(),
                         ),
@@ -1337,7 +904,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildDealerControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 650;
+        final isNarrow = constraints.maxWidth < 780;
         final ctrl = _safeDealerSearchCtrl;
         final pageSize = _safeDealerPageSize;
         final currentPage = _safeDealerCurrentPage;
@@ -1376,9 +943,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
         );
 
-        final paginationControls = Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        final paginationControls = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
             const SizedBox(width: 8),
             Container(
@@ -1439,7 +1008,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               ),
             ],
           ],
-        );
+        ),
+      );
 
         if (isNarrow) {
           return Column(
@@ -1718,7 +1288,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 960, maxHeight: 680),
+            constraints: const BoxConstraints(maxWidth: 1140, maxHeight: 680),
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1748,7 +1318,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Dealer Ledger & Transaction Statement (Sheet 2)',
+                              'Dealer Ledger & Transaction Statement (${summary.entries.length} Transactions)',
                               style: AppTextStyles.subtitle.copyWith(fontSize: 12),
                             ),
                           ],
@@ -1785,7 +1355,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                 const Divider(height: 1),
                 const SizedBox(height: 12),
 
-                // 8-Column Ledger Table (Sheet 2)
+                // 9-Column Ledger Table (Sheet 2)
                 Expanded(
                   child: summary.entries.isEmpty
                       ? Center(
@@ -1799,15 +1369,20 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           ),
                         )
                       : ErpDataTable(
+                          enableVerticalScroll: true,
+                          fixedHeader: true,
+                          columnSpacing: 14,
+                          horizontalMargin: 16,
                           columns: const [
-                            ErpColumn(title: 'Doc / Name'),
-                            ErpColumn(title: 'Total Pending', isNumeric: true),
-                            ErpColumn(title: 'Type'),
-                            ErpColumn(title: 'Date'),
-                            ErpColumn(title: 'Mode'),
-                            ErpColumn(title: 'Discount', isNumeric: true),
-                            ErpColumn(title: 'New Pending', isNumeric: true),
-                            ErpColumn(title: 'Remarks'),
+                            ErpColumn(title: 'Doc / Name', width: 145),
+                            ErpColumn(title: 'Total Pending', isNumeric: true, width: 105),
+                            ErpColumn(title: 'Type', width: 85),
+                            ErpColumn(title: 'Date', width: 95),
+                            ErpColumn(title: 'Mode', width: 120),
+                            ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                            ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                            ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
+                            ErpColumn(title: 'Remarks', width: 160),
                           ],
                           rows: summary.entries.map((entry) {
                             return [
@@ -1818,6 +1393,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                   : ErpStatusBadge.success('RECEIPT'),
                               Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
                               ErpStatusBadge.neutral(entry.paymentMode),
+                              Text(
+                                Formatters.formatCurrency(entry.amount),
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  fontSize: 12,
+                                  color: entry.type == 'Sale Invoice' ? Colors.black87 : const Color(0xFF16A34A),
+                                ),
+                              ),
                               Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
                               Text(
                                 Formatters.formatCurrency(entry.closingPending),
@@ -1826,7 +1408,18 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                   color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
                                 ),
                               ),
-                              Text(entry.remarks, style: AppTextStyles.bodySmall),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 160),
+                                child: Tooltip(
+                                  message: entry.remarks,
+                                  child: Text(
+                                    entry.remarks.isNotEmpty ? entry.remarks : '—',
+                                    style: AppTextStyles.bodySmall,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
                             ];
                           }).toList(),
                         ),
@@ -1912,23 +1505,44 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           isSale: false,
           date: p.paymentDate,
           amount: p.amount,
-          discount: 0.0,
+          discount: p.discount,
           mode: modeLabel,
           notes: (p.transactionReference != null && p.transactionReference!.isNotEmpty)
               ? '${p.notes != null && p.notes!.isNotEmpty ? p.notes : "Payment"} (Ref: ${p.transactionReference})'
               : (p.notes != null && p.notes!.isNotEmpty ? p.notes! : 'Dealer Receipt'),
         ));
       }
-      events.sort((a, b) => a.date.compareTo(b.date));
+      events.sort((a, b) {
+        final cmp = a.date.compareTo(b.date);
+        if (cmp != 0) return cmp;
+        return a.docNumber.compareTo(b.docNumber);
+      });
 
-      double runningPending = 0.0;
+      final double saleTotal = dealerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.totalAmount));
+      final double paidAmount = dealerPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
+      final double paymentDiscounts = dealerPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.discount));
+      final double invoiceDiscountsOnly = dealerSales.fold(0.0, (acc, s) {
+        final linkedPaymentsDiscount = dealerPayments
+            .where((p) => p.referenceDocumentId != null && p.referenceDocumentId!.isNotEmpty && p.referenceDocumentId == s.id)
+            .fold(0.0, (pAcc, p) => pAcc + _safeDouble(p.discount));
+        return acc + (s.discountAmount - linkedPaymentsDiscount).clamp(0.0, double.infinity);
+      });
+      final double discountGiven = paymentDiscounts + invoiceDiscountsOnly;
+      final double dealerOutstanding = _safeDouble(dealer.outstandingAmount);
+
+      final double pendingAmount = dealerOutstanding;
+      final double effectiveSaleTotal = (dealerSales.isEmpty && dealerOutstanding > 0)
+          ? (dealerOutstanding + paidAmount + discountGiven)
+          : saleTotal;
+
+      double runningPending = dealerSales.isEmpty ? effectiveSaleTotal : 0.0;
       final entries = <CustomerLedgerEntry>[];
       for (final ev in events) {
         final opening = runningPending;
         if (ev.isSale) {
           runningPending = opening + ev.amount;
         } else {
-          runningPending = (opening - ev.amount).clamp(0.0, double.infinity);
+          runningPending = (opening - (ev.amount + ev.discount)).clamp(0.0, double.infinity);
         }
         entries.add(CustomerLedgerEntry(
           docNumber: ev.docNumber,
@@ -1936,27 +1550,19 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           type: ev.isSale ? 'Sale Invoice' : 'Dealer Receipt',
           date: ev.date,
           paymentMode: ev.mode,
+          amount: ev.amount,
           discount: ev.discount,
           closingPending: runningPending,
           remarks: ev.notes,
         ));
       }
 
-      final double saleTotal = dealerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.totalAmount));
-      final double paidAmount = dealerPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
-      final double discountGiven = dealerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.discountAmount));
-      final double dealerOutstanding = _safeDouble(dealer.outstandingAmount);
-
-      double pendingAmount;
-      if (dealerSales.isNotEmpty || dealerPayments.isNotEmpty) {
-        pendingAmount = (saleTotal - paidAmount - discountGiven).clamp(0.0, double.infinity);
-      } else {
-        pendingAmount = dealerOutstanding;
-      }
-
-      final double effectiveSaleTotal = (dealerSales.isEmpty && dealerPayments.isEmpty && dealerOutstanding > 0)
-          ? dealerOutstanding
-          : saleTotal;
+      // Present transactions newest to oldest (descending date, then descending docNumber)
+      entries.sort((a, b) {
+        final cmp = b.date.compareTo(a.date);
+        if (cmp != 0) return cmp;
+        return b.docNumber.compareTo(a.docNumber);
+      });
 
       summaries.add(DealerAccountSummary(
         dealer: dealer,
@@ -2000,7 +1606,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Manage vendor accounts and track balances (Sheet 2)',
+            'Manage vendor accounts and track balances',
             style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 14),
@@ -2015,7 +1621,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildVendorControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 650;
+        final isNarrow = constraints.maxWidth < 780;
         final ctrl = _safeVendorSearchCtrl;
         final pageSize = _safeVendorPageSize;
         final currentPage = _safeVendorCurrentPage;
@@ -2054,9 +1660,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
         );
 
-        final paginationControls = Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        final paginationControls = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
             const SizedBox(width: 8),
             Container(
@@ -2069,10 +1677,10 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<int>(
-                  value: (pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
-                  icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                  style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600, color: Colors.black87),
+                  value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
+                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
                   items: const [
+                    DropdownMenuItem(value: 5, child: Text('5')),
                     DropdownMenuItem(value: 10, child: Text('10')),
                     DropdownMenuItem(value: 25, child: Text('25')),
                     DropdownMenuItem(value: 50, child: Text('50')),
@@ -2090,7 +1698,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
             ),
             const SizedBox(width: 12),
             Text(
-              'Showing $shownCount of $totalCount',
+              'Showing $shownCount of $totalCount vendors',
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
             ),
             if (totalCount > pageSize) ...[
@@ -2103,6 +1711,10 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ? () => setState(() => _vendorCurrentPage = currentPage - 1)
                     : null,
               ),
+              Text(
+                '${currentPage + 1} / ${((totalCount - 1) ~/ pageSize) + 1}',
+                style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+              ),
               IconButton(
                 icon: const Icon(Icons.chevron_right, size: 18),
                 padding: EdgeInsets.zero,
@@ -2113,7 +1725,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
               ),
             ],
           ],
-        );
+        ),
+      );
 
         if (isNarrow) {
           return Column(
@@ -2200,54 +1813,54 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
+                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.shopping_bag_outlined, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
+                        Icon(Icons.currency_rupee, size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
                         Text('PURCHASE TOTAL', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                       ],
                     ),
-                    numeric: true,
                   ),
                   DataColumn(
+                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle_outline, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('PAID AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                        const Icon(Icons.currency_rupee, size: 14, color: Color(0xFF16A34A)),
+                        const SizedBox(width: 4),
+                        Text('PAID AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF16A34A))),
                       ],
                     ),
-                    numeric: true,
                   ),
                   DataColumn(
+                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.discount_outlined, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('DISCOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                        const Icon(Icons.percent, size: 14, color: Color(0xFF7C3AED)),
+                        const SizedBox(width: 4),
+                        Text('DISCOUNT GIVEN', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF7C3AED))),
                       ],
                     ),
-                    numeric: true,
                   ),
                   DataColumn(
+                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.pending_actions_outlined, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
+                        Icon(Icons.schedule, size: 15, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
                         Text('PENDING AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                       ],
                     ),
-                    numeric: true,
                   ),
                   DataColumn(
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.tune_outlined, size: 16, color: Colors.grey.shade600),
+                        Icon(Icons.description_outlined, size: 15, color: Colors.grey.shade600),
                         const SizedBox(width: 6),
                         Text('ACTIONS', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                       ],
@@ -2255,72 +1868,79 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                   ),
                 ],
                 rows: summaries.map((summary) {
-                  final initial = summary.vendor.name.trim().isNotEmpty
-                      ? summary.vendor.name.trim().substring(0, 1).toUpperCase()
-                      : 'V';
-
                   return DataRow(
                     cells: [
-                      // Vendor Name + Subtitle
+                      // VENDOR NAME
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            CircleAvatar(
-                              radius: 17,
-                              backgroundColor: const Color(0xFFEFF6FF),
-                              child: Text(
-                                initial,
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB), fontSize: 13),
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(8),
                               ),
+                              child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB), size: 18),
                             ),
                             const SizedBox(width: 12),
                             Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
                                   summary.vendor.name.isNotEmpty ? summary.vendor.name : 'Unnamed Vendor',
                                   style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 2),
-                                Text(
-                                  '${summary.transactionCount} transactions${summary.vendor.contactPerson.isNotEmpty ? " • ${summary.vendor.contactPerson}" : ""}',
-                                  style: AppTextStyles.bodySmall.copyWith(fontSize: 11, color: AppColors.textSecondary),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.description_outlined, size: 11, color: Colors.grey.shade500),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      (summary.vendor.contactPerson.isNotEmpty)
+                                          ? '${summary.vendor.contactPerson} • ${summary.transactionCount} transactions'
+                                          : '${summary.transactionCount} transactions',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ],
                         ),
                       ),
-                      // Purchase Total
+                      // PURCHASE TOTAL
                       DataCell(
                         Text(
                           Formatters.formatCurrency(summary.purchaseTotal),
                           style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
                         ),
                       ),
-                      // Paid Amount
+                      // PAID AMOUNT
                       DataCell(
                         Text(
                           Formatters.formatCurrency(summary.paidAmount),
                           style: AppTextStyles.bodyBold.copyWith(
                             fontSize: 13,
-                            color: summary.paidAmount > 0 ? const Color(0xFF16A34A) : AppColors.textSecondary,
+                            color: const Color(0xFF16A34A),
                           ),
                         ),
                       ),
-                      // Discount
+                      // DISCOUNT GIVEN
                       DataCell(
                         Text(
                           Formatters.formatCurrency(summary.discountGiven),
                           style: AppTextStyles.bodyBold.copyWith(
                             fontSize: 13,
-                            color: summary.discountGiven > 0 ? const Color(0xFF7C3AED) : AppColors.textSecondary,
+                            color: const Color(0xFF7C3AED),
                           ),
                         ),
                       ),
-                      // Pending Amount
+                      // PENDING AMOUNT
                       DataCell(
                         Text(
                           Formatters.formatCurrency(summary.pendingAmount),
@@ -2330,34 +1950,34 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           ),
                         ),
                       ),
-                      // Actions
+                      // ACTIONS
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             OutlinedButton.icon(
-                              icon: const Icon(Icons.edit_note_rounded, size: 15),
-                              label: const Text('Transaction', style: TextStyle(fontSize: 11)),
+                              icon: const Icon(Icons.edit_note_rounded, size: 16),
+                              label: const Text('Transaction', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.primary,
-                                side: const BorderSide(color: AppColors.primary),
+                                foregroundColor: const Color(0xFF2563EB),
+                                side: const BorderSide(color: Color(0xFFBFDBFE)),
+                                backgroundColor: const Color(0xFFEFF6FF),
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
-                              onPressed: () {
-                                _openRecordPaymentDialog(
-                                  PaymentType.vendorPayment,
-                                  preselectedPartyId: summary.vendor.id,
-                                );
-                              },
+                              onPressed: () => _openRecordPaymentDialog(
+                                PaymentType.vendorPayment,
+                                preselectedPartyId: summary.vendor.id,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             OutlinedButton.icon(
-                              icon: const Icon(Icons.history_rounded, size: 15),
-                              label: const Text('History', style: TextStyle(fontSize: 11)),
+                              icon: const Icon(Icons.visibility_outlined, size: 15),
+                              label: const Text('History', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF0F172A),
-                                side: BorderSide(color: Colors.grey.shade300),
+                                foregroundColor: const Color(0xFF475569),
+                                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                backgroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
@@ -2384,8 +2004,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         return Dialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           child: Container(
-            width: 1000,
-            constraints: const BoxConstraints(maxHeight: 700),
+            constraints: const BoxConstraints(maxWidth: 1140, maxHeight: 700),
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2415,7 +2034,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Vendor Ledger & Transaction Statement (Sheet 2)',
+                              'Vendor Ledger & Transaction Statement (${summary.entries.length} Transactions)',
                               style: AppTextStyles.subtitle.copyWith(fontSize: 12),
                             ),
                           ],
@@ -2466,15 +2085,20 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           ),
                         )
                       : ErpDataTable(
+                          enableVerticalScroll: true,
+                          fixedHeader: true,
+                          columnSpacing: 14,
+                          horizontalMargin: 16,
                           columns: const [
-                            ErpColumn(title: 'Doc / Name'),
-                            ErpColumn(title: 'Total Pending (Opening)', isNumeric: true),
-                            ErpColumn(title: 'Type'),
-                            ErpColumn(title: 'Date'),
-                            ErpColumn(title: 'Mode'),
-                            ErpColumn(title: 'Discount', isNumeric: true),
-                            ErpColumn(title: 'New Pending (Closing)', isNumeric: true),
-                            ErpColumn(title: 'Remarks'),
+                            ErpColumn(title: 'Doc / Name', width: 145),
+                            ErpColumn(title: 'Total Pending (Opening)', isNumeric: true, width: 110),
+                            ErpColumn(title: 'Type', width: 85),
+                            ErpColumn(title: 'Date', width: 95),
+                            ErpColumn(title: 'Mode', width: 120),
+                            ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                            ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                            ErpColumn(title: 'New Pending (Closing)', isNumeric: true, width: 110),
+                            ErpColumn(title: 'Remarks', width: 160),
                           ],
                           rows: summary.entries.map((entry) {
                             final isPurchase = entry.type.toLowerCase().contains('purchase') || entry.type.toLowerCase().contains('invoice');
@@ -2489,6 +2113,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                   : ErpStatusBadge.success(entry.type),
                               Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
                               ErpStatusBadge.neutral(entry.paymentMode),
+                              Text(
+                                Formatters.formatCurrency(entry.amount),
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  fontSize: 12,
+                                  color: isPurchase ? Colors.black87 : const Color(0xFF16A34A),
+                                ),
+                              ),
                               Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
                               Text(
                                 Formatters.formatCurrency(entry.closingPending),
@@ -2497,7 +2128,18 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                   color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
                                 ),
                               ),
-                              Text(entry.remarks, style: AppTextStyles.bodySmall),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 160),
+                                child: Tooltip(
+                                  message: entry.remarks,
+                                  child: Text(
+                                    entry.remarks.isNotEmpty ? entry.remarks : '—',
+                                    style: AppTextStyles.bodySmall,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
                             ];
                           }).toList(),
                         ),
@@ -2586,7 +2228,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           isSale: false,
           date: p.paymentDate,
           amount: p.amount,
-          discount: 0.0,
+          discount: p.discount,
           mode: modeLabel,
           notes: (p.transactionReference != null && p.transactionReference!.isNotEmpty)
               ? '${p.notes != null && p.notes!.isNotEmpty ? p.notes : "Payment"} (Ref: ${p.transactionReference})'
@@ -2594,16 +2236,37 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         ));
       }
 
-      events.sort((a, b) => a.date.compareTo(b.date));
+      events.sort((a, b) {
+        final cmp = a.date.compareTo(b.date);
+        if (cmp != 0) return cmp;
+        return a.docNumber.compareTo(b.docNumber);
+      });
 
-      double runningPending = 0.0;
+      final double purchaseTotal = vendorPurchases.fold(0.0, (acc, p) => acc + _safeDouble(p.totalAmount));
+      final double paidAmount = vendorPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
+      final double paymentDiscounts = vendorPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.discount));
+      final double invoiceDiscountsOnly = vendorPurchases.fold(0.0, (acc, p) {
+        final linkedPaymentsDiscount = vendorPayments
+            .where((pay) => pay.referenceDocumentId != null && pay.referenceDocumentId!.isNotEmpty && pay.referenceDocumentId == p.id)
+            .fold(0.0, (pAcc, pay) => pAcc + _safeDouble(pay.discount));
+        return acc + (p.discountAmount - linkedPaymentsDiscount).clamp(0.0, double.infinity);
+      });
+      final double discountGiven = paymentDiscounts + invoiceDiscountsOnly;
+      final double vendorOutstanding = _safeDouble(vendor.outstandingBalance);
+
+      final double pendingAmount = vendorOutstanding;
+      final double effectivePurchaseTotal = (vendorPurchases.isEmpty && vendorOutstanding > 0)
+          ? (vendorOutstanding + paidAmount + discountGiven)
+          : purchaseTotal;
+
+      double runningPending = vendorPurchases.isEmpty ? effectivePurchaseTotal : 0.0;
       final entries = <CustomerLedgerEntry>[];
       for (final ev in events) {
         final opening = runningPending;
         if (ev.isSale) {
           runningPending = opening + ev.amount;
         } else {
-          runningPending = (opening - ev.amount).clamp(0.0, double.infinity);
+          runningPending = (opening - (ev.amount + ev.discount)).clamp(0.0, double.infinity);
         }
         entries.add(CustomerLedgerEntry(
           docNumber: ev.docNumber,
@@ -2611,27 +2274,19 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           type: ev.isSale ? 'Purchase Invoice' : 'Vendor Payment',
           date: ev.date,
           paymentMode: ev.mode,
+          amount: ev.amount,
           discount: ev.discount,
           closingPending: runningPending,
           remarks: ev.notes,
         ));
       }
 
-      final double purchaseTotal = vendorPurchases.fold(0.0, (acc, p) => acc + _safeDouble(p.totalAmount));
-      final double paidAmount = vendorPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
-      final double discountGiven = vendorPurchases.fold(0.0, (acc, p) => acc + _safeDouble(p.discountAmount));
-      final double vendorOutstanding = _safeDouble(vendor.outstandingBalance);
-
-      double pendingAmount;
-      if (vendorPurchases.isNotEmpty || vendorPayments.isNotEmpty) {
-        pendingAmount = (purchaseTotal - paidAmount - discountGiven).clamp(0.0, double.infinity);
-      } else {
-        pendingAmount = vendorOutstanding;
-      }
-
-      final double effectivePurchaseTotal = (vendorPurchases.isEmpty && vendorPayments.isEmpty && vendorOutstanding > 0)
-          ? vendorOutstanding
-          : purchaseTotal;
+      // Present transactions newest to oldest (descending date, then descending docNumber)
+      entries.sort((a, b) {
+        final cmp = b.date.compareTo(a.date);
+        if (cmp != 0) return cmp;
+        return b.docNumber.compareTo(a.docNumber);
+      });
 
       summaries.add(VendorAccountSummary(
         vendor: vendor,
@@ -2712,23 +2367,44 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           isSale: false,
           date: p.paymentDate,
           amount: p.amount,
-          discount: 0.0,
+          discount: p.discount,
           mode: modeLabel,
           notes: (p.transactionReference != null && p.transactionReference!.isNotEmpty)
               ? '${p.notes != null && p.notes!.isNotEmpty ? p.notes : "Payment"} (Ref: ${p.transactionReference})'
               : (p.notes != null && p.notes!.isNotEmpty ? p.notes! : 'Customer Receipt'),
         ));
       }
-      events.sort((a, b) => a.date.compareTo(b.date));
+      events.sort((a, b) {
+        final cmp = a.date.compareTo(b.date);
+        if (cmp != 0) return cmp;
+        return a.docNumber.compareTo(b.docNumber);
+      });
 
-      double runningPending = 0.0;
+      final double saleTotal = customerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.totalAmount));
+      final double paidAmount = customerPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
+      final double paymentDiscounts = customerPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.discount));
+      final double invoiceDiscountsOnly = customerSales.fold(0.0, (acc, s) {
+        final linkedPaymentsDiscount = customerPayments
+            .where((p) => p.referenceDocumentId != null && p.referenceDocumentId!.isNotEmpty && p.referenceDocumentId == s.id)
+            .fold(0.0, (pAcc, p) => pAcc + _safeDouble(p.discount));
+        return acc + (s.discountAmount - linkedPaymentsDiscount).clamp(0.0, double.infinity);
+      });
+      final double discountGiven = paymentDiscounts + invoiceDiscountsOnly;
+      final double custOutstanding = _safeDouble(customer.outstandingAmount);
+
+      final double pendingAmount = custOutstanding;
+      final double effectiveSaleTotal = (customerSales.isEmpty && custOutstanding > 0)
+          ? (custOutstanding + paidAmount + discountGiven)
+          : saleTotal;
+
+      double runningPending = customerSales.isEmpty ? effectiveSaleTotal : 0.0;
       final entries = <CustomerLedgerEntry>[];
       for (final ev in events) {
         final opening = runningPending;
         if (ev.isSale) {
           runningPending = opening + ev.amount;
         } else {
-          runningPending = (opening - ev.amount).clamp(0.0, double.infinity);
+          runningPending = (opening - (ev.amount + ev.discount)).clamp(0.0, double.infinity);
         }
         entries.add(CustomerLedgerEntry(
           docNumber: ev.docNumber,
@@ -2736,27 +2412,19 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           type: ev.isSale ? 'Sale Invoice' : 'Customer Receipt',
           date: ev.date,
           paymentMode: ev.mode,
+          amount: ev.amount,
           discount: ev.discount,
           closingPending: runningPending,
           remarks: ev.notes,
         ));
       }
 
-      final double saleTotal = customerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.totalAmount));
-      final double paidAmount = customerPayments.fold(0.0, (acc, p) => acc + _safeDouble(p.amount));
-      final double discountGiven = customerSales.fold(0.0, (acc, s) => acc + _safeDouble(s.discountAmount));
-      final double custOutstanding = _safeDouble(customer.outstandingAmount);
-
-      double pendingAmount;
-      if (customerSales.isNotEmpty || customerPayments.isNotEmpty) {
-        pendingAmount = (saleTotal - paidAmount - discountGiven).clamp(0.0, double.infinity);
-      } else {
-        pendingAmount = custOutstanding;
-      }
-
-      final double effectiveSaleTotal = (customerSales.isEmpty && customerPayments.isEmpty && custOutstanding > 0)
-          ? custOutstanding
-          : saleTotal;
+      // Present transactions newest to oldest (descending date, then descending docNumber)
+      entries.sort((a, b) {
+        final cmp = b.date.compareTo(a.date);
+        if (cmp != 0) return cmp;
+        return b.docNumber.compareTo(a.docNumber);
+      });
 
       summaries.add(CustomerAccountSummary(
         customer: customer,
@@ -2911,6 +2579,7 @@ class CustomerLedgerEntry {
   final String type;
   final DateTime date;
   final String paymentMode;
+  final double amount;
   final double discount;
   final double closingPending;
   final String remarks;
@@ -2921,6 +2590,7 @@ class CustomerLedgerEntry {
     required this.type,
     required this.date,
     required this.paymentMode,
+    required this.amount,
     required this.discount,
     required this.closingPending,
     required this.remarks,
@@ -2946,3 +2616,811 @@ class _LedgerRawEvent {
     required this.notes,
   });
 }
+
+class _MaxAmountTextInputFormatter extends TextInputFormatter {
+  final double Function() maxAllowed;
+
+  _MaxAmountTextInputFormatter(this.maxAllowed);
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) return newValue;
+    final textToParse = newValue.text.endsWith('.')
+        ? newValue.text.substring(0, newValue.text.length - 1)
+        : newValue.text;
+    if (textToParse.isEmpty) return newValue;
+
+    final val = double.tryParse(textToParse);
+    if (val == null) return oldValue;
+    final max = maxAllowed();
+    if (max > 0 && val > (max + 0.001)) {
+      return oldValue;
+    }
+    return newValue;
+  }
+}
+
+class _RecordPaymentDialog extends ConsumerStatefulWidget {
+  final PaymentType type;
+  final String? preselectedPartyId;
+
+  const _RecordPaymentDialog({
+    required this.type,
+    this.preselectedPartyId,
+  });
+
+  @override
+  ConsumerState<_RecordPaymentDialog> createState() => _RecordPaymentDialogState();
+}
+
+class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
+  late final TextEditingController _amountCtrl;
+  late final TextEditingController _discountCtrl;
+  late final TextEditingController _refCtrl;
+  late final TextEditingController _notesCtrl;
+  final _formKey = GlobalKey<FormState>();
+
+  String? _selectedPartyId;
+  String? _selectedLinkedDocId;
+  String _transactionType = 'Payment with Discount';
+  DateTime _selectedDate = DateTime.now();
+  PaymentMode? _selectedMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountCtrl = TextEditingController();
+    _discountCtrl = TextEditingController();
+    _refCtrl = TextEditingController();
+    _notesCtrl = TextEditingController();
+
+    final db = ref.read(databaseServiceProvider);
+    if (widget.preselectedPartyId != null) {
+      _selectedPartyId = widget.preselectedPartyId;
+    } else if (widget.type == PaymentType.customerPayment && db.customers.isNotEmpty) {
+      _selectedPartyId = db.customers.first.id;
+    } else if (widget.type == PaymentType.dealerPayment && db.dealers.isNotEmpty) {
+      _selectedPartyId = db.dealers.first.id;
+    } else if (widget.type == PaymentType.vendorPayment && db.vendors.isNotEmpty) {
+      _selectedPartyId = db.vendors.first.id;
+    } else if (widget.type == PaymentType.commissionPayment && db.architects.isNotEmpty) {
+      _selectedPartyId = db.architects.first.id;
+    }
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _discountCtrl.dispose();
+    _refCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final db = ref.watch(databaseServiceProvider);
+    double outstanding = 0.0;
+    String partyName = '';
+    List<DropdownMenuItem<String>> linkedDocItems = [];
+    double selectedDocPending = 0.0;
+    double selectedDocTotal = 0.0;
+    String? selectedDocNumber;
+    String? selectedProjectId;
+    String? selectedProjectName;
+
+    if (widget.type == PaymentType.customerPayment && _selectedPartyId != null) {
+      final c = db.customers.firstWhere((cust) => cust.id == _selectedPartyId, orElse: () => db.customers.first);
+      outstanding = c.outstandingAmount;
+      partyName = c.name;
+      final sales = db.sales.where((s) => s.partyId == _selectedPartyId && s.pendingAmount > 0);
+      linkedDocItems = sales.map((s) => DropdownMenuItem(value: s.id, child: Text('${s.invoiceNumber} (Pending: ${Formatters.formatCurrency(s.pendingAmount)})'))).toList();
+
+      if (_selectedLinkedDocId != null) {
+        final sale = db.sales.where((s) => s.id == _selectedLinkedDocId).firstOrNull;
+        if (sale != null) {
+          selectedDocPending = sale.pendingAmount;
+          selectedDocTotal = sale.totalAmount;
+          selectedDocNumber = sale.invoiceNumber;
+          selectedProjectId = sale.projectId;
+          selectedProjectName = sale.projectName;
+        }
+      }
+    } else if (widget.type == PaymentType.dealerPayment && _selectedPartyId != null) {
+      final d = db.dealers.firstWhere((dlr) => dlr.id == _selectedPartyId, orElse: () => db.dealers.first);
+      outstanding = d.outstandingAmount;
+      partyName = d.name;
+      final sales = db.sales.where((s) => s.partyId == _selectedPartyId && s.pendingAmount > 0);
+      linkedDocItems = sales.map((s) => DropdownMenuItem(value: s.id, child: Text('${s.invoiceNumber} (Pending: ${Formatters.formatCurrency(s.pendingAmount)})'))).toList();
+
+      if (_selectedLinkedDocId != null) {
+        final sale = db.sales.where((s) => s.id == _selectedLinkedDocId).firstOrNull;
+        if (sale != null) {
+          selectedDocPending = sale.pendingAmount;
+          selectedDocTotal = sale.totalAmount;
+          selectedDocNumber = sale.invoiceNumber;
+          selectedProjectId = sale.projectId;
+          selectedProjectName = sale.projectName;
+        }
+      }
+    } else if (widget.type == PaymentType.vendorPayment && _selectedPartyId != null) {
+      final v = db.vendors.firstWhere((ven) => ven.id == _selectedPartyId, orElse: () => db.vendors.first);
+      outstanding = v.outstandingBalance;
+      partyName = v.name;
+      final purchases = db.purchases.where((p) => p.vendorId == _selectedPartyId && p.pendingAmount > 0);
+      linkedDocItems = purchases.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.purchaseNumber} (Pending: ${Formatters.formatCurrency(p.pendingAmount)})'))).toList();
+
+      if (_selectedLinkedDocId != null) {
+        final pur = db.purchases.where((p) => p.id == _selectedLinkedDocId).firstOrNull;
+        if (pur != null) {
+          selectedDocPending = pur.pendingAmount;
+          selectedDocTotal = pur.totalAmount;
+          selectedDocNumber = pur.purchaseNumber;
+          selectedProjectId = pur.projectId;
+          selectedProjectName = pur.projectName;
+        }
+      }
+    } else if (widget.type == PaymentType.commissionPayment && _selectedPartyId != null) {
+      final a = db.architects.firstWhere((arc) => arc.id == _selectedPartyId, orElse: () => db.architects.first);
+      outstanding = a.pendingCommission;
+      partyName = a.name;
+
+      final commissions = db.commissions.where((cm) => cm.architectId == _selectedPartyId && cm.status != CommissionStatus.paid);
+      linkedDocItems = commissions.map((cm) => DropdownMenuItem(value: cm.id, child: Text('${cm.commissionNumber} (Amt: ${Formatters.formatCurrency(cm.commissionAmount)})'))).toList();
+
+      if (_selectedLinkedDocId != null) {
+        final comm = db.commissions.where((c) => c.id == _selectedLinkedDocId).firstOrNull;
+        if (comm != null) {
+          selectedDocPending = comm.commissionAmount;
+          selectedDocTotal = comm.commissionAmount;
+          selectedDocNumber = comm.commissionNumber;
+          selectedProjectId = comm.projectId;
+          selectedProjectName = comm.projectName;
+        }
+      }
+    }
+
+    final double basePending = (_selectedLinkedDocId != null && selectedDocPending > 0)
+        ? selectedDocPending
+        : outstanding;
+
+    final currentEnteredAmt = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+    final currentEnteredDisc = double.tryParse(_discountCtrl.text.trim()) ?? 0.0;
+    final totalDeduction = currentEnteredAmt + currentEnteredDisc;
+    final calculatedRemaining = (basePending - totalDeduction).clamp(0.0, double.infinity);
+
+    String title;
+    String partyRoleLabel;
+    switch (widget.type) {
+      case PaymentType.customerPayment:
+        title = 'Add Customer Transaction';
+        partyRoleLabel = 'Customer';
+        break;
+      case PaymentType.dealerPayment:
+        title = 'Add Dealer Transaction';
+        partyRoleLabel = 'Dealer';
+        break;
+      case PaymentType.vendorPayment:
+        title = 'Add Vendor Transaction';
+        partyRoleLabel = 'Vendor';
+        break;
+      case PaymentType.commissionPayment:
+        title = 'Add Commission Payout';
+        partyRoleLabel = 'Architect / Partner';
+        break;
+    }
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 580),
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header with close button
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.edit_note_rounded, color: AppColors.primary, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: AppTextStyles.h2.copyWith(fontSize: 18),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Record payment amount, apply discount, and track live balance',
+                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      tooltip: 'Close',
+                      splashRadius: 18,
+                      onPressed: () {
+                        FocusScope.of(context).unfocus();
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+
+                // Party Selector / Display
+                if (widget.preselectedPartyId != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.person_outline, size: 18, color: AppColors.textSecondary),
+                        const SizedBox(width: 8),
+                        Text('$partyRoleLabel: ', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        Expanded(
+                          child: Text(partyName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ] else ...[
+                  if (widget.type == PaymentType.customerPayment) ...[
+                    DropdownButtonFormField<String>(
+                      value: _selectedPartyId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Customer *',
+                        prefixIcon: Icon(Icons.person_outline, size: 20),
+                      ),
+                      items: db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedPartyId = val;
+                          _selectedLinkedDocId = null;
+                          _amountCtrl.clear();
+                          _discountCtrl.clear();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                  ] else if (widget.type == PaymentType.dealerPayment) ...[
+                    DropdownButtonFormField<String>(
+                      value: _selectedPartyId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Dealer *',
+                        prefixIcon: Icon(Icons.storefront_outlined, size: 20),
+                      ),
+                      items: db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedPartyId = val;
+                          _selectedLinkedDocId = null;
+                          _amountCtrl.clear();
+                          _discountCtrl.clear();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                  ] else if (widget.type == PaymentType.vendorPayment) ...[
+                    DropdownButtonFormField<String>(
+                      value: _selectedPartyId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Vendor *',
+                        prefixIcon: Icon(Icons.business_outlined, size: 20),
+                      ),
+                      items: db.vendors.map((v) => DropdownMenuItem(value: v.id, child: Text(v.name, overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedPartyId = val;
+                          _selectedLinkedDocId = null;
+                          _amountCtrl.clear();
+                          _discountCtrl.clear();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                  ] else if (widget.type == PaymentType.commissionPayment) ...[
+                    DropdownButtonFormField<String>(
+                      value: _selectedPartyId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Architect / Partner *',
+                        prefixIcon: Icon(Icons.handshake_outlined, size: 20),
+                      ),
+                      items: db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name, overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedPartyId = val;
+                          _selectedLinkedDocId = null;
+                          _amountCtrl.clear();
+                          _discountCtrl.clear();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                ],
+
+                // Linked Document Selection
+                if (linkedDocItems.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    value: _selectedLinkedDocId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Link to Unpaid Invoice / Document',
+                      prefixIcon: Icon(Icons.receipt_outlined, size: 20),
+                    ),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('On Account / Advance Payment (General)')),
+                      ...linkedDocItems,
+                    ],
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedLinkedDocId = val;
+                        _amountCtrl.clear();
+                        _discountCtrl.clear();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // 🔴 Current Outstanding Amount Card (Soft Red)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFECACA), width: 1.2),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            const Icon(Icons.account_balance_wallet_outlined, size: 20, color: Color(0xFFDC2626)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _selectedLinkedDocId != null && selectedDocNumber != null
+                                        ? 'Invoice Pending ($selectedDocNumber):'
+                                        : 'Current Outstanding Amount (On Account):',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF991B1B),
+                                    ),
+                                  ),
+                                  if (_selectedLinkedDocId != null && selectedDocNumber != null) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Total $partyRoleLabel Outstanding: ${Formatters.formatCurrency(outstanding)}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade600,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        Formatters.formatCurrency(calculatedRemaining),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFB91C1C),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Transaction Type & Transaction Date
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth >= 460;
+                    final typeWidget = DropdownButtonFormField<String>(
+                      value: _transactionType,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Transaction Type',
+                        prefixIcon: Icon(Icons.swap_horiz, size: 20),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'Payment with Discount', child: Text('Payment with Discount')),
+                        DropdownMenuItem(value: 'Payment Receipt', child: Text('Payment Receipt')),
+                        DropdownMenuItem(value: 'Discount Only', child: Text('Discount Only')),
+                      ],
+                      onChanged: (val) {
+                        if (val == null) return;
+                        setState(() {
+                          _transactionType = val;
+                          if (_transactionType == 'Discount Only') {
+                            _amountCtrl.clear();
+                          } else if (_transactionType == 'Payment Receipt') {
+                            _discountCtrl.clear();
+                          }
+                        });
+                      },
+                    );
+
+                    final dateWidget = InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2035),
+                        );
+                        if (picked != null) {
+                          setState(() => _selectedDate = picked);
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Transaction Date',
+                          prefixIcon: Icon(Icons.calendar_today, size: 18),
+                        ),
+                        child: Text(
+                          Formatters.formatDate(_selectedDate),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    );
+
+                    if (isWide) {
+                      return Row(
+                        children: [
+                          Expanded(child: typeWidget),
+                          const SizedBox(width: 12),
+                          Expanded(child: dateWidget),
+                        ],
+                      );
+                    }
+                    return Column(
+                      children: [
+                        typeWidget,
+                        const SizedBox(height: 12),
+                        dateWidget,
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+
+                // Payment Mode & Reference Number (Hidden if 'Discount Only')
+                if (_transactionType != 'Discount Only') ...[
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 460;
+                      final modeWidget = DropdownButtonFormField<PaymentMode>(
+                        value: _selectedMode,
+                        isExpanded: true,
+                        hint: const Text('Select Paymode'),
+                        decoration: const InputDecoration(
+                          labelText: 'Payment Mode *',
+                          prefixIcon: Icon(Icons.payment, size: 20),
+                        ),
+                        items: PaymentMode.values.map((mode) {
+                          return DropdownMenuItem(
+                            value: mode,
+                            child: Text(mode.toString().split('.').last.toUpperCase(), overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                        validator: (val) {
+                          if (_transactionType != 'Discount Only' && val == null) {
+                            return 'Select Paymode';
+                          }
+                          return null;
+                        },
+                        onChanged: (val) {
+                          setState(() => _selectedMode = val);
+                        },
+                      );
+
+                      final refWidget = TextFormField(
+                        controller: _refCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Reference / UTR / Cheque No',
+                          hintText: 'e.g. UTR84910284',
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
+                          prefixIcon: Icon(Icons.tag, size: 18),
+                        ),
+                      );
+
+                      if (isWide) {
+                        return Row(
+                          children: [
+                            Expanded(child: modeWidget),
+                            const SizedBox(width: 12),
+                            Expanded(child: refWidget),
+                          ],
+                        );
+                      }
+                      return Column(
+                        children: [
+                          modeWidget,
+                          const SizedBox(height: 12),
+                          refWidget,
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // 💰 Payment Amount & Discount Amount
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth >= 460;
+
+                    final paymentAmtWidget = TextFormField(
+                      controller: _amountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                        _MaxAmountTextInputFormatter(() {
+                          final currentDisc = double.tryParse(_discountCtrl.text.trim()) ?? 0.0;
+                          return (basePending - currentDisc).clamp(0.0, double.infinity);
+                        }),
+                      ],
+                      enabled: _transactionType != 'Discount Only',
+                      decoration: InputDecoration(
+                        labelText: _transactionType == 'Discount Only'
+                            ? 'Payment Amount (₹)'
+                            : 'Payment Amount (₹) *',
+                        hintText: '0',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        filled: _transactionType == 'Discount Only',
+                        fillColor: _transactionType == 'Discount Only' ? const Color(0xFFF3F4F6) : null,
+                        prefixIcon: const Icon(Icons.currency_rupee, size: 18),
+                        suffixIcon: (basePending > 0 && _transactionType != 'Discount Only')
+                            ? TextButton(
+                                onPressed: () {
+                                  final currentDisc = double.tryParse(_discountCtrl.text.trim()) ?? 0.0;
+                                  final fullAmt = (basePending - currentDisc).clamp(0.0, double.infinity);
+                                  final formatted = fullAmt == 0
+                                      ? ''
+                                      : (fullAmt % 1 == 0
+                                          ? fullAmt.toInt().toString()
+                                          : fullAmt.toStringAsFixed(2));
+                                  _amountCtrl.value = TextEditingValue(
+                                    text: formatted,
+                                    selection: TextSelection.collapsed(offset: formatted.length),
+                                  );
+                                  setState(() {});
+                                },
+                                child: const Text('Full Pay', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              )
+                            : null,
+                      ),
+                      onChanged: (_) => setState(() {}),
+                      validator: (val) {
+                        if (_transactionType == 'Discount Only') return null;
+                        if (val == null || val.trim().isEmpty) {
+                          return 'Enter payment amount';
+                        }
+                        final payAmt = double.tryParse(val.trim());
+                        if (payAmt == null || payAmt <= 0) {
+                          return 'Enter a valid payment amount';
+                        }
+                        final discAmt = double.tryParse(_discountCtrl.text.trim()) ?? 0.0;
+                        final total = payAmt + discAmt;
+                        if (basePending > 0 && total > (basePending + 0.01)) {
+                          return 'Cannot exceed ${Formatters.formatCurrency(basePending)}';
+                        }
+                        return null;
+                      },
+                    );
+
+                    final discountAmtWidget = TextFormField(
+                      controller: _discountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                        _MaxAmountTextInputFormatter(() {
+                          final currentPay = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+                          return (basePending - currentPay).clamp(0.0, double.infinity);
+                        }),
+                      ],
+                      decoration: InputDecoration(
+                        labelText: _transactionType == 'Discount Only'
+                            ? 'Discount Amount (₹) *'
+                            : 'Discount Amount (₹)',
+                        hintText: '0',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        prefixIcon: const Icon(Icons.discount_outlined, size: 18),
+                      ),
+                      onChanged: (val) {
+                        if (val.trim().isNotEmpty && (double.tryParse(val.trim()) ?? 0) > 0 && _transactionType == 'Payment Receipt') {
+                          _transactionType = 'Payment with Discount';
+                        }
+                        setState(() {});
+                      },
+                      validator: (val) {
+                        if (val == null || val.trim().isEmpty) {
+                          if (_transactionType == 'Discount Only') {
+                            return 'Enter discount amount';
+                          }
+                          return null; // Empty discount defaults to 0
+                        }
+                        final discAmt = double.tryParse(val.trim());
+                        if (discAmt == null || discAmt < 0) {
+                          return 'Enter a valid non-negative number';
+                        }
+                        if (_transactionType == 'Discount Only' && discAmt <= 0) {
+                          return 'Enter discount amount';
+                        }
+                        final payAmt = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+                        final total = payAmt + discAmt;
+                        if (basePending > 0 && total > (basePending + 0.01)) {
+                          return 'Cannot exceed ${Formatters.formatCurrency(basePending)}';
+                        }
+                        return null;
+                      },
+                    );
+
+                    if (isWide) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: paymentAmtWidget),
+                          const SizedBox(width: 12),
+                          Expanded(child: discountAmtWidget),
+                        ],
+                      );
+                    }
+                    return Column(
+                      children: [
+                        paymentAmtWidget,
+                        const SizedBox(height: 12),
+                        discountAmtWidget,
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+
+                // 📝 Remarks / Notes (Right after Amount fields)
+                TextFormField(
+                  controller: _notesCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Remarks / Notes',
+                    hintText: 'Enter reason for discount, transaction note, or remarks...',
+                    floatingLabelBehavior: FloatingLabelBehavior.always,
+                    prefixIcon: Icon(Icons.notes, size: 18),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Action Buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ErpButton(
+                      text: 'Cancel',
+                      isOutlined: true,
+                      onPressed: () {
+                        FocusScope.of(context).unfocus();
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    ErpButton(
+                      text: 'Add Transaction',
+                      icon: Icons.check,
+                      onPressed: () {
+                        if (!_formKey.currentState!.validate()) return;
+                        if (_transactionType != 'Discount Only' && _selectedMode == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please select a payment mode.')),
+                          );
+                          return;
+                        }
+                        final payAmt = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+                        final discAmt = double.tryParse(_discountCtrl.text.trim()) ?? 0.0;
+                        final total = payAmt + discAmt;
+
+                        if (_transactionType != 'Discount Only' && payAmt <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter a payment amount.')),
+                          );
+                          return;
+                        }
+
+                        if (total <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter a payment or discount amount.')),
+                          );
+                          return;
+                        }
+
+                        final isFull = (basePending > 0 && total >= (basePending - 0.01));
+
+                        final payment = ErpPayment(
+                          id: IdGenerator.generateId('PAY'),
+                          paymentNumber: IdGenerator.generateDocNumber('PAY', db.nextAdjustmentNumber + 100),
+                          paymentType: widget.type,
+                          partyId: _selectedPartyId!,
+                          partyName: partyName,
+                          referenceDocumentId: _selectedLinkedDocId,
+                          referenceDocumentNumber: selectedDocNumber,
+                          amount: payAmt,
+                          discount: discAmt,
+                          paymentMode: _transactionType == 'Discount Only' ? PaymentMode.cash : (_selectedMode ?? PaymentMode.bankTransfer),
+                          paymentDate: _selectedDate,
+                          transactionReference: _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
+                          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+                          isFullPayment: isFull,
+                          totalDocumentAmount: selectedDocTotal > 0 ? selectedDocTotal : (basePending > 0 ? basePending : total),
+                          remainingAmount: calculatedRemaining,
+                          projectId: selectedProjectId,
+                          projectName: selectedProjectName,
+                          createdAt: DateTime.now(),
+                        );
+
+                        db.addPaymentAsync(payment).catchError((_) {
+                          db.addManualPayment(payment);
+                          return payment;
+                        });
+                        FocusScope.of(context).unfocus();
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Transaction ${payment.paymentNumber} added! Settled: ${Formatters.formatCurrency(total)}.'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

@@ -20,12 +20,13 @@ class Formatters {
   }
 
   static String formatCurrency(double amount) {
+    final cleanAmount = amount.abs() < 0.00001 ? 0.0 : amount;
     final formatter = NumberFormat.currency(
       locale: 'en_IN',
       symbol: '₹',
-      decimalDigits: amount % 1 == 0 ? 0 : 2,
+      decimalDigits: cleanAmount % 1 == 0 ? 0 : 2,
     );
-    return formatter.format(amount);
+    return formatter.format(cleanAmount);
   }
 
   static String formatNumber(double number) {

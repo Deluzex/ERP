@@ -30,6 +30,17 @@ class Validators {
     return null;
   }
 
+  static String? percentage(String? value, [String message = 'Must be between 0% and 100%']) {
+    if (value == null || value.trim().isEmpty) {
+      return 'This field is required';
+    }
+    final num = double.tryParse(value.trim());
+    if (num == null || num < 0 || num > 100) {
+      return message;
+    }
+    return null;
+  }
+
   /// Optional email (valid format if provided)
   static String? email(String? value) {
     if (value == null || value.trim().isEmpty) return null;

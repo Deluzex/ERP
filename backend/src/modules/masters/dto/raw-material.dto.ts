@@ -66,7 +66,15 @@ export class UpdateRawMaterialDto {
 
   @IsString()
   @IsOptional()
+  itemCode?: string;
+
+  @IsString()
+  @IsOptional()
   categoryId?: string;
+
+  @IsString()
+  @IsOptional()
+  categoryName?: string;
 
   @IsString()
   @IsOptional()
@@ -74,7 +82,21 @@ export class UpdateRawMaterialDto {
 
   @IsString()
   @IsOptional()
+  unit?: string;
+
+  @IsString()
+  @IsOptional()
   hsnSacCode?: string;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  openingStock?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  currentStock?: number;
 
   @IsNumber()
   @Min(0)
@@ -100,4 +122,9 @@ export class UpdateRawMaterialDto {
   @IsString({ each: true })
   @IsOptional()
   preferredVendorIds?: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  preferredVendorNames?: string[];
 }

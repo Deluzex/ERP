@@ -58,6 +58,15 @@ export class CreatePaymentDto {
   @IsPositive()
   amount!: number;
 
+  @ApiPropertyOptional({
+    description: 'Discount amount applied to the payment (in INR)',
+    example: 500.0,
+    default: 0.0,
+  })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsOptional()
+  discount?: number;
+
   @ApiProperty({
     description: 'Mode of payment',
     enum: ['cash', 'bankTransfer', 'cheque', 'upi', 'credit', 'creditNote', 'card'],

@@ -49,6 +49,7 @@ enum ErpNavSection {
   architects,
   rawMaterials,
   finishedProducts,
+  billOfMaterials,
   // 7. Reports
   reportsDashboard,
   inventoryReports,
@@ -58,6 +59,8 @@ enum ErpNavSection {
   projectReports,
   commissionReports,
   financialReports,
+  // Chat Support
+  chatSupport,
   // Settings
   settings,
 }

@@ -6,6 +6,8 @@ class Architect {
   final String email;
   final String gstNumber;
   final String address;
+  final String state;
+  final String pincode;
   final double defaultCommissionRate; // e.g. 5.0 for 5%
   final double totalCommissionEarned;
   final double pendingCommission;
@@ -25,6 +27,8 @@ class Architect {
     required this.email,
     required this.gstNumber,
     required this.address,
+    this.state = '',
+    this.pincode = '',
     this.defaultCommissionRate = 5.0,
     this.totalCommissionEarned = 0.0,
     this.pendingCommission = 0.0,
@@ -45,6 +49,8 @@ class Architect {
     String? email,
     String? gstNumber,
     String? address,
+    String? state,
+    String? pincode,
     double? defaultCommissionRate,
     double? totalCommissionEarned,
     double? pendingCommission,
@@ -64,6 +70,8 @@ class Architect {
       email: email ?? this.email,
       gstNumber: gstNumber ?? this.gstNumber,
       address: address ?? this.address,
+      state: state ?? this.state,
+      pincode: pincode ?? this.pincode,
       defaultCommissionRate: defaultCommissionRate ?? this.defaultCommissionRate,
       totalCommissionEarned: totalCommissionEarned ?? this.totalCommissionEarned,
       pendingCommission: pendingCommission ?? this.pendingCommission,
@@ -86,6 +94,8 @@ class Architect {
       email: json['email']?.toString() ?? '',
       gstNumber: json['gstNumber']?.toString() ?? json['gst_number']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
+      state: json['state']?.toString() ?? '',
+      pincode: json['pincode']?.toString() ?? '',
       defaultCommissionRate: double.tryParse(json['defaultCommissionRate']?.toString() ?? json['default_commission_rate']?.toString() ?? '5.0') ?? 5.0,
       totalCommissionEarned: double.tryParse(json['totalCommissionEarned']?.toString() ?? json['total_commission_earned']?.toString() ?? '0') ?? 0.0,
       pendingCommission: double.tryParse(json['pendingCommission']?.toString() ?? json['pending_commission']?.toString() ?? '0') ?? 0.0,
@@ -107,6 +117,8 @@ class Architect {
       'email': email,
       'gstNumber': gstNumber,
       'address': address,
+      'state': state,
+      'pincode': pincode,
       'defaultCommissionRate': defaultCommissionRate,
       if (linkedCustomerId != null && linkedCustomerId!.isNotEmpty)
         'linkedCustomerId': linkedCustomerId,

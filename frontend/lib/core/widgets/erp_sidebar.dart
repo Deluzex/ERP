@@ -258,7 +258,7 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                           onTap: () => _handleNavigation(context, ErpNavSection.purchaseDashboard, ErpModule.purchase),
                         ),
                         _buildSubNavItem(
-                          title: 'Purchase Orders',
+                          title: 'Purchase Invoices',
                           isRestricted: !canAccessPurchase,
                           isSelected: currentSection == ErpNavSection.purchaseList,
                           onTap: () => _handleNavigation(context, ErpNavSection.purchaseList, ErpModule.purchase),
@@ -288,13 +288,13 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                         onTap: () => _handleNavigation(context, ErpNavSection.productionDashboard, ErpModule.production),
                       ),
                       _buildSubNavItem(
-                        title: 'Work Orders',
+                        title: 'Production Invoices',
                         isRestricted: !canAccessProduction,
                         isSelected: currentSection == ErpNavSection.productionOrders,
                         onTap: () => _handleNavigation(context, ErpNavSection.productionOrders, ErpModule.production),
                       ),
                       _buildSubNavItem(
-                        title: 'Create Work Order',
+                        title: 'Create Production',
                         isRestricted: !canAccessProduction,
                         isSelected: currentSection == ErpNavSection.createProduction,
                         onTap: () => _handleNavigation(context, ErpNavSection.createProduction, ErpModule.production, ErpAction.create),
@@ -462,7 +462,13 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                           onTap: () => _handleNavigation(context, ErpNavSection.finishedProducts, ErpModule.masters),
                         ),
                         _buildSubNavItem(
-                          title: 'Categories & Units',
+                          title: 'BOM Master',
+                          isRestricted: !canAccessMasters,
+                          isSelected: currentSection == ErpNavSection.billOfMaterials,
+                          onTap: () => _handleNavigation(context, ErpNavSection.billOfMaterials, ErpModule.masters),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Category Master',
                           isRestricted: !canAccessMasters,
                           isSelected: currentSection == ErpNavSection.categoriesUnits,
                           onTap: () => _handleNavigation(context, ErpNavSection.categoriesUnits, ErpModule.masters),
@@ -529,6 +535,15 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                         ),
                       ],
                     ),
+
+                  // Chat Support
+                  _buildNavItem(
+                    icon: Icons.chat_bubble_outline,
+                    title: 'Chat Support',
+                    isRestricted: false,
+                    isSelected: currentSection == ErpNavSection.chatSupport,
+                    onTap: () => _handleNavigation(context, ErpNavSection.chatSupport, ErpModule.dashboard),
+                  ),
 
                   // 9. Settings
                   if (canAccessSettings)

@@ -5,6 +5,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/models/bom_model.dart';
 import '../../../core/models/production_model.dart';
 import '../../../core/models/raw_material_model.dart';
 import '../../../core/utils/formatters.dart';
@@ -20,6 +21,8 @@ class _RawMaterialUsageDraft {
   String unit;
   double quantityUsed;
   double unitCost;
+  final TextEditingController qtyCtrl;
+  final TextEditingController unitCostCtrl;
 
   _RawMaterialUsageDraft({
     required this.rawMaterialId,
@@ -28,7 +31,25 @@ class _RawMaterialUsageDraft {
     required this.unit,
     required this.quantityUsed,
     required this.unitCost,
-  });
+  })  : qtyCtrl = TextEditingController(
+          text: quantityUsed % 1 == 0 ? quantityUsed.toInt().toString() : quantityUsed.toString(),
+        ),
+        unitCostCtrl = TextEditingController(
+          text: unitCost % 1 == 0 ? unitCost.toInt().toString() : unitCost.toString(),
+        );
+
+  void updateQuantity(double qty) {
+    quantityUsed = qty;
+    final text = qty % 1 == 0 ? qty.toInt().toString() : qty.toString();
+    if (qtyCtrl.text != text) {
+      qtyCtrl.text = text;
+    }
+  }
+
+  void dispose() {
+    qtyCtrl.dispose();
+    unitCostCtrl.dispose();
+  }
 
   double get totalCost => quantityUsed * unitCost;
 }
@@ -48,6 +69,8 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
   final _notesCtrl = TextEditingController();
 
   String? _selectedFinishedProductId;
+  BillOfMaterial? _activeBom;
+  bool _isAutoSyncedWithBom = true;
   final List<_RawMaterialUsageDraft> _rawMaterialsUsed = [];
 
   List<({RawMaterial rm, double requiredQty, double availableStock, double deficit})> get _lowStockItems {
@@ -76,22 +99,95 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
   void initState() {
     super.initState();
     final db = ref.read(databaseServiceProvider);
-    if (db.finishedProducts.isNotEmpty) {
+    final preselectedId = ref.read(selectedProductionProductIdProvider);
+    if (preselectedId != null && db.finishedProducts.any((p) => p.id == preselectedId)) {
+      _selectedFinishedProductId = preselectedId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(selectedProductionProductIdProvider.notifier).state = null;
+      });
+    } else if (db.finishedProducts.isNotEmpty) {
       _selectedFinishedProductId = db.finishedProducts.first.id;
     }
-    
-    _actualQtyCtrl.addListener(() {
-      setState(() {});
-    });
+    _loadBomForSelectedProduct();
+
+    _actualQtyCtrl.addListener(_onActualQtyChanged);
   }
 
   @override
   void dispose() {
+    _actualQtyCtrl.removeListener(_onActualQtyChanged);
     _actualQtyCtrl.dispose();
     _labourCostCtrl.dispose();
     _otherExpensesCtrl.dispose();
     _notesCtrl.dispose();
+    for (final draft in _rawMaterialsUsed) {
+      draft.dispose();
+    }
     super.dispose();
+  }
+
+  void _loadBomForSelectedProduct({bool showFeedback = false}) {
+    if (_selectedFinishedProductId == null) return;
+    final db = ref.read(databaseServiceProvider);
+    final bom = db.getBomForProduct(_selectedFinishedProductId!);
+    if (bom != null) {
+      final plannedQty = _actualQty > 0 ? _actualQty : 1.0;
+      final ratio = plannedQty / (bom.outputQuantity > 0 ? bom.outputQuantity : 1.0);
+      setState(() {
+        _activeBom = bom;
+        for (final draft in _rawMaterialsUsed) {
+          draft.dispose();
+        }
+        _rawMaterialsUsed.clear();
+        for (final item in bom.items) {
+          final rm = db.rawMaterials.where((r) => r.id == item.rawMaterialId).firstOrNull;
+          final unitCost = (rm != null && rm.defaultPurchasePrice > 0)
+              ? rm.defaultPurchasePrice
+              : item.unitCost;
+          final qtyNeeded = double.parse((item.quantityPerUnit * ratio).toStringAsFixed(4));
+          _rawMaterialsUsed.add(_RawMaterialUsageDraft(
+            rawMaterialId: item.rawMaterialId,
+            rawMaterialName: item.rawMaterialName,
+            rawMaterialCode: item.rawMaterialCode,
+            unit: item.unit,
+            quantityUsed: qtyNeeded,
+            unitCost: unitCost,
+          ));
+        }
+      });
+      if (showFeedback && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Auto-loaded ${bom.items.length} raw materials from BOM recipe "${bom.name}"'),
+            backgroundColor: AppColors.primary,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      setState(() {
+        _activeBom = null;
+        for (final draft in _rawMaterialsUsed) {
+          draft.dispose();
+        }
+        _rawMaterialsUsed.clear();
+      });
+    }
+  }
+
+  void _onActualQtyChanged() {
+    if (_activeBom != null && _isAutoSyncedWithBom) {
+      final plannedQty = _actualQty > 0 ? _actualQty : 1.0;
+      final ratio = plannedQty / (_activeBom!.outputQuantity > 0 ? _activeBom!.outputQuantity : 1.0);
+      for (final usage in _rawMaterialsUsed) {
+        final bomItem = _activeBom!.items.where((i) => i.rawMaterialId == usage.rawMaterialId).firstOrNull;
+        if (bomItem != null) {
+          final scaledQty = double.parse((bomItem.quantityPerUnit * ratio).toStringAsFixed(4));
+          usage.updateQuantity(scaledQty);
+        }
+      }
+    }
+    setState(() {});
   }
 
   Future<void> _showAddRawMaterialDialog() async {
@@ -343,11 +439,13 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
       setState(() {
         final existingIndex = _rawMaterialsUsed.indexWhere((u) => u.rawMaterialId == draft.rawMaterialId);
         if (existingIndex != -1) {
-          _rawMaterialsUsed[existingIndex].quantityUsed += draft.quantityUsed;
+          _rawMaterialsUsed[existingIndex].updateQuantity(_rawMaterialsUsed[existingIndex].quantityUsed + draft.quantityUsed);
           _rawMaterialsUsed[existingIndex].unitCost = draft.unitCost;
+          draft.dispose();
         } else {
           _rawMaterialsUsed.add(draft);
         }
+        _isAutoSyncedWithBom = false;
       });
     }
   }
@@ -357,7 +455,11 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
   }
 
   void _removeRawMaterial(int index) {
-    setState(() => _rawMaterialsUsed.removeAt(index));
+    setState(() {
+      _rawMaterialsUsed[index].dispose();
+      _rawMaterialsUsed.removeAt(index);
+      _isAutoSyncedWithBom = false;
+    });
   }
 
   double get _rawMaterialCost => _rawMaterialsUsed.fold(0.0, (sum, item) => sum + item.totalCost);
@@ -677,7 +779,14 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                   ),
                                 );
                               }).toList(),
-                              onChanged: (val) => setState(() => _selectedFinishedProductId = val),
+                              onChanged: (val) {
+                                if (val == null || val == _selectedFinishedProductId) return;
+                                setState(() {
+                                  _selectedFinishedProductId = val;
+                                  _isAutoSyncedWithBom = true;
+                                });
+                                _loadBomForSelectedProduct(showFeedback: true);
+                              },
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
@@ -708,7 +817,14 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                   ),
                                 );
                               }).toList(),
-                              onChanged: (val) => setState(() => _selectedFinishedProductId = val),
+                              onChanged: (val) {
+                                if (val == null || val == _selectedFinishedProductId) return;
+                                setState(() {
+                                  _selectedFinishedProductId = val;
+                                  _isAutoSyncedWithBom = true;
+                                });
+                                _loadBomForSelectedProduct(showFeedback: true);
+                              },
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -773,6 +889,91 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                     },
                   ),
                   const SizedBox(height: 16),
+                  // BOM Auto-fetch Status Indicator
+                  if (_activeBom != null) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySoft,
+                        borderRadius: AppRadius.smBorderRadius,
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.account_tree_outlined, color: AppColors.primary, size: 22),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    Text('BOM Recipe Applied: ${_activeBom!.name}', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark)),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                                      ),
+                                      child: Text(
+                                        '${_activeBom!.itemsCount} materials · Base: ${_activeBom!.outputQuantity.toStringAsFixed(0)} unit',
+                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Raw material requirements have been auto-fetched from inventory recipe and scaled for ${Formatters.formatNumber(_actualQty)} units.',
+                                  style: AppTextStyles.caption.copyWith(color: AppColors.textPrimary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton.icon(
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Re-apply BOM', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            onPressed: () {
+                              setState(() => _isAutoSyncedWithBom = true);
+                              _loadBomForSelectedProduct(showFeedback: true);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else if (db.finishedProducts.isNotEmpty) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningLight.withValues(alpha: 0.3),
+                        borderRadius: AppRadius.smBorderRadius,
+                        border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline, color: AppColors.warning, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'No BOM recipe registered for this product. You can manually specify components below or register a BOM recipe in Masters.',
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.billOfMaterials,
+                            child: const Text('Go to BOM Master', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (_rawMaterialsUsed.isEmpty)
                     Container(
                       width: double.infinity,
@@ -861,6 +1062,10 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                           item.rawMaterialCode = selected.itemCode;
                                           item.unit = selected.unit;
                                           item.unitCost = selected.defaultPurchasePrice;
+                                          item.unitCostCtrl.text = selected.defaultPurchasePrice % 1 == 0
+                                              ? selected.defaultPurchasePrice.toInt().toString()
+                                              : selected.defaultPurchasePrice.toString();
+                                          _isAutoSyncedWithBom = false;
                                         });
                                       }
                                     },
@@ -923,13 +1128,16 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                 SizedBox(
                                   width: 130,
                                   child: TextFormField(
-                                    initialValue: item.quantityUsed.toString(),
+                                    controller: item.qtyCtrl,
                                     keyboardType: TextInputType.number,
                                     validator: Validators.positiveNumber,
                                     decoration: InputDecoration(labelText: 'Total Qty (${item.unit})'),
                                     onChanged: (v) {
                                       final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.quantityUsed = num);
+                                      setState(() {
+                                        item.quantityUsed = num;
+                                        _isAutoSyncedWithBom = false;
+                                      });
                                     },
                                   ),
                                 ),
@@ -937,13 +1145,16 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                 SizedBox(
                                   width: 120,
                                   child: TextFormField(
-                                    initialValue: item.unitCost.toString(),
+                                    controller: item.unitCostCtrl,
                                     keyboardType: TextInputType.number,
                                     validator: Validators.positiveNumber,
                                     decoration: const InputDecoration(labelText: 'Unit Cost (₹)'),
                                     onChanged: (v) {
                                       final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.unitCost = num);
+                                      setState(() {
+                                        item.unitCost = num;
+                                        _isAutoSyncedWithBom = false;
+                                      });
                                     },
                                   ),
                                 ),
@@ -1272,30 +1483,33 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
             ),
             const SizedBox(height: 24),
             // Bottom Action Bar
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ErpButton(
-                  text: 'Cancel',
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
-                ),
-                const SizedBox(width: 10),
-                ErpButton(
-                  text: 'Save as Waiting Approval',
-                  icon: Icons.hourglass_top_outlined,
-                  isOutlined: true,
-                  isLoading: _isSavingPlanned == true,
-                  onPressed: _isSubmitting ? null : _saveAsPlanned,
-                ),
-                const SizedBox(width: 10),
-                ErpButton(
-                  text: 'Complete & Produce Stock',
-                  icon: Icons.check_circle_outline,
-                  isLoading: _isCompleting == true,
-                  onPressed: _isSubmitting ? null : _completeProduction,
-                ),
-              ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  ErpButton(
+                    text: 'Cancel',
+                    isOutlined: true,
+                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                  ),
+                  ErpButton(
+                    text: 'Save as Waiting Approval',
+                    icon: Icons.hourglass_top_outlined,
+                    isOutlined: true,
+                    isLoading: _isSavingPlanned == true,
+                    onPressed: _isSubmitting ? null : _saveAsPlanned,
+                  ),
+                  ErpButton(
+                    text: 'Complete & Produce Stock',
+                    icon: Icons.check_circle_outline,
+                    isLoading: _isCompleting == true,
+                    onPressed: _isSubmitting ? null : _completeProduction,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 32),
           ],

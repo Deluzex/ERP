@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../../app/routes/app_routes.dart';
 import '../../core/models/architect_model.dart';
+import '../../core/models/bom_model.dart';
 import '../../core/models/category_unit_model.dart';
 import '../../core/models/commission_model.dart';
 import '../../core/models/customer_model.dart';
@@ -49,8 +50,11 @@ class MockDatabaseService extends ChangeNotifier {
   // Master Lists
   List<ItemCategory> categories = [];
   List<MeasurementUnit> units = [];
+  List<ExpenseCategoryMasterItem> expenseCategoryMasterList = [];
+  List<PaymentModeMasterItem> paymentModeMasterList = [];
   List<RawMaterial> rawMaterials = [];
   List<FinishedProduct> finishedProducts = [];
+  List<BillOfMaterial> boms = [];
   List<Vendor> vendors = [];
   List<Customer> customers = [];
   List<Dealer> dealers = [];
@@ -607,6 +611,132 @@ class MockDatabaseService extends ChangeNotifier {
       MeasurementUnit(id: 'U-5', name: 'Rolls', symbol: 'ROL'),
     ];
 
+    // Expense Categories Master
+    expenseCategoryMasterList = [
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-1',
+        name: 'Transportation & Logistics',
+        code: 'TRANSPORT',
+        description: 'Freight, vehicle hire, and site material delivery charges',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-2',
+        name: 'Courier & Packaging',
+        code: 'COURIER',
+        description: 'Domestic express parcels, blueprints, and sample dispatches',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-3',
+        name: 'Fuel & Conveyance',
+        code: 'FUEL',
+        description: 'Diesel, petrol, client site visits, and local travel allowance',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-4',
+        name: 'Direct Labour & Overtime',
+        code: 'LABOUR',
+        description: 'Contract factory workers, loading/unloading, and site installation wages',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-5',
+        name: 'Electricity & Utilities',
+        code: 'UTILITIES',
+        description: 'Factory power bills, backup generator diesel, and water utility',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-6',
+        name: 'Plant & Machinery Maintenance',
+        code: 'MAINTENANCE',
+        description: 'Machine servicing, tooling replacement, and workshop upkeep',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-7',
+        name: 'Office & Administrative',
+        code: 'OFFICE',
+        description: 'Stationery, pantry supplies, software subscriptions, and internet',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-8',
+        name: 'Production Consumables',
+        code: 'PRODUCTION',
+        description: 'Safety gear, cutting blades, adhesives, and workshop consumables',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-9',
+        name: 'Project Site Expenses',
+        code: 'PROJECT',
+        description: 'Architect sample mocks, scaffold hire, and site coordination fees',
+        isActive: true,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-10',
+        name: 'General & Miscellaneous',
+        code: 'OTHER',
+        description: 'Incidental business expenses and petty cash charges',
+        isActive: true,
+      ),
+    ];
+
+    // Payment Modes Master
+    paymentModeMasterList = [
+      PaymentModeMasterItem(
+        id: 'PM-1',
+        name: 'Bank Transfer (NEFT / RTGS / IMPS)',
+        code: 'BANK_TRANSFER',
+        type: 'Bank / Electronic',
+        description: 'Direct account-to-account online bank settlement with UTR reference',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-2',
+        name: 'UPI / QR Code',
+        code: 'UPI',
+        type: 'Digital',
+        description: 'Instant mobile UPI payment via Google Pay, PhonePe, or BHIM',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-3',
+        name: 'Cheque / Demand Draft',
+        code: 'CHEQUE',
+        type: 'Banking Instrument',
+        description: 'Clearing cheque or banker draft with cheque number and drawer bank',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-4',
+        name: 'Cash',
+        code: 'CASH',
+        type: 'Cash',
+        description: 'Direct physical cash receipt or cash voucher payment',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-5',
+        name: 'Company Credit / Debit Card',
+        code: 'CARD',
+        type: 'Card',
+        description: 'Corporate POS card swipe or online payment gateway transaction',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-6',
+        name: 'Credit Note / Ledger Adjustment',
+        code: 'CREDIT_NOTE',
+        type: 'Ledger Adjustment',
+        description: 'Contra settlement against sales returns or dealer debit balances',
+        isActive: true,
+      ),
+    ];
+
     // Vendors
     vendors = [
       Vendor(
@@ -618,6 +748,8 @@ class MockDatabaseService extends ChangeNotifier {
         gstNumber: '27AAACA1234F1Z5',
         panNumber: 'AAACA1234F',
         address: 'Plot 42, GIDC Industrial Estate, Surat, Gujarat',
+        state: 'Gujarat',
+        pincode: '395007',
         paymentTerms: 'Net 30 Days',
         creditLimit: 500000.0,
         outstandingBalance: 145000.0,
@@ -632,6 +764,8 @@ class MockDatabaseService extends ChangeNotifier {
         gstNumber: '29AABCL5543K1ZQ',
         panNumber: 'AABCL5543K',
         address: 'Electronic City Phase 1, Bengaluru, Karnataka',
+        state: 'Karnataka',
+        pincode: '560100',
         paymentTerms: 'Net 15 Days',
         creditLimit: 800000.0,
         outstandingBalance: 230000.0,
@@ -646,6 +780,8 @@ class MockDatabaseService extends ChangeNotifier {
         gstNumber: '07AAECP8876H1Z2',
         panNumber: 'AAECP8876H',
         address: 'Okhla Industrial Area Phase III, New Delhi',
+        state: 'Delhi',
+        pincode: '110020',
         paymentTerms: 'Immediate / Advance',
         creditLimit: 300000.0,
         outstandingBalance: 65000.0,
@@ -662,6 +798,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'procurement@oberoiskycity.com',
         gstNumber: '27AABCO8890K1Z9',
         address: 'Borivali East, Western Express Highway, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400066',
         outstandingAmount: 380000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 80)),
       ),
@@ -672,6 +810,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'projects@grandhyattmumbai.com',
         gstNumber: '27AACCG1122D1ZP',
         address: 'Santacruz East, Mumbai, Maharashtra',
+        state: 'Maharashtra',
+        pincode: '400055',
         outstandingAmount: 0.0,
         createdAt: DateTime.now().subtract(const Duration(days: 45)),
       ),
@@ -682,6 +822,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'singhania.estate@gmail.com',
         gstNumber: '27AAFPS3322E1Z3',
         address: 'Lower Parel, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400013',
         outstandingAmount: 125000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 30)),
       ),
@@ -692,6 +834,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'studio@sanjaypuriarchitects.com',
         gstNumber: '27AABCS5566N1Z1',
         address: 'Worli Sea Face, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400018',
         outstandingAmount: 65000.0,
         linkedArchitectId: 'ARCH-001',
         isAlsoArchitect: true,
@@ -710,6 +854,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'karan@luxelightings.in',
         gstNumber: '29AABFL4433J1Z8',
         address: 'Indiranagar 100ft Road, Bengaluru, Karnataka',
+        state: 'Karnataka',
+        pincode: '560038',
         outstandingAmount: 210000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 100)),
       ),
@@ -722,6 +868,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'anita@aurastudio.com',
         gstNumber: '27AAGCA9988M1ZL',
         address: 'Koregaon Park, Pune, Maharashtra',
+        state: 'Maharashtra',
+        pincode: '411001',
         outstandingAmount: 95000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 70)),
       ),
@@ -737,6 +885,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'studio@sanjaypuriarchitects.com',
         gstNumber: '27AABCS5566N1Z1',
         address: 'Worli Sea Face, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400018',
         defaultCommissionRate: 5.0,
         totalCommissionEarned: 185000.0,
         pendingCommission: 45000.0,
@@ -754,6 +904,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'shabnam@theorangelane.com',
         gstNumber: '27AABCT9988P1Z4',
         address: 'Bandra West, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400050',
         defaultCommissionRate: 6.0,
         totalCommissionEarned: 120000.0,
         pendingCommission: 30000.0,
@@ -794,6 +946,21 @@ class MockDatabaseService extends ChangeNotifier {
         totalCommissionAmount: 28800.0,
         notes: 'Hand-blown glass pendants and warm dimming fixtures',
         createdAt: DateTime.now().subtract(const Duration(days: 40)),
+      ),
+      Project(
+        id: 'PRJ-003',
+        name: 'The St. Regis Penthouse Luxury Suites',
+        customerId: 'CUST-003',
+        customerName: 'The St. Regis Penthouse (Mr. Singhania)',
+        architectId: 'ARCH-001',
+        architectName: 'Ar. Sanjay Puri',
+        startDate: DateTime.now().subtract(const Duration(days: 25)),
+        expectedCompletionDate: DateTime.now().add(const Duration(days: 60)),
+        status: ProjectStatus.active,
+        totalSalesAmount: 520000.0,
+        totalCommissionAmount: 26000.0,
+        notes: 'Bespoke architectural pendant lighting and automation controls',
+        createdAt: DateTime.now().subtract(const Duration(days: 25)),
       ),
     ];
 
@@ -943,6 +1110,231 @@ class MockDatabaseService extends ChangeNotifier {
         gstPercent: 18.0,
         createdAt: DateTime.now().subtract(const Duration(days: 70)),
         updatedAt: DateTime.now(),
+      ),
+    ];
+
+    // Seed Bill of Materials (BOM Recipes)
+    boms = [
+      BillOfMaterial(
+        id: 'BOM-001',
+        finishedProductId: 'FP-001',
+        finishedProductName: 'Aarix Axis Wall Light',
+        finishedProductCode: 'DLX-WL-001',
+        name: 'Standard Aarix Wall Light Assembly',
+        description: 'Complete assembly kit for Aarix Axis architectural wall fixture',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Active',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-01',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 1.2,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-02',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-03',
+            rawMaterialId: 'RM-003',
+            rawMaterialName: 'Tridonic Constant Current LED Driver 40W Dimmable',
+            rawMaterialCode: 'RAW-DRV-40W',
+            quantityPerUnit: 1.0,
+            unit: 'PCS',
+            unitCost: 620.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-04',
+            rawMaterialId: 'RM-005',
+            rawMaterialName: 'Brass CNC Machined End Caps (Brushed Gold)',
+            rawMaterialCode: 'RAW-BRS-CAP',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 280.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 60)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 10)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-002',
+        finishedProductId: 'FP-002',
+        finishedProductName: 'Aarix Linear Suspension Pendant 1200mm',
+        finishedProductCode: 'DLX-PD-002',
+        name: '1200mm Architectural Linear Pendant Recipe',
+        description: 'Suspended architectural lighting fixture with anti-glare opal diffuser',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Active',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-05',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 2.4,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-06',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 4.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-07',
+            rawMaterialId: 'RM-003',
+            rawMaterialName: 'Tridonic Constant Current LED Driver 40W Dimmable',
+            rawMaterialCode: 'RAW-DRV-40W',
+            quantityPerUnit: 1.0,
+            unit: 'PCS',
+            unitCost: 620.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-08',
+            rawMaterialId: 'RM-004',
+            rawMaterialName: 'Opal Frosted Acrylic Diffuser Sheet 3mm',
+            rawMaterialCode: 'RAW-DIF-OPAL',
+            quantityPerUnit: 1.0,
+            unit: 'PCS',
+            unitCost: 420.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-09',
+            rawMaterialId: 'RM-005',
+            rawMaterialName: 'Brass CNC Machined End Caps (Brushed Gold)',
+            rawMaterialCode: 'RAW-BRS-CAP',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 280.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 45)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 5)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-003',
+        finishedProductId: 'FP-003',
+        finishedProductName: 'Aura Halo Minimalist Ring Light 900mm',
+        finishedProductCode: 'DLX-CH-003',
+        name: '900mm Circular Chandelier Halo Assembly',
+        description: 'Ring pendant with dual high-output LED drivers and opal diffusion',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Active',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-10',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 3.0,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-11',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 6.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-12',
+            rawMaterialId: 'RM-003',
+            rawMaterialName: 'Tridonic Constant Current LED Driver 40W Dimmable',
+            rawMaterialCode: 'RAW-DRV-40W',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 620.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-13',
+            rawMaterialId: 'RM-004',
+            rawMaterialName: 'Opal Frosted Acrylic Diffuser Sheet 3mm',
+            rawMaterialCode: 'RAW-DIF-OPAL',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 420.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 30)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 2)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-004',
+        finishedProductId: 'FP-001',
+        finishedProductName: 'Aarix Axis Wall Light',
+        finishedProductCode: 'DLX-WL-001',
+        name: 'Aarix Wall Light (Custom Finish Formula)',
+        description: 'Draft BOM formula for architectural custom finish variants',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Draft',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-14',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 1.2,
+            wastagePercent: 3.0,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-15',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 15)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 1)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-005',
+        finishedProductId: 'FP-002',
+        finishedProductName: 'Aarix Linear Suspension Pendant 1200mm',
+        finishedProductCode: 'DLX-PD-002',
+        name: 'Legacy Linear Pendant Formulation (v1 Archive)',
+        description: 'Archived formula replaced by standard linear assembly recipe',
+        outputQuantity: 1.0,
+        isActive: false,
+        status: 'Inactive',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-16',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 2.5,
+            wastagePercent: 5.0,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 120)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 90)),
       ),
     ];
 
@@ -2879,13 +3271,76 @@ class MockDatabaseService extends ChangeNotifier {
     }
 
     sales.insert(0, invoice);
+    _applySaleToProject(invoice);
     notifyListeners();
     return invoice;
+  }
+
+  void _applySaleToProject(Sale sale) {
+    if (sale.projectId != null &&
+        sale.projectId!.isNotEmpty &&
+        sale.documentType == SalesDocumentType.invoice &&
+        sale.status != SaleStatus.cancelled) {
+      final prjIndex = projects.indexWhere((p) => p.id == sale.projectId);
+      if (prjIndex != -1) {
+        final prj = projects[prjIndex];
+        projects[prjIndex] = prj.copyWith(
+          totalSalesAmount: prj.totalSalesAmount + sale.totalAmount,
+          totalCommissionAmount: prj.totalCommissionAmount + sale.architectCommissionAmount,
+        );
+      }
+    }
+  }
+
+  void _generateCommissionForSale(Sale sale) {
+    if (sale.architectId != null &&
+        sale.architectCommissionAmount > 0 &&
+        sale.documentType == SalesDocumentType.invoice &&
+        sale.status != SaleStatus.cancelled) {
+      final exists = commissions.any((c) =>
+          c.saleInvoiceId == sale.id ||
+          (sale.invoiceNumber.isNotEmpty && c.saleInvoiceNumber == sale.invoiceNumber));
+      if (!exists) {
+        final architect = architects.where((a) => a.id == sale.architectId).firstOrNull;
+        if (architect != null) {
+          final saleVal = sale.taxableAmount > 0 ? sale.taxableAmount : sale.totalAmount;
+          final rate = architect.defaultCommissionRate > 0
+              ? architect.defaultCommissionRate
+              : (saleVal > 0 ? (sale.architectCommissionAmount / saleVal * 100) : 0.0);
+          final comm = ArchitectCommission(
+            id: IdGenerator.generateId('COM'),
+            commissionNumber: IdGenerator.generateDocNumber('COM', ++_commissionCounter),
+            architectId: architect.id,
+            architectName: architect.name,
+            saleInvoiceId: sale.id,
+            saleInvoiceNumber: sale.invoiceNumber,
+            projectId: sale.projectId,
+            projectName: sale.projectName,
+            saleAmount: saleVal,
+            commissionRate: rate,
+            commissionAmount: sale.architectCommissionAmount,
+            status: CommissionStatus.generated,
+            generatedDate: DateTime.now(),
+          );
+          commissions.insert(0, comm);
+
+          final archIndex = architects.indexWhere((a) => a.id == architect.id);
+          if (archIndex != -1) {
+            architects[archIndex] = architects[archIndex].copyWith(
+              totalCommissionEarned: architects[archIndex].totalCommissionEarned + sale.architectCommissionAmount,
+              pendingCommission: architects[archIndex].pendingCommission + sale.architectCommissionAmount,
+            );
+          }
+        }
+      }
+    }
   }
 
   // --- 6. DIRECT SALE (IMMEDIATE COUNTER SALE) ---
   void createSale(Sale sale) {
     sales.insert(0, sale);
+    _applySaleToProject(sale);
+    _generateCommissionForSale(sale);
     notifyListeners();
   }
 
@@ -3609,13 +4064,14 @@ class MockDatabaseService extends ChangeNotifier {
     payments.insert(0, payment);
 
     // 1. Update Party Balance
+    final totalDeduction = payment.amount + payment.discount;
     switch (payment.paymentType) {
       case PaymentType.customerPayment:
         final cIndex = customers.indexWhere((c) => c.id == payment.partyId);
         if (cIndex != -1) {
           final c = customers[cIndex];
           customers[cIndex] = c.copyWith(
-            outstandingAmount: (c.outstandingAmount - payment.amount).clamp(0.0, double.infinity),
+            outstandingAmount: (c.outstandingAmount - totalDeduction).clamp(0.0, double.infinity),
           );
         }
         break;
@@ -3624,7 +4080,7 @@ class MockDatabaseService extends ChangeNotifier {
         if (dIndex != -1) {
           final d = dealers[dIndex];
           dealers[dIndex] = d.copyWith(
-            outstandingAmount: (d.outstandingAmount - payment.amount).clamp(0.0, double.infinity),
+            outstandingAmount: (d.outstandingAmount - totalDeduction).clamp(0.0, double.infinity),
           );
         }
         break;
@@ -3633,7 +4089,7 @@ class MockDatabaseService extends ChangeNotifier {
         if (vIndex != -1) {
           final v = vendors[vIndex];
           vendors[vIndex] = v.copyWith(
-            outstandingBalance: (v.outstandingBalance - payment.amount).clamp(0.0, double.infinity),
+            outstandingBalance: (v.outstandingBalance - totalDeduction).clamp(0.0, double.infinity),
           );
         }
         break;
@@ -3642,12 +4098,13 @@ class MockDatabaseService extends ChangeNotifier {
     }
 
     // 2. Reconcile Linked Invoice or Document
-    if (payment.referenceDocumentId != null) {
+    if (payment.referenceDocumentId != null && payment.referenceDocumentId!.isNotEmpty) {
       final sIndex = sales.indexWhere((s) => s.id == payment.referenceDocumentId);
       if (sIndex != -1) {
         final s = sales[sIndex];
         final newPaid = s.paidAmount + payment.amount;
-        final newPending = (s.totalAmount - newPaid).clamp(0.0, double.infinity);
+        final newDiscount = s.discountAmount + payment.discount;
+        final newPending = (s.totalAmount - newPaid - newDiscount).clamp(0.0, double.infinity);
         final newStatus = newPending <= 0.01 ? SaleStatus.paid : SaleStatus.partialPaid;
         final updatedLogs = [
           DocumentActivityLog(
@@ -3655,7 +4112,7 @@ class MockDatabaseService extends ChangeNotifier {
             action: payment.isFullPayment ? 'FULL PAYMENT RECEIVED' : 'PARTIAL PAYMENT RECEIVED',
             performedBy: currentUser.name,
             timestamp: DateTime.now(),
-            details: 'Recorded ${payment.entryModeLabel} of ${Formatters.formatCurrency(payment.amount)} via ${payment.paymentMode.name.toUpperCase()}. New Balance: ${Formatters.formatCurrency(newPending)}',
+            details: 'Recorded ${payment.entryModeLabel} of ${Formatters.formatCurrency(payment.amount)}${payment.discount > 0 ? " (Discount: ${Formatters.formatCurrency(payment.discount)})" : ""} via ${payment.paymentMode.name.toUpperCase()}. New Balance: ${Formatters.formatCurrency(newPending)}',
             statusBefore: s.status.name,
             statusAfter: newStatus.name,
           ),
@@ -3663,6 +4120,7 @@ class MockDatabaseService extends ChangeNotifier {
         ];
         sales[sIndex] = s.copyWith(
           paidAmount: newPaid,
+          discountAmount: newDiscount,
           pendingAmount: newPending,
           status: newStatus,
           linkedPaymentIds: [...s.linkedPaymentIds, payment.id],
@@ -3674,13 +4132,73 @@ class MockDatabaseService extends ChangeNotifier {
       if (pIndex != -1) {
         final p = purchases[pIndex];
         final newPaid = p.paidAmount + payment.amount;
-        final newPending = (p.totalAmount - newPaid).clamp(0.0, double.infinity);
+        final newDiscount = p.discountAmount + payment.discount;
+        final newPending = (p.totalAmount - newPaid - newDiscount).clamp(0.0, double.infinity);
         final newStatus = newPending <= 0.01 ? PurchaseStatus.paid : PurchaseStatus.partialPaid;
         purchases[pIndex] = p.copyWith(
           paidAmount: newPaid,
+          discountAmount: newDiscount,
           pendingAmount: newPending,
           status: newStatus,
         );
+      }
+    } else {
+      // FIFO auto-reconciliation
+      if (payment.paymentType == PaymentType.customerPayment || payment.paymentType == PaymentType.dealerPayment) {
+        final unpaidSales = sales
+            .where((s) => s.partyId == payment.partyId && s.pendingAmount > 0)
+            .toList()
+          ..sort((a, b) => a.saleDate.compareTo(b.saleDate));
+        double remAmt = payment.amount;
+        double remDisc = payment.discount;
+        for (final s in unpaidSales) {
+          if (remAmt <= 0 && remDisc <= 0) break;
+          final sIndex = sales.indexWhere((item) => item.id == s.id);
+          if (sIndex != -1) {
+            final cur = sales[sIndex];
+            final applyDisc = remDisc.clamp(0.0, cur.pendingAmount);
+            final applyAmt = remAmt.clamp(0.0, cur.pendingAmount - applyDisc);
+            final newPaid = cur.paidAmount + applyAmt;
+            final newDisc = cur.discountAmount + applyDisc;
+            final newPending = (cur.totalAmount - newPaid - newDisc).clamp(0.0, double.infinity);
+            sales[sIndex] = cur.copyWith(
+              paidAmount: newPaid,
+              discountAmount: newDisc,
+              pendingAmount: newPending,
+              status: newPending <= 0.01 ? SaleStatus.paid : SaleStatus.partialPaid,
+              linkedPaymentIds: [...cur.linkedPaymentIds, payment.id],
+            );
+            remAmt -= applyAmt;
+            remDisc -= applyDisc;
+          }
+        }
+      } else if (payment.paymentType == PaymentType.vendorPayment) {
+        final unpaidPurchases = purchases
+            .where((p) => p.vendorId == payment.partyId && p.pendingAmount > 0 && p.status != PurchaseStatus.cancelled)
+            .toList()
+          ..sort((a, b) => a.purchaseDate.compareTo(b.purchaseDate));
+        double remAmt = payment.amount;
+        double remDisc = payment.discount;
+        for (final p in unpaidPurchases) {
+          if (remAmt <= 0 && remDisc <= 0) break;
+          final pIndex = purchases.indexWhere((item) => item.id == p.id);
+          if (pIndex != -1) {
+            final cur = purchases[pIndex];
+            final applyDisc = remDisc.clamp(0.0, cur.pendingAmount);
+            final applyAmt = remAmt.clamp(0.0, cur.pendingAmount - applyDisc);
+            final newPaid = cur.paidAmount + applyAmt;
+            final newDisc = cur.discountAmount + applyDisc;
+            final newPending = (cur.totalAmount - newPaid - newDisc).clamp(0.0, double.infinity);
+            purchases[pIndex] = cur.copyWith(
+              paidAmount: newPaid,
+              discountAmount: newDisc,
+              pendingAmount: newPending,
+              status: newPending <= 0.01 ? PurchaseStatus.paid : PurchaseStatus.partialPaid,
+            );
+            remAmt -= applyAmt;
+            remDisc -= applyDisc;
+          }
+        }
       }
     }
 
@@ -3801,6 +4319,43 @@ class MockDatabaseService extends ChangeNotifier {
 
   void deleteExpense(String id) {
     expenses.removeWhere((e) => e.id == id);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // BILL OF MATERIALS (BOM) MANAGEMENT
+  // -------------------------------------------------------------
+  BillOfMaterial? getBomForProduct(String finishedProductId) {
+    try {
+      return boms.firstWhere((b) => b.finishedProductId == finishedProductId && b.isActive);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void addBom(BillOfMaterial bom) {
+    // Deactivate previous active BOMs for this product
+    for (var i = 0; i < boms.length; i++) {
+      if (boms[i].finishedProductId == bom.finishedProductId) {
+        boms[i] = boms[i].copyWith(isActive: false);
+      }
+    }
+    boms.insert(0, bom);
+    notifyListeners();
+  }
+
+  void updateBom(BillOfMaterial bom) {
+    final index = boms.indexWhere((b) => b.id == bom.id);
+    if (index != -1) {
+      boms[index] = bom;
+      notifyListeners();
+    } else {
+      addBom(bom);
+    }
+  }
+
+  void deleteBom(String id) {
+    boms.removeWhere((b) => b.id == id);
     notifyListeners();
   }
 
@@ -4030,6 +4585,8 @@ class MockDatabaseService extends ChangeNotifier {
 
   bool _isLoadingProjects = false;
   bool get isLoadingProjects => _isLoadingProjects;
+  bool _hasLoadedProjects = false;
+  bool get hasLoadedProjects => _hasLoadedProjects;
 
   bool _isLoadingVendors = false;
   bool get isLoadingVendors => _isLoadingVendors;
@@ -4054,6 +4611,7 @@ class MockDatabaseService extends ChangeNotifier {
         loadCustomers(forceRefresh: forceRefresh),
         loadDealers(forceRefresh: forceRefresh),
         loadArchitects(forceRefresh: forceRefresh),
+        loadProjects(forceRefresh: forceRefresh),
         loadStockMovements(forceRefresh: forceRefresh),
         loadStockAdjustments(forceRefresh: forceRefresh),
         loadLowStockAlerts(forceRefresh: forceRefresh),
@@ -4292,9 +4850,133 @@ class MockDatabaseService extends ChangeNotifier {
     return saved;
   }
 
+  Future<MeasurementUnit> updateUnitAsync({required String id, required String name, required String symbol}) async {
+    final updated = await _categoriesUnitsApi.updateUnit(id: id, name: name, symbol: symbol);
+    final idx = units.indexWhere((u) => u.id == id);
+    if (idx != -1) {
+      units[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
   Future<void> deleteUnitAsync(String id) async {
     await _categoriesUnitsApi.deleteUnit(id);
     units.removeWhere((u) => u.id == id);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Expense Categories Master CRUD
+  // -------------------------------------------------------------
+  Future<ExpenseCategoryMasterItem> addExpenseCategoryAsync({
+    required String name,
+    required String code,
+    required String description,
+  }) async {
+    final newId = 'EXP-CAT-${expenseCategoryMasterList.length + 1}';
+    final item = ExpenseCategoryMasterItem(
+      id: newId,
+      name: name,
+      code: code.trim().toUpperCase(),
+      description: description,
+      isActive: true,
+    );
+    expenseCategoryMasterList.insert(0, item);
+    notifyListeners();
+    return item;
+  }
+
+  Future<ExpenseCategoryMasterItem> updateExpenseCategoryAsync({
+    required String id,
+    required String name,
+    required String code,
+    required String description,
+  }) async {
+    final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
+    if (idx != -1) {
+      expenseCategoryMasterList[idx] = expenseCategoryMasterList[idx].copyWith(
+        name: name,
+        code: code.trim().toUpperCase(),
+        description: description,
+      );
+      notifyListeners();
+      return expenseCategoryMasterList[idx];
+    }
+    throw Exception('Expense category not found');
+  }
+
+  Future<void> toggleExpenseCategoryStatusAsync(String id) async {
+    final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
+    if (idx != -1) {
+      expenseCategoryMasterList[idx] = expenseCategoryMasterList[idx].copyWith(
+        isActive: !expenseCategoryMasterList[idx].isActive,
+      );
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteExpenseCategoryAsync(String id) async {
+    expenseCategoryMasterList.removeWhere((c) => c.id == id);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Payment Modes Master CRUD
+  // -------------------------------------------------------------
+  Future<PaymentModeMasterItem> addPaymentModeAsync({
+    required String name,
+    required String code,
+    required String type,
+    required String description,
+  }) async {
+    final newId = 'PM-${paymentModeMasterList.length + 1}';
+    final item = PaymentModeMasterItem(
+      id: newId,
+      name: name,
+      code: code.trim().toUpperCase(),
+      type: type,
+      description: description,
+      isActive: true,
+    );
+    paymentModeMasterList.insert(0, item);
+    notifyListeners();
+    return item;
+  }
+
+  Future<PaymentModeMasterItem> updatePaymentModeAsync({
+    required String id,
+    required String name,
+    required String code,
+    required String type,
+    required String description,
+  }) async {
+    final idx = paymentModeMasterList.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      paymentModeMasterList[idx] = paymentModeMasterList[idx].copyWith(
+        name: name,
+        code: code.trim().toUpperCase(),
+        type: type,
+        description: description,
+      );
+      notifyListeners();
+      return paymentModeMasterList[idx];
+    }
+    throw Exception('Payment mode not found');
+  }
+
+  Future<void> togglePaymentModeStatusAsync(String id) async {
+    final idx = paymentModeMasterList.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      paymentModeMasterList[idx] = paymentModeMasterList[idx].copyWith(
+        isActive: !paymentModeMasterList[idx].isActive,
+      );
+      notifyListeners();
+    }
+  }
+
+  Future<void> deletePaymentModeAsync(String id) async {
+    paymentModeMasterList.removeWhere((p) => p.id == id);
     notifyListeners();
   }
 
@@ -4313,19 +4995,25 @@ class MockDatabaseService extends ChangeNotifier {
 
   Future<RawMaterial> addRawMaterialAsync(RawMaterial rm) async {
     final saved = await _rawMaterialsApi.createRawMaterial(rm);
-    rawMaterials.insert(0, saved);
+    final effectiveRm = (saved.currentStock == 0 && rm.currentStock > 0)
+        ? saved.copyWith(currentStock: rm.currentStock, openingStock: rm.openingStock)
+        : saved;
+    rawMaterials.insert(0, effectiveRm);
     notifyListeners();
-    return saved;
+    return effectiveRm;
   }
 
   Future<RawMaterial> updateRawMaterialAsync(RawMaterial rm) async {
     final updated = await _rawMaterialsApi.updateRawMaterial(rm);
+    final effectiveRm = (updated.currentStock == 0 && rm.currentStock > 0)
+        ? updated.copyWith(currentStock: rm.currentStock)
+        : updated;
     final idx = rawMaterials.indexWhere((item) => item.id == rm.id);
     if (idx != -1) {
-      rawMaterials[idx] = updated;
+      rawMaterials[idx] = effectiveRm;
       notifyListeners();
     }
-    return updated;
+    return effectiveRm;
   }
 
   Future<void> deleteRawMaterialAsync(String id) async {
@@ -4352,19 +5040,25 @@ class MockDatabaseService extends ChangeNotifier {
 
   Future<FinishedProduct> addFinishedProductAsync(FinishedProduct fp) async {
     final saved = await _finishedProductsApi.createFinishedProduct(fp);
-    finishedProducts.insert(0, saved);
+    final effectiveFp = (saved.currentStock == 0 && fp.currentStock > 0)
+        ? saved.copyWith(currentStock: fp.currentStock, openingStock: fp.openingStock)
+        : saved;
+    finishedProducts.insert(0, effectiveFp);
     notifyListeners();
-    return saved;
+    return effectiveFp;
   }
 
   Future<FinishedProduct> updateFinishedProductAsync(FinishedProduct fp) async {
     final updated = await _finishedProductsApi.updateFinishedProduct(fp);
+    final effectiveFp = (updated.currentStock == 0 && fp.currentStock > 0)
+        ? updated.copyWith(currentStock: fp.currentStock)
+        : updated;
     final idx = finishedProducts.indexWhere((item) => item.id == fp.id);
     if (idx != -1) {
-      finishedProducts[idx] = updated;
+      finishedProducts[idx] = effectiveFp;
       notifyListeners();
     }
-    return updated;
+    return effectiveFp;
   }
 
   Future<void> deleteFinishedProductAsync(String id) async {
@@ -4829,13 +5523,13 @@ class MockDatabaseService extends ChangeNotifier {
 
   Future<void> loadProjects({bool forceRefresh = false, String? search, String? status}) async {
     if (_isLoadingProjects && !forceRefresh) return;
+    if (_hasLoadedProjects && !forceRefresh && search == null && status == null) return;
     _isLoadingProjects = true;
     try {
       final remote = await _projectsApi.getProjects(search: search, status: status);
-      if (remote.isNotEmpty || forceRefresh) {
-        projects = remote;
-        notifyListeners();
-      }
+      projects = remote;
+      _hasLoadedProjects = true;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadProjects fallback: $e');
     } finally {
@@ -4847,6 +5541,7 @@ class MockDatabaseService extends ChangeNotifier {
     try {
       final saved = await _projectsApi.createProject(project);
       projects.insert(0, saved);
+      _hasLoadedProjects = true;
       notifyListeners();
       return saved;
     } catch (e) {
@@ -4926,8 +5621,21 @@ class MockDatabaseService extends ChangeNotifier {
   int get ordersReadyForDispatchCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.readyForDispatch).length;
   int get ordersPartiallyDeliveredCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.partiallyDelivered).length;
 
-  double get totalInvoicedRevenue => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount);
-  double get totalSalesReturnsAmount => approvedSalesReturns.fold(0.0, (sum, s) => sum + s.totalAmount);
+  double get totalInvoicedRevenue => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount.abs());
+  double get totalSalesReturnsAmount {
+    if (salesDashboardMetrics.containsKey('totalSalesReturnsAmount')) {
+      final v = salesDashboardMetrics['totalSalesReturnsAmount'];
+      if (v != null) {
+        final val = (v as num).toDouble().abs();
+        if (val > 0) return val;
+      }
+    }
+    final approved = approvedSalesReturns.fold(0.0, (sum, s) => sum + s.totalAmount.abs());
+    if (approved > 0) return approved;
+    return salesReturns
+        .where((s) => s.salesReturnStatus != SalesReturnStatus.rejected)
+        .fold(0.0, (sum, s) => sum + s.totalAmount.abs());
+  }
   double get netSalesRevenue => (totalSalesAmount - totalSalesReturnsAmount).clamp(0.0, double.infinity);
   double get salesReturnRatePercentage => totalSalesAmount > 0 ? (totalSalesReturnsAmount / totalSalesAmount) * 100 : 0.0;
   int get pendingRefundsCount => salesReturns.where((r) => r.refundStatus == RefundStatus.pending).length;
@@ -4935,8 +5643,8 @@ class MockDatabaseService extends ChangeNotifier {
 
   double get totalSalesAmount => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount);
   double get totalPurchaseAmount => purchases.fold(0.0, (sum, p) => sum + p.totalAmount);
-  double get rawMaterialStockValue => rawMaterials.fold(0.0, (sum, rm) => sum + rm.totalValuation);
-  double get finishedProductStockValue => finishedProducts.fold(0.0, (sum, fp) => sum + fp.totalValuation);
+  double get rawMaterialStockValue => rawMaterials.where((rm) => !rm.isDeleted).fold(0.0, (sum, rm) => sum + rm.totalValuation);
+  double get finishedProductStockValue => finishedProducts.where((fp) => !fp.isDeleted).fold(0.0, (sum, fp) => sum + fp.totalValuation);
   double get totalStockValue => rawMaterialStockValue + finishedProductStockValue;
 
   double get todaySalesAmount {
@@ -4946,12 +5654,56 @@ class MockDatabaseService extends ChangeNotifier {
         .fold(0.0, (sum, s) => sum + s.totalAmount);
   }
 
-  double get pendingCustomerPayments => customers.fold(0.0, (sum, c) => sum + c.outstandingAmount);
-  double get pendingVendorPayments => vendors.where((v) => !v.isDeleted).fold(0.0, (sum, v) => sum + v.outstandingBalance);
-  double get pendingCommissionAmount => architects.fold(0.0, (sum, a) => sum + a.pendingCommission + a.approvedCommission);
+  double get pendingCustomerPayments {
+    final fromCustomers = customers.where((c) => !c.isDeleted).fold(0.0, (sum, c) => sum + c.outstandingAmount);
+    final fromInvoices = salesInvoices.where((s) => s.status != SaleStatus.cancelled).fold(0.0, (sum, s) => sum + s.pendingAmount);
+    if (fromCustomers > 0 && fromCustomers >= fromInvoices) {
+      return fromCustomers;
+    }
+    if (fromInvoices > 0) {
+      return fromInvoices;
+    }
+    return fromCustomers;
+  }
 
-  List<RawMaterial> get lowStockRawMaterials => rawMaterials.where((rm) => rm.isLowStock).toList();
-  List<FinishedProduct> get lowStockFinishedProducts => finishedProducts.where((fp) => fp.isLowStock).toList();
+  double get pendingVendorPayments {
+    final fromVendors = vendors.where((v) => !v.isDeleted).fold(0.0, (sum, v) => sum + v.outstandingBalance);
+    final fromPurchases = purchases.where((p) => p.status != PurchaseStatus.cancelled).fold(0.0, (sum, p) => sum + p.pendingAmount);
+    if (fromVendors > 0 && fromVendors >= fromPurchases) {
+      return fromVendors;
+    }
+    if (fromPurchases > 0) {
+      return fromPurchases;
+    }
+    return fromVendors;
+  }
+
+  double get pendingCommissionAmount {
+    // 1. Calculate from active commission vouchers (generated or approved)
+    final fromCommissions = commissions
+        .where((c) => c.status == CommissionStatus.generated || c.status == CommissionStatus.approved)
+        .fold(0.0, (sum, c) => sum + c.commissionAmount);
+
+    // 2. Calculate from architect entity dues
+    final fromArchitects = architects
+        .where((a) => !a.isDeleted)
+        .fold(0.0, (sum, a) => sum + a.pendingCommission + a.approvedCommission);
+
+    if (fromCommissions > 0 && fromCommissions >= fromArchitects) {
+      return fromCommissions;
+    }
+    if (fromArchitects > 0) {
+      return fromArchitects;
+    }
+
+    // 3. Fallback to active sales invoices with architect commission
+    return salesInvoices
+        .where((s) => s.architectId != null && s.architectCommissionAmount > 0 && s.status != SaleStatus.cancelled)
+        .fold(0.0, (sum, s) => sum + s.architectCommissionAmount);
+  }
+
+  List<RawMaterial> get lowStockRawMaterials => rawMaterials.where((rm) => !rm.isDeleted && rm.isLowStock).toList();
+  List<FinishedProduct> get lowStockFinishedProducts => finishedProducts.where((fp) => !fp.isDeleted && fp.isLowStock).toList();
   int get totalLowStockCount => lowStockRawMaterials.length + lowStockFinishedProducts.length;
 
   int get nextPurchaseNumber => ++_purchaseCounter;
@@ -5793,7 +6545,12 @@ class MockDatabaseService extends ChangeNotifier {
         notes: notes,
       );
       sales.insert(0, created);
-      await loadSalesDeliveries(forceRefresh: true);
+      _applySaleToProject(created);
+      _generateCommissionForSale(created);
+      await Future.wait([
+        loadSalesDeliveries(forceRefresh: true),
+        loadProjects(forceRefresh: true),
+      ]);
       notifyListeners();
       return created;
     } catch (e) {
@@ -5816,9 +6573,12 @@ class MockDatabaseService extends ChangeNotifier {
         notes: sale.notes,
       );
       sales.insert(0, created);
+      _applySaleToProject(created);
+      _generateCommissionForSale(created);
       await Future.wait([
         loadFinishedProducts(forceRefresh: true),
         loadStockMovements(forceRefresh: true),
+        loadProjects(forceRefresh: true),
       ]);
       notifyListeners();
       return created;
@@ -6169,6 +6929,7 @@ class MockDatabaseService extends ChangeNotifier {
         'referenceDocumentId': payment.referenceDocumentId,
         'referenceDocumentNumber': payment.referenceDocumentNumber,
         'amount': payment.amount,
+        'discount': payment.discount,
         'paymentMode': payment.paymentMode.name,
         'paymentDate': payment.paymentDate.toIso8601String(),
         'transactionReference': payment.transactionReference,
@@ -6227,6 +6988,26 @@ class MockDatabaseService extends ChangeNotifier {
       return updated;
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] approveCommissionAsync remote failed: $e');
+      approveCommission(commissionId);
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) return commissions[idx];
+      rethrow;
+    }
+  }
+
+  Future<ArchitectCommission> rejectCommissionAsync(String commissionId, {String? reason}) async {
+    try {
+      final updated = await _paymentsApi.rejectCommission(commissionId, reason: reason);
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) commissions[idx] = updated;
+      await loadArchitects(forceRefresh: true);
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] rejectCommissionAsync remote failed: $e');
+      rejectCommission(commissionId, reason);
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) return commissions[idx];
       rethrow;
     }
   }
@@ -6256,7 +7037,12 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return result;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] disburseCommissionAsync remote failed: $e');
+      if (kDebugMode) debugPrint('[MockDatabaseService] disburseCommissionAsync remote failed, fallback to local: $e');
+      disburseCommission(commissionId, paymentMode, transactionRef ?? 'TXN-DISB-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}');
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) {
+        return {'commission': commissions[idx], 'payment': payments.first};
+      }
       rethrow;
     }
   }

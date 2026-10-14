@@ -65,7 +65,15 @@ export class UpdateFinishedProductDto {
 
   @IsString()
   @IsOptional()
+  itemCode?: string;
+
+  @IsString()
+  @IsOptional()
   categoryId?: string;
+
+  @IsString()
+  @IsOptional()
+  categoryName?: string;
 
   @IsString()
   @IsOptional()
@@ -73,7 +81,21 @@ export class UpdateFinishedProductDto {
 
   @IsString()
   @IsOptional()
+  unit?: string;
+
+  @IsString()
+  @IsOptional()
   hsnSacCode?: string;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  openingStock?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  currentStock?: number;
 
   @IsNumber()
   @Min(0)

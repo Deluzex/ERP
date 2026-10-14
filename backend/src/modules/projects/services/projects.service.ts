@@ -91,8 +91,16 @@ export class ProjectsService {
         p.actual_completion_date,
         p.status,
         p.budget_amount::float as budget_amount,
-        p.total_sales_amount::float as total_sales_amount,
-        p.total_commission_amount::float as total_commission_amount,
+        COALESCE(
+          (SELECT SUM(s.total_amount) FROM sales s WHERE s.project_id = p.id AND s.document_type = 'invoice' AND s.status != 'cancelled'),
+          p.total_sales_amount,
+          0
+        )::float as total_sales_amount,
+        COALESCE(
+          (SELECT SUM(s.architect_commission_amount) FROM sales s WHERE s.project_id = p.id AND s.document_type = 'invoice' AND s.status != 'cancelled'),
+          p.total_commission_amount,
+          0
+        )::float as total_commission_amount,
         p.notes,
         p.created_at,
         p.updated_at
@@ -140,8 +148,16 @@ export class ProjectsService {
         p.actual_completion_date,
         p.status,
         p.budget_amount::float as budget_amount,
-        p.total_sales_amount::float as total_sales_amount,
-        p.total_commission_amount::float as total_commission_amount,
+        COALESCE(
+          (SELECT SUM(s.total_amount) FROM sales s WHERE s.project_id = p.id AND s.document_type = 'invoice' AND s.status != 'cancelled'),
+          p.total_sales_amount,
+          0
+        )::float as total_sales_amount,
+        COALESCE(
+          (SELECT SUM(s.architect_commission_amount) FROM sales s WHERE s.project_id = p.id AND s.document_type = 'invoice' AND s.status != 'cancelled'),
+          p.total_commission_amount,
+          0
+        )::float as total_commission_amount,
         p.notes,
         p.created_at,
         p.updated_at

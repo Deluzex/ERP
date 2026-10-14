@@ -5,8 +5,8 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/models/production_model.dart';
 import '../../../core/models/purchase_model.dart';
-import '../../../core/models/stock_movement_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
@@ -24,6 +24,8 @@ class InventoryRoleDashboard extends ConsumerWidget {
     final db = ref.watch(databaseServiceProvider);
     final lowStockRM = db.lowStockRawMaterials;
     final lowStockFP = db.lowStockFinishedProducts;
+    final activeRawMaterials = db.rawMaterials.where((r) => !r.isDeleted).toList();
+    final activeFinishedProducts = db.finishedProducts.where((p) => !p.isDeleted).toList();
     final recentMovements = db.stockMovements.take(6).toList();
 
     return SingleChildScrollView(
@@ -93,14 +95,14 @@ class InventoryRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Raw Material Valuation',
               value: Formatters.formatCurrency(db.rawMaterialStockValue),
-              subtitle: '${db.rawMaterials.length} Unique items',
+              subtitle: '${activeRawMaterials.length} Unique items',
               icon: Icons.view_in_ar_rounded,
               color: Colors.blue,
             ),
             _buildMetricCard(
               title: 'Finished Goods Valuation',
               value: Formatters.formatCurrency(db.finishedProductStockValue),
-              subtitle: '${db.finishedProducts.length} Product SKUs',
+              subtitle: '${activeFinishedProducts.length} Product SKUs',
               icon: Icons.inventory_outlined,
               color: Colors.teal,
             ),
@@ -340,12 +342,12 @@ class PurchaseRoleDashboard extends ConsumerWidget {
                   runSpacing: 8,
                   children: [
                     ErpButton(
-                      text: 'Create Purchase Order',
+                      text: 'Create Direct Purchase',
                       icon: Icons.add_shopping_cart,
                       onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
                     ),
                     ErpButton(
-                      text: 'Purchase List',
+                      text: 'Purchase Invoices',
                       icon: Icons.list_alt_rounded,
                       isOutlined: true,
                       onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
@@ -374,7 +376,7 @@ class PurchaseRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Total Purchases Placed',
               value: Formatters.formatCurrency(db.totalPurchaseAmount),
-              subtitle: '${db.purchases.length} Purchase Orders',
+              subtitle: '${db.purchases.length} Purchase Invoices',
               icon: Icons.shopping_bag_outlined,
               color: Colors.purple,
             ),
@@ -395,7 +397,7 @@ class PurchaseRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Vendor Payables Due',
               value: Formatters.formatCurrency(db.pendingVendorPayments),
-              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} Vendors pending payment',
+              subtitle: '${db.vendors.where((v) => !v.isDeleted && v.outstandingBalance > 0).length} Vendors pending payment',
               icon: Icons.account_balance_outlined,
               color: Colors.red,
             ),
@@ -403,12 +405,12 @@ class PurchaseRoleDashboard extends ConsumerWidget {
           const SizedBox(height: 28),
 
           // Recent Purchase Orders Table
-          Text('Recent Purchase Orders', style: AppTextStyles.h2),
+          Text('Recent Purchase Invoices', style: AppTextStyles.h2),
           const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
-              ErpColumn(title: 'PO Number'),
-              ErpColumn(title: 'PO Date'),
+              ErpColumn(title: 'Invoice Number'),
+              ErpColumn(title: 'Invoice Date'),
               ErpColumn(title: 'Vendor Name'),
               ErpColumn(title: 'Project Tag'),
               ErpColumn(title: 'Items Count', isNumeric: true),
@@ -426,7 +428,7 @@ class PurchaseRoleDashboard extends ConsumerWidget {
                 Text(p.projectName ?? 'Warehouse Stock', style: AppTextStyles.bodySmall),
                 Text('${p.items.length}', style: AppTextStyles.bodySmall),
                 Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
-                ErpStatusBadge.info(p.statusLabel),
+                _buildPurchaseStatusBadge(p.status, p.statusLabel),
               ];
             }).toList(),
           ),
@@ -434,19 +436,51 @@ class PurchaseRoleDashboard extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _buildPurchaseStatusBadge(PurchaseStatus status, String label) {
+    switch (status) {
+      case PurchaseStatus.paid:
+        return ErpStatusBadge.success(label);
+      case PurchaseStatus.partialPaid:
+        return ErpStatusBadge.warning(label);
+      case PurchaseStatus.saved:
+        return ErpStatusBadge.info(label);
+      case PurchaseStatus.draft:
+        return ErpStatusBadge.neutral(label);
+      case PurchaseStatus.cancelled:
+        return ErpStatusBadge.danger(label);
+    }
+  }
 }
 
 // =====================================================================
 // 3. PRODUCTION ROLE DASHBOARD
 // =====================================================================
-class ProductionRoleDashboard extends ConsumerWidget {
+class ProductionRoleDashboard extends ConsumerStatefulWidget {
   const ProductionRoleDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductionRoleDashboard> createState() => _ProductionRoleDashboardState();
+}
+
+class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final db = ref.read(databaseServiceProvider);
+      db.loadProductionOrders(forceRefresh: true);
+      db.loadRawMaterials(forceRefresh: true);
+      db.loadFinishedProducts(forceRefresh: true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
-    final pendingOrders = db.productionOrders.where((po) => po.status.name == 'planned' || po.status.name == 'inProgress').toList();
-    final completedOrders = db.productionOrders.where((po) => po.status.name == 'completed').toList();
+    final activeOrders = db.productionOrders.where((po) => !po.isDeleted).toList();
+    final pendingOrders = activeOrders.where((po) => po.status.name == 'planned' || po.status.name == 'inProgress').toList();
+    final completedOrders = activeOrders.where((po) => po.status.name == 'completed').toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -481,12 +515,12 @@ class ProductionRoleDashboard extends ConsumerWidget {
                   runSpacing: 8,
                   children: [
                     ErpButton(
-                      text: 'Create Work Order',
+                      text: 'Create Production Order',
                       icon: Icons.add_circle_outline,
                       onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
                     ),
                     ErpButton(
-                      text: 'Production Orders List',
+                      text: 'Production Orders',
                       icon: Icons.precision_manufacturing_outlined,
                       isOutlined: true,
                       onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
@@ -507,8 +541,8 @@ class ProductionRoleDashboard extends ConsumerWidget {
           // 4 Key Metrics
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
-              title: 'Total Work Orders',
-              value: '${db.productionOrders.length}',
+              title: 'Total Production Orders',
+              value: '${activeOrders.length}',
               subtitle: 'All-time production jobs',
               icon: Icons.precision_manufacturing_outlined,
               color: Colors.indigo,
@@ -542,7 +576,7 @@ class ProductionRoleDashboard extends ConsumerWidget {
           const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
-              ErpColumn(title: 'Work Order No'),
+              ErpColumn(title: 'Order No'),
               ErpColumn(title: 'Start Date'),
               ErpColumn(title: 'Product to Produce'),
               ErpColumn(title: 'Target Qty', isNumeric: true),
@@ -550,7 +584,7 @@ class ProductionRoleDashboard extends ConsumerWidget {
               ErpColumn(title: 'Estimated Cost (₹)', isNumeric: true),
               ErpColumn(title: 'Status'),
             ],
-            rows: db.productionOrders.take(7).map((po) {
+            rows: activeOrders.take(7).map((po) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(po.id, 'production', ErpNavSection.productionOrders),
@@ -561,13 +595,26 @@ class ProductionRoleDashboard extends ConsumerWidget {
                 Text('${po.plannedQuantity} ${po.unit}', style: AppTextStyles.bodySmall),
                 Text(po.projectName ?? 'General Stock', style: AppTextStyles.bodySmall),
                 Text(Formatters.formatCurrency(po.totalProductionCost), style: AppTextStyles.bodyBold),
-                ErpStatusBadge.info(po.statusLabel),
+                _buildProductionStatusBadge(po.status, po.statusLabel),
               ];
             }).toList(),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildProductionStatusBadge(ProductionStatus status, String label) {
+    switch (status) {
+      case ProductionStatus.planned:
+        return ErpStatusBadge.warning('WAITING APPROVAL');
+      case ProductionStatus.inProgress:
+        return ErpStatusBadge.info(label);
+      case ProductionStatus.completed:
+        return ErpStatusBadge.success(label);
+      case ProductionStatus.cancelled:
+        return ErpStatusBadge.danger(label);
+    }
   }
 }
 
@@ -649,14 +696,14 @@ class AccountsPaymentRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Customer Receivables',
               value: Formatters.formatCurrency(db.pendingCustomerPayments),
-              subtitle: '${db.customers.where((c) => c.outstandingAmount > 0).length} Clients pending dues',
+              subtitle: '${db.customers.where((c) => !c.isDeleted && c.outstandingAmount > 0).length} Clients pending dues',
               icon: Icons.account_balance_wallet_outlined,
               color: Colors.teal,
             ),
             _buildMetricCard(
               title: 'Vendor Payables Due',
               value: Formatters.formatCurrency(db.pendingVendorPayments),
-              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} Suppliers awaiting payment',
+              subtitle: '${db.vendors.where((v) => !v.isDeleted && v.outstandingBalance > 0).length} Suppliers awaiting payment',
               icon: Icons.payment_outlined,
               color: Colors.red,
             ),
@@ -720,8 +767,10 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
-    final activeProjects = db.projects.where((p) => p.status.name == 'inProgress' || p.status.name == 'planning').toList();
-    final completedProjects = db.projects.where((p) => p.status.name == 'completed').toList();
+    final nonDeletedProjects = db.projects.where((p) => !p.isDeleted).toList();
+    final activeProjects = nonDeletedProjects.where((p) => p.status.name == 'inProgress' || p.status.name == 'planning' || p.status.name == 'active').toList();
+    final completedProjects = nonDeletedProjects.where((p) => p.status.name == 'completed').toList();
+    final activeArchitects = db.architects.where((a) => !a.isDeleted).toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -789,8 +838,8 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
               title: 'Total Projects',
-              value: '${db.projects.length}',
-              subtitle: Formatters.formatCurrency(db.projects.fold(0.0, (sum, p) => sum + p.totalSalesAmount)),
+              value: '${nonDeletedProjects.length}',
+              subtitle: Formatters.formatCurrency(nonDeletedProjects.fold(0.0, (sum, p) => sum + p.totalSalesAmount)),
               icon: Icons.apartment_rounded,
               color: Colors.deepPurple,
             ),
@@ -810,7 +859,7 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
             ),
             _buildMetricCard(
               title: 'Architect Partners',
-              value: '${db.architects.length}',
+              value: '${activeArchitects.length}',
               subtitle: 'Registered Specifiers',
               icon: Icons.architecture_rounded,
               color: Colors.purple,
@@ -830,7 +879,7 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
               ErpColumn(title: 'Billed (₹)', isNumeric: true),
               ErpColumn(title: 'Status'),
             ],
-            rows: db.projects.take(7).map((prj) {
+            rows: nonDeletedProjects.take(7).map((prj) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(prj.id, 'project', ErpNavSection.projectList),
@@ -853,12 +902,45 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
 // =====================================================================
 // 5.1. MASTERS ROLE DASHBOARD
 // =====================================================================
-class MastersRoleDashboard extends ConsumerWidget {
+class MastersRoleDashboard extends ConsumerStatefulWidget {
   const MastersRoleDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MastersRoleDashboard> createState() => _MastersRoleDashboardState();
+}
+
+class _MastersRoleDashboardState extends ConsumerState<MastersRoleDashboard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final db = ref.read(databaseServiceProvider);
+      db.loadProjects();
+      db.loadVendors();
+      db.loadArchitects();
+      db.loadCustomers();
+      db.loadDealers();
+      db.loadPurchases();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+
+    final activeCustomers = db.customers.where((c) => !c.isDeleted).toList();
+    final activeVendors = db.vendors.where((v) => !v.isDeleted).toList();
+    final activeDealers = db.dealers.where((d) => !d.isDeleted).toList();
+    final activeArchitects = db.architects.where((a) => !a.isDeleted).toList();
+    final activeProjects = db.projects.where((p) => !p.isDeleted).toList();
+    final activeRawMaterials = db.rawMaterials.where((r) => !r.isDeleted).toList();
+    final activeFinishedProducts = db.finishedProducts.where((p) => !p.isDeleted).toList();
+
+    // Dynamically calculate projects linked to architects
+    final linkedProjectsCount = activeProjects
+        .where((p) => p.architectId != null && p.architectId!.isNotEmpty)
+        .length;
+    final displayProjectsCount = linkedProjectsCount > 0 ? linkedProjectsCount : activeProjects.length;
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -878,29 +960,29 @@ class MastersRoleDashboard extends ConsumerWidget {
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
               title: 'Customers Master',
-              value: '${db.customers.length} Clients',
-              subtitle: '${db.customers.where((c) => c.outstandingAmount > 0).length} with active balances',
+              value: '${activeCustomers.length} Clients',
+              subtitle: '${activeCustomers.where((c) => c.outstandingAmount > 0).length} with active balances',
               icon: Icons.people_outline,
               color: Colors.blue,
             ),
             _buildMetricCard(
               title: 'Vendors Master',
-              value: '${db.vendors.length} Suppliers',
-              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} with active payables',
+              value: '${activeVendors.length} Suppliers',
+              subtitle: '${activeVendors.where((v) => v.outstandingBalance > 0).length} with active payables',
               icon: Icons.storefront_outlined,
               color: Colors.purple,
             ),
             _buildMetricCard(
               title: 'Dealers Master',
-              value: '${db.dealers.length} Retailers',
+              value: '${activeDealers.length} Retailers',
               subtitle: 'Active distribution network',
               icon: Icons.store_mall_directory_outlined,
               color: Colors.teal,
             ),
             _buildMetricCard(
               title: 'Architect Partners',
-              value: '${db.architects.length} Specifiers',
-              subtitle: '${db.projects.length} linked projects',
+              value: '${activeArchitects.length} Specifiers',
+              subtitle: '$displayProjectsCount linked projects',
               icon: Icons.architecture_rounded,
               color: Colors.deepPurple,
             ),
@@ -909,15 +991,15 @@ class MastersRoleDashboard extends ConsumerWidget {
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
               title: 'Raw Material Items',
-              value: '${db.rawMaterials.length} Items',
-              subtitle: '${db.lowStockRawMaterials.length} below buffer level',
+              value: '${activeRawMaterials.length} Items',
+              subtitle: '${activeRawMaterials.where((rm) => rm.isLowStock).length} below buffer level',
               icon: Icons.view_in_ar_outlined,
               color: Colors.indigo,
             ),
             _buildMetricCard(
               title: 'Finished Product SKUs',
-              value: '${db.finishedProducts.length} Products',
-              subtitle: '${db.lowStockFinishedProducts.length} below buffer level',
+              value: '${activeFinishedProducts.length} Products',
+              subtitle: '${activeFinishedProducts.where((fp) => fp.isLowStock).length} below buffer level',
               icon: Icons.inventory_2_outlined,
               color: Colors.green,
             ),
@@ -1000,8 +1082,8 @@ class MastersRoleDashboard extends ConsumerWidget {
                     onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProducts,
                   ),
                   _buildMasterShortcutCard(
-                    title: 'Categories & Units',
-                    subtitle: 'Tax rates & measurement symbols',
+                    title: 'Category Master',
+                    subtitle: 'Item, expense & payment categories',
                     icon: Icons.category_outlined,
                     color: Colors.amber.shade800,
                     onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.categoriesUnits,
@@ -1017,6 +1099,8 @@ class MastersRoleDashboard extends ConsumerWidget {
               );
             },
           ),
+          /*
+          // NOTE: Temporarily commented out pending final decision on removal
           const SizedBox(height: 28),
 
           // Architect & Partner Overview Table
@@ -1031,7 +1115,7 @@ class MastersRoleDashboard extends ConsumerWidget {
               ErpColumn(title: 'Approved Commission', isNumeric: true),
               ErpColumn(title: 'Commission Earned', isNumeric: true),
             ],
-            rows: db.architects.take(6).map((arc) {
+            rows: (activeArchitects.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt))).take(6).map((arc) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(arc.id, 'architect', ErpNavSection.architects),
@@ -1045,6 +1129,7 @@ class MastersRoleDashboard extends ConsumerWidget {
               ];
             }).toList(),
           ),
+          */
         ],
       ),
     );
@@ -1104,6 +1189,8 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseServiceProvider);
+
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
@@ -1118,16 +1205,58 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
+          // 4 Executive Audit KPI Metrics
+          _buildResponsiveMetricGrid(context, [
+            _buildMetricCard(
+              title: 'Total Stock Valuation',
+              value: Formatters.formatCurrency(db.totalStockValue),
+              subtitle: 'Raw Materials & Finished Goods',
+              icon: Icons.inventory_2_outlined,
+              color: Colors.blue,
+            ),
+            _buildMetricCard(
+              title: 'Gross Invoiced Revenue',
+              value: Formatters.formatCurrency(db.totalInvoicedRevenue),
+              subtitle: '${db.sales.length} Invoices Generated',
+              icon: Icons.point_of_sale_outlined,
+              color: Colors.green,
+            ),
+            _buildMetricCard(
+              title: 'Procurement Spending',
+              value: Formatters.formatCurrency(db.purchases.fold(0.0, (s, p) => s + p.totalAmount)),
+              subtitle: '${db.purchases.length} Purchase Orders',
+              icon: Icons.shopping_bag_outlined,
+              color: Colors.purple,
+            ),
+            _buildMetricCard(
+              title: 'Total Business Assets',
+              value: Formatters.formatCurrency(db.totalStockValue + db.pendingCustomerPayments),
+              subtitle: 'Inventory + Receivables',
+              icon: Icons.account_balance_outlined,
+              color: Colors.teal,
+            ),
+          ]),
+          const SizedBox(height: 28),
+
           Text('Available ERP Analytical Reports', style: AppTextStyles.h2),
           const SizedBox(height: 16),
 
           LayoutBuilder(
             builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth >= 1100
+              final width = constraints.maxWidth;
+              final crossAxisCount = width >= 1100
                   ? 3
-                  : constraints.maxWidth >= 650
+                  : width >= 650
                       ? 2
                       : 1;
+
+              final aspectRatio = width >= 1400
+                  ? 2.35
+                  : width >= 1100
+                      ? 2.1
+                      : width >= 650
+                          ? 2.15
+                          : 2.4;
 
               return GridView.count(
                 crossAxisCount: crossAxisCount,
@@ -1135,7 +1264,7 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
                 mainAxisSpacing: 16,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: crossAxisCount == 1 ? 1.5 : (crossAxisCount == 2 ? 1.25 : 1.35),
+                childAspectRatio: aspectRatio,
                 children: [
                   _buildReportHubCard(
                     title: 'Inventory & Stock Valuation',
@@ -1204,22 +1333,34 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
           color: AppColors.surface,
           borderRadius: AppRadius.lgBorderRadius,
           border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 22),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(icon, color: color, size: 22),
+                ),
+                Icon(Icons.arrow_forward_rounded, color: color.withValues(alpha: 0.6), size: 16),
+              ],
             ),
             const SizedBox(height: 12),
             Text(title, style: AppTextStyles.h3, maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 4),
             Text(
               description,
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.3),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

@@ -7,6 +7,7 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/architect_model.dart';
 import '../../../core/models/commission_model.dart';
 import '../../../core/models/purchase_model.dart';
+import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
@@ -14,6 +15,8 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -27,7 +30,19 @@ class ArchitectsScreen extends ConsumerStatefulWidget {
 
 class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _searchQuery = '';
+  String _archSearchQuery = '';
+  String _archCustomerFilter = 'ALL';
+  DateTime? _archStartDate;
+  DateTime? _archEndDate;
+  int _archCurrentPage = 0;
+  int _archPageSize = 25;
+
+  String _commSearchQuery = '';
+  String _commStatusFilter = 'ALL';
+  DateTime? _commStartDate;
+  DateTime? _commEndDate;
+  int _commCurrentPage = 0;
+  int _commPageSize = 25;
 
   @override
   void initState() {
@@ -54,6 +69,8 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     final emailCtrl = TextEditingController(text: existing?.email ?? '');
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final addrCtrl = TextEditingController(text: existing?.address ?? '');
+    final stateCtrl = TextEditingController(text: existing?.state ?? '');
+    final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     final rateCtrl = TextEditingController(text: existing?.defaultCommissionRate.toString() ?? '5.0');
     String? linkedCustomerId = (existing?.linkedCustomerId != null &&
             db.customers.any((c) => c.id == existing!.linkedCustomerId))
@@ -102,6 +119,8 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                 mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
                                 emailCtrl.text = data['Email'] ?? emailCtrl.text;
                                 addrCtrl.text = data['Address'] ?? addrCtrl.text;
+                                if (data.containsKey('State')) stateCtrl.text = data['State']!;
+                                if (data.containsKey('Pincode')) pincodeCtrl.text = data['Pincode']!;
                                 Navigator.of(ocrCtx).pop();
                               },
                             ),
@@ -187,6 +206,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                 decoration: const InputDecoration(
                                   labelText: 'GST Number (Optional, 15 chars)',
                                   hintText: '24AAAAA0000A1Z5',
+                                  errorMaxLines: 2,
                                 ),
                               ),
                             ),
@@ -195,8 +215,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                               child: TextFormField(
                                 controller: rateCtrl,
                                 keyboardType: TextInputType.number,
-                                validator: Validators.nonNegativeNumber,
-                                decoration: const InputDecoration(labelText: 'Default Commission Rate (%) *'),
+                                validator: (v) => Validators.percentage(v, 'Must be between 0% and 100%'),
+                                decoration: const InputDecoration(
+                                  labelText: 'Default Commission Rate (%) *',
+                                  errorMaxLines: 2,
+                                ),
                               ),
                             ),
                           ],
@@ -207,6 +230,33 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           maxLines: 2,
                           validator: (v) => Validators.requiredField(v, 'Studio address required'),
                           decoration: const InputDecoration(labelText: 'Studio Address *'),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: stateCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'State',
+                                  hintText: 'E.g., Gujarat',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: pincodeCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'PIN Code',
+                                  hintText: 'E.g., 395006',
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 16),
 
@@ -306,6 +356,8 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                             email: emailCtrl.text.trim(),
                             gstNumber: gstCtrl.text.trim(),
                             address: addrCtrl.text.trim(),
+                            state: stateCtrl.text.trim(),
+                            pincode: pincodeCtrl.text.trim(),
                             defaultCommissionRate: rateVal,
                             isAlsoCustomer: isAlsoCustomer || linkedCustomerId != null,
                             linkedCustomerId: linkedCustomerId,
@@ -438,17 +490,28 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
             ),
             ErpButton(
               text: 'Record Payout',
-              onPressed: () {
+              onPressed: () async {
                 final db = ref.read(databaseServiceProvider);
-                db.payCommission(
-                  commissionId: comm.id,
-                  paymentMode: selectedMode,
-                  ref: refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : 'COMM-PAY-${DateTime.now().millisecondsSinceEpoch}',
-                );
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Commission Paid & Ledger Updated!'), backgroundColor: AppColors.success),
-                );
+                final payRef = refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : 'COMM-PAY-${DateTime.now().millisecondsSinceEpoch}';
+                try {
+                  await db.disburseCommissionAsync(
+                    commissionId: comm.id,
+                    paymentMode: selectedMode,
+                    transactionRef: payRef,
+                  );
+                } catch (e) {
+                  db.payCommission(
+                    commissionId: comm.id,
+                    paymentMode: selectedMode,
+                    ref: payRef,
+                  );
+                }
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Commission Paid & Ledger Updated!'), backgroundColor: AppColors.success),
+                  );
+                }
               },
             ),
           ],
@@ -460,16 +523,64 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+
+    // Tab 1: Architects filtering & pagination
     final architects = db.architects.where((a) {
       if (a.isDeleted) return false;
-      final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          a.name.toLowerCase().contains(query) ||
-          a.companyName.toLowerCase().contains(query) ||
-          a.mobile.toLowerCase().contains(query) ||
-          a.email.toLowerCase().contains(query) ||
-          (a.address != null && a.address!.toLowerCase().contains(query));
+      final query = _archSearchQuery.trim().toLowerCase();
+      if (query.isNotEmpty) {
+        final matches = a.name.toLowerCase().contains(query) ||
+            a.companyName.toLowerCase().contains(query) ||
+            a.mobile.toLowerCase().contains(query) ||
+            a.email.toLowerCase().contains(query) ||
+            a.address.toLowerCase().contains(query) ||
+            a.state.toLowerCase().contains(query) ||
+            a.pincode.toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_archCustomerFilter == 'DUAL_CUSTOMER' && (!a.isAlsoCustomer && a.linkedCustomerId == null)) return false;
+      if (_archCustomerFilter == 'INDEPENDENT' && (a.isAlsoCustomer || a.linkedCustomerId != null)) return false;
+      if (_archStartDate != null && a.createdAt.isBefore(DateTime(_archStartDate!.year, _archStartDate!.month, _archStartDate!.day))) return false;
+      if (_archEndDate != null && a.createdAt.isAfter(DateTime(_archEndDate!.year, _archEndDate!.month, _archEndDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final archTotalRecords = architects.length;
+    final archSafePageSize = _archPageSize <= 0 ? 25 : _archPageSize;
+    final archTotalPages = (archTotalRecords <= 0) ? 1 : (archTotalRecords / archSafePageSize).ceil();
+    final archMaxPage = archTotalPages > 0 ? archTotalPages - 1 : 0;
+    final archSafeCurrentPage = _archCurrentPage.clamp(0, archMaxPage);
+    final archStartIndex = archSafeCurrentPage * archSafePageSize;
+    final archEndIndex = (archStartIndex + archSafePageSize).clamp(0, archTotalRecords);
+    final pagedArchitects = archTotalRecords == 0 ? <Architect>[] : architects.sublist(archStartIndex, archEndIndex);
+
+    // Tab 2: Commissions filtering & pagination
+    final commissions = db.commissions.where((comm) {
+      final query = _commSearchQuery.trim().toLowerCase();
+      if (query.isNotEmpty) {
+        final matches = comm.commissionNumber.toLowerCase().contains(query) ||
+            comm.architectName.toLowerCase().contains(query) ||
+            comm.saleInvoiceNumber.toLowerCase().contains(query) ||
+            (comm.projectName != null && comm.projectName!.toLowerCase().contains(query));
+        if (!matches) return false;
+      }
+      if (_commStatusFilter == 'PENDING' && comm.status != CommissionStatus.generated) return false;
+      if (_commStatusFilter == 'APPROVED' && comm.status != CommissionStatus.approved) return false;
+      if (_commStatusFilter == 'PAID' && comm.status != CommissionStatus.paid) return false;
+      if (_commStatusFilter == 'REJECTED' && comm.status != CommissionStatus.rejected) return false;
+      if (_commStartDate != null && comm.generatedDate.isBefore(DateTime(_commStartDate!.year, _commStartDate!.month, _commStartDate!.day))) return false;
+      if (_commEndDate != null && comm.generatedDate.isAfter(DateTime(_commEndDate!.year, _commEndDate!.month, _commEndDate!.day, 23, 59, 59))) return false;
+      return true;
+    }).toList();
+
+    final commTotalRecords = commissions.length;
+    final commSafePageSize = _commPageSize <= 0 ? 25 : _commPageSize;
+    final commTotalPages = (commTotalRecords <= 0) ? 1 : (commTotalRecords / commSafePageSize).ceil();
+    final commMaxPage = commTotalPages > 0 ? commTotalPages - 1 : 0;
+    final commSafeCurrentPage = _commCurrentPage.clamp(0, commMaxPage);
+    final commStartIndex = commSafeCurrentPage * commSafePageSize;
+    final commEndIndex = (commStartIndex + commSafePageSize).clamp(0, commTotalRecords);
+    final pagedCommissions = commTotalRecords == 0 ? <ArchitectCommission>[] : commissions.sublist(commStartIndex, commEndIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -536,7 +647,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
           const SizedBox(height: 20),
 
           SizedBox(
-            height: 600,
+            height: 720,
             child: TabBarView(
               controller: _tabController,
               children: [
@@ -544,20 +655,55 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search architect by name, studio or mobile...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 280,
+                          child: ErpSearchInput(
+                            hintText: 'Search architect by name, studio...',
+                            initialValue: _archSearchQuery,
+                            onChanged: (val) => setState(() {
+                              _archSearchQuery = val;
+                              _archCurrentPage = 0;
+                            }),
+                          ),
+                        ),
+                        ErpFilterDropdown<String>(
+                          value: _archCustomerFilter,
+                          items: const [
+                            DropdownMenuItem(value: 'ALL', child: Text('All Architects')),
+                            DropdownMenuItem(value: 'DUAL_CUSTOMER', child: Text('Dual Arch-Customer / Linked')),
+                            DropdownMenuItem(value: 'INDEPENDENT', child: Text('Independent Studios')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setState(() {
+                              _archCustomerFilter = val;
+                              _archCurrentPage = 0;
+                            });
+                          },
+                        ),
+                        ErpDateFilterBox(
+                          startDate: _archStartDate,
+                          endDate: _archEndDate,
+                          onDateRangeSelected: (start, end) => setState(() {
+                            _archStartDate = start;
+                            _archEndDate = end;
+                            _archCurrentPage = 0;
+                          }),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     Expanded(
                       child: ErpDataTable(
                         columns: const [
                           ErpColumn(title: 'Architect Name'),
                           ErpColumn(title: 'Architect-Customer Name'),
                           ErpColumn(title: 'Studio / Company'),
+                          ErpColumn(title: 'State'),
                           ErpColumn(title: 'Contact'),
                           ErpColumn(title: 'Default Rate (%)', isNumeric: true),
                           ErpColumn(title: 'Total Earned', isNumeric: true),
@@ -566,10 +712,25 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           ErpColumn(title: 'Paid to Date', isNumeric: true),
                           ErpColumn(title: 'Actions'),
                         ],
-                        rows: architects.map((a) {
+                        rows: pagedArchitects.map((a) {
                           final linkedCust = a.linkedCustomerId != null
                               ? db.customers.where((c) => c.id == a.linkedCustomerId).firstOrNull
                               : null;
+
+                          final aComms = db.commissions.where((c) => c.architectId == a.id).toList();
+                          final commEarned = aComms.where((c) => c.status != CommissionStatus.rejected).fold(0.0, (s, c) => s + c.commissionAmount);
+                          final commPending = aComms.where((c) => c.status == CommissionStatus.generated).fold(0.0, (s, c) => s + c.commissionAmount);
+                          final commApproved = aComms.where((c) => c.status == CommissionStatus.approved).fold(0.0, (s, c) => s + c.commissionAmount);
+                          final commPaid = aComms.where((c) => c.status == CommissionStatus.paid).fold(0.0, (s, c) => s + c.commissionAmount);
+
+                          final invComms = db.sales
+                              .where((s) => s.architectId == a.id && s.documentType == SalesDocumentType.invoice && s.status != SaleStatus.cancelled)
+                              .fold(0.0, (s, sale) => s + sale.architectCommissionAmount);
+
+                          final displayEarned = commEarned > 0 ? commEarned : (a.totalCommissionEarned > 0 ? a.totalCommissionEarned : invComms);
+                          final displayPending = commPending > 0 ? commPending : (a.pendingCommission > 0 ? a.pendingCommission : (commEarned == 0 ? invComms : 0.0));
+                          final displayApproved = commApproved > 0 ? commApproved : a.approvedCommission;
+                          final displayPaid = commPaid > 0 ? commPaid : a.paidCommission;
 
                           return [
                             // 1. Architect Name (Clickable -> Architect Detail Page)
@@ -588,7 +749,19 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       decoration: TextDecoration.underline,
                                     ),
                                   ),
-                                  Text('ID: ${a.id}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                  if (a.address.isNotEmpty || a.state.isNotEmpty || a.pincode.isNotEmpty)
+                                    Text(
+                                      [
+                                        if (a.address.isNotEmpty) a.address,
+                                        if (a.state.isNotEmpty) a.state,
+                                        if (a.pincode.isNotEmpty) a.pincode,
+                                      ].join(', '),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                                    )
+                                  else
+                                    Text('ID: ${a.id}', style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
                                 ],
                               ),
                             ),
@@ -635,47 +808,96 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                     child: const Text('Not Linked', style: TextStyle(fontSize: 10.5, color: Colors.grey)),
                                   ),
                             Text(a.companyName.isNotEmpty ? a.companyName : '-', style: AppTextStyles.bodyMedium),
+                            Text(a.state.isNotEmpty ? a.state : '-', style: AppTextStyles.bodyMedium),
                             Text(a.mobile, style: AppTextStyles.bodySmall),
                             Text('${a.defaultCommissionRate}%', style: AppTextStyles.bodyMedium),
-                            Text(Formatters.formatCurrency(a.totalCommissionEarned), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
-                            Text(Formatters.formatCurrency(a.pendingCommission), style: AppTextStyles.bodySmall.copyWith(color: AppColors.warningText)),
-                            Text(Formatters.formatCurrency(a.approvedCommission), style: AppTextStyles.bodySmall.copyWith(color: AppColors.infoText)),
-                            Text(Formatters.formatCurrency(a.paidCommission), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
-                                  tooltip: 'View Complete Architect Detail Page',
-                                  onPressed: () {
+                            Text(Formatters.formatCurrency(displayEarned), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
+                            Text(Formatters.formatCurrency(displayPending), style: AppTextStyles.bodySmall.copyWith(color: AppColors.warningText)),
+                            Text(Formatters.formatCurrency(displayApproved), style: AppTextStyles.bodySmall.copyWith(color: AppColors.infoText)),
+                            Text(Formatters.formatCurrency(displayPaid), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                            PopupMenuButton<String>(
+                              tooltip: 'Actions',
+                              icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onSelected: (action) {
+                                switch (action) {
+                                  case 'view':
                                     ref.read(activeRecordDetailsStackProvider.notifier).push(a.id, 'architect', ErpNavSection.architects);
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.chat, color: Colors.green, size: 18),
-                                  tooltip: 'Quick WhatsApp Message',
-                                  onPressed: () => WhatsAppQuickChatDialog.showArchitectQuickChat(
-                                    context,
-                                    architectName: a.name,
-                                    architectPhone: a.mobile,
-                                    firmName: a.companyName,
+                                    break;
+                                  case 'whatsapp':
+                                    WhatsAppQuickChatDialog.showArchitectQuickChat(
+                                      context,
+                                      architectName: a.name,
+                                      architectPhone: a.mobile,
+                                      firmName: a.companyName,
+                                    );
+                                    break;
+                                  case 'edit':
+                                    _openAddEditArchitectDialog(a);
+                                    break;
+                                  case 'delete':
+                                    _confirmDeleteArchitect(a);
+                                    break;
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'view',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('View Architect Profile'),
+                                    ],
                                   ),
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined, size: 18),
-                                  tooltip: 'Edit Architect',
-                                  onPressed: () => _openAddEditArchitectDialog(a),
+                                PopupMenuItem(
+                                  value: 'whatsapp',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.chat, color: Colors.green, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('WhatsApp Chat'),
+                                    ],
+                                  ),
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                                  tooltip: 'Delete Architect',
-                                  onPressed: () => _confirmDeleteArchitect(a),
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit_outlined, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Edit Architect'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Delete Architect', style: TextStyle(color: AppColors.danger)),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
                           ];
                         }).toList(),
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    ErpPaginationBar(
+                      currentPage: archSafeCurrentPage,
+                      pageSize: archSafePageSize,
+                      totalRecords: archTotalRecords,
+                      onPageChanged: (newPage) => setState(() => _archCurrentPage = newPage),
+                      onPageSizeChanged: (newSize) => setState(() {
+                        _archPageSize = newSize;
+                        _archCurrentPage = 0;
+                      }),
                     ),
                   ],
                 ),
@@ -684,7 +906,49 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Commission Transactions & Approval Center', style: AppTextStyles.h3),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 280,
+                          child: ErpSearchInput(
+                            hintText: 'Search voucher, architect, invoice...',
+                            initialValue: _commSearchQuery,
+                            onChanged: (val) => setState(() {
+                              _commSearchQuery = val;
+                              _commCurrentPage = 0;
+                            }),
+                          ),
+                        ),
+                        ErpFilterDropdown<String>(
+                          value: _commStatusFilter,
+                          items: const [
+                            DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                            DropdownMenuItem(value: 'PENDING', child: Text('Pending Review')),
+                            DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+                            DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+                            DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setState(() {
+                              _commStatusFilter = val;
+                              _commCurrentPage = 0;
+                            });
+                          },
+                        ),
+                        ErpDateFilterBox(
+                          startDate: _commStartDate,
+                          endDate: _commEndDate,
+                          onDateRangeSelected: (start, end) => setState(() {
+                            _commStartDate = start;
+                            _commEndDate = end;
+                            _commCurrentPage = 0;
+                          }),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 14),
                     Expanded(
                       child: ErpDataTable(
@@ -700,7 +964,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           ErpColumn(title: 'Status'),
                           ErpColumn(title: 'Workflow Actions'),
                         ],
-                        rows: db.commissions.map((comm) {
+                        rows: pagedCommissions.map((comm) {
                           ErpStatusBadge badge;
                           switch (comm.status) {
                             case CommissionStatus.generated:
@@ -730,33 +994,101 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (comm.status == CommissionStatus.generated)
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.info,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    ),
-                                    onPressed: () => db.approveCommission(comm.id),
-                                    child: const Text('Approve', style: TextStyle(fontSize: 11)),
+                                if (comm.status == CommissionStatus.generated) ...[
+                                  IconButton(
+                                    icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 18),
+                                    tooltip: 'Approve Commission Voucher',
+                                    onPressed: () async {
+                                      try {
+                                        await db.approveCommissionAsync(comm.id);
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Commission Voucher ${comm.commissionNumber} Approved!'),
+                                            backgroundColor: AppColors.success,
+                                          ));
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Failed to approve: $e'),
+                                            backgroundColor: AppColors.danger,
+                                          ));
+                                        }
+                                      }
+                                    },
                                   ),
-                                if (comm.status == CommissionStatus.approved)
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.success,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    ),
+                                  IconButton(
+                                    icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 18),
+                                    tooltip: 'Reject Commission Voucher',
+                                    onPressed: () async {
+                                      try {
+                                        await db.rejectCommissionAsync(comm.id, reason: 'Declined during partner audit');
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
+                                            backgroundColor: AppColors.danger,
+                                          ));
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Failed to reject: $e'),
+                                            backgroundColor: AppColors.danger,
+                                          ));
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ],
+                                if (comm.status == CommissionStatus.approved) ...[
+                                  IconButton(
+                                    icon: const Icon(Icons.payments_outlined, color: Colors.purple, size: 18),
+                                    tooltip: 'Disburse / Pay Commission',
                                     onPressed: () => _openPayCommissionDialog(comm),
-                                    child: const Text('Pay Commission', style: TextStyle(fontSize: 11)),
                                   ),
+                                  IconButton(
+                                    icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 18),
+                                    tooltip: 'Reject / Cancel Commission Voucher',
+                                    onPressed: () async {
+                                      try {
+                                        await db.rejectCommissionAsync(comm.id, reason: 'Declined after approval');
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
+                                            backgroundColor: AppColors.danger,
+                                          ));
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                            content: Text('Failed to reject: $e'),
+                                            backgroundColor: AppColors.danger,
+                                          ));
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ],
                                 if (comm.status == CommissionStatus.paid)
                                   Text('Ref: ${comm.paymentReference ?? "Paid"}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
+                                if (comm.status == CommissionStatus.rejected)
+                                  Text('Rejected', style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
                               ],
                             ),
                           ];
                         }).toList(),
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    ErpPaginationBar(
+                      currentPage: commSafeCurrentPage,
+                      pageSize: commSafePageSize,
+                      totalRecords: commTotalRecords,
+                      onPageChanged: (newPage) => setState(() => _commCurrentPage = newPage),
+                      onPageSizeChanged: (newSize) => setState(() {
+                        _commPageSize = newSize;
+                        _commCurrentPage = 0;
+                      }),
                     ),
                   ],
                 ),

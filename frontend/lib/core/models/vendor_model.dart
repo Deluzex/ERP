@@ -7,6 +7,8 @@ class Vendor {
   final String gstNumber;
   final String panNumber;
   final String address;
+  final String state;
+  final String pincode;
   final String paymentTerms;
   final double creditLimit;
   final double outstandingBalance;
@@ -24,6 +26,8 @@ class Vendor {
     required this.gstNumber,
     required this.panNumber,
     required this.address,
+    this.state = '',
+    this.pincode = '',
     required this.paymentTerms,
     required this.creditLimit,
     this.outstandingBalance = 0.0,
@@ -42,6 +46,8 @@ class Vendor {
     String? gstNumber,
     String? panNumber,
     String? address,
+    String? state,
+    String? pincode,
     String? paymentTerms,
     double? creditLimit,
     double? outstandingBalance,
@@ -59,6 +65,8 @@ class Vendor {
       gstNumber: gstNumber ?? this.gstNumber,
       panNumber: panNumber ?? this.panNumber,
       address: address ?? this.address,
+      state: state ?? this.state,
+      pincode: pincode ?? this.pincode,
       paymentTerms: paymentTerms ?? this.paymentTerms,
       creditLimit: creditLimit ?? this.creditLimit,
       outstandingBalance: outstandingBalance ?? this.outstandingBalance,
@@ -79,6 +87,8 @@ class Vendor {
       gstNumber: json['gstNumber']?.toString() ?? json['gst_number']?.toString() ?? '',
       panNumber: json['panNumber']?.toString() ?? json['pan_number']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
+      state: json['state']?.toString() ?? '',
+      pincode: json['pincode']?.toString() ?? '',
       paymentTerms: json['paymentTerms']?.toString() ?? json['payment_terms']?.toString() ?? 'Net 30 Days',
       creditLimit: double.tryParse(json['creditLimit']?.toString() ?? json['credit_limit']?.toString() ?? '0') ?? 0.0,
       outstandingBalance: double.tryParse(json['outstandingBalance']?.toString() ?? json['outstanding_balance']?.toString() ?? '0') ?? 0.0,
@@ -102,6 +112,8 @@ class Vendor {
       'gstNumber': gstNumber,
       'panNumber': panNumber,
       'address': address,
+      'state': state,
+      'pincode': pincode,
       'paymentTerms': paymentTerms,
       'creditLimit': creditLimit,
     };

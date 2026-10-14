@@ -7,6 +7,8 @@ class Dealer {
   final String email;
   final String gstNumber;
   final String address;
+  final String state;
+  final String pincode;
   final double outstandingAmount;
   final bool isDeleted;
   final DateTime? deletedAt;
@@ -21,6 +23,8 @@ class Dealer {
     required this.email,
     required this.gstNumber,
     required this.address,
+    this.state = '',
+    this.pincode = '',
     this.outstandingAmount = 0.0,
     this.isDeleted = false,
     this.deletedAt,
@@ -36,6 +40,8 @@ class Dealer {
     String? email,
     String? gstNumber,
     String? address,
+    String? state,
+    String? pincode,
     double? outstandingAmount,
     bool? isDeleted,
     DateTime? deletedAt,
@@ -50,6 +56,8 @@ class Dealer {
       email: email ?? this.email,
       gstNumber: gstNumber ?? this.gstNumber,
       address: address ?? this.address,
+      state: state ?? this.state,
+      pincode: pincode ?? this.pincode,
       outstandingAmount: outstandingAmount ?? this.outstandingAmount,
       isDeleted: isDeleted ?? this.isDeleted,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -67,6 +75,8 @@ class Dealer {
       email: json['email']?.toString() ?? '',
       gstNumber: json['gstNumber']?.toString() ?? json['gst_number']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
+      state: json['state']?.toString() ?? '',
+      pincode: json['pincode']?.toString() ?? '',
       outstandingAmount: double.tryParse(json['outstandingAmount']?.toString() ?? json['outstanding_amount']?.toString() ?? '0') ?? 0.0,
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
       deletedAt: json['deletedAt'] != null ? DateTime.tryParse(json['deletedAt'].toString()) : null,
@@ -83,6 +93,8 @@ class Dealer {
       'email': email,
       'gstNumber': gstNumber,
       'address': address,
+      'state': state,
+      'pincode': pincode,
     };
   }
 }

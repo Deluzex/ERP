@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
@@ -12,6 +13,32 @@ import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../shared/providers/app_state_providers.dart';
+
+class _MaxAmountTextInputFormatter extends TextInputFormatter {
+  final double Function() maxAllowed;
+
+  _MaxAmountTextInputFormatter(this.maxAllowed);
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) return newValue;
+    final textToParse = newValue.text.endsWith('.')
+        ? newValue.text.substring(0, newValue.text.length - 1)
+        : newValue.text;
+    if (textToParse.isEmpty) return newValue;
+
+    final val = double.tryParse(textToParse);
+    if (val == null) return oldValue;
+    final max = maxAllowed();
+    if (max > 0 && val > (max + 0.0001)) {
+      return oldValue;
+    }
+    return newValue;
+  }
+}
 
 class CreatePurchaseScreen extends ConsumerStatefulWidget {
   const CreatePurchaseScreen({super.key});
@@ -43,12 +70,12 @@ class _LineItemDraft {
     this.gstPercent = 18.0,
   });
 
-  double get subtotal => (quantity * rate) - discount;
+  double get subtotal => ((quantity * rate) - discount).clamp(0.0, double.infinity);
 
   double get lineTotal => PurchaseLineItem.calculateLineTotal(
         quantity: quantity,
         rate: rate,
-        discountAmount: discount,
+        discountAmount: discount.clamp(0.0, (quantity * rate).clamp(0.0, double.infinity)),
         gstPercent: gstPercent,
       );
 }
@@ -63,7 +90,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   String? _selectedProjectId;
   DateTime _purchaseDate = DateTime.now();
   DateTime _invoiceDate = DateTime.now();
-  PaymentMode _paymentMode = PaymentMode.bankTransfer;
+  PaymentMode? _paymentMode;
   bool _isInterStateTax = false; // False = Intra-State (CGST + SGST), True = Inter-State (IGST)
   final List<_LineItemDraft> _items = [];
   String? _attachmentName;
@@ -96,9 +123,29 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   void initState() {
     super.initState();
     final db = ref.read(databaseServiceProvider);
-    if (db.vendors.isNotEmpty) {
-      _selectedVendorId = db.vendors.first.id;
+    final activeVendors = db.vendors.where((v) => !v.isDeleted).toList();
+    if (activeVendors.isNotEmpty) {
+      _selectedVendorId = activeVendors.first.id;
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final database = ref.read(databaseServiceProvider);
+      await Future.wait([
+        database.loadProjects(forceRefresh: false),
+        database.loadVendors(forceRefresh: false),
+        database.loadRawMaterials(forceRefresh: false),
+        database.loadFinishedProducts(forceRefresh: false),
+      ]);
+      if (mounted) {
+        setState(() {
+          if (_selectedVendorId == null) {
+            final freshVendors = database.vendors.where((v) => !v.isDeleted).toList();
+            if (freshVendors.isNotEmpty) {
+              _selectedVendorId = freshVendors.first.id;
+            }
+          }
+        });
+      }
+    });
   }
 
   void _openAddItemDialog({PurchaseItemType initialType = PurchaseItemType.rawMaterial}) {
@@ -112,23 +159,29 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     double defaultRate = 0.0;
     double defaultGst = 18.0;
 
+    double currentStock = 0.0;
+
     void initForType(PurchaseItemType type) {
       if (type == PurchaseItemType.rawMaterial && db.rawMaterials.isNotEmpty) {
-        final rm = db.rawMaterials.first;
+        final rmList = db.rawMaterials.where((r) => !r.isDeleted).toList();
+        final rm = rmList.isNotEmpty ? rmList.first : db.rawMaterials.first;
         selectedItemId = rm.id;
         selectedItemName = rm.name;
         selectedItemCode = rm.itemCode;
         selectedUnit = rm.unit;
         defaultRate = rm.defaultPurchasePrice;
         defaultGst = rm.gstPercent;
+        currentStock = rm.currentStock;
       } else if (type == PurchaseItemType.finishedProduct && db.finishedProducts.isNotEmpty) {
-        final fp = db.finishedProducts.first;
+        final fpList = db.finishedProducts.where((f) => !f.isDeleted).toList();
+        final fp = fpList.isNotEmpty ? fpList.first : db.finishedProducts.first;
         selectedItemId = fp.id;
         selectedItemName = fp.name;
         selectedItemCode = fp.itemCode;
         selectedUnit = fp.unit;
         defaultRate = fp.costPrice;
         defaultGst = fp.gstPercent;
+        currentStock = fp.currentStock;
       } else {
         selectedItemId = null;
         selectedItemName = '';
@@ -136,6 +189,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         selectedUnit = 'PCS';
         defaultRate = 0.0;
         defaultGst = 18.0;
+        currentStock = 0.0;
       }
     }
 
@@ -156,11 +210,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
           final disc = double.tryParse(discCtrl.text.trim()) ?? 0.0;
           final gst = double.tryParse(gstCtrl.text.trim()) ?? 0.0;
 
-          final subtotal = (qty * rate) - disc;
+          final gross = (qty * rate).clamp(0.0, double.infinity);
+          final subtotal = (gross - disc).clamp(0.0, double.infinity);
           final total = PurchaseLineItem.calculateLineTotal(
             quantity: qty,
             rate: rate,
-            discountAmount: disc,
+            discountAmount: disc.clamp(0.0, gross),
             gstPercent: gst,
           );
 
@@ -224,11 +279,11 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                           value: selectedItemId,
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Select Raw Material *'),
-                          items: db.rawMaterials.map((rm) {
+                          items: db.rawMaterials.where((rm) => !rm.isDeleted).map((rm) {
                             return DropdownMenuItem(
                               value: rm.id,
                               child: Text(
-                                '${rm.itemCode} - ${rm.name} (${rm.unit})',
+                                '${rm.itemCode} - ${rm.name} (Stock: ${Formatters.formatNumber(rm.currentStock)} ${rm.unit})',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -243,6 +298,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 selectedItemName = rm.name;
                                 selectedItemCode = rm.itemCode;
                                 selectedUnit = rm.unit;
+                                currentStock = rm.currentStock;
                                 rateCtrl.text = rm.defaultPurchasePrice.toString();
                                 gstCtrl.text = rm.gstPercent.toString();
                               });
@@ -254,11 +310,11 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                           value: selectedItemId,
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Select Finished Product *'),
-                          items: db.finishedProducts.map((fp) {
+                          items: db.finishedProducts.where((fp) => !fp.isDeleted).map((fp) {
                             return DropdownMenuItem(
                               value: fp.id,
                               child: Text(
-                                '${fp.itemCode} - ${fp.name} (${fp.unit})',
+                                '${fp.itemCode} - ${fp.name} (Stock: ${Formatters.formatNumber(fp.currentStock)} ${fp.unit})',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -273,12 +329,66 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 selectedItemName = fp.name;
                                 selectedItemCode = fp.itemCode;
                                 selectedUnit = fp.unit;
+                                currentStock = fp.currentStock;
                                 rateCtrl.text = fp.costPrice.toString();
                                 gstCtrl.text = fp.gstPercent.toString();
                               });
                             }
                           },
                         ),
+                      if (selectedItemId != null) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.successLight,
+                            borderRadius: AppRadius.smBorderRadius,
+                            border: Border.all(
+                              color: AppColors.success,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.inventory_2_outlined,
+                                size: 18,
+                                color: AppColors.successText,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  qty > 0
+                                      ? 'Updated Stock After Purchase: ${Formatters.formatNumber(currentStock + qty)} $selectedUnit'
+                                      : 'Stock After Purchase: ${Formatters.formatNumber(currentStock)} $selectedUnit',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.successText,
+                                  ),
+                                ),
+                              ),
+                              if (qty > 0) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.success,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    '+${Formatters.formatNumber(qty)} $selectedUnit',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       Row(
                         children: [
@@ -316,10 +426,18 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                             child: TextFormField(
                               controller: discCtrl,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              validator: Validators.nonNegativeNumber,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                                _MaxAmountTextInputFormatter(() {
+                                  final q = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
+                                  final r = double.tryParse(rateCtrl.text.trim()) ?? 0.0;
+                                  return (q * r).clamp(0.0, double.infinity);
+                                }),
+                              ],
                               decoration: const InputDecoration(
                                 labelText: 'Discount (₹)',
                                 hintText: '0.00',
+                                prefixIcon: Icon(Icons.discount_outlined, size: 18),
                               ),
                               onChanged: (_) => setDlgState(() {}),
                             ),
@@ -389,7 +507,9 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
 
                   final enteredQty = double.tryParse(qtyCtrl.text.trim()) ?? 1.0;
                   final enteredRate = double.tryParse(rateCtrl.text.trim()) ?? 0.0;
-                  final enteredDisc = double.tryParse(discCtrl.text.trim()) ?? 0.0;
+                  final gross = (enteredQty * enteredRate).clamp(0.0, double.infinity);
+                  final rawDisc = double.tryParse(discCtrl.text.trim()) ?? 0.0;
+                  final enteredDisc = rawDisc.clamp(0.0, gross);
                   final enteredGst = double.tryParse(gstCtrl.text.trim()) ?? 18.0;
 
                   setState(() {
@@ -425,7 +545,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   double get _sgstAmount => _isInterStateTax ? 0.0 : _items.fold(0.0, (sum, i) => sum + ((i.subtotal * (i.gstPercent / 2.0)) / 100.0));
   double get _igstAmount => _isInterStateTax ? _items.fold(0.0, (sum, i) => sum + ((i.subtotal * i.gstPercent) / 100.0)) : 0.0;
   double get _gstTotal => _cgstAmount + _sgstAmount + _igstAmount;
-  double get _totalAmount => _subtotalAmount + _gstTotal;
+  double get _totalAmount => (_subtotalAmount + _gstTotal).clamp(0.0, double.infinity);
   double get _paidAmount => double.tryParse(_paidAmountCtrl.text.trim()) ?? 0.0;
   double get _pendingAmount => (_totalAmount - _paidAmount).clamp(0.0, double.infinity);
 
@@ -434,6 +554,18 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add at least one line item to purchase order')),
+      );
+      return;
+    }
+    if (_paidAmount > 0 && _paymentMode == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a payment mode before proceeding')),
+      );
+      return;
+    }
+    if (_paidAmount > _totalAmount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Paid amount cannot exceed Grand Total (${Formatters.formatCurrency(_totalAmount)})')),
       );
       return;
     }
@@ -502,7 +634,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       totalAmount: _totalAmount,
       paidAmount: _paidAmount,
       pendingAmount: _pendingAmount,
-      paymentMode: _paymentMode,
+      paymentMode: _paymentMode ?? PaymentMode.bankTransfer,
       status: status,
       notes: _notesCtrl.text.trim(),
       projectId: project?.id,
@@ -579,7 +711,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Create Purchase Order', style: AppTextStyles.h1),
+                          Text('Create Direct Purchase', style: AppTextStyles.h1),
                           const SizedBox(height: 4),
                           Text('Inward Raw Materials or Finished Goods directly into stock with GST tax breakup',
                               style: AppTextStyles.subtitle),
@@ -844,10 +976,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                   ),
                                   items: [
                                     const DropdownMenuItem(value: null, child: Text('General Inventory (No Project)')),
-                                    ...db.projects.map((p) => DropdownMenuItem(
-                                          value: p.id,
-                                          child: Text(p.name),
-                                        )),
+                                    ...db.projects
+                                        .where((p) => !p.isDeleted)
+                                        .map((p) => DropdownMenuItem(
+                                              value: p.id,
+                                              child: Text(p.name),
+                                            )),
                                   ],
                                   onChanged: (val) => setState(() => _selectedProjectId = val),
                                 ),
@@ -897,15 +1031,46 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 child: DropdownButtonFormField<PaymentMode>(
                                   value: _paymentMode,
                                   isExpanded: true,
-                                  decoration: const InputDecoration(labelText: 'Payment Mode'),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Payment Mode',
+                                    hintText: 'SELECT PAYMENT METHOD',
+                                  ),
+                                  hint: const Text('SELECT PAYMENT METHOD'),
                                   items: PaymentMode.values.map((mode) {
+                                    String label;
+                                    switch (mode) {
+                                      case PaymentMode.cash:
+                                        label = 'CASH';
+                                        break;
+                                      case PaymentMode.bankTransfer:
+                                        label = 'BANK TRANSFER';
+                                        break;
+                                      case PaymentMode.cheque:
+                                        label = 'CHEQUE';
+                                        break;
+                                      case PaymentMode.upi:
+                                        label = 'UPI';
+                                        break;
+                                      case PaymentMode.credit:
+                                        label = 'CREDIT';
+                                        break;
+                                      case PaymentMode.creditNote:
+                                        label = 'CREDIT NOTE';
+                                        break;
+                                    }
                                     return DropdownMenuItem(
                                       value: mode,
-                                      child: Text(mode.toString().split('.').last.toUpperCase()),
+                                      child: Text(label),
                                     );
                                   }).toList(),
+                                  validator: (val) {
+                                    if (_paidAmount > 0 && val == null) {
+                                      return 'Please select payment mode';
+                                    }
+                                    return null;
+                                  },
                                   onChanged: (val) {
-                                    if (val != null) setState(() => _paymentMode = val);
+                                    setState(() => _paymentMode = val);
                                   },
                                 ),
                               ),
@@ -1185,8 +1350,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                   child: TextFormField(
                                     key: ValueKey('disc_${item.itemId}_${item.itemType}_$index'),
                                     initialValue: item.discount.toString(),
-                                    keyboardType: TextInputType.number,
-                                    validator: Validators.nonNegativeNumber,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                                      _MaxAmountTextInputFormatter(() => (item.quantity * item.rate).clamp(0.0, double.infinity)),
+                                    ],
+
                                     decoration: const InputDecoration(labelText: 'Disc (₹)'),
                                     onChanged: (v) {
                                       final num = double.tryParse(v) ?? 0.0;
@@ -1402,10 +1571,33 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _paidAmountCtrl,
-                        keyboardType: TextInputType.number,
-                        validator: Validators.nonNegativeNumber,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                          _MaxAmountTextInputFormatter(() => _totalAmount),
+                        ],
                         onChanged: (_) => setState(() {}),
-                        decoration: const InputDecoration(labelText: 'Paid Amount (₹)'),
+                        decoration: InputDecoration(
+                          labelText: 'Paid Amount (₹)',
+                          prefixIcon: const Icon(Icons.currency_rupee, size: 18),
+                          suffixIcon: (_totalAmount > 0)
+                              ? TextButton(
+                                  onPressed: () {
+                                    final formatted = _totalAmount == 0
+                                        ? ''
+                                        : (_totalAmount % 1 == 0
+                                            ? _totalAmount.toInt().toString()
+                                            : _totalAmount.toStringAsFixed(2));
+                                    _paidAmountCtrl.value = TextEditingValue(
+                                      text: formatted,
+                                      selection: TextSelection.collapsed(offset: formatted.length),
+                                    );
+                                    setState(() {});
+                                  },
+                                  child: const Text('Full Pay', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                )
+                              : null,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -1444,6 +1636,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                 );
               },
             ),
+            const SizedBox(height: 100),
           ],
         ),
       ),

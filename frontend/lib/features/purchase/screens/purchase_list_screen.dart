@@ -9,6 +9,8 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class PurchaseListScreen extends ConsumerStatefulWidget {
@@ -20,7 +22,11 @@ class PurchaseListScreen extends ConsumerStatefulWidget {
 
 class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
   String _searchQuery = '';
-  String _selectedStatusFilter = 'all';
+  String _selectedStatusFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -312,18 +318,52 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final purchases = db.purchases.where((p) {
-      if (_selectedStatusFilter != 'all' && p.status.name.toLowerCase() != _selectedStatusFilter) {
+      if (_selectedStatusFilter != 'ALL') {
+        switch (_selectedStatusFilter) {
+          case 'SAVED':
+            if (p.status != PurchaseStatus.saved) return false;
+            break;
+          case 'PARTIAL':
+            if (p.status != PurchaseStatus.partialPaid) return false;
+            break;
+          case 'PAID':
+            if (p.status != PurchaseStatus.paid) return false;
+            break;
+          case 'DRAFT':
+            if (p.status != PurchaseStatus.draft) return false;
+            break;
+          case 'CANCELLED':
+            if (p.status != PurchaseStatus.cancelled) return false;
+            break;
+        }
+      }
+      if (_startDate != null && p.purchaseDate.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) {
+        return false;
+      }
+      if (_endDate != null && p.purchaseDate.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) {
         return false;
       }
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          p.purchaseNumber.toLowerCase().contains(query) ||
-          p.vendorName.toLowerCase().contains(query) ||
-          p.vendorInvoiceNumber.toLowerCase().contains(query) ||
-          (p.notes != null && p.notes!.toLowerCase().contains(query)) ||
-          p.status.toString().toLowerCase().contains(query) ||
-          p.items.any((item) => item.displayName.toLowerCase().contains(query));
+      if (query.isNotEmpty) {
+        final matches = p.purchaseNumber.toLowerCase().contains(query) ||
+            p.vendorName.toLowerCase().contains(query) ||
+            p.vendorInvoiceNumber.toLowerCase().contains(query) ||
+            (p.notes != null && p.notes!.toLowerCase().contains(query)) ||
+            p.status.name.toLowerCase().contains(query) ||
+            p.items.any((item) => item.displayName.toLowerCase().contains(query));
+        if (!matches) return false;
+      }
+      return true;
     }).toList();
+
+    final totalRecords = purchases.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedPurchases = totalRecords == 0 ? <Purchase>[] : purchases.sublist(startIndex, endIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -337,10 +377,10 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
               final titleBlock = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Purchase Orders', style: AppTextStyles.h1),
+                  Text('Purchase Invoices', style: AppTextStyles.h1),
                   const SizedBox(height: 4),
                   Text(
-                    'Vendor purchase orders, incoming invoices, and payment statuses',
+                    'Vendor purchase invoices, incoming bills, and payment statuses',
                     style: AppTextStyles.subtitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -353,19 +393,15 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                 runSpacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  IconButton(
-                    icon: db.isLoadingPurchases
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh),
-                    tooltip: 'Refresh Purchases',
+                  ErpButton(
+                    text: 'Refresh',
+                    icon: Icons.refresh,
+                    isOutlined: true,
+                    isLoading: db.isLoadingPurchases,
                     onPressed: () => db.loadPurchases(forceRefresh: true),
                   ),
                   ErpButton(
-                    text: 'Create Purchase',
+                    text: 'Create Direct Purchase',
                     icon: Icons.add,
                     onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
                   ),
@@ -395,90 +431,58 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Search and Filters
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 750;
-              final searchField = TextField(
-                onChanged: (val) => setState(() => _searchQuery = val),
-                decoration: const InputDecoration(
-                  hintText: 'Search purchase by PO number, vendor name or invoice number...',
-                  prefixIcon: Icon(Icons.search, size: 18),
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 300,
+                child: ErpSearchInput(
+                  hintText: 'Search by invoice no, vendor, bills...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
                 ),
-              );
-
-              final filterChips = SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    ChoiceChip(
-                      label: const Text('All'),
-                      selected: _selectedStatusFilter == 'all',
-                      onSelected: (selected) {
-                        if (selected) setState(() => _selectedStatusFilter = 'all');
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text('Saved / Inward'),
-                      selected: _selectedStatusFilter == 'saved',
-                      onSelected: (selected) {
-                        if (selected) setState(() => _selectedStatusFilter = 'saved');
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text('Partial'),
-                      selected: _selectedStatusFilter == 'partialpaid',
-                      onSelected: (selected) {
-                        if (selected) setState(() => _selectedStatusFilter = 'partialpaid');
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text('Paid'),
-                      selected: _selectedStatusFilter == 'paid',
-                      onSelected: (selected) {
-                        if (selected) setState(() => _selectedStatusFilter = 'paid');
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text('Cancelled'),
-                      selected: _selectedStatusFilter == 'cancelled',
-                      onSelected: (selected) {
-                        if (selected) setState(() => _selectedStatusFilter = 'cancelled');
-                      },
-                    ),
-                  ],
-                ),
-              );
-
-              if (isNarrow) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    searchField,
-                    const SizedBox(height: 12),
-                    filterChips,
-                  ],
-                );
-              }
-
-              return Row(
-                children: [
-                  Expanded(child: searchField),
-                  const SizedBox(width: 16),
-                  filterChips,
+              ),
+              ErpFilterDropdown<String>(
+                value: _selectedStatusFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                  DropdownMenuItem(value: 'SAVED', child: Text('Saved / Inward')),
+                  DropdownMenuItem(value: 'PARTIAL', child: Text('Partial Paid')),
+                  DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+                  DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                  DropdownMenuItem(value: 'CANCELLED', child: Text('Cancelled')),
                 ],
-              );
-            },
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedStatusFilter = val;
+                      _currentPage = 0;
+                    });
+                  }
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           ErpDataTable(
             columns: const [
-              ErpColumn(title: 'PO Number'),
+              ErpColumn(title: 'Invoice Number'),
               ErpColumn(title: 'Date'),
               ErpColumn(title: 'Vendor Name'),
               ErpColumn(title: 'Vendor Invoice'),
@@ -487,9 +491,9 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
               ErpColumn(title: 'Paid Amount', isNumeric: true),
               ErpColumn(title: 'Pending Amount', isNumeric: true),
               ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
+              ErpColumn(title: 'Actions', width: 90, alignment: Alignment.center),
             ],
-            rows: purchases.map((p) {
+            rows: pagedPurchases.map((p) {
               ErpStatusBadge badge;
               switch (p.status) {
                 case PurchaseStatus.paid:
@@ -524,24 +528,58 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                   ),
                 ),
                 badge,
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.visibility_outlined, size: 18),
-                      tooltip: 'View Purchase Details',
-                      onPressed: () => _showPurchaseDetailsDialog(p),
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'view':
+                        _showPurchaseDetailsDialog(p);
+                        break;
+                      case 'cancel':
+                        _confirmCancelPurchase(p);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('View Purchase Details'),
+                        ],
+                      ),
                     ),
                     if (p.status != PurchaseStatus.cancelled)
-                      IconButton(
-                        icon: const Icon(Icons.cancel_outlined, color: AppColors.danger, size: 18),
-                        tooltip: 'Cancel Purchase Order',
-                        onPressed: () => _confirmCancelPurchase(p),
+                      const PopupMenuItem(
+                        value: 'cancel',
+                        child: Row(
+                          children: [
+                            Icon(Icons.cancel_outlined, color: AppColors.danger, size: 18),
+                            SizedBox(width: 8),
+                            Text('Cancel Purchase'),
+                          ],
+                        ),
                       ),
                   ],
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

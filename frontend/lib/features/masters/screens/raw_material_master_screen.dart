@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -10,6 +11,8 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class RawMaterialMasterScreen extends ConsumerStatefulWidget {
@@ -21,8 +24,12 @@ class RawMaterialMasterScreen extends ConsumerStatefulWidget {
 
 class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScreen> {
   String _searchQuery = '';
-  String? _selectedCategoryFilter;
-  bool _lowStockOnly = false;
+  String _selectedCategoryFilter = 'ALL';
+  String _stockFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -130,10 +137,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     initialValue: selectedCategory.isNotEmpty ? selectedCategory : null,
                                     decoration: const InputDecoration(labelText: 'Category *'),
                                     items: db.categories.map((c) {
-                                      return DropdownMenuItem(value: c.id, child: Text(c.name));
+                                      return DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis));
                                     }).toList(),
                                     onChanged: isSubmitting ? null : (val) {
                                       if (val != null) setDlgState(() => selectedCategory = val);
@@ -141,10 +149,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
                                     decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
                                     items: db.units.map((u) {
-                                      return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
+                                      return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis));
                                     }).toList(),
                                     onChanged: isSubmitting ? null : (val) {
                                       if (val != null) setDlgState(() => selectedUnitId = val);
@@ -217,10 +226,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                   children: [
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         initialValue: selectedCategory.isNotEmpty ? selectedCategory : null,
                                         decoration: const InputDecoration(labelText: 'Category *'),
                                         items: db.categories.map((c) {
-                                          return DropdownMenuItem(value: c.id, child: Text(c.name));
+                                          return DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis));
                                         }).toList(),
                                         onChanged: isSubmitting ? null : (val) {
                                           if (val != null) setDlgState(() => selectedCategory = val);
@@ -230,10 +240,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
                                         decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
                                         items: db.units.map((u) {
-                                          return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
+                                          return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis));
                                         }).toList(),
                                         onChanged: isSubmitting ? null : (val) {
                                           if (val != null) setDlgState(() => selectedUnitId = val);
@@ -290,15 +301,16 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
 
                         // Supplier / Vendor Info
                         DropdownButtonFormField<String?>(
+                          isExpanded: true,
                           initialValue: selectedVendorId,
                           decoration: const InputDecoration(
                             labelText: 'Preferred Supplier / Vendor',
                             hintText: 'Select default procurement source',
                           ),
                           items: [
-                            const DropdownMenuItem(value: null, child: Text('No Preferred Vendor Assigned')),
+                            const DropdownMenuItem(value: null, child: Text('No Preferred Vendor Assigned', overflow: TextOverflow.ellipsis)),
                             ...db.vendors.where((v) => !v.isDeleted).map((v) {
-                              return DropdownMenuItem(value: v.id, child: Text('${v.name} (${v.id})'));
+                              return DropdownMenuItem(value: v.id, child: Text('${v.name} (${v.id})', overflow: TextOverflow.ellipsis));
                             }),
                           ],
                           onChanged: isSubmitting ? null : (val) => setDlgState(() => selectedVendorId = val),
@@ -457,13 +469,38 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
     final materials = db.rawMaterials.where((rm) {
       if (rm.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          rm.name.toLowerCase().contains(query) ||
-          rm.itemCode.toLowerCase().contains(query) ||
-          rm.categoryName.toLowerCase().contains(query) ||
-          rm.unit.toLowerCase().contains(query) ||
-          rm.preferredVendorNames.any((v) => v.toLowerCase().contains(query));
+      if (query.isNotEmpty) {
+        final matches = rm.name.toLowerCase().contains(query) ||
+            rm.itemCode.toLowerCase().contains(query) ||
+            rm.categoryName.toLowerCase().contains(query) ||
+            rm.unit.toLowerCase().contains(query) ||
+            rm.preferredVendorNames.any((v) => v.toLowerCase().contains(query));
+        if (!matches) return false;
+      }
+      if (_selectedCategoryFilter != 'ALL' && rm.categoryId != _selectedCategoryFilter && rm.categoryName != _selectedCategoryFilter) {
+        return false;
+      }
+      if (_stockFilter == 'LOW' && !rm.isLowStock) return false;
+      if (_stockFilter == 'OUT_OF_STOCK' && rm.currentStock > 0) return false;
+      if (_stockFilter == 'IN_STOCK' && rm.currentStock <= 0) return false;
+      if (_startDate != null && rm.createdAt.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && rm.createdAt.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = materials.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedMaterials = totalRecords == 0 ? <RawMaterial>[] : materials.sublist(startIndex, endIndex);
+
+    final categoryFilterItems = <DropdownMenuItem<String>>[
+      const DropdownMenuItem(value: 'ALL', child: Text('All Categories')),
+      ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+    ];
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -502,17 +539,62 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          // Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search raw materials by name, SKU/code, category, UOM, or vendor...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search raw materials by SKU, name, vendor...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _selectedCategoryFilter,
+                items: categoryFilterItems,
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _selectedCategoryFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpFilterDropdown<String>(
+                value: _stockFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                  DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                  DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                  DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _stockFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           // Data Table
           ErpDataTable(
@@ -527,14 +609,23 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
               ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
-            rows: materials.map((rm) {
+            rows: pagedMaterials.map((rm) {
               final vendorDisplay = rm.preferredVendorNames.isNotEmpty
                   ? rm.preferredVendorNames.join(', ')
                   : 'Unassigned';
 
               return [
                 Text(rm.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                Text(rm.name, style: AppTextStyles.bodyBold),
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(rm.id, 'rawMaterial', ErpNavSection.rawMaterials),
+                  child: Text(
+                    rm.name,
+                    style: AppTextStyles.bodyBold.copyWith(
+                      color: AppColors.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
                 Text(rm.categoryName, style: AppTextStyles.bodySmall),
                 Text(rm.unit, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
                 Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
@@ -548,23 +639,70 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                 rm.isLowStock
                     ? ErpStatusBadge.danger('LOW STOCK')
                     : ErpStatusBadge.success('AVAILABLE'),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Material',
-                      onPressed: () => _openAddEditDialog(rm),
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'view':
+                        ref.read(activeRecordDetailsStackProvider.notifier).push(rm.id, 'rawMaterial', ErpNavSection.rawMaterials);
+                        break;
+                      case 'edit':
+                        _openAddEditDialog(rm);
+                        break;
+                      case 'delete':
+                        _confirmDelete(rm);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('View Material Details'),
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                      tooltip: 'Delete Material',
-                      onPressed: () => _confirmDelete(rm),
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('Edit Material'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                          SizedBox(width: 8),
+                          Text('Delete Material'),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

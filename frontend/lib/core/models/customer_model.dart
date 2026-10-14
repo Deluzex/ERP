@@ -5,6 +5,8 @@ class Customer {
   final String email;
   final String gstNumber;
   final String address;
+  final String state;
+  final String pincode;
   final String stateCode;
   final double outstandingAmount;
   final double creditBalance;
@@ -21,6 +23,8 @@ class Customer {
     required this.email,
     required this.gstNumber,
     required this.address,
+    this.state = '',
+    this.pincode = '',
     this.stateCode = '24',
     this.outstandingAmount = 0.0,
     this.creditBalance = 0.0,
@@ -38,6 +42,8 @@ class Customer {
     String? email,
     String? gstNumber,
     String? address,
+    String? state,
+    String? pincode,
     String? stateCode,
     double? outstandingAmount,
     double? creditBalance,
@@ -54,6 +60,8 @@ class Customer {
       email: email ?? this.email,
       gstNumber: gstNumber ?? this.gstNumber,
       address: address ?? this.address,
+      state: state ?? this.state,
+      pincode: pincode ?? this.pincode,
       stateCode: stateCode ?? this.stateCode,
       outstandingAmount: outstandingAmount ?? this.outstandingAmount,
       creditBalance: creditBalance ?? this.creditBalance,
@@ -73,6 +81,8 @@ class Customer {
       email: json['email']?.toString() ?? '',
       gstNumber: json['gstNumber']?.toString() ?? json['gst_number']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
+      state: json['state']?.toString() ?? '',
+      pincode: json['pincode']?.toString() ?? '',
       stateCode: json['stateCode']?.toString() ?? json['state_code']?.toString() ?? '24',
       outstandingAmount: double.tryParse(json['outstandingAmount']?.toString() ?? json['outstanding_amount']?.toString() ?? '0') ?? 0.0,
       creditBalance: double.tryParse(json['creditBalance']?.toString() ?? json['credit_balance']?.toString() ?? '0') ?? 0.0,
@@ -91,6 +101,8 @@ class Customer {
       'email': email,
       'gstNumber': gstNumber,
       'address': address,
+      'state': state,
+      'pincode': pincode,
       'stateCode': stateCode,
       if (linkedArchitectId != null && linkedArchitectId!.isNotEmpty)
         'linkedArchitectId': linkedArchitectId,

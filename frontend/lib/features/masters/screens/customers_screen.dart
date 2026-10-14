@@ -11,6 +11,8 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -24,6 +26,12 @@ class CustomersScreen extends ConsumerStatefulWidget {
 
 class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   String _searchQuery = '';
+  String _roleFilter = 'ALL';
+  String _balanceFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -42,6 +50,8 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     final emailCtrl = TextEditingController(text: existing?.email ?? '');
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final addressCtrl = TextEditingController(text: existing?.address ?? '');
+    final stateCtrl = TextEditingController(text: existing?.state ?? '');
+    final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     String? linkedArchitectId = (existing?.linkedArchitectId != null &&
             db.architects.any((a) => a.id == existing!.linkedArchitectId))
         ? existing!.linkedArchitectId
@@ -88,6 +98,8 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                                 mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
                                 emailCtrl.text = data['Email'] ?? emailCtrl.text;
                                 addressCtrl.text = data['Address'] ?? addressCtrl.text;
+                                if (data.containsKey('State')) stateCtrl.text = data['State']!;
+                                if (data.containsKey('Pincode')) pincodeCtrl.text = data['Pincode']!;
                                 Navigator.of(ocrCtx).pop();
                               },
                             ),
@@ -174,6 +186,33 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                           maxLines: 2,
                           validator: (v) => Validators.requiredField(v, 'Site / Billing Address required'),
                           decoration: const InputDecoration(labelText: 'Site / Billing Address *'),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: stateCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'State',
+                                  hintText: 'E.g., Gujarat',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: pincodeCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'PIN Code',
+                                  hintText: 'E.g., 382481',
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 16),
 
@@ -267,6 +306,8 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                             email: emailCtrl.text.trim(),
                             gstNumber: gstCtrl.text.trim(),
                             address: addressCtrl.text.trim(),
+                            state: stateCtrl.text.trim(),
+                            pincode: pincodeCtrl.text.trim(),
                             outstandingAmount: existing?.outstandingAmount ?? 0.0,
                             isAlsoArchitect: isAlsoArchitect,
                             linkedArchitectId: linkedArchitectId,
@@ -354,12 +395,33 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     final customers = db.customers.where((c) {
       if (c.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          c.name.toLowerCase().contains(query) ||
-          c.mobile.toLowerCase().contains(query) ||
-          c.email.toLowerCase().contains(query) ||
-          c.address.toLowerCase().contains(query);
+      if (query.isNotEmpty) {
+        final matches = c.name.toLowerCase().contains(query) ||
+            c.mobile.toLowerCase().contains(query) ||
+            c.email.toLowerCase().contains(query) ||
+            c.gstNumber.toLowerCase().contains(query) ||
+            c.address.toLowerCase().contains(query) ||
+            c.state.toLowerCase().contains(query) ||
+            c.pincode.toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_roleFilter == 'DIRECT' && (c.isAlsoArchitect || c.linkedArchitectId != null)) return false;
+      if (_roleFilter == 'ARCHITECT' && (!c.isAlsoArchitect && c.linkedArchitectId == null)) return false;
+      if (_balanceFilter == 'WITH_BALANCE' && c.outstandingAmount <= 0) return false;
+      if (_balanceFilter == 'ZERO_BALANCE' && c.outstandingAmount > 0) return false;
+      if (_startDate != null && c.createdAt.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && c.createdAt.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = customers.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedCustomers = totalRecords == 0 ? <Customer>[] : customers.sublist(startIndex, endIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -408,21 +470,71 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search customer by name, mobile, email, company, GST, or address...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search customer by name, mobile, GST...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _roleFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Customer Types')),
+                  DropdownMenuItem(value: 'DIRECT', child: Text('Direct Clients Only')),
+                  DropdownMenuItem(value: 'ARCHITECT', child: Text('Architect Linked / Dual')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _roleFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpFilterDropdown<String>(
+                value: _balanceFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                  DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Outstanding')),
+                  DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _balanceFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           ErpDataTable(
             columns: const [
               ErpColumn(title: 'Customer Name'),
               ErpColumn(title: 'Type / Dual Role'),
+              ErpColumn(title: 'State'),
               ErpColumn(title: 'Mobile Phone'),
               ErpColumn(title: 'Email Address'),
               ErpColumn(title: 'GST Number'),
@@ -430,7 +542,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
               ErpColumn(title: 'Actions'),
             ],
-            rows: customers.map((c) {
+            rows: pagedCustomers.map((c) {
               final linkedArch = c.linkedArchitectId != null
                   ? db.architects.where((a) => a.id == c.linkedArchitectId).firstOrNull
                   : null;
@@ -452,8 +564,17 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                           decoration: TextDecoration.underline,
                         ),
                       ),
-                      if (c.address.isNotEmpty)
-                        Text(c.address, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
+                      if (c.address.isNotEmpty || c.state.isNotEmpty || c.pincode.isNotEmpty)
+                        Text(
+                          [
+                            if (c.address.isNotEmpty) c.address,
+                            if (c.state.isNotEmpty) c.state,
+                            if (c.pincode.isNotEmpty) c.pincode,
+                          ].join(', '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                        ),
                     ],
                   ),
                 ),
@@ -498,6 +619,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                             child: const Text('ARCH-CUSTOMER', style: TextStyle(fontSize: 10, color: Colors.purple, fontWeight: FontWeight.bold)),
                           )
                         : const Text('Direct Client', style: TextStyle(fontSize: 11, color: Colors.grey))),
+                Text(c.state.isNotEmpty ? c.state : '-', style: AppTextStyles.bodyMedium),
                 Text(c.mobile, style: AppTextStyles.bodyMedium),
                 Text(c.email, style: AppTextStyles.bodySmall),
                 Text(c.gstNumber.isNotEmpty ? c.gstNumber : '-', style: AppTextStyles.bodySmall),
@@ -508,39 +630,87 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                     color: c.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText,
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
-                      tooltip: 'View Complete Customer Detail Page',
-                      onPressed: () {
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'view':
                         ref.read(activeRecordDetailsStackProvider.notifier).push(c.id, 'customer', ErpNavSection.customers);
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chat, color: Colors.green, size: 18),
-                      tooltip: 'Quick WhatsApp Message',
-                      onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
-                        context,
-                        customerName: c.name,
-                        customerPhone: c.mobile,
+                        break;
+                      case 'whatsapp':
+                        WhatsAppQuickChatDialog.showCustomerQuickChat(
+                          context,
+                          customerName: c.name,
+                          customerPhone: c.mobile,
+                        );
+                        break;
+                      case 'edit':
+                        _openAddEditCustomerDialog(c);
+                        break;
+                      case 'delete':
+                        _confirmDeleteCustomer(c);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('View Customer Details'),
+                        ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Customer',
-                      onPressed: () => _openAddEditCustomerDialog(c),
+                    PopupMenuItem(
+                      value: 'whatsapp',
+                      child: Row(
+                        children: [
+                          Icon(Icons.chat, color: Colors.green, size: 18),
+                          SizedBox(width: 8),
+                          Text('WhatsApp Chat'),
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                      tooltip: 'Delete Customer',
-                      onPressed: () => _confirmDeleteCustomer(c),
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 18),
+                          SizedBox(width: 8),
+                          Text('Edit Customer'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                          SizedBox(width: 8),
+                          Text('Delete Customer', style: TextStyle(color: AppColors.danger)),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

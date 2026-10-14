@@ -10,6 +10,8 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ProductMasterScreen extends ConsumerStatefulWidget {
@@ -21,6 +23,12 @@ class ProductMasterScreen extends ConsumerStatefulWidget {
 
 class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
   String _searchQuery = '';
+  String _selectedCategoryFilter = 'ALL';
+  String _stockFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -129,10 +137,11 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     initialValue: selectedCategory.isNotEmpty ? selectedCategory : null,
                                     decoration: const InputDecoration(labelText: 'Category *'),
                                     items: db.categories.map((c) {
-                                      return DropdownMenuItem(value: c.id, child: Text(c.name));
+                                      return DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis));
                                     }).toList(),
                                     onChanged: isSubmitting ? null : (val) {
                                       if (val != null) setDlgState(() => selectedCategory = val);
@@ -140,10 +149,11 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
                                     decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
                                     items: db.units.map((u) {
-                                      return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
+                                      return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis));
                                     }).toList(),
                                     onChanged: isSubmitting ? null : (val) {
                                       if (val != null) setDlgState(() => selectedUnitId = val);
@@ -236,10 +246,11 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                   children: [
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         initialValue: selectedCategory.isNotEmpty ? selectedCategory : null,
                                         decoration: const InputDecoration(labelText: 'Category *'),
                                         items: db.categories.map((c) {
-                                          return DropdownMenuItem(value: c.id, child: Text(c.name));
+                                          return DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis));
                                         }).toList(),
                                         onChanged: isSubmitting ? null : (val) {
                                           if (val != null) setDlgState(() => selectedCategory = val);
@@ -249,10 +260,11 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         initialValue: selectedUnitId.isNotEmpty ? selectedUnitId : null,
                                         decoration: const InputDecoration(labelText: 'Unit of Measurement (UOM) *'),
                                         items: db.units.map((u) {
-                                          return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})'));
+                                          return DropdownMenuItem(value: u.id, child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis));
                                         }).toList(),
                                         onChanged: isSubmitting ? null : (val) {
                                           if (val != null) setDlgState(() => selectedUnitId = val);
@@ -498,12 +510,37 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
     final products = db.finishedProducts.where((fp) {
       if (fp.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          fp.name.toLowerCase().contains(query) ||
-          fp.itemCode.toLowerCase().contains(query) ||
-          fp.categoryName.toLowerCase().contains(query) ||
-          fp.unit.toLowerCase().contains(query);
+      if (query.isNotEmpty) {
+        final matches = fp.name.toLowerCase().contains(query) ||
+            fp.itemCode.toLowerCase().contains(query) ||
+            fp.categoryName.toLowerCase().contains(query) ||
+            fp.unit.toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_selectedCategoryFilter != 'ALL' && fp.categoryId != _selectedCategoryFilter && fp.categoryName != _selectedCategoryFilter) {
+        return false;
+      }
+      if (_stockFilter == 'LOW' && !fp.isLowStock) return false;
+      if (_stockFilter == 'OUT_OF_STOCK' && fp.currentStock > 0) return false;
+      if (_stockFilter == 'IN_STOCK' && fp.currentStock <= 0) return false;
+      if (_startDate != null && fp.createdAt.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && fp.createdAt.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = products.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedProducts = totalRecords == 0 ? <FinishedProduct>[] : products.sublist(startIndex, endIndex);
+
+    final categoryFilterItems = <DropdownMenuItem<String>>[
+      const DropdownMenuItem(value: 'ALL', child: Text('All Categories')),
+      ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+    ];
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -542,17 +579,62 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          // Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search product master by name, SKU/code, category or UOM...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search product by SKU, name, category...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _selectedCategoryFilter,
+                items: categoryFilterItems,
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _selectedCategoryFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpFilterDropdown<String>(
+                value: _stockFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                  DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                  DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                  DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _stockFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           // Data Table
           ErpDataTable(
@@ -568,7 +650,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
               ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
-            rows: products.map((fp) {
+            rows: pagedProducts.map((fp) {
               return [
                 Text(fp.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
                 Text(fp.name, style: AppTextStyles.bodyBold),
@@ -589,23 +671,57 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                 fp.isLowStock
                     ? ErpStatusBadge.danger('LOW STOCK')
                     : ErpStatusBadge.success('AVAILABLE'),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Product',
-                      onPressed: () => _openAddEditDialog(fp),
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'edit':
+                        _openAddEditDialog(fp);
+                        break;
+                      case 'delete':
+                        _confirmDelete(fp);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('Edit Product'),
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                      tooltip: 'Delete Product',
-                      onPressed: () => _confirmDelete(fp),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                          SizedBox(width: 8),
+                          Text('Delete Product'),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

@@ -68,7 +68,7 @@ class FinishedProductsApiService {
     try {
       final response = await _client.dio.put(
         '/masters/finished-products/${fp.id}',
-        data: fp.toJson(),
+        data: fp.toUpdateJson(),
       );
       final data = _client.unwrap<Map<String, dynamic>>(response);
       return FinishedProduct.fromJson(data);

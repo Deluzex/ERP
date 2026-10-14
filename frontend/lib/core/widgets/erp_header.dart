@@ -126,9 +126,9 @@ class ErpHeader extends ConsumerWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: AppColors.danger.withOpacity(0.12),
+                            color: AppColors.danger.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.danger.withOpacity(0.3)),
+                            border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -407,37 +407,60 @@ class ErpHeader extends ConsumerWidget {
   void _showSwitchRoleDialog(BuildContext context, WidgetRef ref, dynamic db) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Quick Switch Demo Role'),
-        content: SizedBox(
-          width: 440,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Select an authorized demo user to immediately test that role-specific dashboard and permissions matrix.', style: TextStyle(fontSize: 12.5, color: Colors.grey)),
-              const SizedBox(height: 16),
-              ...db.users.map((u) {
-                final r = db.getUserRole(u);
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppColors.primaryLight,
-                    child: Text(u.name.substring(0, 1)),
+      builder: (ctx) {
+        final screenHeight = MediaQuery.of(ctx).size.height;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mdBorderRadius),
+          title: const Text('Quick Switch Demo Role'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select an authorized demo user to immediately test that role-specific dashboard and permissions matrix.',
+                  style: TextStyle(fontSize: 12.5, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: screenHeight * 0.58),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: db.users.map<Widget>((u) {
+                        final r = db.getUserRole(u);
+                        final initial = u.name.isNotEmpty ? u.name.substring(0, 1).toUpperCase() : 'U';
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          dense: true,
+                          leading: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: AppColors.primaryLight,
+                            child: Text(
+                              initial,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryDark),
+                            ),
+                          ),
+                          title: Text(u.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          subtitle: Text('${r.name} • ${u.email}', style: const TextStyle(fontSize: 11)),
+                          onTap: () {
+                            ref.read(authStateProvider.notifier).switchUser(u);
+                            Navigator.of(ctx).pop();
+                          },
+                        );
+                      }).toList(),
+                    ),
                   ),
-                  title: Text(u.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  subtitle: Text('${r.name} • ${u.email}', style: const TextStyle(fontSize: 11)),
-                  onTap: () {
-                    ref.read(authStateProvider.notifier).switchUser(u);
-                    Navigator.of(ctx).pop();
-                  },
-                );
-              }),
-            ],
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
-        ],
-      ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          ],
+        );
+      },
     );
   }
 }

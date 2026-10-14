@@ -17,10 +17,7 @@ import '../models/architect_model.dart';
 import '../models/project_model.dart';
 import '../models/sale_model.dart';
 import '../models/payment_model.dart';
-import '../models/expense_model.dart';
-import '../models/finished_product_model.dart';
 import '../models/commission_model.dart';
-import '../models/stock_movement_model.dart';
 import '../../features/sales/widgets/sales_pdf_generator.dart';
 import '../utils/formatters.dart';
 import 'erp_button.dart';
@@ -181,35 +178,6 @@ class RecordDetailsView extends ConsumerWidget {
     );
   }
 
-  Widget _buildTwoPaneLayout({
-    required Widget left,
-    required Widget right,
-    int leftFlex = 3,
-    int rightFlex = 2,
-  }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 850) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              left,
-              const SizedBox(height: 16),
-              right,
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(flex: leftFlex, child: left),
-            const SizedBox(width: 16),
-            Expanded(flex: rightFlex, child: right),
-          ],
-        );
-      },
-    );
-  }
 
   // -----------------------------------------------------------------
   // 1. Raw Material Details
@@ -340,6 +308,37 @@ class RecordDetailsView extends ConsumerWidget {
   // -----------------------------------------------------------------
   Widget _buildVendorDetails(BuildContext context, WidgetRef ref, Vendor v, MockDatabaseService db) {
     final vendorPurchases = db.purchases.where((p) => p.vendorId == v.id).toList();
+    final sortedPurchases = List<Purchase>.from(vendorPurchases)..sort((a, b) => b.purchaseDate.compareTo(a.purchaseDate));
+    final totalPurchased = vendorPurchases.fold(0.0, (sum, p) => sum + p.totalAmount);
+    final totalPaid = vendorPurchases.fold(0.0, (sum, p) => sum + p.paidAmount);
+    final totalPending = vendorPurchases.fold(0.0, (sum, p) => sum + p.pendingAmount);
+    final vendorPayments = db.payments.where((p) => p.partyId == v.id || p.partyName.toLowerCase() == v.name.toLowerCase()).toList();
+
+    // Catalog of materials supplied by this vendor
+    final suppliedMaterials = <String, Map<String, dynamic>>{};
+    for (final p in vendorPurchases) {
+      for (final it in p.items) {
+        final matKey = it.rawMaterialId ?? it.finishedProductId ?? it.rawMaterialCode ?? it.rawMaterialName ?? 'item';
+        final matName = it.rawMaterialName ?? it.finishedProductName ?? 'Item';
+        final matCode = it.rawMaterialCode ?? it.finishedProductCode ?? '-';
+        if (!suppliedMaterials.containsKey(matKey)) {
+          suppliedMaterials[matKey] = {
+            'name': matName,
+            'code': matCode,
+            'unit': it.unit,
+            'itemType': it.itemType.name.toUpperCase(),
+            'totalQty': 0.0,
+            'totalVal': 0.0,
+            'lastRate': it.rate,
+          };
+        }
+        suppliedMaterials[matKey]!['totalQty'] =
+            (suppliedMaterials[matKey]!['totalQty'] as double) + it.quantity;
+        suppliedMaterials[matKey]!['totalVal'] =
+            (suppliedMaterials[matKey]!['totalVal'] as double) + it.lineTotal;
+        suppliedMaterials[matKey]!['lastRate'] = it.rate;
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,16 +358,81 @@ class RecordDetailsView extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Vendor Profile', style: AppTextStyles.h3),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Vendor Profile', style: AppTextStyles.h3),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.chat, color: Colors.green, size: 20),
+                              tooltip: 'Quick WhatsApp Message',
+                              onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
+                                context,
+                                customerName: v.name,
+                                customerPhone: v.mobile,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            v.isDeleted
+                                ? ErpStatusBadge.danger('DELETED / ARCHIVED')
+                                : ErpStatusBadge.neutral('ACTIVE VENDOR'),
+                          ],
+                        ),
+                      ],
+                    ),
                     const Divider(height: 24),
+                    if (v.isDeleted) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.08),
+                          borderRadius: AppRadius.smBorderRadius,
+                          border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Vendor Account is Soft-Deleted',
+                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Reason for Deletion: ${v.deleteReason != null && v.deleteReason!.trim().isNotEmpty ? v.deleteReason! : "Reason not specified"}',
+                                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.dangerText),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     _buildInfoRow('Vendor Code', v.id),
                     _buildInfoRow('Company Name', v.name),
                     _buildInfoRow('Contact Person', v.contactPerson),
                     _buildInfoRow('Mobile / Phone', v.mobile),
-                    _buildInfoRow('Email Address', v.email),
-                    _buildInfoRow('GST Registration', v.gstNumber),
-                    _buildInfoRow('PAN Number', v.panNumber),
-                    _buildInfoRow('Factory / Address', v.address),
+                    _buildInfoRow('Email Address', v.email.isNotEmpty ? v.email : '-'),
+                    _buildInfoRow('GST Registration', v.gstNumber.isNotEmpty ? v.gstNumber : '-'),
+                    _buildInfoRow('PAN Number', v.panNumber.isNotEmpty ? v.panNumber : '-'),
+                    _buildInfoRow('Factory / Address', v.address.isNotEmpty ? v.address : '-'),
+                    _buildInfoRow('State', v.state.isNotEmpty ? v.state : '-'),
+                    _buildInfoRow('PIN Code', v.pincode.isNotEmpty ? v.pincode : '-'),
+                    _buildInfoRow('Account Created Date', Formatters.formatDate(v.createdAt)),
+                    if (v.isDeleted)
+                      _buildInfoRow(
+                        'Deletion Reason',
+                        v.deleteReason != null && v.deleteReason!.trim().isNotEmpty ? v.deleteReason! : 'Reason not specified',
+                        valueColor: AppColors.dangerText,
+                      ),
                   ],
                 ),
               ),
@@ -386,22 +450,48 @@ class RecordDetailsView extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Financial Status', style: AppTextStyles.h3),
+                    Text('Financial & Procurement Ledger', style: AppTextStyles.h3),
                     const Divider(height: 24),
+                    _buildInfoRow('Total Purchases Invoiced', Formatters.formatCurrency(totalPurchased)),
+                    _buildInfoRow('Total Amount Disbursed', Formatters.formatCurrency(totalPaid)),
+                    _buildInfoRow('Pending Dues on Orders', Formatters.formatCurrency(totalPending)),
+                    _buildInfoRow('Credit Limit Allowed', Formatters.formatCurrency(v.creditLimit)),
+                    _buildInfoRow('Payment Terms', v.paymentTerms),
+                    const Divider(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Outstanding Balance:', style: AppTextStyles.bodyMedium),
-                        Text(
-                          Formatters.formatCurrency(v.outstandingBalance),
-                          style: AppTextStyles.h2.copyWith(color: v.outstandingBalance > 0 ? AppColors.dangerText : AppColors.textPrimary),
+                        Text('Outstanding Payables Due:', style: AppTextStyles.bodyBold),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            Formatters.formatCurrency(v.outstandingBalance),
+                            textAlign: TextAlign.end,
+                            style: AppTextStyles.h2.copyWith(color: v.outstandingBalance > 0 ? AppColors.dangerText : AppColors.successText),
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    _buildInfoRow('Credit Limit Allowed', Formatters.formatCurrency(v.creditLimit)),
-                    _buildInfoRow('Payment Terms', v.paymentTerms),
-                    _buildInfoRow('Registered Date', Formatters.formatDate(v.createdAt)),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: v.outstandingBalance > 0 ? Colors.red.withValues(alpha: 0.08) : Colors.green.withValues(alpha: 0.08),
+                        borderRadius: AppRadius.smBorderRadius,
+                        border: Border.all(color: v.outstandingBalance > 0 ? Colors.red.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
+                      ),
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text('Payable Status:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            v.outstandingBalance > 0 ? 'PAYMENT OUTSTANDING' : 'ALL DUES CLEARED',
+                            style: AppTextStyles.bodyBold.copyWith(color: v.outstandingBalance > 0 ? AppColors.dangerText : AppColors.successText),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -409,36 +499,99 @@ class RecordDetailsView extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 24),
-        Text('Vendor Purchase Orders History', style: AppTextStyles.h2),
+        Text('Purchase Orders History', style: AppTextStyles.h2),
         const SizedBox(height: 12),
-        ErpDataTable(
-          columns: const [
-            ErpColumn(title: 'PO Number'),
-            ErpColumn(title: 'Purchase Date'),
-            ErpColumn(title: 'Linked Invoice'),
-            ErpColumn(title: 'Items Count', isNumeric: true),
-            ErpColumn(title: 'Total Amount', isNumeric: true),
-            ErpColumn(title: 'Pending Due', isNumeric: true),
-            ErpColumn(title: 'Status'),
-          ],
-          rows: vendorPurchases.map((p) {
-            return [
-              InkWell(
-                onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
-                child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-              ),
-              Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
-              Text(p.vendorInvoiceNumber, style: AppTextStyles.bodySmall),
-              Text('${p.items.length} items', style: AppTextStyles.bodySmall),
-              Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
-              Text(
-                Formatters.formatCurrency(p.pendingAmount),
-                style: AppTextStyles.bodyBold.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
-              ),
-              Text(p.statusLabel, style: AppTextStyles.bodySmall),
-            ];
-          }).toList(),
-        ),
+        if (sortedPurchases.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
+            child: Text('No purchase orders recorded for this vendor yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+          )
+        else
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'PO Number'),
+              ErpColumn(title: 'Purchase Date'),
+              ErpColumn(title: 'Vendor Invoice'),
+              ErpColumn(title: 'Items Count', isNumeric: true),
+              ErpColumn(title: 'Total Amount', isNumeric: true),
+              ErpColumn(title: 'Paid Amount', isNumeric: true),
+              ErpColumn(title: 'Pending Due', isNumeric: true),
+              ErpColumn(title: 'Status'),
+            ],
+            rows: sortedPurchases.map((p) {
+              return [
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
+                  child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                ),
+                Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
+                Text(p.vendorInvoiceNumber.isNotEmpty ? p.vendorInvoiceNumber : '-', style: AppTextStyles.bodySmall),
+                Text('${p.items.length} items', style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
+                Text(Formatters.formatCurrency(p.paidAmount), style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
+                Text(
+                  Formatters.formatCurrency(p.pendingAmount),
+                  style: AppTextStyles.bodyBold.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
+                ),
+                ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
+              ];
+            }).toList(),
+          ),
+
+        if (vendorPayments.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Payment Transactions & Disbursements', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Payment No'),
+              ErpColumn(title: 'Payment Date'),
+              ErpColumn(title: 'Reference / UTR'),
+              ErpColumn(title: 'PO Reference'),
+              ErpColumn(title: 'Amount (₹)', isNumeric: true),
+              ErpColumn(title: 'Payment Mode'),
+              ErpColumn(title: 'Status'),
+            ],
+            rows: vendorPayments.map((pay) {
+              return [
+                Text(pay.paymentNumber, style: AppTextStyles.bodyBold),
+                Text(Formatters.formatDate(pay.paymentDate), style: AppTextStyles.bodySmall),
+                Text(pay.transactionReference ?? '-', style: AppTextStyles.bodySmall),
+                Text(pay.referenceDocumentNumber ?? '-', style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(pay.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                Text(pay.paymentMode.name.toUpperCase(), style: AppTextStyles.bodySmall),
+                ErpStatusBadge.success('DISBURSED'),
+              ];
+            }).toList(),
+          ),
+        ],
+
+        if (suppliedMaterials.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Supplied Raw Materials & Products Catalog', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Item Code'),
+              ErpColumn(title: 'Material Name'),
+              ErpColumn(title: 'Category / Type'),
+              ErpColumn(title: 'Cumulative Quantity Supplied'),
+              ErpColumn(title: 'Last Procurement Rate (₹)', isNumeric: true),
+              ErpColumn(title: 'Total Procurement Valuation (₹)', isNumeric: true),
+            ],
+            rows: suppliedMaterials.values.map((mat) {
+              return [
+                Text(mat['code'] as String, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                Text(mat['name'] as String, style: AppTextStyles.bodyMedium),
+                Text(mat['itemType'] as String, style: AppTextStyles.bodySmall),
+                Text('${Formatters.formatNumber(mat['totalQty'] as double)} ${mat['unit']}', style: AppTextStyles.bodyMedium),
+                Text(Formatters.formatCurrency(mat['lastRate'] as double), style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(mat['totalVal'] as double), style: AppTextStyles.bodyBold),
+              ];
+            }).toList(),
+          ),
+        ],
       ],
     );
   }
@@ -754,6 +907,8 @@ class RecordDetailsView extends ConsumerWidget {
                     _buildInfoRow('Contact Number', c.mobile),
                     _buildInfoRow('Email Address', c.email),
                     _buildInfoRow('Registered Address', c.address),
+                    _buildInfoRow('State', c.state.isNotEmpty ? c.state : '-'),
+                    _buildInfoRow('PIN Code', c.pincode.isNotEmpty ? c.pincode : '-'),
                     _buildInfoRow('Account Created Date', Formatters.formatDate(c.createdAt)),
                   ],
                 ),
@@ -781,7 +936,10 @@ class RecordDetailsView extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Net Sales Revenue:', style: AppTextStyles.bodyBold),
-                        Text(Formatters.formatCurrency(netSalesRevenue), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(Formatters.formatCurrency(netSalesRevenue), textAlign: TextAlign.end, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -789,9 +947,13 @@ class RecordDetailsView extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Total Receivables Due:', style: AppTextStyles.bodyMedium),
-                        Text(
-                          Formatters.formatCurrency(c.outstandingAmount),
-                          style: AppTextStyles.h2.copyWith(color: c.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            Formatters.formatCurrency(c.outstandingAmount),
+                            textAlign: TextAlign.end,
+                            style: AppTextStyles.h2.copyWith(color: c.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                          ),
                         ),
                       ],
                     ),
@@ -803,8 +965,9 @@ class RecordDetailsView extends ConsumerWidget {
                         borderRadius: AppRadius.smBorderRadius,
                         border: Border.all(color: c.creditBalance > 0 ? AppColors.primary.withOpacity(0.3) : Colors.grey.shade200),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text('Customer Store Credit:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
                           Text(
@@ -888,7 +1051,13 @@ class RecordDetailsView extends ConsumerWidget {
   // 6. Dealer Details
   // -----------------------------------------------------------------
   Widget _buildDealerDetails(BuildContext context, WidgetRef ref, Dealer d, MockDatabaseService db) {
-    final dealerSales = db.sales.where((s) => s.partyId == d.id).toList();
+    final dealerSales = db.sales.where((s) => (s.partyId == d.id || s.partyName.toLowerCase() == d.name.toLowerCase()) && s.documentType != SalesDocumentType.salesReturn).toList();
+    final sortedSales = List<Sale>.from(dealerSales)..sort((a, b) => b.saleDate.compareTo(a.saleDate));
+    final dealerReturns = db.salesReturns.where((r) => r.partyId == d.id || r.partyName.toLowerCase() == d.name.toLowerCase()).toList();
+    final grossInvoiced = dealerSales.where((s) => s.documentType == SalesDocumentType.invoice).fold(0.0, (sum, s) => sum + s.totalAmount);
+    final approvedReturns = dealerReturns.where((r) => r.salesReturnStatus == SalesReturnStatus.approved).fold(0.0, (sum, r) => sum + r.totalAmount);
+    final netSalesRevenue = (grossInvoiced - approvedReturns).clamp(0.0, double.infinity);
+    final dealerPayments = db.payments.where((p) => p.partyId == d.id).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -908,16 +1077,39 @@ class RecordDetailsView extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Dealer Profile', style: AppTextStyles.h3),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Dealer Profile', style: AppTextStyles.h3),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.chat, color: Colors.green, size: 20),
+                              tooltip: 'Quick WhatsApp Message',
+                              onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
+                                context,
+                                customerName: d.name,
+                                customerPhone: d.mobile,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ErpStatusBadge.neutral('ACTIVE DEALER'),
+                          ],
+                        ),
+                      ],
+                    ),
                     const Divider(height: 24),
                     _buildInfoRow('Dealer ID', d.id),
-                    _buildInfoRow('Store Name', d.name),
-                    _buildInfoRow('Company LLP / Name', d.companyName),
+                    _buildInfoRow('Showroom / Store Name', d.name),
+                    _buildInfoRow('Company Entity', d.companyName),
                     _buildInfoRow('Contact Person', d.contactPerson),
                     _buildInfoRow('Phone Number', d.mobile),
-                    _buildInfoRow('Email Address', d.email),
-                    _buildInfoRow('GST Identification', d.gstNumber),
-                    _buildInfoRow('Store Address', d.address),
+                    _buildInfoRow('Email Address', d.email.isNotEmpty ? d.email : '-'),
+                    _buildInfoRow('GST Identification', d.gstNumber.isNotEmpty ? d.gstNumber : '-'),
+                    _buildInfoRow('Showroom Address', d.address.isNotEmpty ? d.address : '-'),
+                    _buildInfoRow('State', d.state.isNotEmpty ? d.state : '-'),
+                    _buildInfoRow('PIN Code', d.pincode.isNotEmpty ? d.pincode : '-'),
+                    _buildInfoRow('Account Created Date', Formatters.formatDate(d.createdAt)),
                   ],
                 ),
               ),
@@ -935,20 +1127,56 @@ class RecordDetailsView extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Outstanding Balance', style: AppTextStyles.h3),
+                    Text('Financial & Channel Ledger', style: AppTextStyles.h3),
                     const Divider(height: 24),
+                    _buildInfoRow('Gross Sales Invoiced', Formatters.formatCurrency(grossInvoiced)),
+                    _buildInfoRow('Approved Sales Returns', Formatters.formatCurrency(approvedReturns)),
+                    const Divider(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Total Receivables:', style: AppTextStyles.bodyMedium),
-                        Text(
-                          Formatters.formatCurrency(d.outstandingAmount),
-                          style: AppTextStyles.h2.copyWith(color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                        Text('Net Channel Revenue:', style: AppTextStyles.bodyBold),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(Formatters.formatCurrency(netSalesRevenue), textAlign: TextAlign.end, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    _buildInfoRow('Created Date', Formatters.formatDate(d.createdAt)),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Total Receivables Due:', style: AppTextStyles.bodyMedium),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            Formatters.formatCurrency(d.outstandingAmount),
+                            textAlign: TextAlign.end,
+                            style: AppTextStyles.h2.copyWith(color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: d.outstandingAmount > 0 ? Colors.red.withValues(alpha: 0.08) : Colors.green.withValues(alpha: 0.08),
+                        borderRadius: AppRadius.smBorderRadius,
+                        border: Border.all(color: d.outstandingAmount > 0 ? Colors.red.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
+                      ),
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text('Account Standing:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            d.outstandingAmount > 0 ? 'PAYMENT OUTSTANDING' : 'CLEAR / CURRENT',
+                            style: AppTextStyles.bodyBold.copyWith(color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -958,36 +1186,120 @@ class RecordDetailsView extends ConsumerWidget {
         const SizedBox(height: 24),
         Text('Sales & Invoices History', style: AppTextStyles.h2),
         const SizedBox(height: 12),
-        ErpDataTable(
-          columns: const [
-            ErpColumn(title: 'Invoice Number'),
-            ErpColumn(title: 'Date'),
-            ErpColumn(title: 'Total Invoiced', isNumeric: true),
-            ErpColumn(title: 'Outstanding Due', isNumeric: true),
-            ErpColumn(title: 'Status'),
-          ],
-          rows: dealerSales.map((s) {
-            return [
-              InkWell(
-                onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-              ),
-              Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-              Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
-              Text(
-                Formatters.formatCurrency(s.pendingAmount),
-                style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
-              ),
-              Text(s.statusLabel, style: AppTextStyles.bodySmall),
-            ];
-          }).toList(),
-        ),
+        if (sortedSales.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
+            child: Text('No sales documents linked to this dealer showroom yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+          )
+        else
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Invoice Number'),
+              ErpColumn(title: 'Date'),
+              ErpColumn(title: 'Document Type'),
+              ErpColumn(title: 'Total Invoiced', isNumeric: true),
+              ErpColumn(title: 'Outstanding Due', isNumeric: true),
+              ErpColumn(title: 'Status'),
+              ErpColumn(title: 'Actions'),
+            ],
+            rows: sortedSales.map((s) {
+              return [
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
+                  child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                ),
+                Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
+                Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
+                Text(
+                  Formatters.formatCurrency(s.pendingAmount),
+                  style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
+                ),
+                ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.share, color: Colors.teal, size: 16),
+                      tooltip: 'Share Document',
+                      onPressed: () => ShareDocumentDialog.show(context, s),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
+                      tooltip: 'View PDF',
+                      onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
+                    ),
+                  ],
+                ),
+              ];
+            }).toList(),
+          ),
+
+        if (dealerReturns.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Sales Returns & Credit Notes', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Return No'),
+              ErpColumn(title: 'Date'),
+              ErpColumn(title: 'Original Invoice'),
+              ErpColumn(title: 'Return Type'),
+              ErpColumn(title: 'Total Amount', isNumeric: true),
+              ErpColumn(title: 'Status'),
+              ErpColumn(title: 'Refund / Credit Note'),
+            ],
+            rows: dealerReturns.map((r) {
+              return [
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(r.id, 'salesReturn', details.parentSection),
+                  child: Text(r.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                ),
+                Text(Formatters.formatDate(r.saleDate), style: AppTextStyles.bodySmall),
+                Text(r.originalInvoiceNumber ?? '-', style: AppTextStyles.bodyMedium),
+                Text(r.returnType == ReturnType.fullReturn ? 'Full' : 'Partial', style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(r.totalAmount), style: AppTextStyles.bodyBold),
+                Text(r.salesReturnStatusLabel.toUpperCase(), style: AppTextStyles.bodySmall),
+                Text(r.refundStatusLabel, style: AppTextStyles.bodySmall),
+              ];
+            }).toList(),
+          ),
+        ],
+
+        if (dealerPayments.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Payment Receipts & Settlements', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Payment No'),
+              ErpColumn(title: 'Payment Date'),
+              ErpColumn(title: 'Reference / UTR'),
+              ErpColumn(title: 'Invoice Reference'),
+              ErpColumn(title: 'Amount (₹)', isNumeric: true),
+              ErpColumn(title: 'Payment Mode'),
+              ErpColumn(title: 'Status'),
+            ],
+            rows: dealerPayments.map((p) {
+              return [
+                Text(p.paymentNumber, style: AppTextStyles.bodyBold),
+                Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
+                Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
+                Text(p.referenceDocumentNumber ?? '-', style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                Text(p.paymentMode.name.toUpperCase(), style: AppTextStyles.bodySmall),
+                p.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL'),
+              ];
+            }).toList(),
+          ),
+        ],
       ],
     );
   }
 
   // -----------------------------------------------------------------
-  // 7. Architect Details (Comprehensive 14-Section Breakdown: A to N)
+  // 7. Architect Details
   // -----------------------------------------------------------------
   Widget _buildArchitectDetails(BuildContext context, WidgetRef ref, Architect a, MockDatabaseService db) {
     // 1. Relational Queries
@@ -1011,6 +1323,7 @@ class RecordDetailsView extends ConsumerWidget {
     final architectQuotations = architectSales.where((s) => s.documentType == SalesDocumentType.quotation).toList();
     final architectInvoices = architectSales.where((s) =>
         s.documentType == SalesDocumentType.invoice || s.documentType == SalesDocumentType.salesOrder).toList();
+    final sortedInvoices = List<Sale>.from(architectInvoices)..sort((a, b) => b.saleDate.compareTo(a.saleDate));
 
     final architectPurchases = db.purchases.where((p) =>
         p.projectId != null && projectIds.contains(p.projectId)).toList();
@@ -1022,16 +1335,26 @@ class RecordDetailsView extends ConsumerWidget {
     final commissionPayments = db.payments.where((pay) =>
         pay.partyId == a.id && pay.paymentType == PaymentType.commissionPayment).toList();
 
+    // Commission Metrics
+    final commEarned = architectCommissions.where((c) => c.status != CommissionStatus.rejected).fold(0.0, (s, c) => s + c.commissionAmount);
+    final commPending = architectCommissions.where((c) => c.status == CommissionStatus.generated).fold(0.0, (s, c) => s + c.commissionAmount);
+    final commApproved = architectCommissions.where((c) => c.status == CommissionStatus.approved).fold(0.0, (s, c) => s + c.commissionAmount);
+    final commPaid = architectCommissions.where((c) => c.status == CommissionStatus.paid).fold(0.0, (s, c) => s + c.commissionAmount);
+
+    final invComms = architectInvoices
+        .where((s) => s.documentType == SalesDocumentType.invoice && s.status != SaleStatus.cancelled)
+        .fold(0.0, (s, sale) => s + sale.architectCommissionAmount);
+
+    final displayTotalGenerated = commEarned > 0 ? commEarned : (a.totalCommissionEarned > 0 ? a.totalCommissionEarned : invComms);
+    final displayPendingReview = commPending > 0 ? commPending : (a.pendingCommission > 0 ? a.pendingCommission : (commEarned == 0 ? invComms : 0.0));
+    final displayApprovedPayouts = commApproved > 0 ? commApproved : a.approvedCommission;
+    final displayPaidToDate = commPaid > 0 ? commPaid : a.paidCommission;
+
     // 2. Raw Material Consumption calculations
     final rawMaterialsList = <Map<String, dynamic>>[];
-    double totalRmQty = 0.0;
-    double totalRmVal = 0.0;
-
     for (final po in architectProductions) {
       for (final rm in po.rawMaterialsUsed) {
         final lineCost = rm.totalCost > 0 ? rm.totalCost : (rm.quantityUsed * rm.unitCost);
-        totalRmQty += rm.quantityUsed;
-        totalRmVal += lineCost;
         rawMaterialsList.add({
           'name': rm.rawMaterialName,
           'code': rm.rawMaterialCode,
@@ -1049,9 +1372,6 @@ class RecordDetailsView extends ConsumerWidget {
 
     // 3. Finished Product Usage calculations
     final finishedProductsList = <Map<String, dynamic>>[];
-    double totalFpQty = 0.0;
-    double totalFpVal = 0.0;
-
     for (final s in architectInvoices) {
       for (final it in s.items) {
         final fp = db.finishedProducts.where((f) => f.id == it.finishedProductId).firstOrNull;
@@ -1060,12 +1380,9 @@ class RecordDetailsView extends ConsumerWidget {
         final usageQty = it.deliveredQuantity > 0 ? it.deliveredQuantity : it.quantity;
         final totalItemCost = usageQty * costPerUnit;
 
-        totalFpQty += usageQty;
-        totalFpVal += totalItemCost;
-
         finishedProductsList.add({
           'name': it.finishedProductName,
-          'code': it.finishedProductCode ?? fp?.itemCode ?? '-',
+          'code': it.finishedProductCode.isNotEmpty ? it.finishedProductCode : (fp?.itemCode ?? '-'),
           'project': s.projectName ?? 'Direct Client Order',
           'projectId': s.projectId,
           'quantity': usageQty,
@@ -1079,226 +1396,220 @@ class RecordDetailsView extends ConsumerWidget {
       }
     }
 
-    final totalConsumptionVal = totalRmVal + totalFpVal;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // =========================================================
-        // SECTION A: ARCHITECT PROFILE
-        // =========================================================
+        // Dual Top Profile Cards
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('SECTION A: Architect Master Profile', style: AppTextStyles.h2),
-                const SizedBox(height: 2),
-                Text('Primary designer credentials, commission policy, and dual entity status',
-                    style: AppTextStyles.subtitle),
-              ],
-            ),
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chat, color: Colors.green, size: 22),
-                  tooltip: 'Quick WhatsApp Message',
-                  onPressed: () => WhatsAppQuickChatDialog.showArchitectQuickChat(
-                    context,
-                    architectName: a.name,
-                    architectPhone: a.mobile,
-                    firmName: a.companyName,
-                  ),
+            // Left Card: Architect Profile
+            Expanded(
+              flex: 3,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: AppRadius.lgBorderRadius,
+                  border: Border.all(color: AppColors.border),
                 ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: AppRadius.lgBorderRadius,
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildInfoRow('Architect ID', a.id),
-                        _buildInfoRow('Architect Name', a.name),
-                        _buildInfoRow('Studio / Company Name', a.companyName.isNotEmpty ? a.companyName : '-'),
-                        _buildInfoRow('Mobile Number', a.mobile),
-                        _buildInfoRow('Email Address', a.email ?? '-'),
-                        _buildInfoRow('Studio Address', a.address.isNotEmpty ? a.address : '-'),
-                        _buildInfoRow('GST Number', a.gstNumber.isNotEmpty ? a.gstNumber : '-'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 24),
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildInfoRow('Default Commission Rate', '${a.defaultCommissionRate}%'),
-                        _buildInfoRow('Active Status', 'ACTIVE PARTNER'),
-                        _buildInfoRow('Partner Registered Date', Formatters.formatDate(DateTime.now().subtract(const Duration(days: 120)))),
-                        const SizedBox(height: 8),
+                        Text('Architect Profile', style: AppTextStyles.h3),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Architect-Customer Link:', style: AppTextStyles.bodyMedium),
-                            linkedCust != null
-                                ? InkWell(
-                                    onTap: () {
-                                      ref.read(activeRecordDetailsStackProvider.notifier).push(linkedCust.id, 'customer', details.parentSection);
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.purple.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.link, size: 14, color: Colors.purple),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            linkedCust.name,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.purple,
-                                              decoration: TextDecoration.underline,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                : Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: const Text('Not Linked to Customer Master', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                                  ),
+                            IconButton(
+                              icon: const Icon(Icons.chat, color: Colors.green, size: 20),
+                              tooltip: 'Quick WhatsApp Message',
+                              onPressed: () => WhatsAppQuickChatDialog.showArchitectQuickChat(
+                                context,
+                                architectName: a.name,
+                                architectPhone: a.mobile,
+                                firmName: a.companyName,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ErpStatusBadge.neutral('ACTIVE PARTNER'),
                           ],
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    const Divider(height: 24),
+                    _buildInfoRow('Architect ID', a.id),
+                    _buildInfoRow('Architect Name', a.name),
+                    _buildInfoRow('Studio / Company Name', a.companyName.isNotEmpty ? a.companyName : '-'),
+                    _buildInfoRow('Mobile Number', a.mobile),
+                    _buildInfoRow('Email Address', a.email.isNotEmpty ? a.email : '-'),
+                    _buildInfoRow('Studio Address', a.address.isNotEmpty ? a.address : '-'),
+                    _buildInfoRow('State', a.state.isNotEmpty ? a.state : '-'),
+                    _buildInfoRow('PIN Code', a.pincode.isNotEmpty ? a.pincode : '-'),
+                    _buildInfoRow('GST Number', a.gstNumber.isNotEmpty ? a.gstNumber : '-'),
+                    _buildInfoRow('Partner Registered Date', Formatters.formatDate(DateTime.now().subtract(const Duration(days: 120)))),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Architect-Customer Link:', style: AppTextStyles.bodyMedium),
+                        linkedCust != null
+                            ? InkWell(
+                                onTap: () {
+                                  ref.read(activeRecordDetailsStackProvider.notifier).push(linkedCust.id, 'customer', details.parentSection);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.purple.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.link, size: 14, color: Colors.purple),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        linkedCust.name,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.purple,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text('Not Linked to Customer Master', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                              ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 28),
+            ),
+            const SizedBox(width: 16),
 
-        // =========================================================
-        // SECTION B: ARCHITECT-CUSTOMER DETAILS (DUAL ENTITY)
-        // =========================================================
-        Text('SECTION B: Architect-Customer Details (Dual Entity)', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (linkedCust == null)
+            // Right Card: Commission & Financial Ledger
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: AppRadius.lgBorderRadius,
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Commission & Financial Ledger', style: AppTextStyles.h3),
+                    const Divider(height: 24),
+                    _buildInfoRow('Default Commission Rate', '${a.defaultCommissionRate}%'),
+                    _buildInfoRow('Associated Projects', '${architectProjects.length} Projects'),
+                    _buildInfoRow('Total Commission Generated', Formatters.formatCurrency(displayTotalGenerated)),
+                    _buildInfoRow('Approved Payouts', Formatters.formatCurrency(displayApprovedPayouts)),
+                    _buildInfoRow('Disbursed to Date', Formatters.formatCurrency(displayPaidToDate)),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Pending Review / Due:', style: AppTextStyles.bodyBold),
+                        Text(
+                          Formatters.formatCurrency(displayPendingReview),
+                          style: AppTextStyles.h2.copyWith(
+                            color: displayPendingReview > 0 ? Colors.purple : AppColors.successText,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withValues(alpha: 0.08),
+                        borderRadius: AppRadius.smBorderRadius,
+                        border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Partner Payout Status:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            displayPendingReview > 0 ? 'PAYOUT PENDING' : 'SETTLED',
+                            style: AppTextStyles.bodyBold.copyWith(
+                              color: displayPendingReview > 0 ? Colors.purple : AppColors.successText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        // Linked Direct Customer Account Details (Dual Entity)
+        if (linkedCust != null) ...[
+          const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline, color: Colors.grey, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'No direct Customer record is currently linked. You can link this Architect to a Customer account via the Edit Architect modal for unified project orders and statements.',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.purple.withValues(alpha: 0.03),
+              color: Colors.purple.withValues(alpha: 0.04),
               borderRadius: AppRadius.lgBorderRadius,
               border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
+                    const Icon(Icons.person_pin_circle, color: Colors.purple, size: 22),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.person_pin_circle, color: Colors.purple, size: 22),
-                        const SizedBox(width: 8),
-                        Text('Linked Direct Customer Account: ${linkedCust.name}',
-                            style: AppTextStyles.h3.copyWith(color: Colors.purple)),
+                        Row(
+                          children: [
+                            Text('Linked Customer Account: ', style: AppTextStyles.bodyMedium),
+                            Text(linkedCust.name, style: AppTextStyles.bodyBold.copyWith(color: Colors.purple)),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Contact: ${linkedCust.mobile}   •   GSTIN: ${linkedCust.gstNumber.isNotEmpty ? linkedCust.gstNumber : "-"}   •   Email: ${linkedCust.email.isNotEmpty ? linkedCust.email : "-"}   •   Outstanding: ${Formatters.formatCurrency(linkedCust.outstandingAmount)}',
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                        ),
                       ],
                     ),
-                    InkWell(
-                      onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(linkedCust.id, 'customer', details.parentSection),
-                      child: Text('Open Customer Detail Page →',
-                          style: AppTextStyles.bodyBold.copyWith(color: Colors.purple, decoration: TextDecoration.underline)),
-                    ),
                   ],
                 ),
-                const Divider(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildInfoRow('Customer Contact', linkedCust.mobile),
-                    ),
-                    Expanded(
-                      child: _buildInfoRow('GSTIN / Tax ID', linkedCust.gstNumber ?? '-'),
-                    ),
-                    Expanded(
-                      child: _buildInfoRow('Customer Email', linkedCust.email ?? '-'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _buildSummaryMiniBadge('Related Projects', '${architectProjects.length} Projects', Colors.blue),
-                    const SizedBox(width: 12),
-                    _buildSummaryMiniBadge('Related Quotations', '${architectQuotations.length} Quotations', Colors.orange),
-                    const SizedBox(width: 12),
-                    _buildSummaryMiniBadge('Related Invoices & Orders', '${architectInvoices.length} Sales', Colors.teal),
-                    const SizedBox(width: 12),
-                    _buildSummaryMiniBadge('Customer Outstanding', Formatters.formatCurrency(linkedCust.outstandingAmount), Colors.red),
-                  ],
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(linkedCust.id, 'customer', details.parentSection),
+                  child: Text('Open Customer Profile →',
+                      style: AppTextStyles.bodyBold.copyWith(color: Colors.purple, decoration: TextDecoration.underline)),
                 ),
               ],
             ),
           ),
-        const SizedBox(height: 28),
+        ],
 
-        // =========================================================
-        // SECTION C: RELATED PROJECTS
-        // =========================================================
-        Text('SECTION C: Associated Architectural Projects', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
+        // Associated Architectural Projects
+        const SizedBox(height: 24),
+        Text('Associated Projects', style: AppTextStyles.h2),
+        const SizedBox(height: 12),
         if (architectProjects.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
@@ -1337,352 +1648,12 @@ class RecordDetailsView extends ConsumerWidget {
               ];
             }).toList(),
           ),
-        const SizedBox(height: 28),
 
-        // =========================================================
-        // SECTION D: RAW MATERIAL USAGE
-        // =========================================================
-        Text('SECTION D: Raw Material Consumption in Architect Projects', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (rawMaterialsList.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No raw material consumption recorded for associated production orders.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Material Name'),
-              ErpColumn(title: 'Item Code'),
-              ErpColumn(title: 'Project Name'),
-              ErpColumn(title: 'Quantity Used', isNumeric: true),
-              ErpColumn(title: 'Unit'),
-              ErpColumn(title: 'Date Used'),
-              ErpColumn(title: 'Unit Cost (₹)', isNumeric: true),
-              ErpColumn(title: 'Total Cost (₹)', isNumeric: true),
-              ErpColumn(title: 'Source Transaction'),
-            ],
-            rows: rawMaterialsList.map((rm) {
-              return [
-                Text(rm['name'] as String, style: AppTextStyles.bodyBold),
-                Text(rm['code'] as String, style: AppTextStyles.bodySmall),
-                Text(rm['project'] as String, style: AppTextStyles.bodyMedium),
-                Text(Formatters.formatNumber(rm['quantity'] as double), style: AppTextStyles.bodyBold),
-                Text(rm['unit'] as String, style: AppTextStyles.bodySmall),
-                Text(Formatters.formatDate(rm['date'] as DateTime), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(rm['unitCost'] as double), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(rm['totalCost'] as double), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(rm['source'] as String, style: AppTextStyles.bodySmall.copyWith(color: AppColors.purple)),
-              ];
-            }).toList(),
-          ),
+        // Sales & Invoices History
         const SizedBox(height: 28),
-
-        // =========================================================
-        // SECTION E: FINISHED PRODUCT USAGE
-        // =========================================================
-        Text('SECTION E: Finished Goods Delivered & Used in Projects', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (finishedProductsList.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No finished goods delivered or allocated to Architect projects yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Product Name'),
-              ErpColumn(title: 'SKU / Code'),
-              ErpColumn(title: 'Project Name'),
-              ErpColumn(title: 'Quantity Used', isNumeric: true),
-              ErpColumn(title: 'Unit'),
-              ErpColumn(title: 'Source'),
-              ErpColumn(title: 'Unit Cost (₹)', isNumeric: true),
-              ErpColumn(title: 'Total Cost (₹)', isNumeric: true),
-              ErpColumn(title: 'Delivery / Sale Date'),
-            ],
-            rows: finishedProductsList.map((fp) {
-              final isPurchased = fp['source'] == 'Purchased';
-              return [
-                Text(fp['name'] as String, style: AppTextStyles.bodyBold),
-                Text(fp['code'] as String, style: AppTextStyles.bodySmall),
-                Text(fp['project'] as String, style: AppTextStyles.bodyMedium),
-                Text(Formatters.formatNumber(fp['quantity'] as double), style: AppTextStyles.bodyBold),
-                Text(fp['unit'] as String, style: AppTextStyles.bodySmall),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isPurchased ? Colors.teal.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    isPurchased ? 'Purchased Goods' : 'Produced Goods',
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: isPurchased ? Colors.teal : Colors.blue),
-                  ),
-                ),
-                Text(Formatters.formatCurrency(fp['unitCost'] as double), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(fp['totalCost'] as double), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(Formatters.formatDate(fp['date'] as DateTime), style: AppTextStyles.bodySmall),
-              ];
-            }).toList(),
-          ),
-        const SizedBox(height: 28),
-
-        // =========================================================
-        // SECTION F: COMPLETE MATERIAL & PRODUCT SUMMARY
-        // =========================================================
-        Text('SECTION F: Complete Material & Product Summary', style: AppTextStyles.h2),
+        Text('Sales & Invoices History', style: AppTextStyles.h2),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildSummaryMetricCard('Total Projects', '${architectProjects.length} Projects', Icons.apartment, Colors.blue),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildSummaryMetricCard('Total RM Quantity', '${Formatters.formatNumber(totalRmQty)} Units', Icons.category_outlined, Colors.amber.shade800),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildSummaryMetricCard('Total RM Value', Formatters.formatCurrency(totalRmVal), Icons.account_balance_wallet_outlined, Colors.orange),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildSummaryMetricCard('Total FG Quantity', '${Formatters.formatNumber(totalFpQty)} Units', Icons.inventory_2_outlined, Colors.teal),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildSummaryMetricCard('Total FG Value', Formatters.formatCurrency(totalFpVal), Icons.monetization_on_outlined, Colors.indigo),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildSummaryMetricCard('Total Consumption Value', Formatters.formatCurrency(totalConsumptionVal), Icons.analytics_outlined, AppColors.primary),
-            ),
-          ],
-        ),
-        const SizedBox(height: 28),
-
-        // =========================================================
-        // SECTION G: PROJECT-WISE CONSUMPTION BREAKDOWN
-        // =========================================================
-        Text('SECTION G: Project-wise Material Consumption Breakdown', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (architectProjects.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No project consumption data available.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
-          Column(
-            children: architectProjects.map((prj) {
-              final prjRm = rawMaterialsList.where((r) => r['projectId'] == prj.id || r['project'] == prj.name).toList();
-              final prjFp = finishedProductsList.where((f) => f['projectId'] == prj.id || f['project'] == prj.name).toList();
-              final prjRmTotal = prjRm.fold(0.0, (sum, r) => sum + (r['totalCost'] as double));
-              final prjFpTotal = prjFp.fold(0.0, (sum, f) => sum + (f['totalCost'] as double));
-              final prjGrandMaterialVal = prjRmTotal + prjFpTotal;
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: AppRadius.lgBorderRadius,
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.architecture, color: AppColors.primary, size: 20),
-                            const SizedBox(width: 8),
-                            Text(prj.name, style: AppTextStyles.h3),
-                            const SizedBox(width: 8),
-                            ErpStatusBadge.neutral(prj.statusLabel),
-                          ],
-                        ),
-                        Text(
-                          'PROJECT TOTAL MATERIAL VALUE: ${Formatters.formatCurrency(prjGrandMaterialVal)}',
-                          style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 20),
-                    if (prjRm.isNotEmpty) ...[
-                      Text('Raw Materials Used:', style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.textSecondary)),
-                      const SizedBox(height: 6),
-                      ErpDataTable(
-                        columns: const [
-                          ErpColumn(title: 'Material Name'),
-                          ErpColumn(title: 'Qty'),
-                          ErpColumn(title: 'Unit Cost (₹)', isNumeric: true),
-                          ErpColumn(title: 'Total Cost (₹)', isNumeric: true),
-                        ],
-                        rows: prjRm.map((r) => [
-                          Text(r['name'] as String, style: AppTextStyles.bodyMedium),
-                          Text('${Formatters.formatNumber(r['quantity'] as double)} ${r['unit']}', style: AppTextStyles.bodySmall),
-                          Text(Formatters.formatCurrency(r['unitCost'] as double), style: AppTextStyles.bodySmall),
-                          Text(Formatters.formatCurrency(r['totalCost'] as double), style: AppTextStyles.bodyBold),
-                        ]).toList(),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (prjFp.isNotEmpty) ...[
-                      Text('Finished Products Allocated / Installed:', style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.textSecondary)),
-                      const SizedBox(height: 6),
-                      ErpDataTable(
-                        columns: const [
-                          ErpColumn(title: 'Product Name'),
-                          ErpColumn(title: 'Qty'),
-                          ErpColumn(title: 'Source'),
-                          ErpColumn(title: 'Unit Cost (₹)', isNumeric: true),
-                          ErpColumn(title: 'Total Cost (₹)', isNumeric: true),
-                        ],
-                        rows: prjFp.map((f) => [
-                          Text(f['name'] as String, style: AppTextStyles.bodyMedium),
-                          Text('${Formatters.formatNumber(f['quantity'] as double)} ${f['unit']}', style: AppTextStyles.bodySmall),
-                          Text(f['source'] as String, style: TextStyle(fontSize: 11, color: f['source'] == 'Purchased' ? Colors.teal : Colors.blue, fontWeight: FontWeight.bold)),
-                          Text(Formatters.formatCurrency(f['unitCost'] as double), style: AppTextStyles.bodySmall),
-                          Text(Formatters.formatCurrency(f['totalCost'] as double), style: AppTextStyles.bodyBold),
-                        ]).toList(),
-                      ),
-                    ],
-                    if (prjRm.isEmpty && prjFp.isEmpty)
-                      Text('No material movements recorded yet for this project.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        const SizedBox(height: 28),
-
-        // =========================================================
-        // SECTION H: RELATED PURCHASES
-        // =========================================================
-        Text('SECTION H: Purchase Orders Linked to Architect Projects', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (architectPurchases.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No direct purchase orders tagged to projects of this Architect.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'PO Number'),
-              ErpColumn(title: 'Date'),
-              ErpColumn(title: 'Vendor'),
-              ErpColumn(title: 'Purchase Type'),
-              ErpColumn(title: 'Items Count', isNumeric: true),
-              ErpColumn(title: 'Total Amount (₹)', isNumeric: true),
-              ErpColumn(title: 'Status'),
-            ],
-            rows: architectPurchases.map((p) {
-              final isFinished = p.items.any((it) => it.itemType == PurchaseItemType.finishedProduct);
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
-                  child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                ),
-                Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
-                Text(p.vendorName, style: AppTextStyles.bodyMedium),
-                Text(isFinished ? 'Finished Goods' : 'Raw Material', style: TextStyle(fontSize: 11, color: isFinished ? Colors.teal : Colors.blueGrey, fontWeight: FontWeight.bold)),
-                Text('${p.items.length} items', style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
-                ErpStatusBadge.neutral(p.statusLabel),
-              ];
-            }).toList(),
-          ),
-        const SizedBox(height: 28),
-
-        // =========================================================
-        // SECTION I: RELATED PRODUCTION ORDERS
-        // =========================================================
-        Text('SECTION I: Factory Production Orders for Architect Projects', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (architectProductions.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No factory production orders booked for these projects.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Production No'),
-              ErpColumn(title: 'Project'),
-              ErpColumn(title: 'Production Date'),
-              ErpColumn(title: 'Finished Product'),
-              ErpColumn(title: 'Qty Produced', isNumeric: true),
-              ErpColumn(title: 'RM Cost (₹)', isNumeric: true),
-              ErpColumn(title: 'Labour & Overheads (₹)', isNumeric: true),
-              ErpColumn(title: 'Total Production Cost (₹)', isNumeric: true),
-            ],
-            rows: architectProductions.map((po) {
-              return [
-                Text(po.productionNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(po.projectName ?? 'Project Scope', style: AppTextStyles.bodySmall),
-                Text(Formatters.formatDate(po.productionDate), style: AppTextStyles.bodySmall),
-                Text(po.finishedProductName, style: AppTextStyles.bodyMedium),
-                Text('${Formatters.formatNumber(po.actualQuantityProduced)} ${po.unit}', style: AppTextStyles.bodyBold),
-                Text(Formatters.formatCurrency(po.rawMaterialCost), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(po.labourCost + po.otherExpenses), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(po.totalProductionCost), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-              ];
-            }).toList(),
-          ),
-        const SizedBox(height: 28),
-
-        // =========================================================
-        // SECTION J: RELATED QUOTATIONS
-        // =========================================================
-        Text('SECTION J: Quotations & Estimates', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (architectQuotations.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No quotations generated under this Architect or associated projects.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Quotation No'),
-              ErpColumn(title: 'Client / Customer'),
-              ErpColumn(title: 'Project'),
-              ErpColumn(title: 'Quotation Date'),
-              ErpColumn(title: 'Total Amount (₹)', isNumeric: true),
-              ErpColumn(title: 'Status'),
-            ],
-            rows: architectQuotations.map((q) {
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(q.id, 'quotation', details.parentSection),
-                  child: Text(q.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                ),
-                Text(q.partyName, style: AppTextStyles.bodyMedium),
-                Text(q.projectName ?? '-', style: AppTextStyles.bodySmall),
-                Text(Formatters.formatDate(q.saleDate), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(q.totalAmount), style: AppTextStyles.bodyBold),
-                ErpStatusBadge.neutral(q.statusLabel),
-              ];
-            }).toList(),
-          ),
-        const SizedBox(height: 28),
-
-        // =========================================================
-        // SECTION K: RELATED SALES & INVOICES
-        // =========================================================
-        Text('SECTION K: Tax Invoices & Sales Orders', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (architectInvoices.isEmpty)
+        if (sortedInvoices.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
@@ -1701,7 +1672,7 @@ class RecordDetailsView extends ConsumerWidget {
               ErpColumn(title: 'Balance Pending (₹)', isNumeric: true),
               ErpColumn(title: 'Payment Status'),
             ],
-            rows: architectInvoices.map((s) {
+            rows: sortedInvoices.map((s) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
@@ -1718,27 +1689,11 @@ class RecordDetailsView extends ConsumerWidget {
               ];
             }).toList(),
           ),
-        const SizedBox(height: 28),
 
-        // =========================================================
-        // SECTION L: COMMISSION SUMMARY & LIFECYCLE LEDGER
-        // =========================================================
-        Text('SECTION L: Commission Summary & Lifecycle Ledger', style: AppTextStyles.h2),
+        // Commission Vouchers & Payout Lifecycle
+        const SizedBox(height: 28),
+        Text('Commission Vouchers & Payout Lifecycle', style: AppTextStyles.h2),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(child: _buildSummaryMetricCard('Commission Rate', '${a.defaultCommissionRate}% Rate', Icons.percent, Colors.purple)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildSummaryMetricCard('Total Generated', Formatters.formatCurrency(a.totalCommissionEarned), Icons.receipt_long, Colors.blue)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildSummaryMetricCard('Pending Review', Formatters.formatCurrency(a.pendingCommission), Icons.hourglass_top, Colors.amber.shade800)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildSummaryMetricCard('Approved Payouts', Formatters.formatCurrency(a.approvedCommission), Icons.check_circle_outline, Colors.teal)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildSummaryMetricCard('Paid to Date', Formatters.formatCurrency(a.paidCommission), Icons.paid_outlined, Colors.green)),
-          ],
-        ),
-        const SizedBox(height: 16),
         if (architectCommissions.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
@@ -1794,57 +1749,109 @@ class RecordDetailsView extends ConsumerWidget {
                       IconButton(
                         icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 18),
                         tooltip: 'Approve Commission Voucher',
-                        onPressed: () {
-                          db.approveCommission(comm.id);
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Commission Voucher ${comm.commissionNumber} Approved!'),
-                            backgroundColor: AppColors.success,
-                          ));
+                        onPressed: () async {
+                          try {
+                            await db.approveCommissionAsync(comm.id);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Commission Voucher ${comm.commissionNumber} Approved!'),
+                                backgroundColor: AppColors.success,
+                              ));
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Failed to approve: $e'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          }
                         },
                       ),
                       IconButton(
                         icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 18),
                         tooltip: 'Reject Commission Voucher',
-                        onPressed: () {
-                          db.rejectCommission(comm.id, 'Declined during partner audit');
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
-                            backgroundColor: AppColors.danger,
-                          ));
+                        onPressed: () async {
+                          try {
+                            await db.rejectCommissionAsync(comm.id, reason: 'Declined during partner audit');
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Failed to reject: $e'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          }
                         },
                       ),
                     ],
-                    if (comm.status == CommissionStatus.approved)
+                    if (comm.status == CommissionStatus.approved) ...[
                       IconButton(
                         icon: const Icon(Icons.payments_outlined, color: Colors.purple, size: 18),
                         tooltip: 'Disburse / Pay Commission',
-                        onPressed: () {
-                          db.disburseCommission(comm.id, PaymentMode.bankTransfer, 'TXN-DISB-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}');
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Disbursed ${Formatters.formatCurrency(comm.commissionAmount)} to ${comm.architectName}!'),
-                            backgroundColor: AppColors.success,
-                          ));
+                        onPressed: () async {
+                          try {
+                            await db.disburseCommissionAsync(
+                              commissionId: comm.id,
+                              paymentMode: PaymentMode.bankTransfer,
+                              transactionRef: 'TXN-DISB-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Disbursed ${Formatters.formatCurrency(comm.commissionAmount)} to ${comm.architectName}!'),
+                                backgroundColor: AppColors.success,
+                              ));
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Failed to disburse: $e'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          }
                         },
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 18),
+                        tooltip: 'Reject / Cancel Commission Voucher',
+                        onPressed: () async {
+                          try {
+                            await db.rejectCommissionAsync(comm.id, reason: 'Declined after approval');
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Failed to reject: $e'),
+                                backgroundColor: AppColors.danger,
+                              ));
+                            }
+                          }
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ];
             }).toList(),
           ),
-        const SizedBox(height: 28),
 
-        // =========================================================
-        // SECTION M: PAYMENT HISTORY (DISBURSEMENTS)
-        // =========================================================
-        Text('SECTION M: Commission Payment Disbursement History', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (commissionPayments.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No payout transactions disbursed yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
+        // Commission Disbursement History
+        if (commissionPayments.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Commission Disbursement History', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
               ErpColumn(title: 'Payment No'),
@@ -1867,12 +1874,183 @@ class RecordDetailsView extends ConsumerWidget {
               ];
             }).toList(),
           ),
-        const SizedBox(height: 28),
+        ],
 
-        // =========================================================
-        // SECTION N: ACTIVITY TIMELINE
-        // =========================================================
-        Text('SECTION N: Chronological Partner Activity Timeline', style: AppTextStyles.h2),
+        // Quotations & Estimates
+        if (architectQuotations.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Quotations & Estimates', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Quotation No'),
+              ErpColumn(title: 'Client / Customer'),
+              ErpColumn(title: 'Project'),
+              ErpColumn(title: 'Quotation Date'),
+              ErpColumn(title: 'Total Amount (₹)', isNumeric: true),
+              ErpColumn(title: 'Status'),
+            ],
+            rows: architectQuotations.map((q) {
+              return [
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(q.id, 'quotation', details.parentSection),
+                  child: Text(q.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                ),
+                Text(q.partyName, style: AppTextStyles.bodyMedium),
+                Text(q.projectName ?? '-', style: AppTextStyles.bodySmall),
+                Text(Formatters.formatDate(q.saleDate), style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(q.totalAmount), style: AppTextStyles.bodyBold),
+                ErpStatusBadge.neutral(q.statusLabel),
+              ];
+            }).toList(),
+          ),
+        ],
+
+        // Direct Purchases in Architect Projects
+        if (architectPurchases.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Direct Purchases in Architect Projects', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'PO Number'),
+              ErpColumn(title: 'Date'),
+              ErpColumn(title: 'Vendor'),
+              ErpColumn(title: 'Purchase Type'),
+              ErpColumn(title: 'Items Count', isNumeric: true),
+              ErpColumn(title: 'Total Amount (₹)', isNumeric: true),
+              ErpColumn(title: 'Status'),
+            ],
+            rows: architectPurchases.map((p) {
+              final isFinished = p.items.any((it) => it.itemType == PurchaseItemType.finishedProduct);
+              return [
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
+                  child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                ),
+                Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
+                Text(p.vendorName, style: AppTextStyles.bodyMedium),
+                Text(isFinished ? 'Finished Goods' : 'Raw Material', style: TextStyle(fontSize: 11, color: isFinished ? Colors.teal : Colors.blueGrey, fontWeight: FontWeight.bold)),
+                Text('${p.items.length} items', style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
+                ErpStatusBadge.neutral(p.statusLabel),
+              ];
+            }).toList(),
+          ),
+        ],
+
+        // Factory Production Orders
+        if (architectProductions.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Factory Production Orders for Architect Projects', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Production No'),
+              ErpColumn(title: 'Project'),
+              ErpColumn(title: 'Production Date'),
+              ErpColumn(title: 'Finished Product'),
+              ErpColumn(title: 'Qty Produced', isNumeric: true),
+              ErpColumn(title: 'RM Cost (₹)', isNumeric: true),
+              ErpColumn(title: 'Labour & Overheads (₹)', isNumeric: true),
+              ErpColumn(title: 'Total Production Cost (₹)', isNumeric: true),
+            ],
+            rows: architectProductions.map((po) {
+              return [
+                Text(po.productionNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                Text(po.projectName ?? 'Project Scope', style: AppTextStyles.bodySmall),
+                Text(Formatters.formatDate(po.productionDate), style: AppTextStyles.bodySmall),
+                Text(po.finishedProductName, style: AppTextStyles.bodyMedium),
+                Text('${Formatters.formatNumber(po.actualQuantityProduced)} ${po.unit}', style: AppTextStyles.bodyBold),
+                Text(Formatters.formatCurrency(po.rawMaterialCost), style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(po.labourCost + po.otherExpenses), style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(po.totalProductionCost), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+              ];
+            }).toList(),
+          ),
+        ],
+
+        // Raw Material Consumption
+        if (rawMaterialsList.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Raw Material Consumption in Architect Projects', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Material Name'),
+              ErpColumn(title: 'Item Code'),
+              ErpColumn(title: 'Project Name'),
+              ErpColumn(title: 'Quantity Used', isNumeric: true),
+              ErpColumn(title: 'Unit'),
+              ErpColumn(title: 'Date Used'),
+              ErpColumn(title: 'Unit Cost (₹)', isNumeric: true),
+              ErpColumn(title: 'Total Cost (₹)', isNumeric: true),
+              ErpColumn(title: 'Source Transaction'),
+            ],
+            rows: rawMaterialsList.map((rm) {
+              return [
+                Text(rm['name'] as String, style: AppTextStyles.bodyBold),
+                Text(rm['code'] as String, style: AppTextStyles.bodySmall),
+                Text(rm['project'] as String, style: AppTextStyles.bodyMedium),
+                Text(Formatters.formatNumber(rm['quantity'] as double), style: AppTextStyles.bodyBold),
+                Text(rm['unit'] as String, style: AppTextStyles.bodySmall),
+                Text(Formatters.formatDate(rm['date'] as DateTime), style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(rm['unitCost'] as double), style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(rm['totalCost'] as double), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                Text(rm['source'] as String, style: AppTextStyles.bodySmall.copyWith(color: AppColors.purple)),
+              ];
+            }).toList(),
+          ),
+        ],
+
+        // Finished Goods Delivered & Used
+        if (finishedProductsList.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Finished Goods Delivered & Used in Projects', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Product Name'),
+              ErpColumn(title: 'SKU / Code'),
+              ErpColumn(title: 'Project Name'),
+              ErpColumn(title: 'Quantity Used', isNumeric: true),
+              ErpColumn(title: 'Unit'),
+              ErpColumn(title: 'Source'),
+              ErpColumn(title: 'Unit Cost (₹)', isNumeric: true),
+              ErpColumn(title: 'Total Cost (₹)', isNumeric: true),
+              ErpColumn(title: 'Delivery / Sale Date'),
+            ],
+            rows: finishedProductsList.map((fp) {
+              final isPurchased = fp['source'] == 'Purchased';
+              return [
+                Text(fp['name'] as String, style: AppTextStyles.bodyBold),
+                Text(fp['code'] as String, style: AppTextStyles.bodySmall),
+                Text(fp['project'] as String, style: AppTextStyles.bodyMedium),
+                Text(Formatters.formatNumber(fp['quantity'] as double), style: AppTextStyles.bodyBold),
+                Text(fp['unit'] as String, style: AppTextStyles.bodySmall),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isPurchased ? Colors.teal.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    isPurchased ? 'Purchased Goods' : 'Produced Goods',
+                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: isPurchased ? Colors.teal : Colors.blue),
+                  ),
+                ),
+                Text(Formatters.formatCurrency(fp['unitCost'] as double), style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(fp['totalCost'] as double), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                Text(Formatters.formatDate(fp['date'] as DateTime), style: AppTextStyles.bodySmall),
+              ];
+            }).toList(),
+          ),
+        ],
+
+        // Partner Activity Timeline (Commented out per request)
+        /*
+        const SizedBox(height: 28),
+        Text('Partner Activity Timeline & Audit Trail', style: AppTextStyles.h2),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(20),
@@ -1894,58 +2072,12 @@ class RecordDetailsView extends ConsumerWidget {
             ],
           ),
         ),
+        */
       ],
     );
   }
 
-  Widget _buildSummaryMiniBadge(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$label: ', style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
-          Text(value, style: TextStyle(fontSize: 11.5, color: color, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryMetricCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.mdBorderRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title, style: AppTextStyles.tableHeader.copyWith(fontSize: 11)),
-              Icon(icon, size: 16, color: color),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: AppTextStyles.metricValue.copyWith(fontSize: 15, color: color),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
+  /*
   Widget _buildTimelineTile(String title, String description, DateTime timestamp, IconData icon, Color color) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -1981,6 +2113,7 @@ class RecordDetailsView extends ConsumerWidget {
       ),
     );
   }
+  */
 
   // -----------------------------------------------------------------
   // 8. Project Details (Comprehensive 10-Section Breakdown: A to J)
@@ -2046,47 +2179,12 @@ class RecordDetailsView extends ConsumerWidget {
         .fold(0.0, (sum, s) => sum + s.pendingAmount);
     final totalProjectExpenses = projectExpenses.fold(0.0, (sum, e) => sum + e.amount);
     final totalProjectPurchases = projectPurchases.fold(0.0, (sum, p) => sum + p.totalAmount);
-    final totalRMCost = rawMaterialConsumption.values.fold(0.0, (sum, rm) => sum + (rm['totalCost'] as double));
     final estimatedMargin = (totalSalesInvoiced - totalProjectExpenses - totalProjectPurchases).clamp(-9999999.0, 99999999.0);
+    final sortedSales = List<Sale>.from(projectSales)..sort((a, b) => b.saleDate.compareTo(a.saleDate));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // =========================================================
-        // SECTION A: Project Overview & Commercial KPIs
-        // =========================================================
-        Container(
-          padding: const EdgeInsets.all(12),
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.primary.withOpacity(0.2)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('SECTION A: Project Overview & Financial Dashboard',
-                  style: AppTextStyles.h3.copyWith(color: AppColors.primary)),
-              Row(
-                children: [
-                  if (prj.customerId != null)
-                    IconButton(
-                      icon: const Icon(Icons.chat, color: Colors.green, size: 18),
-                      tooltip: 'WhatsApp Client / Site Lead',
-                      onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
-                        context,
-                        customerName: prj.customerName ?? prj.name,
-                        customerPhone: '+91 98765 00000',
-                        projectName: prj.name,
-                      ),
-                    ),
-                  ErpStatusBadge.neutral(prj.statusLabel.toUpperCase()),
-                ],
-              ),
-            ],
-          ),
-        ),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -2102,9 +2200,31 @@ class RecordDetailsView extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Scope & Parties', style: AppTextStyles.h3),
-                    const Divider(height: 20),
-                    _buildInfoRow('Project ID', prj.id),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Project Details', style: AppTextStyles.h3),
+                        Row(
+                          children: [
+                            if (prj.customerId != null)
+                              IconButton(
+                                icon: const Icon(Icons.chat, color: Colors.green, size: 20),
+                                tooltip: 'WhatsApp Client / Site Lead',
+                                onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
+                                  context,
+                                  customerName: prj.customerName ?? prj.name,
+                                  customerPhone: '+91 98765 00000',
+                                  projectName: prj.name,
+                                ),
+                              ),
+                            const SizedBox(width: 8),
+                            ErpStatusBadge.neutral(prj.statusLabel.toUpperCase()),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+                    _buildInfoRow('Project Code', prj.id),
                     _buildInfoRow('Project Name', prj.name),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2155,8 +2275,8 @@ class RecordDetailsView extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Financial & Costing Summary', style: AppTextStyles.h3),
-                    const Divider(height: 20),
-                    _buildInfoRow('Total Sales Invoiced', Formatters.formatCurrency(totalSalesInvoiced)),
+                    const Divider(height: 24),
+                    _buildInfoRow('Gross Sales Invoiced', Formatters.formatCurrency(totalSalesInvoiced)),
                     _buildInfoRow('Direct Material Purchases', Formatters.formatCurrency(totalProjectPurchases)),
                     _buildInfoRow('Operational Expenses', Formatters.formatCurrency(totalProjectExpenses)),
                     _buildInfoRow('Pending Receivables', Formatters.formatCurrency(totalSalesPending)),
@@ -2167,11 +2287,32 @@ class RecordDetailsView extends ConsumerWidget {
                         Text('Estimated Project Margin:', style: AppTextStyles.bodyBold),
                         Text(
                           Formatters.formatCurrency(estimatedMargin),
-                          style: AppTextStyles.h3.copyWith(
+                          style: AppTextStyles.h2.copyWith(
                             color: estimatedMargin >= 0 ? AppColors.successText : AppColors.dangerText,
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: estimatedMargin >= 0 ? AppColors.primary.withValues(alpha: 0.08) : Colors.red.withValues(alpha: 0.08),
+                        borderRadius: AppRadius.smBorderRadius,
+                        border: Border.all(color: estimatedMargin >= 0 ? AppColors.primary.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Profitability Status:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            estimatedMargin >= 0 ? 'PROFITABLE' : 'BUDGET DEFICIT',
+                            style: AppTextStyles.bodyBold.copyWith(
+                              color: estimatedMargin >= 0 ? AppColors.primary : AppColors.dangerText,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -2179,80 +2320,66 @@ class RecordDetailsView extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
 
-        // =========================================================
-        // SECTION B: Raw Material Consumption Breakdown
-        // =========================================================
-        Text('SECTION B: Raw Material Consumption Breakdown', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (rawMaterialConsumption.isEmpty)
+        // Sales & Invoices History
+        Text('Sales & Invoices History', style: AppTextStyles.h2),
+        const SizedBox(height: 12),
+        if (sortedSales.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No raw material consumption recorded for this project yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+            child: Text('No sales documents linked to this project yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
           )
         else
           ErpDataTable(
             columns: const [
-              ErpColumn(title: 'Item Code'),
-              ErpColumn(title: 'Raw Material Name'),
-              ErpColumn(title: 'Quantity Consumed'),
-              ErpColumn(title: 'Total Material Cost (₹)', isNumeric: true),
+              ErpColumn(title: 'Invoice Number'),
+              ErpColumn(title: 'Date'),
+              ErpColumn(title: 'Document Type'),
+              ErpColumn(title: 'Total Invoiced', isNumeric: true),
+              ErpColumn(title: 'Outstanding Due', isNumeric: true),
+              ErpColumn(title: 'Status'),
+              ErpColumn(title: 'Actions'),
             ],
-            rows: rawMaterialConsumption.values.map((rm) {
+            rows: sortedSales.map((s) {
               return [
-                Text(rm['code'] as String, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(rm['name'] as String, style: AppTextStyles.bodyMedium),
-                Text('${(rm['quantity'] as double).toStringAsFixed(1)} ${rm['unit']}', style: AppTextStyles.bodyMedium),
-                Text(Formatters.formatCurrency(rm['totalCost'] as double), style: AppTextStyles.bodyBold),
+                InkWell(
+                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
+                  child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                ),
+                Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
+                Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
+                Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
+                Text(
+                  Formatters.formatCurrency(s.pendingAmount),
+                  style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
+                ),
+                ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.share, color: Colors.teal, size: 16),
+                      tooltip: 'Share Document',
+                      onPressed: () => ShareDocumentDialog.show(context, s),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
+                      tooltip: 'View PDF',
+                      onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
+                    ),
+                  ],
+                ),
               ];
             }).toList(),
           ),
-        const SizedBox(height: 28),
 
-        // =========================================================
-        // SECTION C: Finished Product Usage Breakdown
-        // =========================================================
-        Text('SECTION C: Finished Product Usage Breakdown', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (finishedProductUsage.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No finished products delivered or invoiced for this project yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'SKU Code'),
-              ErpColumn(title: 'Finished Product Name'),
-              ErpColumn(title: 'Quantity Used / Invoiced'),
-              ErpColumn(title: 'Total Line Valuation (₹)', isNumeric: true),
-            ],
-            rows: finishedProductUsage.values.map((fp) {
-              return [
-                Text(fp['code'] as String, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(fp['name'] as String, style: AppTextStyles.bodyMedium),
-                Text('${(fp['quantity'] as double).toInt()} ${fp['unit']}', style: AppTextStyles.bodyMedium),
-                Text(Formatters.formatCurrency(fp['totalValue'] as double), style: AppTextStyles.bodyBold),
-              ];
-            }).toList(),
-          ),
-        const SizedBox(height: 28),
-
-        // =========================================================
-        // SECTION D: Purchases Linked to Project
-        // =========================================================
-        Text('SECTION D: Direct Purchases Linked to Project', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (projectPurchases.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No direct purchases linked to this project.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
+        // Direct Purchases Linked to Project
+        if (projectPurchases.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Direct Purchases Linked to Project', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
               ErpColumn(title: 'PO Number'),
@@ -2278,20 +2405,13 @@ class RecordDetailsView extends ConsumerWidget {
               ];
             }).toList(),
           ),
-        const SizedBox(height: 28),
+        ],
 
-        // =========================================================
-        // SECTION E: Production Orders Linked to Project
-        // =========================================================
-        Text('SECTION E: Production Orders Linked to Project', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (projectProductions.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No production orders linked to this project.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
+        // Production Orders Linked to Project
+        if (projectProductions.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Production Orders Linked to Project', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
               ErpColumn(title: 'Order No'),
@@ -2315,76 +2435,13 @@ class RecordDetailsView extends ConsumerWidget {
               ];
             }).toList(),
           ),
-        const SizedBox(height: 28),
+        ],
 
-        // =========================================================
-        // SECTION F: Sales Orders & Invoices
-        // =========================================================
-        Text('SECTION F: Sales Orders & Invoices Linked to Project', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (projectSales.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No sales documents linked to this project.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Doc Number'),
-              ErpColumn(title: 'Type'),
-              ErpColumn(title: 'Date'),
-              ErpColumn(title: 'Total (₹)', isNumeric: true),
-              ErpColumn(title: 'Outstanding Due (₹)', isNumeric: true),
-              ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
-            ],
-            rows: projectSales.map((s) {
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                  child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                ),
-                Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
-                Text(
-                  Formatters.formatCurrency(s.pendingAmount),
-                  style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
-                ),
-                ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.share, color: Colors.teal, size: 16),
-                      tooltip: 'Share Document',
-                      onPressed: () => ShareDocumentDialog.show(context, s),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
-                      tooltip: 'View PDF',
-                      onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
-                    ),
-                  ],
-                ),
-              ];
-            }).toList(),
-          ),
-        const SizedBox(height: 28),
-
-        // =========================================================
-        // SECTION G: Expenses Linked to Project
-        // =========================================================
-        Text('SECTION G: Direct Expenses & Overheads', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (projectExpenses.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No direct expenses booked against this project.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
+        // Expenses Linked to Project
+        if (projectExpenses.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Direct Expenses & Overheads', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
               ErpColumn(title: 'Expense No'),
@@ -2407,20 +2464,13 @@ class RecordDetailsView extends ConsumerWidget {
               ];
             }).toList(),
           ),
-        const SizedBox(height: 28),
+        ],
 
-        // =========================================================
-        // SECTION H: Payments & Collections Linked to Project
-        // =========================================================
-        Text('SECTION H: Payment Transactions & Receipts', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (projectPayments.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No payment vouchers linked to this project.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
+        // Payments & Collections Linked to Project
+        if (projectPayments.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Payment Transactions & Receipts', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
               ErpColumn(title: 'Payment No'),
@@ -2443,20 +2493,59 @@ class RecordDetailsView extends ConsumerWidget {
               ];
             }).toList(),
           ),
-        const SizedBox(height: 28),
+        ],
 
-        // =========================================================
-        // SECTION I: Stock Movement Ledger
-        // =========================================================
-        Text('SECTION I: Stock Movement & Inward/Outward Ledger', style: AppTextStyles.h2),
-        const SizedBox(height: 8),
-        if (projectMovements.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No stock movements logged for items in this project.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else
+        // Raw Material Consumption Breakdown
+        if (rawMaterialConsumption.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Raw Material Consumption Breakdown', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'Item Code'),
+              ErpColumn(title: 'Raw Material Name'),
+              ErpColumn(title: 'Quantity Consumed'),
+              ErpColumn(title: 'Total Material Cost (₹)', isNumeric: true),
+            ],
+            rows: rawMaterialConsumption.values.map((rm) {
+              return [
+                Text(rm['code'] as String, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                Text(rm['name'] as String, style: AppTextStyles.bodyMedium),
+                Text('${(rm['quantity'] as double).toStringAsFixed(1)} ${rm['unit']}', style: AppTextStyles.bodyMedium),
+                Text(Formatters.formatCurrency(rm['totalCost'] as double), style: AppTextStyles.bodyBold),
+              ];
+            }).toList(),
+          ),
+        ],
+
+        // Finished Product Usage Breakdown
+        if (finishedProductUsage.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Finished Product Usage Breakdown', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          ErpDataTable(
+            columns: const [
+              ErpColumn(title: 'SKU Code'),
+              ErpColumn(title: 'Finished Product Name'),
+              ErpColumn(title: 'Quantity Used / Invoiced'),
+              ErpColumn(title: 'Total Line Valuation (₹)', isNumeric: true),
+            ],
+            rows: finishedProductUsage.values.map((fp) {
+              return [
+                Text(fp['code'] as String, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                Text(fp['name'] as String, style: AppTextStyles.bodyMedium),
+                Text('${(fp['quantity'] as double).toInt()} ${fp['unit']}', style: AppTextStyles.bodyMedium),
+                Text(Formatters.formatCurrency(fp['totalValue'] as double), style: AppTextStyles.bodyBold),
+              ];
+            }).toList(),
+          ),
+        ],
+
+        // Stock Movement Ledger
+        if (projectMovements.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Stock Movement & Inward/Outward Ledger', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
               ErpColumn(title: 'Movement ID'),
@@ -2472,7 +2561,7 @@ class RecordDetailsView extends ConsumerWidget {
                 Text(Formatters.formatDate(m.timestamp), style: AppTextStyles.bodySmall),
                 Text(m.itemName, style: AppTextStyles.bodyMedium),
                 Text(m.transactionTypeLabel, style: AppTextStyles.bodySmall),
-                Text(m.sourceLabel ?? 'Produced', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal)),
+                Text(m.sourceLabel, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal)),
                 Text('${m.quantityChanged > 0 ? "+" : ""}${m.quantityChanged.toInt()} ${m.unit}',
                     style: AppTextStyles.bodyBold.copyWith(
                       color: m.quantityChanged > 0 ? AppColors.successText : AppColors.dangerText,
@@ -2480,12 +2569,12 @@ class RecordDetailsView extends ConsumerWidget {
               ];
             }).toList(),
           ),
-        const SizedBox(height: 28),
+        ],
 
-        // =========================================================
-        // SECTION J: Project Activity Timeline & Audit Trail
-        // =========================================================
-        Text('SECTION J: Project Activity Timeline & Audit Trail', style: AppTextStyles.h2),
+        // Activity Timeline (Commented out per request)
+        /*
+        const SizedBox(height: 28),
+        Text('Project Activity Timeline & Audit Trail', style: AppTextStyles.h2),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(20),
@@ -2507,10 +2596,12 @@ class RecordDetailsView extends ConsumerWidget {
             ],
           ),
         ),
+        */
       ],
     );
   }
 
+  /*
   Widget _buildTimelineEvent(String title, String desc, String date, IconData icon, Color color) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -2543,10 +2634,8 @@ class RecordDetailsView extends ConsumerWidget {
       ),
     );
   }
+  */
 
-  void _showSaleDocumentPdfDialog(BuildContext context, Sale s, MockDatabaseService db) {
-    SalesPdfGeneratorDialog.show(context, s, db);
-  }
 
   void _showApproveReturnDialog(BuildContext context, Sale s, MockDatabaseService db) {
     showDialog(
@@ -3094,7 +3183,7 @@ class RecordDetailsView extends ConsumerWidget {
                 child: Text(item.finishedProductCode, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
               ),
               Text(item.finishedProductName, style: AppTextStyles.bodyMedium),
-              Text('${item.invoicedQuantity?.toInt() ?? item.quantity.toInt()} ${item.unit}', style: AppTextStyles.bodySmall),
+              Text('${item.invoicedQuantity.toInt()} ${item.unit}', style: AppTextStyles.bodySmall),
               Text('${item.quantity.toInt()} ${item.unit}', style: AppTextStyles.bodyBold),
               Text(Formatters.formatCurrency(item.rate), style: AppTextStyles.bodySmall),
               Text('${item.gstPercent.toInt()}%', style: AppTextStyles.bodySmall),
@@ -3391,12 +3480,10 @@ class RecordDetailsView extends ConsumerWidget {
                                 icon: Icons.check_circle_outline,
                                 onPressed: () {
                                   final pi = db.createProformaFromQuotation(s.id);
-                                  if (pi != null) {
-                                    ref.read(activeRecordDetailsStackProvider.notifier).push(pi.id, 'proformaInvoice', details.parentSection);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Quotation Accepted! Proforma Invoice generated.'), backgroundColor: AppColors.success),
-                                    );
-                                  }
+                                  ref.read(activeRecordDetailsStackProvider.notifier).push(pi.id, 'proformaInvoice', details.parentSection);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Quotation Accepted! Proforma Invoice generated.'), backgroundColor: AppColors.success),
+                                  );
                                 },
                               ),
                             ),
@@ -3888,14 +3975,21 @@ class RecordDetailsView extends ConsumerWidget {
   }
 
   // Common UI builder row helper
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoRow(String label, String value, {Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: AppTextStyles.bodyMedium),
-          Text(value, style: AppTextStyles.bodyBold),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: valueColor != null ? AppTextStyles.bodyBold.copyWith(color: valueColor) : AppTextStyles.bodyBold,
+            ),
+          ),
         ],
       ),
     );

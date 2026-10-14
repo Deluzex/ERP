@@ -165,9 +165,9 @@ export class RawMaterialsService {
     const res = await this.db.query<{ id: string }>(
       `INSERT INTO raw_materials (
         name, item_code, category_id, unit_id, hsn_sac_code,
-        opening_stock, minimum_stock, reorder_level, default_purchase_price,
+        opening_stock, current_stock, minimum_stock, reorder_level, default_purchase_price,
         gst_percent, preferred_vendor_ids
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11)
       RETURNING id`,
       [
         dto.name.trim(),
@@ -226,6 +226,10 @@ export class RawMaterialsService {
     if (dto.hsnSacCode !== undefined) {
       updates.push(`hsn_sac_code = $${idx++}`);
       values.push(dto.hsnSacCode);
+    }
+    if (dto.currentStock !== undefined) {
+      updates.push(`current_stock = $${idx++}`);
+      values.push(Money.formatQuantity(dto.currentStock));
     }
     if (dto.minimumStock !== undefined) {
       updates.push(`minimum_stock = $${idx++}`);
@@ -301,7 +305,9 @@ export class RawMaterialsService {
   }
 
   private mapRow(r: any): RawMaterialRecord {
-    const currentStock = parseFloat(r.current_stock ?? r.opening_stock) || 0;
+    const rawCurrentStock = r.current_stock !== null && r.current_stock !== undefined ? parseFloat(r.current_stock) : null;
+    const rawOpeningStock = parseFloat(r.opening_stock) || 0;
+    const currentStock = (rawCurrentStock !== null && !isNaN(rawCurrentStock)) ? rawCurrentStock : rawOpeningStock;
     const minStock = parseFloat(r.minimum_stock) || 0;
 
     return {
@@ -313,7 +319,7 @@ export class RawMaterialsService {
       unitId: r.unit_id,
       unit: r.unit_symbol,
       hsnSacCode: r.hsn_sac_code,
-      currentStock: Money.formatQuantity(r.current_stock ?? r.opening_stock),
+      currentStock: Money.formatQuantity(currentStock),
       openingStock: Money.formatQuantity(r.opening_stock),
       minimumStock: Money.formatQuantity(r.minimum_stock),
       reorderLevel: Money.formatQuantity(r.reorder_level),

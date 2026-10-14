@@ -31,7 +31,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(databaseServiceProvider).loadUsers();
       ref.read(databaseServiceProvider).loadRoles();
@@ -53,6 +53,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
     final mobileCtrl = TextEditingController(text: existing?.mobile ?? '');
     final passwordCtrl = TextEditingController(text: '');
     String selectedPrimaryRoleId = existing?.primaryRoleId ?? 'data_entry';
+    if (!db.roles.any((r) => r.id == selectedPrimaryRoleId)) {
+      selectedPrimaryRoleId = db.roles.isNotEmpty ? db.roles.first.id : 'data_entry';
+    }
     List<String> assignedRoleIds = List.from(existing?.assignedRoleIds ?? []);
     bool isActive = existing?.isActive ?? true;
     final formKey = GlobalKey<FormState>();
@@ -325,6 +328,29 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
       permMatrix[mod] = Set.from(existing?.permissions[mod] ?? {});
     }
 
+    // Dashboard dropdown options covering all system & custom landing destinations
+    final dashboardItems = <DropdownMenuItem<ErpNavSection>>[
+      const DropdownMenuItem(value: ErpNavSection.dashboard, child: Text('Admin Full Dashboard')),
+      const DropdownMenuItem(value: ErpNavSection.inventoryDashboard, child: Text('Inventory Dashboard')),
+      const DropdownMenuItem(value: ErpNavSection.purchaseDashboard, child: Text('Purchase Dashboard')),
+      const DropdownMenuItem(value: ErpNavSection.productionDashboard, child: Text('Production Dashboard')),
+      const DropdownMenuItem(value: ErpNavSection.salesDashboard, child: Text('Sales Dashboard')),
+      const DropdownMenuItem(value: ErpNavSection.paymentsDashboard, child: Text('Accounts / Payment Dashboard')),
+      const DropdownMenuItem(value: ErpNavSection.mastersDashboard, child: Text('Master Data Dashboard')),
+      const DropdownMenuItem(value: ErpNavSection.projectList, child: Text('Project Dashboard')),
+      const DropdownMenuItem(value: ErpNavSection.reportsDashboard, child: Text('Reports Analytics Dashboard')),
+    ];
+
+    // Defensive guarantee: if existing role has any custom or legacy nav section, ensure it exists in the items list to prevent Flutter assertion errors
+    if (!dashboardItems.any((item) => item.value == selectedDashboard)) {
+      dashboardItems.add(
+        DropdownMenuItem(
+          value: selectedDashboard,
+          child: Text(selectedDashboard.name),
+        ),
+      );
+    }
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -389,16 +415,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                   value: selectedDashboard,
                                   isExpanded: true,
                                   decoration: const InputDecoration(labelText: 'Default Landing Dashboard'),
-                                  items: const [
-                                    DropdownMenuItem(value: ErpNavSection.dashboard, child: Text('Admin Full Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.inventoryDashboard, child: Text('Inventory Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.purchaseList, child: Text('Purchase Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.productionOrders, child: Text('Production Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.salesDashboard, child: Text('Sales Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.customerPayments, child: Text('Accounts / Payment Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.projectList, child: Text('Project Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.inventoryReports, child: Text('Reports Analytics Dashboard')),
-                                  ],
+                                  items: dashboardItems,
                                   onChanged: (val) {
                                     if (val != null) setDlgState(() => selectedDashboard = val);
                                   },
@@ -431,16 +448,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                   value: selectedDashboard,
                                   isExpanded: true,
                                   decoration: const InputDecoration(labelText: 'Default Landing Dashboard'),
-                                  items: const [
-                                    DropdownMenuItem(value: ErpNavSection.dashboard, child: Text('Admin Full Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.inventoryDashboard, child: Text('Inventory Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.purchaseList, child: Text('Purchase Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.productionOrders, child: Text('Production Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.salesDashboard, child: Text('Sales Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.customerPayments, child: Text('Accounts / Payment Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.projectList, child: Text('Project Dashboard')),
-                                    DropdownMenuItem(value: ErpNavSection.inventoryReports, child: Text('Reports Analytics Dashboard')),
-                                  ],
+                                  items: dashboardItems,
                                   onChanged: (val) {
                                     if (val != null) setDlgState(() => selectedDashboard = val);
                                   },
@@ -600,6 +608,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                     final permStrings = RolesApiService.permissionMapToStrings(permMatrix);
                                     if (isEdit) {
                                       await db.updateRolePermissionsAsync(existing.id, permStrings);
+                                      db.updateRole(existing.copyWith(
+                                        name: nameCtrl.text.trim(),
+                                        description: descCtrl.text.trim(),
+                                        defaultDashboardSection: selectedDashboard,
+                                        isActive: isActive,
+                                        permissions: permMatrix,
+                                      ));
                                       ref.read(authStateProvider.notifier).refreshUserPermissions(existing.id, permMatrix);
                                       if (mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
@@ -709,6 +724,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
 
   @override
   Widget build(BuildContext context) {
+    if (_tabController.length != 2) {
+      _tabController.dispose();
+      _tabController = TabController(length: 2, vsync: this);
+    }
     final db = ref.watch(databaseServiceProvider);
     final filteredUsers = db.users.where((u) {
       final q = _userSearchQuery.toLowerCase();
@@ -765,15 +784,15 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                     ],
                   ),
                 ),
-                Tab(
-                  child: Row(
-                    children: [
-                      const Icon(Icons.history_edu_rounded, size: 16),
-                      const SizedBox(width: 8),
-                      Text('Security Audit Trail (${db.auditLogs.length})'),
-                    ],
-                  ),
-                ),
+                // Tab(
+                //   child: Row(
+                //     children: [
+                //       const Icon(Icons.history_edu_rounded, size: 16),
+                //       const SizedBox(width: 8),
+                //       Text('Security Audit Trail (${db.auditLogs.length})'),
+                //     ],
+                //   ),
+                // ),
               ],
             ),
           ),
@@ -1009,8 +1028,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                 ),
 
                 // -------------------------------------------------------------
-                // TAB 3: SECURITY & ACCESS AUDIT TRAIL
+                // TAB 3: SECURITY & ACCESS AUDIT TRAIL (COMMENTED OUT)
                 // -------------------------------------------------------------
+                /*
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1264,6 +1284,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                     ),
                   ],
                 ),
+                */
               ],
             ),
           ),
