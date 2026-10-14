@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { CoreAuthModule } from '../../core/auth/auth.module';
+import { SubscriptionModule } from '../subscription/subscription.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 
 @Module({
-  imports: [CoreAuthModule],
+  imports: [CoreAuthModule, SubscriptionModule],
   controllers: [AuthController],
   providers: [AuthService],
   exports: [AuthService],

@@ -39,8 +39,15 @@ export class SalesService {
       `SELECT count(*)::text as count FROM sales WHERE invoice_number LIKE $1`,
       [`%${prefix}/${year}/%`],
     );
-    const seq = parseInt(countRes.rows[0].count, 10) + 1;
-    return `DLZ/${prefix}/${year}/${seq.toString().padStart(4, '0')}`;
+    let seq = parseInt(countRes.rows[0]?.count || '0', 10) + 1;
+    let candidate = `DLZ/${prefix}/${year}/${seq.toString().padStart(4, '0')}`;
+    let exists = await this.db.query(`SELECT 1 FROM sales WHERE invoice_number = $1`, [candidate]);
+    while (exists.rows.length > 0) {
+      seq++;
+      candidate = `DLZ/${prefix}/${year}/${seq.toString().padStart(4, '0')}`;
+      exists = await this.db.query(`SELECT 1 FROM sales WHERE invoice_number = $1`, [candidate]);
+    }
+    return candidate;
   }
 
   private async getPartyDetails(partyType: string, partyId: string) {
@@ -551,7 +558,14 @@ export class SalesService {
     for (const shortage of shortagesToProduce) {
       const year = new Date().getFullYear();
       const prdCount = await this.db.query<{ count: string }>(`SELECT count(*)::text as count FROM production_orders WHERE production_number LIKE $1`, [`%PRD-${year}-%`]);
-      const prdNum = `PRD-${year}-${(parseInt(prdCount.rows[0].count, 10) + 1).toString().padStart(4, '0')}`;
+      let prdSeq = parseInt(prdCount.rows[0]?.count || '0', 10) + 1;
+      let prdNum = `PRD-${year}-${prdSeq.toString().padStart(4, '0')}`;
+      let prdExists = await this.db.query(`SELECT 1 FROM production_orders WHERE production_number = $1`, [prdNum]);
+      while (prdExists.rows.length > 0) {
+        prdSeq++;
+        prdNum = `PRD-${year}-${prdSeq.toString().padStart(4, '0')}`;
+        prdExists = await this.db.query(`SELECT 1 FROM production_orders WHERE production_number = $1`, [prdNum]);
+      }
 
       await this.db.query(
         `INSERT INTO production_orders (

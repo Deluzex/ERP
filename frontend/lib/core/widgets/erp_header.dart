@@ -5,6 +5,7 @@ import '../../app/theme/app_radius.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../shared/providers/app_state_providers.dart';
 import '../../shared/widgets/low_stock_whatsapp_alert_dialog.dart';
+import '../../shared/widgets/subscription_badge_pill.dart';
 
 class ErpHeader extends ConsumerWidget {
   final VoidCallback? onMenuToggle;
@@ -148,6 +149,12 @@ class ErpHeader extends ConsumerWidget {
                     );
                   },
                 ),
+
+              // Subscription Status Pill Badge (Days Remaining)
+              if (availableWidth >= 520) ...[
+                const SubscriptionBadgePill(),
+                SizedBox(width: isMobile ? 4 : 8),
+              ],
 
               // Notification Bell with unread dot
               Stack(

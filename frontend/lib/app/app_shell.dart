@@ -41,7 +41,10 @@ import '../features/expenses/screens/expenses_screen.dart';
 import '../features/chat/screens/chat_support_screen.dart';
 import '../features/settings/screens/settings_screen.dart';
 import '../shared/providers/app_state_providers.dart';
+import '../shared/providers/subscription_provider.dart';
 import '../shared/widgets/access_required_dialog.dart';
+import '../shared/widgets/subscription_reminder_dialog.dart';
+import '../shared/widgets/subscription_expired_dialog.dart';
 // import '../shared/widgets/global_whatsapp_floating_button.dart';
 import 'routes/app_routes.dart';
 import 'theme/app_colors.dart';
@@ -57,6 +60,36 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkSubscriptionReminders();
+    });
+  }
+
+  Future<void> _checkSubscriptionReminders() async {
+    try {
+      final status = await ref.read(subscriptionProvider.notifier).fetchStatus();
+      if (!mounted) return;
+
+      if (status.isExpired) {
+        SubscriptionExpiredDialog.show(
+          context,
+          clientName: status.clientName,
+          planName: status.planName,
+          supportPhone: status.supportPhone,
+          supportEmail: status.supportEmail,
+        );
+        return;
+      }
+
+      if (status.showRenewalWarning && SubscriptionReminderTracker.shouldShowToday()) {
+        SubscriptionReminderDialog.show(context, status: status);
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {

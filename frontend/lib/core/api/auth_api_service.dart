@@ -1,4 +1,5 @@
 import '../models/rbac_models.dart';
+import '../models/subscription_model.dart';
 import 'api_client.dart';
 import 'token_storage.dart';
 
@@ -8,6 +9,7 @@ class AuthResponse {
   final int expiresIn;
   final AppUser user;
   final List<String> permissions;
+  final SubscriptionStatus? subscription;
 
   const AuthResponse({
     required this.accessToken,
@@ -15,6 +17,7 @@ class AuthResponse {
     required this.expiresIn,
     required this.user,
     required this.permissions,
+    this.subscription,
   });
 }
 
@@ -45,12 +48,18 @@ class AuthApiService {
       final permissionsList = (userJson['permissions'] as List?)?.map((p) => p.toString()).toList() ?? [];
       final appUser = _mapToAppUser(userJson, permissionsList);
 
+      SubscriptionStatus? subscription;
+      if (data['subscription'] is Map<String, dynamic>) {
+        subscription = SubscriptionStatus.fromJson(data['subscription'] as Map<String, dynamic>);
+      }
+
       return AuthResponse(
         accessToken: accessToken,
         refreshToken: refreshToken,
         expiresIn: expiresIn,
         user: appUser,
         permissions: permissionsList,
+        subscription: subscription,
       );
     } catch (e) {
       throw _client.handleDioError(e);

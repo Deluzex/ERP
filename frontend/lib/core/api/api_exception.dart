@@ -43,6 +43,23 @@ class ForbiddenException extends ApiException {
         );
 }
 
+class SubscriptionExpiredException extends ApiException {
+  final String? supportPhone;
+  final String? supportEmail;
+  final String? expiredOn;
+
+  const SubscriptionExpiredException({
+    required super.message,
+    this.supportPhone,
+    this.supportEmail,
+    this.expiredOn,
+    super.correlationId,
+  }) : super(
+          statusCode: 403,
+          errorCode: 'SUBSCRIPTION_EXPIRED',
+        );
+}
+
 class ConflictException extends ApiException {
   const ConflictException({
     required super.message,

@@ -150,6 +150,18 @@ class ApiClient {
         case 401:
           return UnauthorizedException(message: message, correlationId: correlationId);
         case 403:
+          if (code == 'SUBSCRIPTION_EXPIRED') {
+            final errObj = (responseData is Map && responseData.containsKey('error') && responseData['error'] is Map)
+                ? responseData['error'] as Map
+                : {};
+            return SubscriptionExpiredException(
+              message: message,
+              supportPhone: errObj['supportPhone']?.toString() ?? '+91 98250 12345',
+              supportEmail: errObj['supportEmail']?.toString() ?? 'billing@deluzex.com',
+              expiredOn: errObj['expiredOn']?.toString(),
+              correlationId: correlationId,
+            );
+          }
           return ForbiddenException(message: message, correlationId: correlationId);
         case 404:
           return NotFoundException(message: message, correlationId: correlationId);

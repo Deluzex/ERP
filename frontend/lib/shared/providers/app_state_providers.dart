@@ -5,6 +5,7 @@ import '../../core/models/sale_model.dart';
 import '../../core/models/stock_movement_model.dart';
 import '../../core/api/auth_api_service.dart';
 import '../services/mock_database_service.dart';
+import 'subscription_provider.dart';
 
 // Database Singleton Provider
 final databaseServiceProvider = ChangeNotifierProvider<MockDatabaseService>((ref) {
@@ -27,6 +28,10 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       state = user;
       await db.loadRoles(forceRefresh: true);
       await db.loadAllMasters(forceRefresh: true);
+
+      if (authRes.subscription != null) {
+        ref.read(subscriptionProvider.notifier).updateStatus(authRes.subscription!);
+      }
 
       final landingSection = user.getAccessibleLandingSection(db.roles);
       ref.read(currentNavSectionProvider.notifier).state = landingSection;

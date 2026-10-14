@@ -4,9 +4,11 @@ import '../../../app/constants/app_constants.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/api/api_exception.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../shared/widgets/subscription_expired_dialog.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   final VoidCallback onLoginSuccess;
@@ -132,6 +134,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _errorMessage = 'Invalid username/password or selected role does not match assigned permissions.';
         });
       }
+    } on SubscriptionExpiredException catch (e) {
+      if (mounted) {
+        SubscriptionExpiredDialog.show(
+          context,
+          clientName: 'Deluzex ERP Client',
+          supportPhone: e.supportPhone ?? '+91 98250 12345',
+          supportEmail: e.supportEmail ?? 'billing@deluzex.com',
+          expiredOn: e.expiredOn,
+        );
+      }
     } catch (e) {
       setState(() {
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
@@ -179,66 +191,72 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Logo & Brand Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        alignment: WrapAlignment.spaceBetween,
                         children: [
-                          Flexible(
-                            child: SizedBox(
+                          SizedBox(
+                            height: 38,
+                            child: Image.asset(
+                              'assets/images/logo.png',
                               height: 38,
-                              child: Image.asset(
-                                'assets/images/logo.png',
-                                height: 38,
-                                fit: BoxFit.contain,
-                                alignment: Alignment.centerLeft,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'd',
-                                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 22),
-                                    ),
+                              fit: BoxFit.contain,
+                              alignment: Alignment.centerLeft,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Center(
+                                  child: Text(
+                                    'd',
+                                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 22),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                            ),
-                            child: const Text(
-                              'ENTERPRISE RBAC',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF16A34A).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.4)),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.check_circle, size: 11, color: Color(0xFF16A34A)),
-                                SizedBox(width: 4),
-                                Text(
-                                  'v1.0.1 LIVE',
-                                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                                 ),
-                              ],
-                            ),
+                                child: const Text(
+                                  'ENTERPRISE RBAC',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF16A34A).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.4)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle, size: 11, color: Color(0xFF16A34A)),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'v1.0.1 LIVE',
+                                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

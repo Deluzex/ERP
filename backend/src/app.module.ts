@@ -22,6 +22,7 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     AuditModule,
     CoreAuthModule,
     AuthModule,
+    SubscriptionModule,
     IdentityModule,
     MastersModule,
     InventoryModule,
