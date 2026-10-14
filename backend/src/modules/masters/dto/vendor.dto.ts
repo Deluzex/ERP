@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
 } from 'class-validator';
 
@@ -35,6 +36,21 @@ export class CreateVendorDto {
   @IsString()
   @IsNotEmpty()
   address!: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(/^[1-9][0-9]{5}$/, {
+    message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
+  })
+  pincode?: string;
 
   @IsString()
   @IsOptional()
@@ -74,6 +90,21 @@ export class UpdateVendorDto {
   @IsString()
   @IsOptional()
   address?: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(/^[1-9][0-9]{5}$/, {
+    message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
+  })
+  pincode?: string;
 
   @IsString()
   @IsOptional()

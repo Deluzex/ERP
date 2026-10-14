@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
 } from 'class-validator';
 
 export class CreateDealerDto {
@@ -37,6 +38,21 @@ export class CreateDealerDto {
   @IsString()
   @IsOptional()
   stateCode?: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(/^[1-9][0-9]{5}$/, {
+    message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
+  })
+  pincode?: string;
 }
 
 export class UpdateDealerDto {
@@ -71,4 +87,19 @@ export class UpdateDealerDto {
   @IsString()
   @IsOptional()
   stateCode?: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(/^[1-9][0-9]{5}$/, {
+    message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
+  })
+  pincode?: string;
 }

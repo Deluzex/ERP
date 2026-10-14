@@ -816,20 +816,30 @@ export class ProductionService {
       );
       const bom = bomRes.rows[0];
 
+      // Mirror into boms table for unified BOM Master consistency
+      const bomNumber = `BOM-PRD-${bom.id.slice(0, 8).toUpperCase()}`;
+      await client.query(
+        `INSERT INTO boms (id, bom_number, finished_product_id, version, status, yield_quantity, notes)
+         VALUES ($1, $2, $3, 1, 'ACTIVE', $4, $5)
+         ON CONFLICT (id) DO NOTHING`,
+        [bom.id, bomNumber, dto.finishedProductId, Number(dto.outputQuantity || 1), dto.description || null],
+      );
+
       const insertedItems: any[] = [];
       for (const item of dto.items) {
         const itemRes = await client.query<any>(
           `INSERT INTO bom_items (
              bom_id, raw_material_id, raw_material_name, raw_material_code,
-             quantity_per_unit, unit
+             quantity, quantity_per_unit, unit
            )
-           VALUES ($1, $2, $3, $4, $5, $6)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING *`,
           [
             bom.id,
             item.rawMaterialId,
             item.rawMaterialName,
             item.rawMaterialCode || '',
+            Number(item.quantityPerUnit),
             Number(item.quantityPerUnit),
             item.unit,
           ],

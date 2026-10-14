@@ -103,8 +103,10 @@ describe('Manufacturing & Production Domain Lifecycle (E2E with Auto-Cleanup)', 
     }
     if (createdBomIds.length > 0) {
       await db.query('DELETE FROM bom_items WHERE bom_id = ANY($1)', [createdBomIds]);
+      await db.query('DELETE FROM boms WHERE id = ANY($1)', [createdBomIds]);
       await db.query('DELETE FROM bill_of_materials WHERE id = ANY($1)', [createdBomIds]);
     }
+    await db.query('DELETE FROM boms WHERE finished_product_id = $1', [testFinishedProductId]);
     await db.query('DELETE FROM raw_materials WHERE id IN ($1, $2)', [testRawMaterialId1, testRawMaterialId2]);
     await db.query('DELETE FROM finished_products WHERE id = $1', [testFinishedProductId]);
 

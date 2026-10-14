@@ -20,6 +20,8 @@ export interface CustomerRecord {
   gstNumber: string | null;
   address: string;
   stateCode: string;
+  state?: string | null;
+  pincode?: string | null;
   outstandingAmount: string;
   creditBalance: string;
   linkedArchitectId: string | null;
@@ -39,6 +41,8 @@ export interface DealerRecord {
   gstNumber: string;
   address: string;
   stateCode: string;
+  state?: string | null;
+  pincode?: string | null;
   outstandingAmount: string;
   isDeleted: boolean;
   createdAt: Date;
@@ -53,6 +57,8 @@ export interface ArchitectRecord {
   email: string;
   gstNumber: string | null;
   address: string;
+  state?: string | null;
+  pincode?: string | null;
   defaultCommissionRate: number;
   totalCommissionEarned: string;
   pendingCommission: string;
@@ -105,6 +111,8 @@ export class PartiesService {
       gstNumber: r.gst_number,
       address: r.address,
       stateCode: r.state_code,
+      state: r.state,
+      pincode: r.pincode,
       outstandingAmount: Money.format(r.outstanding_amount),
       creditBalance: Money.format(r.credit_balance),
       linkedArchitectId: r.linked_architect_id,
@@ -128,6 +136,8 @@ export class PartiesService {
       gstNumber: r.gst_number,
       address: r.address,
       stateCode: r.state_code,
+      state: r.state,
+      pincode: r.pincode,
       outstandingAmount: Money.format(r.outstanding_amount),
       creditBalance: Money.format(r.credit_balance),
       linkedArchitectId: r.linked_architect_id,
@@ -141,9 +151,9 @@ export class PartiesService {
   async createCustomer(dto: CreateCustomerDto, userId?: string, correlationId?: string): Promise<CustomerRecord> {
     const res = await this.db.query<{ id: string }>(
       `INSERT INTO customers (
-        name, mobile, email, gst_number, address, state_code,
+        name, mobile, email, gst_number, address, state_code, state, pincode,
         linked_architect_id, is_also_architect
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id`,
       [
         dto.name.trim(),
@@ -151,7 +161,9 @@ export class PartiesService {
         dto.email.trim().toLowerCase(),
         dto.gstNumber?.trim().toUpperCase() || null,
         dto.address.trim(),
-        dto.stateCode || '24',
+        dto.stateCode || (dto.gstNumber ? dto.gstNumber.trim().slice(0, 2) : '24'),
+        dto.state?.trim() || 'Gujarat',
+        dto.pincode?.trim() || null,
         dto.linkedArchitectId || null,
         dto.isAlsoArchitect || false,
       ],
@@ -184,6 +196,8 @@ export class PartiesService {
     if (dto.gstNumber !== undefined) { updates.push(`gst_number = $${idx++}`); values.push(dto.gstNumber.trim().toUpperCase()); }
     if (dto.address !== undefined) { updates.push(`address = $${idx++}`); values.push(dto.address.trim()); }
     if (dto.stateCode !== undefined) { updates.push(`state_code = $${idx++}`); values.push(dto.stateCode); }
+    if (dto.state !== undefined) { updates.push(`state = $${idx++}`); values.push(dto.state.trim()); }
+    if (dto.pincode !== undefined) { updates.push(`pincode = $${idx++}`); values.push(dto.pincode.trim()); }
     if (dto.linkedArchitectId !== undefined) { updates.push(`linked_architect_id = $${idx++}`); values.push(dto.linkedArchitectId); }
     if (dto.isAlsoArchitect !== undefined) { updates.push(`is_also_architect = $${idx++}`); values.push(dto.isAlsoArchitect); }
 
@@ -243,6 +257,8 @@ export class PartiesService {
       gstNumber: r.gst_number,
       address: r.address,
       stateCode: r.state_code,
+      state: r.state,
+      pincode: r.pincode,
       outstandingAmount: Money.format(r.outstanding_amount),
       isDeleted: r.is_deleted,
       createdAt: r.created_at,
@@ -265,6 +281,8 @@ export class PartiesService {
       gstNumber: r.gst_number,
       address: r.address,
       stateCode: r.state_code,
+      state: r.state,
+      pincode: r.pincode,
       outstandingAmount: Money.format(r.outstanding_amount),
       isDeleted: r.is_deleted,
       createdAt: r.created_at,
@@ -275,8 +293,8 @@ export class PartiesService {
   async createDealer(dto: CreateDealerDto, userId?: string, correlationId?: string): Promise<DealerRecord> {
     const res = await this.db.query<{ id: string }>(
       `INSERT INTO dealers (
-        name, contact_person, company_name, mobile, email, gst_number, address, state_code
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        name, contact_person, company_name, mobile, email, gst_number, address, state_code, state, pincode
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id`,
       [
         dto.name.trim(),
@@ -286,7 +304,9 @@ export class PartiesService {
         dto.email.trim().toLowerCase(),
         dto.gstNumber ? dto.gstNumber.trim().toUpperCase() : '',
         dto.address.trim(),
-        dto.stateCode || '24',
+        dto.stateCode || (dto.gstNumber ? dto.gstNumber.trim().slice(0, 2) : '24'),
+        dto.state?.trim() || 'Gujarat',
+        dto.pincode?.trim() || null,
       ],
     );
 
@@ -319,6 +339,8 @@ export class PartiesService {
     if (dto.gstNumber !== undefined) { updates.push(`gst_number = $${idx++}`); values.push(dto.gstNumber ? dto.gstNumber.trim().toUpperCase() : ''); }
     if (dto.address !== undefined) { updates.push(`address = $${idx++}`); values.push(dto.address.trim()); }
     if (dto.stateCode !== undefined) { updates.push(`state_code = $${idx++}`); values.push(dto.stateCode); }
+    if (dto.state !== undefined) { updates.push(`state = $${idx++}`); values.push(dto.state.trim()); }
+    if (dto.pincode !== undefined) { updates.push(`pincode = $${idx++}`); values.push(dto.pincode.trim()); }
 
     if (updates.length > 0) {
       updates.push('updated_at = NOW()');
@@ -389,6 +411,8 @@ export class PartiesService {
       email: r.email,
       gstNumber: r.gst_number,
       address: r.address,
+      state: r.state,
+      pincode: r.pincode,
       defaultCommissionRate: parseFloat(r.default_commission_rate) || 5.0,
       totalCommissionEarned: Money.format(parseFloat(r.total_commission_earned) > 0 ? r.total_commission_earned : r.comm_earned),
       pendingCommission: Money.format(parseFloat(r.pending_commission) > 0 ? r.pending_commission : r.comm_pending),
@@ -433,6 +457,8 @@ export class PartiesService {
       email: r.email,
       gstNumber: r.gst_number,
       address: r.address,
+      state: r.state,
+      pincode: r.pincode,
       defaultCommissionRate: parseFloat(r.default_commission_rate) || 5.0,
       totalCommissionEarned: Money.format(parseFloat(r.total_commission_earned) > 0 ? r.total_commission_earned : r.comm_earned),
       pendingCommission: Money.format(parseFloat(r.pending_commission) > 0 ? r.pending_commission : r.comm_pending),
@@ -449,9 +475,9 @@ export class PartiesService {
   async createArchitect(dto: CreateArchitectDto, userId?: string, correlationId?: string): Promise<ArchitectRecord> {
     const res = await this.db.query<{ id: string }>(
       `INSERT INTO architects (
-        name, company_name, mobile, email, gst_number, address,
+        name, company_name, mobile, email, gst_number, address, state, pincode,
         default_commission_rate, linked_customer_id, is_also_customer
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING id`,
       [
         dto.name.trim(),
@@ -460,6 +486,8 @@ export class PartiesService {
         dto.email.trim().toLowerCase(),
         dto.gstNumber?.trim().toUpperCase() || null,
         dto.address.trim(),
+        dto.state?.trim() || 'Gujarat',
+        dto.pincode?.trim() || null,
         dto.defaultCommissionRate ?? 5.0,
         dto.linkedCustomerId || null,
         dto.isAlsoCustomer || false,
@@ -493,6 +521,8 @@ export class PartiesService {
     if (dto.email !== undefined) { updates.push(`email = $${idx++}`); values.push(dto.email.trim().toLowerCase()); }
     if (dto.gstNumber !== undefined) { updates.push(`gst_number = $${idx++}`); values.push(dto.gstNumber.trim().toUpperCase()); }
     if (dto.address !== undefined) { updates.push(`address = $${idx++}`); values.push(dto.address.trim()); }
+    if (dto.state !== undefined) { updates.push(`state = $${idx++}`); values.push(dto.state.trim()); }
+    if (dto.pincode !== undefined) { updates.push(`pincode = $${idx++}`); values.push(dto.pincode.trim()); }
     if (dto.defaultCommissionRate !== undefined) { updates.push(`default_commission_rate = $${idx++}`); values.push(dto.defaultCommissionRate); }
     if (dto.linkedCustomerId !== undefined) { updates.push(`linked_customer_id = $${idx++}`); values.push(dto.linkedCustomerId); }
     if (dto.isAlsoCustomer !== undefined) { updates.push(`is_also_customer = $${idx++}`); values.push(dto.isAlsoCustomer); }

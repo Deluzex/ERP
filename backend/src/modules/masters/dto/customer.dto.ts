@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
 } from 'class-validator';
 
@@ -42,6 +43,21 @@ export class CreateCustomerDto {
 
   @IsString()
   @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(/^[1-9][0-9]{5}$/, {
+    message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
+  })
+  pincode?: string;
+
+  @IsString()
+  @IsOptional()
   linkedArchitectId?: string;
 
   @IsBoolean()
@@ -76,6 +92,21 @@ export class UpdateCustomerDto {
   @IsString()
   @IsOptional()
   stateCode?: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(/^[1-9][0-9]{5}$/, {
+    message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
+  })
+  pincode?: string;
 
   @IsString()
   @IsOptional()

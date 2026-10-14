@@ -16,6 +16,7 @@ import { MastersModule } from './modules/masters/masters.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { PurchasesModule } from './modules/purchases/purchases.module';
 import { ProductionModule } from './modules/production/production.module';
+import { BomsModule } from './modules/boms/boms.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -37,6 +38,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     InventoryModule,
     PurchasesModule,
     ProductionModule,
+    BomsModule,
     SalesModule,
     ProjectsModule,
     PaymentsModule,
