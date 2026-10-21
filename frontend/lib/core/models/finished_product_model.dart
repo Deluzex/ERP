@@ -14,6 +14,7 @@ class FinishedProduct {
   final double openingStock;
   final double minimumStock;
   final double costPrice;
+  final double transportationCharge;
   final double dealerSellingPrice;
   final double customerSellingPrice;
   final double gstPercent;
@@ -38,6 +39,7 @@ class FinishedProduct {
     required this.openingStock,
     required this.minimumStock,
     required this.costPrice,
+    this.transportationCharge = 0.0,
     required this.dealerSellingPrice,
     required this.customerSellingPrice,
     required this.gstPercent,
@@ -49,7 +51,8 @@ class FinishedProduct {
         producedStock = producedStock ?? currentStock;
 
   bool get isLowStock => currentStock <= minimumStock;
-  double get effectiveCostPrice => costPrice > 0 ? costPrice : (dealerSellingPrice > 0 ? dealerSellingPrice * 0.7 : (customerSellingPrice > 0 ? customerSellingPrice * 0.6 : 0.0));
+  double get totalPurchaseCost => costPrice + transportationCharge;
+  double get effectiveCostPrice => totalPurchaseCost > 0 ? totalPurchaseCost : (dealerSellingPrice > 0 ? dealerSellingPrice * 0.7 : (customerSellingPrice > 0 ? customerSellingPrice * 0.6 : 0.0));
   double get totalValuation => currentStock * effectiveCostPrice;
   double get availableStock => (currentStock - reservedStock).clamp(0.0, double.infinity);
 
@@ -69,6 +72,7 @@ class FinishedProduct {
     double? openingStock,
     double? minimumStock,
     double? costPrice,
+    double? transportationCharge,
     double? dealerSellingPrice,
     double? customerSellingPrice,
     double? gstPercent,
@@ -93,6 +97,7 @@ class FinishedProduct {
       openingStock: openingStock ?? this.openingStock,
       minimumStock: minimumStock ?? this.minimumStock,
       costPrice: costPrice ?? this.costPrice,
+      transportationCharge: transportationCharge ?? this.transportationCharge,
       dealerSellingPrice: dealerSellingPrice ?? this.dealerSellingPrice,
       customerSellingPrice: customerSellingPrice ?? this.customerSellingPrice,
       gstPercent: gstPercent ?? this.gstPercent,
@@ -120,6 +125,7 @@ class FinishedProduct {
       openingStock: double.tryParse(json['openingStock']?.toString() ?? json['opening_stock']?.toString() ?? '0') ?? 0.0,
       minimumStock: double.tryParse(json['minimumStock']?.toString() ?? json['minimum_stock']?.toString() ?? '0') ?? 0.0,
       costPrice: double.tryParse(json['costPrice']?.toString() ?? json['cost_price']?.toString() ?? '0') ?? 0.0,
+      transportationCharge: double.tryParse(json['transportationCharge']?.toString() ?? json['transportation_charge']?.toString() ?? '0') ?? 0.0,
       dealerSellingPrice: double.tryParse(json['dealerSellingPrice']?.toString() ?? json['dealer_selling_price']?.toString() ?? '0') ?? 0.0,
       customerSellingPrice: double.tryParse(json['customerSellingPrice']?.toString() ?? json['customer_selling_price']?.toString() ?? '0') ?? 0.0,
       gstPercent: double.tryParse(json['gstPercent']?.toString() ?? json['gst_percent']?.toString() ?? '18') ?? 18.0,
@@ -140,6 +146,7 @@ class FinishedProduct {
       'openingStock': openingStock,
       'minimumStock': minimumStock,
       'costPrice': costPrice,
+      'transportationCharge': transportationCharge,
       'dealerSellingPrice': dealerSellingPrice,
       'customerSellingPrice': customerSellingPrice,
       'gstPercent': gstPercent,
@@ -155,6 +162,7 @@ class FinishedProduct {
       'currentStock': currentStock,
       'minimumStock': minimumStock,
       'costPrice': costPrice,
+      'transportationCharge': transportationCharge,
       'dealerSellingPrice': dealerSellingPrice,
       'customerSellingPrice': customerSellingPrice,
       'gstPercent': gstPercent,

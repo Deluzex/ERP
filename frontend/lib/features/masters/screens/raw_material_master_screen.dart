@@ -55,6 +55,9 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
     final priceCtrl = TextEditingController(
       text: existing?.defaultPurchasePrice.toString() ?? '100',
     );
+    final transportCtrl = TextEditingController(
+      text: existing?.transportationCharge.toString() ?? '0',
+    );
     final minCtrl = TextEditingController(
       text: existing?.minimumStock.toString() ?? '10',
     );
@@ -165,8 +168,19 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                     keyboardType: TextInputType.number,
                                     validator: Validators.positiveNumber,
                                     decoration: const InputDecoration(
-                                      labelText: 'Unit Price (₹) *',
-                                      hintText: 'Purchase price per unit',
+                                      labelText: 'Purchase Cost (₹) *',
+                                      hintText: 'Purchase / landed cost per unit',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: transportCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.nonNegativeNumber,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Transportation Charge (₹)',
+                                      hintText: 'Freight per unit',
+                                      prefixIcon: Icon(Icons.local_shipping_outlined, size: 18),
                                     ),
                                   ),
                                   const SizedBox(height: 12),
@@ -262,8 +276,21 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                         keyboardType: TextInputType.number,
                                         validator: Validators.positiveNumber,
                                         decoration: const InputDecoration(
-                                          labelText: 'Unit Price (₹) *',
-                                          hintText: 'Purchase price per unit',
+                                          labelText: 'Purchase Cost (₹) *',
+                                          hintText: 'Base cost per unit',
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: transportCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Trans. Charge (₹)',
+                                          hintText: 'Freight per unit',
+                                          prefixIcon: Icon(Icons.local_shipping_outlined, size: 18),
                                         ),
                                       ),
                                     ),
@@ -341,6 +368,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                           final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
                           final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
                           final priceVal = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
+                          final transportVal = double.tryParse(transportCtrl.text.trim()) ?? 0.0;
                           final catObj = db.categories.firstWhere(
                             (c) => c.id == selectedCategory,
                             orElse: () => db.categories.first,
@@ -367,6 +395,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                 currentStock: stockVal,
                                 minimumStock: minVal,
                                 defaultPurchasePrice: priceVal,
+                                transportationCharge: transportVal,
                                 preferredVendorIds: prefVendorIds,
                                 preferredVendorNames: prefVendorNames,
                                 updatedAt: DateTime.now(),
@@ -385,6 +414,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                 minimumStock: minVal,
                                 reorderLevel: minVal * 1.5,
                                 defaultPurchasePrice: priceVal,
+                                transportationCharge: transportVal,
                                 gstPercent: 18.0,
                                 preferredVendorIds: prefVendorIds,
                                 preferredVendorNames: prefVendorNames,
@@ -518,16 +548,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                 children: [
                   ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Raw Material Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Configure raw materials, specifications, pricing, UOM, and supplier information',
-                          style: AppTextStyles.subtitle,
-                        ),
-                      ],
+                    child: Text(
+                      'Configure raw materials, specifications, pricing, UOM, and supplier information',
+                      style: AppTextStyles.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   ErpButton(
@@ -603,7 +628,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
               ErpColumn(title: 'Material Name'),
               ErpColumn(title: 'Category'),
               ErpColumn(title: 'UOM'),
-              ErpColumn(title: 'Unit Price (₹)', isNumeric: true),
+              ErpColumn(title: 'Purchase Cost (₹)', isNumeric: true),
               ErpColumn(title: 'Current Stock', isNumeric: true),
               ErpColumn(title: 'Supplier / Vendor'),
               ErpColumn(title: 'Status'),
@@ -628,7 +653,18 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                 ),
                 Text(rm.categoryName, style: AppTextStyles.bodySmall),
                 Text(rm.unit, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(Formatters.formatCurrency(rm.totalPurchaseCost), style: AppTextStyles.bodyMedium),
+                    if (rm.transportationCharge > 0)
+                      Text(
+                        'Base: ₹${Formatters.formatNumber(rm.defaultPurchasePrice)} + Trans: ₹${Formatters.formatNumber(rm.transportationCharge)}',
+                        style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                      ),
+                  ],
+                ),
                 Text(
                   '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
                   style: AppTextStyles.bodyBold.copyWith(

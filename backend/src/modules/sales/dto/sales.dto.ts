@@ -51,9 +51,20 @@ export enum ReturnFinancialAction {
 }
 
 export class SaleLineItemDto {
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  itemType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsUUID()
-  finishedProductId!: string;
+  finishedProductId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  rawMaterialId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -64,6 +75,16 @@ export class SaleLineItemDto {
   @IsOptional()
   @IsString()
   finishedProductCode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  rawMaterialName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  rawMaterialCode?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

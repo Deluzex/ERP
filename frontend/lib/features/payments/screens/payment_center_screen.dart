@@ -17,7 +17,9 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 
@@ -182,16 +184,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                 children: [
                   ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 240),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Payments & Treasury Center', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Manual payment entry (Full & Partial), invoice balance auto-reconciliation, and treasury tracking',
-                          style: AppTextStyles.subtitle,
-                        ),
-                      ],
+                    child: Text(
+                      'Manual payment entry (Full & Partial), invoice balance auto-reconciliation, and treasury tracking',
+                      style: AppTextStyles.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   ErpButton(
@@ -239,18 +236,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
             const SizedBox(height: 20),
           ],
 
-          SizedBox(
-            height: 680,
-            child: IndexedStack(
-              index: _tabController.index,
-              children: [
-                _buildCustomerCollectionsTab(db),
-                _buildDealerReceiptsTab(db),
-                _buildVendorDisbursementsTab(db),
-                _buildPaymentTable(_filterPayments(db.payments.where((p) => p.paymentType == PaymentType.commissionPayment).toList())),
-              ],
-            ),
-          ),
+          switch (_tabController.index) {
+            0 => _buildCustomerCollectionsTab(db),
+            1 => _buildDealerReceiptsTab(db),
+            2 => _buildVendorDisbursementsTab(db),
+            3 => _buildPaymentTable(_filterPayments(db.payments.where((p) => p.paymentType == PaymentType.commissionPayment).toList())),
+            _ => _buildCustomerCollectionsTab(db),
+          },
         ],
       ),
     );
@@ -291,27 +283,25 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     final endIndex = min(startIndex + pageSize, totalCount);
     final pageSummaries = (startIndex < totalCount) ? filtered.sublist(startIndex, endIndex) : <CustomerAccountSummary>[];
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Manage customer accounts and track balances',
-            style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 14),
-          _buildCustomerControlsRow(totalCount, pageSummaries.length),
-          const SizedBox(height: 16),
-          _buildCustomerAccountsTable(pageSummaries),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Manage customer accounts and track balances',
+          style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 14),
+        _buildCustomerControlsRow(totalCount, pageSummaries.length),
+        const SizedBox(height: 16),
+        _buildCustomerAccountsTable(pageSummaries),
+      ],
     );
   }
 
   Widget _buildCustomerControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 780;
+        final isNarrow = constraints.maxWidth < 820;
         final ctrl = _safeCustomerSearchCtrl;
         final pageSize = _safeCustomerPageSize;
         final currentPage = _safeCustomerCurrentPage;
@@ -350,73 +340,79 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
         );
 
-        final paginationControls = SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-            Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-            const SizedBox(width: 8),
-            Container(
-              height: 32,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
-                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
-                  items: const [
-                    DropdownMenuItem(value: 5, child: Text('5')),
-                    DropdownMenuItem(value: 10, child: Text('10')),
-                    DropdownMenuItem(value: 25, child: Text('25')),
-                    DropdownMenuItem(value: 50, child: Text('50')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        _customerPageSize = val;
-                        _customerCurrentPage = 0;
-                      });
-                    }
-                  },
+        final paginationControls = Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                const SizedBox(width: 8),
+                Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
+                      style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
+                      items: const [
+                        DropdownMenuItem(value: 5, child: Text('5')),
+                        DropdownMenuItem(value: 10, child: Text('10')),
+                        DropdownMenuItem(value: 25, child: Text('25')),
+                        DropdownMenuItem(value: 50, child: Text('50')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _customerPageSize = val;
+                            _customerCurrentPage = 0;
+                          });
+                        }
+                      },
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(width: 12),
             Text(
               'Showing $shownCount of $totalCount customers',
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
             ),
-            if (totalCount > pageSize) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.chevron_left, size: 18),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                onPressed: currentPage > 0
-                    ? () => setState(() => _customerCurrentPage = currentPage - 1)
-                    : null,
+            if (totalCount > pageSize)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed: currentPage > 0
+                        ? () => setState(() => _customerCurrentPage = currentPage - 1)
+                        : null,
+                  ),
+                  Text(
+                    '${currentPage + 1}/${max(1, (totalCount / pageSize).ceil())}',
+                    style: AppTextStyles.bodySmall,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed: (currentPage + 1) * pageSize < totalCount
+                        ? () => setState(() => _customerCurrentPage = currentPage + 1)
+                        : null,
+                  ),
+                ],
               ),
-              Text(
-                '${currentPage + 1}/${max(1, (totalCount / pageSize).ceil())}',
-                style: AppTextStyles.bodySmall,
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, size: 18),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                onPressed: (currentPage + 1) * pageSize < totalCount
-                    ? () => setState(() => _customerCurrentPage = currentPage + 1)
-                    : null,
-              ),
-            ],
           ],
-        ),
-      );
+        );
 
         if (isNarrow) {
           return Column(
@@ -884,27 +880,25 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     final endIndex = min(startIndex + pageSize, totalCount);
     final pageSummaries = (startIndex < totalCount) ? filtered.sublist(startIndex, endIndex) : <DealerAccountSummary>[];
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Manage dealer accounts and track balances (Sheet 2)',
-            style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 14),
-          _buildDealerControlsRow(totalCount, pageSummaries.length),
-          const SizedBox(height: 16),
-          _buildDealerAccountsTable(pageSummaries),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Manage dealer accounts and track balances (Sheet 2)',
+          style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 14),
+        _buildDealerControlsRow(totalCount, pageSummaries.length),
+        const SizedBox(height: 16),
+        _buildDealerAccountsTable(pageSummaries),
+      ],
     );
   }
 
   Widget _buildDealerControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 780;
+        final isNarrow = constraints.maxWidth < 820;
         final ctrl = _safeDealerSearchCtrl;
         final pageSize = _safeDealerPageSize;
         final currentPage = _safeDealerCurrentPage;
@@ -943,73 +937,79 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
         );
 
-        final paginationControls = SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-            Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-            const SizedBox(width: 8),
-            Container(
-              height: 32,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
-                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
-                  items: const [
-                    DropdownMenuItem(value: 5, child: Text('5')),
-                    DropdownMenuItem(value: 10, child: Text('10')),
-                    DropdownMenuItem(value: 25, child: Text('25')),
-                    DropdownMenuItem(value: 50, child: Text('50')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        _dealerPageSize = val;
-                        _dealerCurrentPage = 0;
-                      });
-                    }
-                  },
+        final paginationControls = Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                const SizedBox(width: 8),
+                Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
+                      style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
+                      items: const [
+                        DropdownMenuItem(value: 5, child: Text('5')),
+                        DropdownMenuItem(value: 10, child: Text('10')),
+                        DropdownMenuItem(value: 25, child: Text('25')),
+                        DropdownMenuItem(value: 50, child: Text('50')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _dealerPageSize = val;
+                            _dealerCurrentPage = 0;
+                          });
+                        }
+                      },
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(width: 12),
             Text(
               'Showing $shownCount of $totalCount dealers',
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
             ),
-            if (totalCount > pageSize) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.chevron_left, size: 18),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                onPressed: currentPage > 0
-                    ? () => setState(() => _dealerCurrentPage = currentPage - 1)
-                    : null,
+            if (totalCount > pageSize)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed: currentPage > 0
+                        ? () => setState(() => _dealerCurrentPage = currentPage - 1)
+                        : null,
+                  ),
+                  Text(
+                    '${currentPage + 1}/${max(1, (totalCount / pageSize).ceil())}',
+                    style: AppTextStyles.bodySmall,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed: (currentPage + 1) * pageSize < totalCount
+                        ? () => setState(() => _dealerCurrentPage = currentPage + 1)
+                        : null,
+                  ),
+                ],
               ),
-              Text(
-                '${currentPage + 1}/${max(1, (totalCount / pageSize).ceil())}',
-                style: AppTextStyles.bodySmall,
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, size: 18),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                onPressed: (currentPage + 1) * pageSize < totalCount
-                    ? () => setState(() => _dealerCurrentPage = currentPage + 1)
-                    : null,
-              ),
-            ],
           ],
-        ),
-      );
+        );
 
         if (isNarrow) {
           return Column(
@@ -1601,27 +1601,25 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     final endIndex = min(startIndex + pageSize, totalCount);
     final pageSummaries = (startIndex < totalCount) ? filtered.sublist(startIndex, endIndex) : <VendorAccountSummary>[];
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Manage vendor accounts and track balances',
-            style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 14),
-          _buildVendorControlsRow(totalCount, pageSummaries.length),
-          const SizedBox(height: 16),
-          _buildVendorAccountsTable(pageSummaries),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Manage vendor accounts and track balances',
+          style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 14),
+        _buildVendorControlsRow(totalCount, pageSummaries.length),
+        const SizedBox(height: 16),
+        _buildVendorAccountsTable(pageSummaries),
+      ],
     );
   }
 
   Widget _buildVendorControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 780;
+        final isNarrow = constraints.maxWidth < 820;
         final ctrl = _safeVendorSearchCtrl;
         final pageSize = _safeVendorPageSize;
         final currentPage = _safeVendorCurrentPage;
@@ -1660,73 +1658,79 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
         );
 
-        final paginationControls = SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-            Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-            const SizedBox(width: 8),
-            Container(
-              height: 32,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
-                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
-                  items: const [
-                    DropdownMenuItem(value: 5, child: Text('5')),
-                    DropdownMenuItem(value: 10, child: Text('10')),
-                    DropdownMenuItem(value: 25, child: Text('25')),
-                    DropdownMenuItem(value: 50, child: Text('50')),
-                  ],
-                  onChanged: (newSize) {
-                    if (newSize != null) {
-                      setState(() {
-                        _vendorPageSize = newSize;
-                        _vendorCurrentPage = 0;
-                      });
-                    }
-                  },
+        final paginationControls = Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                const SizedBox(width: 8),
+                Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
+                      style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
+                      items: const [
+                        DropdownMenuItem(value: 5, child: Text('5')),
+                        DropdownMenuItem(value: 10, child: Text('10')),
+                        DropdownMenuItem(value: 25, child: Text('25')),
+                        DropdownMenuItem(value: 50, child: Text('50')),
+                      ],
+                      onChanged: (newSize) {
+                        if (newSize != null) {
+                          setState(() {
+                            _vendorPageSize = newSize;
+                            _vendorCurrentPage = 0;
+                          });
+                        }
+                      },
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(width: 12),
             Text(
               'Showing $shownCount of $totalCount vendors',
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
             ),
-            if (totalCount > pageSize) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.chevron_left, size: 18),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                onPressed: currentPage > 0
-                    ? () => setState(() => _vendorCurrentPage = currentPage - 1)
-                    : null,
+            if (totalCount > pageSize)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed: currentPage > 0
+                        ? () => setState(() => _vendorCurrentPage = currentPage - 1)
+                        : null,
+                  ),
+                  Text(
+                    '${currentPage + 1}/${max(1, (totalCount / pageSize).ceil())}',
+                    style: AppTextStyles.bodySmall,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed: (currentPage + 1) * pageSize < totalCount
+                        ? () => setState(() => _vendorCurrentPage = currentPage + 1)
+                        : null,
+                  ),
+                ],
               ),
-              Text(
-                '${currentPage + 1} / ${((totalCount - 1) ~/ pageSize) + 1}',
-                style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, size: 18),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                onPressed: (currentPage + 1) * pageSize < totalCount
-                    ? () => setState(() => _vendorCurrentPage = currentPage + 1)
-                    : null,
-              ),
-            ],
           ],
-        ),
-      );
+        );
 
         if (isNarrow) {
           return Column(
@@ -3352,9 +3356,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                       onPressed: () {
                         if (!_formKey.currentState!.validate()) return;
                         if (_transactionType != 'Discount Only' && _selectedMode == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please select a payment mode.')),
-                          );
+                          ErpToast.showWarning(context, 'Please select a payment mode.');
                           return;
                         }
                         final payAmt = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
@@ -3362,16 +3364,12 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                         final total = payAmt + discAmt;
 
                         if (_transactionType != 'Discount Only' && payAmt <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please enter a payment amount.')),
-                          );
+                          ErpToast.showWarning(context, 'Please enter a payment amount.');
                           return;
                         }
 
                         if (total <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please enter a payment or discount amount.')),
-                          );
+                          ErpToast.showWarning(context, 'Please enter a payment or discount amount.');
                           return;
                         }
 
@@ -3405,11 +3403,9 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                         });
                         FocusScope.of(context).unfocus();
                         Navigator.of(context).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Transaction ${payment.paymentNumber} added! Settled: ${Formatters.formatCurrency(total)}.'),
-                            backgroundColor: AppColors.success,
-                          ),
+                        ErpToast.showSuccess(
+                          context,
+                          'Transaction ${payment.paymentNumber} added! Settled: ${Formatters.formatCurrency(total)}.',
                         );
                       },
                     ),

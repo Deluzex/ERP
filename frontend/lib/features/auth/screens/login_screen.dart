@@ -179,37 +179,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Logo & Brand Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
-                          Flexible(
-                            child: SizedBox(
+                          SizedBox(
+                            height: 38,
+                            child: Image.asset(
+                              'assets/images/logo.png',
                               height: 38,
-                              child: Image.asset(
-                                'assets/images/logo.png',
-                                height: 38,
-                                fit: BoxFit.contain,
-                                alignment: Alignment.centerLeft,
-                                color: AppColors.textPrimary,
-                                colorBlendMode: BlendMode.srcIn,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'd',
-                                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 22),
-                                    ),
+                              fit: BoxFit.contain,
+                              alignment: Alignment.centerLeft,
+                              color: AppColors.textPrimary,
+                              colorBlendMode: BlendMode.srcIn,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Center(
+                                  child: Text(
+                                    'd',
+                                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 22),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
@@ -222,7 +222,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
                             ),
                           ),
-                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(

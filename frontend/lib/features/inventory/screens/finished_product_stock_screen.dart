@@ -8,7 +8,9 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class FinishedProductStockScreen extends ConsumerStatefulWidget {
@@ -21,6 +23,7 @@ class FinishedProductStockScreen extends ConsumerStatefulWidget {
 // This is class ant
 class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStockScreen> {
   String _searchQuery = '';
+  String? _selectedCategory;
   bool _showOnlyLowStock = false;
 
   @override
@@ -270,11 +273,9 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                       updatedAt: DateTime.now(),
                     ));
                     Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Product updated successfully!'),
-                        backgroundColor: AppColors.success,
-                      ),
+                    ErpToast.showSuccess(
+                      context,
+                      'Product updated successfully!',
                     );
                   },
                 ),
@@ -296,8 +297,9 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
           fp.itemCode.toLowerCase().contains(query) ||
           fp.categoryName.toLowerCase().contains(query) ||
           fp.unit.toLowerCase().contains(query);
+      final matchesCategory = _selectedCategory == null || fp.categoryId == _selectedCategory;
       final matchesLow = !_showOnlyLowStock || fp.isLowStock;
-      return matchesSearch && matchesLow;
+      return matchesSearch && matchesCategory && matchesLow;
     }).toList();
 
     return SingleChildScrollView(
@@ -305,69 +307,42 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Text(
+            'Manage finished goods catalog, multi-tier pricing, and stock levels',
+            style: AppTextStyles.subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 16),
+
+          // Global Filter bar
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text('Finished Product Stock', style: AppTextStyles.h1),
-              const SizedBox(height: 4),
-              Text(
-                'Manage finished goods catalog, multi-tier pricing, and stock levels',
-                style: AppTextStyles.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              ErpSearchInput(
+                hintText: 'Search product by name, SKU or category...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() => _searchQuery = val),
+              ),
+              ErpFilterDropdown<String?>(
+                label: 'Category',
+                value: _selectedCategory,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('All Categories')),
+                  ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                ],
+                onChanged: (val) => setState(() => _selectedCategory = val),
+              ),
+              FilterChip(
+                label: Text('Low Stock (${db.lowStockFinishedProducts.length})'),
+                selected: _showOnlyLowStock,
+                onSelected: (val) => setState(() => _showOnlyLowStock = val),
+                selectedColor: AppColors.dangerLight,
+                checkmarkColor: AppColors.dangerText,
               ),
             ],
-          ),
-          const SizedBox(height: 24),
-
-          // Filter bar
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-              if (isSmall) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search product by name, SKU or category...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilterChip(
-                      label: Text('Low Stock (${db.lowStockFinishedProducts.length})'),
-                      selected: _showOnlyLowStock,
-                      onSelected: (val) => setState(() => _showOnlyLowStock = val),
-                      selectedColor: AppColors.dangerLight,
-                      checkmarkColor: AppColors.dangerText,
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search product by name, SKU or category...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  FilterChip(
-                    label: Text('Low Stock (${db.lowStockFinishedProducts.length})'),
-                    selected: _showOnlyLowStock,
-                    onSelected: (val) => setState(() => _showOnlyLowStock = val),
-                    selectedColor: AppColors.dangerLight,
-                    checkmarkColor: AppColors.dangerText,
-                  ),
-                ],
-              );
-            },
           ),
           const SizedBox(height: 20),
 

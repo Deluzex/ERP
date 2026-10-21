@@ -707,13 +707,11 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                   children: [
                     ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 460),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Create Production Order', style: AppTextStyles.h1),
-                          const SizedBox(height: 4),
-                          Text('Consume raw materials, record labor & overhead expenses, and output finished goods', style: AppTextStyles.subtitle),
-                        ],
+                      child: Text(
+                        'Consume raw materials, record labor & overhead expenses, and output finished goods',
+                        style: AppTextStyles.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Wrap(
@@ -1488,7 +1486,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
               child: Wrap(
                 alignment: WrapAlignment.end,
                 spacing: 10,
-                runSpacing: 8,
+                runSpacing: 10,
                 children: [
                   ErpButton(
                     text: 'Cancel',

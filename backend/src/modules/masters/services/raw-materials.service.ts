@@ -23,6 +23,7 @@ export interface RawMaterialRecord {
   minimumStock: string;
   reorderLevel: string;
   defaultPurchasePrice: string;
+  transportationCharge: string;
   gstPercent: number;
   preferredVendorIds: string[];
   isLowStock: boolean;
@@ -161,13 +162,14 @@ export class RawMaterialsService {
     const minimumStock = Money.formatQuantity(dto.minimumStock ?? 0);
     const reorderLevel = Money.formatQuantity(dto.reorderLevel ?? 0);
     const defaultPrice = Money.format(dto.defaultPurchasePrice ?? 0);
+    const transCharge = Money.format(dto.transportationCharge ?? 0);
 
     const res = await this.db.query<{ id: string }>(
       `INSERT INTO raw_materials (
         name, item_code, category_id, unit_id, hsn_sac_code,
         opening_stock, current_stock, minimum_stock, reorder_level, default_purchase_price,
-        gst_percent, preferred_vendor_ids
-      ) VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11)
+        transportation_charge, gst_percent, preferred_vendor_ids
+      ) VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11, $12)
       RETURNING id`,
       [
         dto.name.trim(),
@@ -179,6 +181,7 @@ export class RawMaterialsService {
         minimumStock,
         reorderLevel,
         defaultPrice,
+        transCharge,
         dto.gstPercent ?? 18.0,
         dto.preferredVendorIds || null,
       ],
@@ -242,6 +245,10 @@ export class RawMaterialsService {
     if (dto.defaultPurchasePrice !== undefined) {
       updates.push(`default_purchase_price = $${idx++}`);
       values.push(Money.format(dto.defaultPurchasePrice));
+    }
+    if (dto.transportationCharge !== undefined) {
+      updates.push(`transportation_charge = $${idx++}`);
+      values.push(Money.format(dto.transportationCharge));
     }
     if (dto.gstPercent !== undefined) {
       updates.push(`gst_percent = $${idx++}`);
@@ -324,6 +331,7 @@ export class RawMaterialsService {
       minimumStock: Money.formatQuantity(r.minimum_stock),
       reorderLevel: Money.formatQuantity(r.reorder_level),
       defaultPurchasePrice: Money.format(r.default_purchase_price),
+      transportationCharge: Money.format(r.transportation_charge || 0),
       gstPercent: parseFloat(r.gst_percent) || 18.0,
       preferredVendorIds: r.preferred_vendor_ids || [],
       isLowStock: currentStock <= minStock,

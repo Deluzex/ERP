@@ -162,6 +162,163 @@ void main() {
       expect((json['items'] as List).length, 1);
     });
 
+    test('Purchase & PurchaseLineItem serialize and parse transportation fields with backward compatibility', () {
+      final json = {
+        'id': 'pur-2026-002',
+        'purchaseNumber': 'PO-2026-0002',
+        'purchaseDate': '2026-10-16T00:00:00.000Z',
+        'vendorId': 'ven-uuid-1',
+        'vendorName': 'Apex Metals Corp',
+        'vendorInvoiceNumber': 'INV-9902',
+        'invoiceDate': '2026-10-16T00:00:00.000Z',
+        'purchaseType': 'rawMaterial',
+        'subtotalAmount': '40000.00',
+        'discountAmount': '0.00',
+        'taxableAmount': '40000.00',
+        'cgstAmount': '3600.00',
+        'sgstAmount': '3600.00',
+        'igstAmount': '0.00',
+        'gstAmount': '7200.00',
+        'transportationCharges': 2000.0,
+        'totalAmount': '49200.00',
+        'paidAmount': '0.00',
+        'pendingAmount': '49200.00',
+        'paymentMode': 'credit',
+        'status': 'saved',
+        'items': [
+          {
+            'itemType': 'rawMaterial',
+            'rawMaterialId': 'rm-uuid-1',
+            'quantity': 100.0,
+            'unit': 'MTR',
+            'rate': 300.0,
+            'lineTotal': 35400.0,
+            'transportationCost': 1500.0,
+            'landedRate': 315.0,
+          },
+          {
+            'itemType': 'finishedProduct',
+            'finishedProductId': 'fp-uuid-1',
+            'quantity': 10.0,
+            'unit': 'PCS',
+            'rate': 1000.0,
+            'lineTotal': 11800.0,
+            'transportationCost': 500.0,
+            'landedRate': 1050.0,
+          },
+        ],
+      };
+
+      final p = Purchase.fromJson(json);
+
+      expect(p.transportationCharges, 2000.0);
+      expect(p.items.length, 2);
+      expect(p.items[0].transportationCost, 1500.0);
+      expect(p.items[0].landedRate, 315.0);
+      expect(p.items[1].transportationCost, 500.0);
+      expect(p.items[1].landedRate, 1050.0);
+
+      // Verify toJson serialization
+      final serialized = p.toJson();
+      expect(serialized['transportationCharges'], 2000.0);
+      expect((serialized['items'] as List)[0]['transportationCost'], 1500.0);
+      expect((serialized['items'] as List)[0]['landedRate'], 315.0);
+
+      // Historical purchase without transportation charges defaults to 0.0
+      final historical = Purchase.fromJson({
+        'id': 'hist-1',
+        'purchaseNumber': 'PO-HIST-1',
+        'totalAmount': 5000.0,
+        'paidAmount': 5000.0,
+        'pendingAmount': 0.0,
+        'status': 'paid',
+        'items': [
+          {
+            'itemType': 'rawMaterial',
+            'quantity': 10.0,
+            'rate': 500.0,
+            'lineTotal': 5000.0,
+          }
+        ],
+      });
+      expect(historical.transportationCharges, 0.0);
+      expect(historical.items[0].transportationCost, 0.0);
+      expect(historical.items[0].landedRate, 500.0);
+    });
+
+    test('PurchaseLineItem.allocateTransportation accurately calculates prorated landed cost and resolves paisa delta', () {
+      final items = [
+        PurchaseLineItem(
+          itemType: PurchaseItemType.rawMaterial,
+          rawMaterialId: 'rm-1',
+          quantity: 100.0,
+          unit: 'MTR',
+          rate: 300.0,
+          discountAmount: 0.0,
+          lineTotal: 35400.0,
+        ),
+        PurchaseLineItem(
+          itemType: PurchaseItemType.finishedProduct,
+          finishedProductId: 'fp-1',
+          quantity: 10.0,
+          unit: 'PCS',
+          rate: 1000.0,
+          discountAmount: 0.0,
+          lineTotal: 11800.0,
+        ),
+      ];
+
+      final allocated = PurchaseLineItem.allocateTransportation(
+        items: items,
+        transportationCharges: 2000.0,
+      );
+
+      expect(allocated.length, 2);
+      // Item 1: 30,000 / 40,000 * 2000 = 1500.00
+      expect(allocated[0].transportationCost, 1500.0);
+      expect(allocated[0].landedRate, 315.0); // (30000 + 1500) / 100
+
+      // Item 2: 10,000 / 40,000 * 2000 = 500.00
+      expect(allocated[1].transportationCost, 500.0);
+      expect(allocated[1].landedRate, 1050.0); // (10000 + 500) / 10
+
+      // Sum equals total transportation
+      expect(allocated[0].transportationCost + allocated[1].transportationCost, 2000.0);
+
+      // Edge case: Odd paisa split (e.g. 1000 charges split over 3 items with values 1000, 1000, 1000)
+      final oddItems = [
+        PurchaseLineItem(quantity: 1.0, unit: 'PCS', rate: 1000.0, lineTotal: 1000.0),
+        PurchaseLineItem(quantity: 1.0, unit: 'PCS', rate: 1000.0, lineTotal: 1000.0),
+        PurchaseLineItem(quantity: 1.0, unit: 'PCS', rate: 1000.0, lineTotal: 1000.0),
+      ];
+      final oddAllocated = PurchaseLineItem.allocateTransportation(
+        items: oddItems,
+        transportationCharges: 100.0,
+      );
+      final sumAllocated = oddAllocated.fold<double>(0.0, (s, i) => s + i.transportationCost);
+      expect(double.parse(sumAllocated.toStringAsFixed(2)), 100.0);
+
+      // Edge case: Zero transportation
+      final zeroAllocated = PurchaseLineItem.allocateTransportation(
+        items: items,
+        transportationCharges: 0.0,
+      );
+      expect(zeroAllocated[0].transportationCost, 0.0);
+      expect(zeroAllocated[0].landedRate, 300.0);
+
+      // Edge case: Zero subtotal (rate = 0 or 100% discount)
+      final freeItems = [
+        PurchaseLineItem(quantity: 10.0, unit: 'PCS', rate: 0.0, lineTotal: 0.0),
+        PurchaseLineItem(quantity: 10.0, unit: 'PCS', rate: 0.0, lineTotal: 0.0),
+      ];
+      final freeAllocated = PurchaseLineItem.allocateTransportation(
+        items: freeItems,
+        transportationCharges: 500.0,
+      );
+      expect(freeAllocated[0].transportationCost + freeAllocated[1].transportationCost, 500.0);
+      expect(freeAllocated[0].landedRate, 25.0); // 250 / 10
+    });
+
     test('PurchasesApiService instantiates without error', () {
       final api = PurchasesApiService();
       expect(api, isNotNull);

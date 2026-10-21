@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../app/routes/app_routes.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_radius.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../shared/providers/app_state_providers.dart';
 import '../../shared/widgets/low_stock_whatsapp_alert_dialog.dart';
+import '../../shared/widgets/notifications_center_dialog.dart';
 
 class ErpHeader extends ConsumerWidget {
   final VoidCallback? onMenuToggle;
@@ -14,13 +16,171 @@ class ErpHeader extends ConsumerWidget {
     this.onMenuToggle,
   });
 
+  String _resolvePageTitle(WidgetRef ref) {
+    final activeRecordStack = ref.watch(activeRecordDetailsStackProvider);
+    if (activeRecordStack.isNotEmpty) {
+      final details = activeRecordStack.last;
+      switch (details.recordType) {
+        case 'rawMaterial':
+          return 'Raw Material Details';
+        case 'vendor':
+          return 'Vendor Details';
+        case 'purchase':
+          return 'Purchase Order Details';
+        case 'production':
+          return 'Production Order Details';
+        case 'customer':
+          return 'Customer Profile';
+        case 'dealer':
+          return 'Dealer Profile';
+        case 'architect':
+          return 'Architect Profile';
+        case 'project':
+          return 'Project Details';
+        case 'quotation':
+          return 'Quotation Details';
+        case 'proformaInvoice':
+          return 'Proforma Invoice Details';
+        case 'salesOrder':
+          return 'Sales Order Details';
+        case 'delivery':
+          return 'Delivery Challan Details';
+        case 'invoice':
+          return 'Sales Tax Invoice Details';
+        case 'salesReturn':
+          return 'Sales Return & Credit Note Details';
+        case 'payment':
+          return 'Payment Voucher Details';
+        default:
+          return 'Record Details';
+      }
+    }
+
+    final currentSection = ref.watch(currentNavSectionProvider);
+    final db = ref.watch(databaseServiceProvider);
+    final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
+    final userRole = db.getUserRole(currentUser);
+
+    switch (currentSection) {
+      case ErpNavSection.dashboard:
+        return '${userRole.name} Dashboard';
+      case ErpNavSection.inventoryDashboard:
+        return 'Inventory Dashboard';
+      case ErpNavSection.rawMaterialStock:
+        return 'Raw Material Stock';
+      case ErpNavSection.finishedProductStock:
+        return 'Finished Product Stock';
+      case ErpNavSection.stockMovement:
+        return 'Stock Movement (Ledger)';
+      case ErpNavSection.stockAdjustments:
+        return 'Stock Adjustments';
+      case ErpNavSection.purchaseDashboard:
+        return 'Purchase Dashboard';
+      case ErpNavSection.purchaseList:
+      case ErpNavSection.purchaseHistory:
+        return 'Purchase Orders';
+      case ErpNavSection.createPurchase:
+        return 'Create Purchase Order';
+      case ErpNavSection.vendorPayments:
+        return 'Vendor Payments';
+      case ErpNavSection.productionDashboard:
+        return 'Production Dashboard';
+      case ErpNavSection.productionOrders:
+      case ErpNavSection.productionHistory:
+        return 'Production Orders';
+      case ErpNavSection.createProduction:
+        return 'Create Production Order';
+      case ErpNavSection.productionCosting:
+        return 'Production Costing';
+      case ErpNavSection.salesDashboard:
+        return 'Sales Dashboard';
+      case ErpNavSection.quotations:
+        return 'Quotations';
+      case ErpNavSection.createQuotation:
+        return 'Create Quotation';
+      case ErpNavSection.proformaInvoices:
+        return 'Proforma Invoices';
+      case ErpNavSection.salesOrders:
+        return 'Sales Orders';
+      case ErpNavSection.createSalesOrder:
+        return 'Create Sales Order';
+      case ErpNavSection.salesDeliveries:
+        return 'Sales Deliveries & Dispatch';
+      case ErpNavSection.salesInvoiceList:
+        return 'Sales Invoices';
+      case ErpNavSection.createSale:
+        return 'Create Sales Invoice';
+      case ErpNavSection.salesReturns:
+      case ErpNavSection.createSalesReturn:
+        return 'Sales Returns';
+      case ErpNavSection.projectList:
+      case ErpNavSection.createProject:
+        return 'Projects';
+      case ErpNavSection.paymentsDashboard:
+        return 'Payments & Treasury Center';
+      case ErpNavSection.customerPayments:
+        return 'Customer Payments';
+      case ErpNavSection.dealerPayments:
+        return 'Dealer Payments';
+      case ErpNavSection.vendorPaymentsSection:
+        return 'Vendor Payments';
+      case ErpNavSection.commissionPayments:
+        return 'Commission Payments';
+      case ErpNavSection.expenseList:
+        return 'Expenses';
+      case ErpNavSection.mastersDashboard:
+        return 'Masters Hub';
+      case ErpNavSection.categoriesUnits:
+        return 'Categories & Units';
+      case ErpNavSection.vendors:
+        return 'Vendors Master';
+      case ErpNavSection.customers:
+        return 'Customers Master';
+      case ErpNavSection.dealers:
+        return 'Dealers Master';
+      case ErpNavSection.architects:
+        return 'Architects Master';
+      case ErpNavSection.rawMaterials:
+        return 'Raw Materials Master';
+      case ErpNavSection.finishedProducts:
+        return 'Product Master';
+      case ErpNavSection.billOfMaterials:
+        return 'BOM Master';
+      case ErpNavSection.reportsDashboard:
+        return 'Reports & Analytics';
+      case ErpNavSection.inventoryReports:
+        return 'Inventory Reports';
+      case ErpNavSection.purchaseReports:
+        return 'Purchase Reports';
+      case ErpNavSection.productionReports:
+        return 'Production Reports';
+      case ErpNavSection.salesReports:
+        return 'Sales Reports';
+      case ErpNavSection.projectReports:
+        return 'Project Reports';
+      case ErpNavSection.commissionReports:
+        return 'Commission Reports';
+      case ErpNavSection.financialReports:
+        return 'Financial Reports';
+      case ErpNavSection.chatSupport:
+        return 'Chat Support';
+      case ErpNavSection.settings:
+        return 'Settings & User Management';
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final pageTitle = _resolvePageTitle(ref);
+    final db = ref.watch(databaseServiceProvider);
+    final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
+    final canViewLowStock = db.canViewLowStockAlerts(currentUser);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
         final isDesktop = MediaQuery.of(context).size.width >= 1024;
-        final showLowStockPill = availableWidth >= 780;
+        final showLowStockPill = availableWidth >= 780 && canViewLowStock;
         final isMobile = availableWidth < 500;
         final hideUserDetails = availableWidth < 620;
 
@@ -45,78 +205,30 @@ class ErpHeader extends ConsumerWidget {
                 const SizedBox(width: 4),
               ],
 
-              // Search Field pill with filter icon
+              // Current Page / Module Title (replacing top global search)
               Expanded(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.mdBorderRadius,
-                    border: Border.all(color: AppColors.border, width: 1),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.search,
-                        size: 17,
-                        color: AppColors.textMuted,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: TextField(
-                          onChanged: (val) {
-                            ref.read(globalSearchQueryProvider.notifier).state = val;
-                          },
-                          style: AppTextStyles.bodyMedium.copyWith(fontSize: 12.5),
-                          decoration: InputDecoration(
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
-                            hintText: isMobile ? 'Search products...' : 'Search product, SKU, barcode',
-                            hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textDisabled, fontSize: 12),
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            fillColor: Colors.transparent,
-                            filled: false,
-                          ),
-                        ),
-                      ),
-                      if (!isMobile) ...[
-                        Container(
-                          height: 18,
-                          width: 1,
-                          color: AppColors.border,
-                          margin: const EdgeInsets.symmetric(horizontal: 6),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Search filter active: All categories')),
-                            );
-                          },
-                          child: const Icon(
-                            Icons.tune_rounded,
-                            size: 16,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ],
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    pageTitle,
+                    style: isMobile
+                        ? AppTextStyles.bodyBold.copyWith(fontSize: 15, color: AppColors.textPrimary)
+                        : AppTextStyles.h2.copyWith(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
 
               SizedBox(width: isMobile ? 6 : 10),
 
-              // Low Stock Alert Quick Button if low stock exists (Only show text pill on wide containers)
+              // Low Stock Alert Quick Button if low stock exists and user role is authorized
               if (showLowStockPill)
                 Builder(
                   builder: (context) {
-                    final db = ref.watch(databaseServiceProvider);
-                    final lowCount = db.totalLowStockCount;
+                    final lowCount = db.getLowStockCountForUser(currentUser);
                     if (lowCount == 0) return const SizedBox.shrink();
+                    final label = db.getLowStockAlertLabelForUser(currentUser);
 
                     return Container(
                       margin: const EdgeInsets.only(right: 6),
@@ -136,7 +248,7 @@ class ErpHeader extends ConsumerWidget {
                               const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 16),
                               const SizedBox(width: 6),
                               Text(
-                                '$lowCount Low Stock Alerts',
+                                label,
                                 style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 11.5),
                               ),
                               const SizedBox(width: 4),
@@ -149,29 +261,59 @@ class ErpHeader extends ConsumerWidget {
                   },
                 ),
 
-              // Notification Bell with unread dot
-              Stack(
-                children: [
-                  IconButton(
-                    tooltip: 'Low Stock & Production Alerts',
-                    icon: const Icon(Icons.notifications_none_rounded, color: AppColors.textSecondary, size: 22),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    onPressed: () => LowStockWhatsAppAlertDialog.show(context),
-                  ),
-                  Positioned(
-                    right: 6,
-                    top: 6,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.danger,
-                        shape: BoxShape.circle,
+              // Notification Bell with dynamic unread badge
+              Builder(
+                builder: (context) {
+                  final unreadCount = db.getUnreadNotificationCount(currentUser);
+
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      IconButton(
+                        tooltip: unreadCount > 0
+                            ? '$unreadCount Unread Notification(s)'
+                            : 'Notifications & Alerts',
+                        icon: Icon(
+                          unreadCount > 0
+                              ? Icons.notifications_active_rounded
+                              : Icons.notifications_none_rounded,
+                          color: unreadCount > 0
+                              ? AppColors.primary
+                              : AppColors.textSecondary,
+                          size: 22,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        onPressed: () => NotificationsCenterDialog.show(context),
                       ),
-                    ),
-                  ),
-                ],
+                      if (unreadCount > 0)
+                        Positioned(
+                          right: 2,
+                          top: 2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              unreadCount > 99 ? '99+' : '$unreadCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
               SizedBox(width: isMobile ? 4 : 8),
 

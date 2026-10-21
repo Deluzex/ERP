@@ -33,14 +33,7 @@ class InventoryRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
-            title: 'Inventory & Warehouse Dashboard',
-            subtitle: 'Real-time stock valuation, inventory balances, low stock alerts, and warehouse movements',
-            badgeText: 'INVENTORY MANAGER',
-            badgeColor: Colors.blue,
-          ),
-          const SizedBox(height: 20),
+
 
           // Quick Action Bar
           Container(
@@ -314,14 +307,7 @@ class PurchaseRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
-            title: 'Procurement & Purchase Hub',
-            subtitle: 'Purchase orders, vendor relations, raw material supplies, and delivery tracking',
-            badgeText: 'PURCHASE MANAGER',
-            badgeColor: Colors.purple,
-          ),
-          const SizedBox(height: 20),
+
 
           // Quick Action Bar
           Container(
@@ -487,14 +473,7 @@ class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboar
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
-            title: 'Factory & Production Dashboard',
-            subtitle: 'Manufacturing work orders, shopfloor assembly batches, BOM consumption, and output yields',
-            badgeText: 'PRODUCTION MANAGER',
-            badgeColor: Colors.indigo,
-          ),
-          const SizedBox(height: 20),
+
 
           // Quick Action Bar
           Container(
@@ -634,14 +613,7 @@ class AccountsPaymentRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
-            title: 'Finance, Accounts & Payment Control',
-            subtitle: 'Customer receivables, dealer ledgers, vendor disbursements, expense vouchers, and partner commissions',
-            badgeText: 'ACCOUNTS & FINANCE',
-            badgeColor: Colors.teal,
-          ),
-          const SizedBox(height: 20),
+
 
           // Quick Action Bar
           Container(
@@ -777,14 +749,7 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
-            title: 'Architectural Projects Portfolio',
-            subtitle: 'Commercial project milestones, site deliverables, client scopes, and material budget consumption',
-            badgeText: 'PROJECT MANAGER',
-            badgeColor: Colors.deepPurple,
-          ),
-          const SizedBox(height: 20),
+
 
           // Quick Action Bar
           Container(
@@ -947,14 +912,7 @@ class _MastersRoleDashboardState extends ConsumerState<MastersRoleDashboard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
-            title: 'Master Data & Entity Registry',
-            subtitle: 'Centralized repository of commercial counterparties, architectural specifiers, SKUs, and units',
-            badgeText: 'MASTER DATA MANAGER',
-            badgeColor: Colors.deepOrange,
-          ),
-          const SizedBox(height: 20),
+
 
           // 8 Entity Metric Cards (Responsive Grid)
           _buildResponsiveMetricGrid(context, [
@@ -1196,14 +1154,7 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
-            title: 'Analytics & Reporting Hub (Read-Only)',
-            subtitle: 'Comprehensive audit trails, financial ledgers, stock reconciliations, and cross-department analytics',
-            badgeText: 'AUDITOR & REPORT ANALYST',
-            badgeColor: Colors.amber.shade900,
-          ),
-          const SizedBox(height: 24),
+
 
           // 4 Executive Audit KPI Metrics
           _buildResponsiveMetricGrid(context, [
@@ -1394,14 +1345,7 @@ class DataEntryRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
-            title: 'Data Entry Workspace',
-            subtitle: 'Direct data input shortcuts, draft creation queues, and recent document submissions',
-            badgeText: 'DATA ENTRY OPERATOR',
-            badgeColor: Colors.blueGrey,
-          ),
-          const SizedBox(height: 24),
+
 
           Text('Quick Record Creation Shortcuts', style: AppTextStyles.h2),
           const SizedBox(height: 16),
@@ -1506,56 +1450,7 @@ class DataEntryRoleDashboard extends ConsumerWidget {
 
 // =====================================================================
 // SHARED RESPONSIVE HELPER WIDGETS
-// =====================================================================
-Widget _buildRoleHeader({
-  required BuildContext context,
-  required String title,
-  required String subtitle,
-  required String badgeText,
-  required Color badgeColor,
-}) {
-  return Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: AppColors.surface,
-      borderRadius: AppRadius.lgBorderRadius,
-      border: Border.all(color: AppColors.border),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(title, style: AppTextStyles.h1),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: badgeColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      badgeText,
-                      style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(subtitle, style: AppTextStyles.subtitle),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
+
 
 Widget _buildMetricCard({
   required String title,

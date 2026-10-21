@@ -9,7 +9,9 @@ import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/widgets/share_document_dialog.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -25,6 +27,8 @@ class DeliveriesScreen extends ConsumerStatefulWidget {
 
 class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
   String _searchQuery = '';
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -174,15 +178,14 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                   );
                   Navigator.pop(ctx);
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Courier & tracking details updated successfully!'),
-                      backgroundColor: AppColors.success,
-                    ),
+                  ErpToast.showSuccess(
+                    context,
+                    'Courier & tracking details updated successfully!',
                   );
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to update tracking: $e'), backgroundColor: AppColors.danger),
+                  ErpToast.showError(
+                    context,
+                    'Failed to update tracking: $e',
                   );
                 }
               },
@@ -284,16 +287,15 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                 );
 
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Tax Invoice ${invoice.invoiceNumber} created from delivered items! Customer outstanding updated.'),
-                    backgroundColor: AppColors.success,
-                  ),
+                ErpToast.showSuccess(
+                  context,
+                  'Tax Invoice ${invoice.invoiceNumber} created from delivered items!',
                 );
                 ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to generate invoice: $e'), backgroundColor: AppColors.danger),
+                ErpToast.showError(
+                  context,
+                  'Failed to generate invoice: $e',
                 );
               }
             },
@@ -309,12 +311,17 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
 
     final filtered = db.deliveries.where((d) {
       final qLower = _searchQuery.toLowerCase();
-      return d.invoiceNumber.toLowerCase().contains(qLower) ||
+      final matchesSearch = d.invoiceNumber.toLowerCase().contains(qLower) ||
           d.partyName.toLowerCase().contains(qLower) ||
           (d.salesOrderNumber != null && d.salesOrderNumber!.toLowerCase().contains(qLower)) ||
           (d.courierName != null && d.courierName!.toLowerCase().contains(qLower)) ||
           (d.trackingNumber != null && d.trackingNumber!.toLowerCase().contains(qLower)) ||
           (d.vehicleNumber != null && d.vehicleNumber!.toLowerCase().contains(qLower));
+
+      final matchesStart = _startDate == null || !d.date.isBefore(_startDate!);
+      final matchesEnd = _endDate == null || !d.date.isAfter(_endDate!.add(const Duration(days: 1)));
+
+      return matchesSearch && matchesStart && matchesEnd;
     }).toList();
 
     return SingleChildScrollView(
@@ -326,16 +333,11 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Deliveries & Dispatch Challans', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Physical dispatch records, courier tracking details & invoice generation from delivered quantities',
-                    style: AppTextStyles.subtitle,
-                  ),
-                ],
+              final titleBlock = Text(
+                'Physical dispatch records, courier tracking details & invoice generation from delivered quantities',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               );
 
               final actionBtn = ErpButton(
@@ -368,13 +370,28 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
           ),
           const SizedBox(height: 20),
 
-          // 2. Search
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search delivery by challan no, courier, tracking no, vehicle number, customer or sales order...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // 2. Global Filters
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search challan, customer, courier, vehicle...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() => _searchQuery = val),
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 

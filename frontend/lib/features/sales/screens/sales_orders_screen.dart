@@ -10,6 +10,8 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
@@ -24,6 +26,9 @@ class SalesOrdersScreen extends ConsumerStatefulWidget {
 class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
+  String _selectedStatusFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -266,21 +271,17 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                     final physicalStock = fp?.currentStock ?? 0.0;
 
                     if (qtyToDispatch > remainingToDeliver) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Dispatch quantity for ${item.finishedProductName} cannot exceed remaining order quantity (${remainingToDeliver.toInt()}).'),
-                          backgroundColor: AppColors.danger,
-                        ),
+                      ErpToast.showError(
+                        context,
+                        'Dispatch quantity for ${item.finishedProductName} cannot exceed remaining order quantity (${remainingToDeliver.toInt()}).',
                       );
                       return;
                     }
 
                     if (qtyToDispatch > physicalStock) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Cannot dispatch ${qtyToDispatch.toInt()} ${item.unit} of ${item.finishedProductName}. Only ${physicalStock.toInt()} ${item.unit} physically available in warehouse. Wait for production to finish or dispatch partial stock.'),
-                          backgroundColor: AppColors.danger,
-                        ),
+                      ErpToast.showError(
+                        context,
+                        'Cannot dispatch ${qtyToDispatch.toInt()} ${item.unit} of ${item.finishedProductName}. Only ${physicalStock.toInt()} available.',
                       );
                       return;
                     }
@@ -299,9 +300,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                   }
 
                   if (deliveryItems.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please specify a dispatch quantity greater than 0.'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showError(context, 'Please specify a dispatch quantity greater than 0.');
                     return;
                   }
 
@@ -316,16 +315,12 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                     );
 
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Delivery Challan ${deliveryDoc.invoiceNumber} generated! Physical stock deducted from finished goods.'),
-                        backgroundColor: AppColors.success,
-                      ),
+                    ErpToast.showSuccess(
+                      context,
+                      'Delivery challan ${deliveryDoc.invoiceNumber} created successfully. Physical stock deducted.',
                     );
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to create delivery: $e'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showError(context, 'Failed to create delivery: $e');
                   }
                 },
               ),
@@ -349,16 +344,11 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
           LayoutBuilder(
             builder: (context, constraints) {
               final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Sales Orders & Stock Allocation', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Order execution, stock reservation, shortage production links & dispatch',
-                    style: AppTextStyles.subtitle,
-                  ),
-                ],
+              final titleBlock = Text(
+                'Order execution, stock reservation, shortage production links & dispatch',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               );
 
               final actionBtn = ErpButton(
@@ -420,13 +410,43 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
           ),
           const SizedBox(height: 16),
 
-          // 3. Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search sales orders by number, customer, project or linked proforma/quotation...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // 3. Search and Filter Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 300,
+                child: ErpSearchInput(
+                  hintText: 'Search order no, customer, project...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _selectedStatusFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                  DropdownMenuItem(value: 'READY', child: Text('Ready for Dispatch')),
+                  DropdownMenuItem(value: 'PRODUCTION', child: Text('In Production / Shortage')),
+                  DropdownMenuItem(value: 'PARTIAL', child: Text('Partially Delivered')),
+                  DropdownMenuItem(value: 'DELIVERED', child: Text('Fully Delivered')),
+                  DropdownMenuItem(value: 'DRAFT', child: Text('Draft / Other')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() => _selectedStatusFilter = val);
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                }),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -459,6 +479,34 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
         break;
       default:
         break;
+    }
+
+    // Filter by status dropdown
+    if (_selectedStatusFilter != 'ALL') {
+      filtered = filtered.where((so) {
+        switch (_selectedStatusFilter) {
+          case 'READY':
+            return so.salesOrderStatus == SalesOrderStatus.readyForDispatch;
+          case 'PRODUCTION':
+            return so.salesOrderStatus == SalesOrderStatus.productionPending || so.salesOrderStatus == SalesOrderStatus.inProduction;
+          case 'PARTIAL':
+            return so.salesOrderStatus == SalesOrderStatus.partiallyDelivered;
+          case 'DELIVERED':
+            return so.salesOrderStatus == SalesOrderStatus.delivered || so.salesOrderStatus == SalesOrderStatus.completed;
+          case 'DRAFT':
+            return so.salesOrderStatus == SalesOrderStatus.draft || so.salesOrderStatus == SalesOrderStatus.pending;
+          default:
+            return true;
+        }
+      }).toList();
+    }
+
+    // Filter by date range
+    if (_startDate != null) {
+      filtered = filtered.where((so) => !so.date.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))).toList();
+    }
+    if (_endDate != null) {
+      filtered = filtered.where((so) => !so.date.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))).toList();
     }
 
     // Filter by search query

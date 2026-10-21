@@ -820,13 +820,11 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                 children: [
                   ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 180),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Project Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Manage architectural projects, client assignments, lead architects, and lifecycle status', style: AppTextStyles.subtitle),
-                      ],
+                    child: Text(
+                      'Manage architectural projects, client assignments, lead architects, and lifecycle status',
+                      style: AppTextStyles.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   ErpButton(

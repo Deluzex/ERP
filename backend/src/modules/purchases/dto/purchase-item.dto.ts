@@ -97,6 +97,25 @@ export class PurchaseLineItemDto {
   @IsOptional()
   igstAmount?: number = 0.0;
 
+  @ApiPropertyOptional({
+    description: 'Proportionally allocated transportation cost for this line item',
+    default: 0.0,
+    example: 500.0,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  transportationCost?: number = 0.0;
+
+  @ApiPropertyOptional({
+    description: 'Final unit landed cost including allocated transportation',
+    example: 455.0,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  landedRate?: number;
+
   @ApiProperty({ description: 'Line total inclusive of tax', example: 51920.0 })
   @IsNumber()
   @IsNotEmpty()

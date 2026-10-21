@@ -744,14 +744,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('User & Role Access Management (RBAC)', style: AppTextStyles.h1),
-              const SizedBox(height: 4),
-              Text('Manage ERP operators, primary & multi-department roles, and granular permission matrices', style: AppTextStyles.subtitle),
-            ],
-          ),
+          Text('Manage ERP operators, primary & multi-department roles, and granular permission matrices', style: AppTextStyles.subtitle),
           const SizedBox(height: 16),
           Container(
             decoration: const BoxDecoration(

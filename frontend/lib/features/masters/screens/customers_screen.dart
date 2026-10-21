@@ -430,42 +430,34 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
+              final subtitleWidget = Text(
+                'Direct end-customers, project developers, and dual-entity Architect-Customers with WhatsApp action',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              );
+              final actionButton = ErpButton(
+                text: 'Add Customer',
+                icon: Icons.add,
+                onPressed: () => _openAddEditCustomerDialog(),
+              );
+
               if (constraints.maxWidth < 550) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Customers Master', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Direct end-customers, project developers, and dual-entity Architect-Customers with WhatsApp action',
-                        style: AppTextStyles.subtitle),
+                    subtitleWidget,
                     const SizedBox(height: 12),
-                    ErpButton(
-                      text: 'Add Customer',
-                      icon: Icons.add,
-                      onPressed: () => _openAddEditCustomerDialog(),
-                    ),
+                    actionButton,
                   ],
                 );
               }
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Customers Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Direct end-customers, project developers, and dual-entity Architect-Customers with WhatsApp action',
-                            style: AppTextStyles.subtitle),
-                      ],
-                    ),
-                  ),
-                  ErpButton(
-                    text: 'Add Customer',
-                    icon: Icons.add,
-                    onPressed: () => _openAddEditCustomerDialog(),
-                  ),
+                  Expanded(child: subtitleWidget),
+                  const SizedBox(width: 12),
+                  actionButton,
                 ],
               );
             },

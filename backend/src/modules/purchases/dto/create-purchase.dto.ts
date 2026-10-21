@@ -127,6 +127,16 @@ export class CreatePurchaseDto {
   @IsOptional()
   gstAmount?: number = 0.0;
 
+  @ApiPropertyOptional({
+    description: 'Total transportation and freight charges for the purchase order',
+    default: 0.0,
+    example: 2500.0,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  transportationCharges?: number = 0.0;
+
   @ApiProperty({ description: 'Grand total payable', example: 51920.0 })
   @IsNumber()
   @Min(0)

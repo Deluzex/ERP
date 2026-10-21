@@ -10,7 +10,9 @@ import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
@@ -29,6 +31,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
   String? _selectedCustomerFilter;
   ReturnType? _selectedReturnTypeFilter;
   RefundStatus? _selectedRefundStatusFilter;
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -55,9 +59,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
   Future<void> _showCreateOrEditSalesReturnDialog(BuildContext context, MockDatabaseService db, {Sale? initialExistingReturn, String? preselectedInvoiceId}) async {
     if (db.salesInvoices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No sales invoices available for return.'), backgroundColor: AppColors.warning),
-      );
+      ErpToast.showWarning(context, 'No sales invoices available for return.');
       return;
     }
 
@@ -427,9 +429,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                   icon: Icons.save_outlined,
                   onPressed: () {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Sales return updated.'), backgroundColor: AppColors.success),
-                    );
+                    ErpToast.showSuccess(context, 'Sales return updated.');
                   },
                 ),
               ],
@@ -482,11 +482,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
       final maxReturnable = (item.quantity - item.returnedQuantity).clamp(0.0, double.infinity);
 
       if (qtyToReturn > maxReturnable) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Return quantity for ${item.finishedProductName} exceeds maximum returnable quantity (${maxReturnable.toInt()}).'),
-            backgroundColor: AppColors.danger,
-          ),
+        ErpToast.showError(
+          context,
+          'Return quantity for ${item.finishedProductName} exceeds maximum (${maxReturnable.toInt()}).',
         );
         return;
       }
@@ -509,16 +507,12 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     }
 
     if (returnItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please specify a return quantity greater than 0 for at least one item.'), backgroundColor: AppColors.danger),
-      );
+      ErpToast.showWarning(context, 'Please specify a return quantity greater than 0.');
       return;
     }
 
     if (returnReason.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please provide a reason for the return.'), backgroundColor: AppColors.danger),
-      );
+      ErpToast.showWarning(context, 'Please provide a reason for the return.');
       return;
     }
 
@@ -533,15 +527,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
       );
 
       Navigator.pop(dialogCtx);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Sales Return ${returnDoc.invoiceNumber} created as ${(returnDoc.salesReturnStatus ?? targetStatus).name.toUpperCase()}!'),
-          backgroundColor: AppColors.success,
-        ),
+      ErpToast.showSuccess(
+        context,
+        'Sales Return ${returnDoc.invoiceNumber} created as ${(returnDoc.salesReturnStatus ?? targetStatus).name.toUpperCase()}!',
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create sales return: $e'), backgroundColor: AppColors.danger),
+      ErpToast.showError(
+        context,
+        'Failed to create sales return: $e',
       );
     }
   }
@@ -597,15 +590,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
               Navigator.pop(ctx);
               try {
                 await db.approveSalesReturnAsync(returnDoc.id);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.'),
-                    backgroundColor: AppColors.success,
-                  ),
+                ErpToast.showSuccess(
+                  context,
+                  'Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.',
                 );
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to approve return: $e'), backgroundColor: AppColors.danger),
+                ErpToast.showError(
+                  context,
+                  'Failed to approve return: $e',
                 );
               }
             },
@@ -650,16 +642,12 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
             icon: Icons.close,
             onPressed: () {
               if (reasonCtrl.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please specify a rejection reason.'), backgroundColor: AppColors.danger),
-                );
+                ErpToast.showWarning(context, 'Please specify a rejection reason.');
                 return;
               }
               Navigator.pop(ctx);
               db.rejectSalesReturn(returnDoc.id, reasonCtrl.text.trim());
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Sales Return ${returnDoc.invoiceNumber} rejected.'), backgroundColor: AppColors.neutral),
-              );
+              ErpToast.showInfo(context, 'Sales Return ${returnDoc.invoiceNumber} rejected.');
             },
           ),
         ],
@@ -793,9 +781,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                 onPressed: () async {
                   final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
                   if (amount <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter a valid refund amount.'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showWarning(context, 'Please enter a valid refund amount.');
                     return;
                   }
 
@@ -809,15 +795,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     );
 
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!'),
-                        backgroundColor: AppColors.success,
-                      ),
+                    ErpToast.showSuccess(
+                      context,
+                      'Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!',
                     );
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to process refund: $e'), backgroundColor: AppColors.danger),
+                    ErpToast.showError(
+                      context,
+                      'Failed to process refund: $e',
                     );
                   }
                 },
@@ -893,6 +878,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
       }).toList();
     }
 
+    // Date Range Filter
+    if (_startDate != null) {
+      filtered = filtered.where((r) => !r.saleDate.isBefore(_startDate!)).toList();
+    }
+    if (_endDate != null) {
+      filtered = filtered.where((r) => !r.saleDate.isAfter(_endDate!.add(const Duration(days: 1)))).toList();
+    }
+
     final draftCount = db.salesReturns.where((r) => r.salesReturnStatus == SalesReturnStatus.draft || r.salesReturnStatus == SalesReturnStatus.submitted).length;
     final inspectionCount = db.salesReturns.where((r) => r.salesReturnStatus == SalesReturnStatus.itemsReceived || r.salesReturnStatus == SalesReturnStatus.inspection).length;
     final approvedCount = db.salesReturns.where((r) => r.salesReturnStatus == SalesReturnStatus.approved || r.salesReturnStatus == SalesReturnStatus.completed).length;
@@ -907,18 +900,11 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
           LayoutBuilder(
             builder: (context, constraints) {
               final isNarrow = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Sales Returns & Credit Notes', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Multi-stage return verification: QA Inspection, Condition Routing (Resalable/Damaged/Scrap), Ledger Adjustments & Refunds',
-                    style: AppTextStyles.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+              final titleBlock = Text(
+                'Multi-stage return verification: QA Inspection, Condition Routing (Resalable/Damaged/Scrap), Ledger Adjustments & Refunds',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               );
               final actionButton = ErpButton(
                 text: 'Create Sales Return',
@@ -1022,68 +1008,45 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
           ),
           const SizedBox(height: 16),
 
-          // 4. Search and Dropdown Filter Row
-          LayoutBuilder(
-            builder: (context, filterBox) {
-              final isStacked = filterBox.maxWidth < 750;
-
-              final searchField = TextField(
+          // 4. Global Filters
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search return no, customer, reason...',
+                initialValue: _searchQuery,
                 onChanged: (val) => setState(() => _searchQuery = val),
-                decoration: const InputDecoration(
-                  hintText: 'Search by return number, customer, invoice ref, or reason...',
-                  prefixIcon: Icon(Icons.search, size: 18),
-                ),
-              );
-
-              final customerDropdown = DropdownButtonFormField<String?>(
+              ),
+              ErpFilterDropdown<String?>(
                 value: (_selectedCustomerFilter != null && db.customers.any((c) => c.id == _selectedCustomerFilter)) ? _selectedCustomerFilter : null,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Filter Customer', isDense: true),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('All Customers')),
                   ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                 ],
                 onChanged: (val) => setState(() => _selectedCustomerFilter = val),
-              );
-
-              final typeDropdown = DropdownButtonFormField<ReturnType?>(
+              ),
+              ErpFilterDropdown<ReturnType?>(
                 value: _selectedReturnTypeFilter,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Return Type', isDense: true),
                 items: const [
                   DropdownMenuItem(value: null, child: Text('All Return Types')),
                   DropdownMenuItem(value: ReturnType.fullReturn, child: Text('Full Return')),
                   DropdownMenuItem(value: ReturnType.partialReturn, child: Text('Partial Return')),
                 ],
                 onChanged: (val) => setState(() => _selectedReturnTypeFilter = val),
-              );
-
-              if (isStacked) {
-                return Column(
-                  children: [
-                    searchField,
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: customerDropdown),
-                        const SizedBox(width: 12),
-                        Expanded(child: typeDropdown),
-                      ],
-                    ),
-                  ],
-                );
-              }
-
-              return Row(
-                children: [
-                  Expanded(flex: 3, child: searchField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: customerDropdown),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: typeDropdown),
-                ],
-              );
-            },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 

@@ -48,13 +48,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
             builder: (context, constraints) {
               final isStacked = constraints.maxWidth < 850;
 
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('System Configuration & Access Control', style: AppTextStyles.h1),
-                  const SizedBox(height: 2),
-                  Text('Configure company profile, security matrices, and user account credentials', style: AppTextStyles.subtitle),
-                ],
+              final titleBlock = Text(
+                'Configure company profile, security matrices, and user account credentials',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               );
 
 

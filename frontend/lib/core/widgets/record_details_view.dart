@@ -158,20 +158,18 @@ class RecordDetailsView extends ConsumerWidget {
                 onPressed: () => stack.pop(),
                 tooltip: 'Go Back',
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(subtitle, style: AppTextStyles.subtitle),
-                  ],
+                child: Text(
+                  subtitle,
+                  style: AppTextStyles.subtitle.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           detailsWidget,
         ],
       ),
@@ -655,6 +653,8 @@ class RecordDetailsView extends ConsumerWidget {
                     Text('Payment Summary', style: AppTextStyles.h3),
                     const Divider(height: 24),
                     _buildInfoRow('Grand Total Amount', Formatters.formatCurrency(p.totalAmount)),
+                    if (p.transportationCharges > 0)
+                      _buildInfoRow('Transportation / Freight', Formatters.formatCurrency(p.transportationCharges)),
                     _buildInfoRow('Amount Paid to Date', Formatters.formatCurrency(p.paidAmount)),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -690,6 +690,7 @@ class RecordDetailsView extends ConsumerWidget {
             ErpColumn(title: 'Material Name'),
             ErpColumn(title: 'Purchase Qty'),
             ErpColumn(title: 'Rate per Unit', isNumeric: true),
+            ErpColumn(title: 'Landed Rate', isNumeric: true),
             ErpColumn(title: 'Discount Amount', isNumeric: true),
             ErpColumn(title: 'GST Tax', isNumeric: true),
             ErpColumn(title: 'Line Total', isNumeric: true),
@@ -706,6 +707,13 @@ class RecordDetailsView extends ConsumerWidget {
               Text(item.displayName, style: AppTextStyles.bodyMedium),
               Text('${item.quantity} ${item.unit}', style: AppTextStyles.bodyMedium),
               Text(Formatters.formatCurrency(item.rate), style: AppTextStyles.bodySmall),
+              Text(
+                item.landedRate > 0 ? Formatters.formatCurrency(item.landedRate) : Formatters.formatCurrency(item.rate),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: item.landedRate > item.rate ? AppColors.successText : AppColors.textPrimary,
+                  fontWeight: item.landedRate > item.rate ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
               Text(Formatters.formatCurrency(item.discountAmount), style: AppTextStyles.bodySmall),
               Text('${item.gstPercent}%', style: AppTextStyles.bodySmall),
               Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodyBold),
@@ -3471,19 +3479,64 @@ class RecordDetailsView extends ConsumerWidget {
 
                     // Quotation actions
                     if (s.documentType == SalesDocumentType.quotation) ...[
-                      if (s.quotationStatus == QuotationStatus.draft || s.quotationStatus == QuotationStatus.sent || s.quotationStatus == null) ...[
+                      if (s.quotationStatus == QuotationStatus.draft ||
+                          s.quotationStatus == QuotationStatus.sent ||
+                          s.quotationStatus == QuotationStatus.accepted ||
+                          s.quotationStatus == QuotationStatus.approved ||
+                          s.quotationStatus == null) ...[
+                        if (s.quotationStatus == QuotationStatus.draft || s.quotationStatus == QuotationStatus.sent || s.quotationStatus == null) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ErpButton(
+                                  text: 'Accept Quotation',
+                                  icon: Icons.check_circle_outline,
+                                  onPressed: () async {
+                                    try {
+                                      await db.updateQuotationStatusAsync(s.id, QuotationStatus.accepted.name);
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Quotation ${s.invoiceNumber} marked as ACCEPTED!'),
+                                          backgroundColor: AppColors.success,
+                                        ),
+                                      );
+                                    } catch (e) {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Failed to accept quotation: $e'), backgroundColor: AppColors.danger),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                         Row(
                           children: [
                             Expanded(
                               child: ErpButton(
-                                text: 'Accept & Generate Proforma',
-                                icon: Icons.check_circle_outline,
-                                onPressed: () {
-                                  final pi = db.createProformaFromQuotation(s.id);
-                                  ref.read(activeRecordDetailsStackProvider.notifier).push(pi.id, 'proformaInvoice', details.parentSection);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Quotation Accepted! Proforma Invoice generated.'), backgroundColor: AppColors.success),
-                                  );
+                                text: 'Generate Proforma Invoice',
+                                icon: Icons.receipt_long_outlined,
+                                onPressed: () async {
+                                  try {
+                                    final pi = await db.convertQuotationToProformaAsync(s.id);
+                                    if (!context.mounted) return;
+                                    ref.read(activeRecordDetailsStackProvider.notifier).push(pi.id, 'proformaInvoice', details.parentSection);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Generated Proforma Invoice ${pi.invoiceNumber} from ${s.invoiceNumber}!'),
+                                        backgroundColor: AppColors.success,
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Failed to generate proforma: $e'), backgroundColor: AppColors.danger),
+                                    );
+                                  }
                                 },
                               ),
                             ),
@@ -3498,11 +3551,25 @@ class RecordDetailsView extends ConsumerWidget {
                                 isOutlined: true,
                                 icon: Icons.history_edu,
                                 onPressed: () {
-                                  final rev = db.createQuotationRevision(s.id);
-                                  ref.read(activeRecordDetailsStackProvider.notifier).push(rev.id, 'quotation', details.parentSection);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Created Revision ${rev.revisionNumber} (${rev.invoiceNumber})'), backgroundColor: AppColors.primary),
-                                  );
+                                  ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
+                                  ref.read(salesCreateSourceDocIdProvider.notifier).state = s.id;
+                                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      if (s.quotationStatus == QuotationStatus.converted && s.proformaReferenceId != null) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ErpButton(
+                                text: 'View Generated Proforma',
+                                icon: Icons.receipt_long,
+                                onPressed: () {
+                                  ref.read(activeRecordDetailsStackProvider.notifier).push(s.proformaReferenceId!, 'proformaInvoice', details.parentSection);
                                 },
                               ),
                             ),

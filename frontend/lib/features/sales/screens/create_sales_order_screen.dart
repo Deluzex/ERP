@@ -229,16 +229,11 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
             LayoutBuilder(
               builder: (context, constraints) {
                 final isStacked = constraints.maxWidth < 750;
-                final titleBlock = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Create Sales Order', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Direct confirmed order with automated stock reservation & production shortage creation',
-                      style: AppTextStyles.subtitle,
-                    ),
-                  ],
+                final titleBlock = Text(
+                  'Direct confirmed order with automated stock reservation & production shortage creation',
+                  style: AppTextStyles.subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 );
 
                 final actionButtons = Wrap(

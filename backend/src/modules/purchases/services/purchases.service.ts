@@ -205,7 +205,48 @@ export class PurchasesService {
         : now;
       const invoiceDate = dto.invoiceDate ? new Date(dto.invoiceDate) : null;
 
-      // 1. Insert Purchase Header
+      // 1. Calculate Landed Cost & Transportation Allocation per Line
+      const transportationCharges = Number(dto.transportationCharges || 0);
+      const lineValues = dto.items.map((it) => {
+        const qty = Number(it.quantity || 0);
+        const rate = Number(it.rate || 0);
+        const discount = Number(it.discountAmount || 0);
+        return Math.max(0, qty * rate - discount);
+      });
+      const orderSubtotal = lineValues.reduce((acc, val) => acc + val, 0);
+
+      let allocatedCosts: number[] = [];
+      if (transportationCharges <= 0 || dto.items.length === 0) {
+        allocatedCosts = dto.items.map(() => 0);
+      } else if (orderSubtotal > 0) {
+        // Proportional allocation to discounted line value
+        allocatedCosts = lineValues.map((val) =>
+          Math.round((val / orderSubtotal) * transportationCharges * 100) / 100,
+        );
+        // Distribute nearest-paisa remainder to largest line item
+        const sumAllocated = allocatedCosts.reduce((acc, c) => acc + c, 0);
+        const delta = Math.round((transportationCharges - sumAllocated) * 100) / 100;
+        if (delta !== 0) {
+          let maxIdx = 0;
+          for (let i = 1; i < lineValues.length; i++) {
+            if (lineValues[i] > lineValues[maxIdx]) {
+              maxIdx = i;
+            }
+          }
+          allocatedCosts[maxIdx] =
+            Math.round((allocatedCosts[maxIdx] + delta) * 100) / 100;
+        }
+      } else {
+        // Fallback: Equal allocation if order subtotal is 0
+        const share =
+          Math.round((transportationCharges / dto.items.length) * 100) / 100;
+        allocatedCosts = dto.items.map(() => share);
+        const sumAllocated = allocatedCosts.reduce((acc, c) => acc + c, 0);
+        const delta = Math.round((transportationCharges - sumAllocated) * 100) / 100;
+        allocatedCosts[0] = Math.round((allocatedCosts[0] + delta) * 100) / 100;
+      }
+
+      // 2. Insert Purchase Header
       const pRes = await client.query<any>(
         `INSERT INTO purchases (
            purchase_number,
@@ -224,6 +265,7 @@ export class PurchasesService {
            sgst_amount,
            igst_amount,
            gst_amount,
+           transportation_charges,
            total_amount,
            paid_amount,
            pending_amount,
@@ -236,7 +278,7 @@ export class PurchasesService {
          VALUES (
            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
            $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-           $21, $22, $23, $24
+           $21, $22, $23, $24, $25
          )
          RETURNING *`,
         [
@@ -256,6 +298,7 @@ export class PurchasesService {
           Number(dto.sgstAmount || 0),
           Number(dto.igstAmount || 0),
           Number(dto.gstAmount || 0),
+          transportationCharges,
           totalAmount,
           paidAmount,
           pendingAmount,
@@ -268,10 +311,19 @@ export class PurchasesService {
       );
       const purchaseRecord = pRes.rows[0];
 
-      // 2. Insert Line Items & Inward Stock
+      // 3. Insert Line Items & Inward Stock
       const insertedItems: any[] = [];
 
-      for (const item of dto.items) {
+      for (let i = 0; i < dto.items.length; i++) {
+        const item = dto.items[i];
+        const transCost = allocatedCosts[i];
+        const lineVal = lineValues[i];
+        const qty = Number(item.quantity || 0);
+        const landedRate =
+          qty > 0
+            ? Math.round(((lineVal + transCost) / qty) * 100) / 100
+            : Number(item.rate || 0);
+
         const itemRes = await client.query<any>(
           `INSERT INTO purchase_items (
              purchase_id,
@@ -291,11 +343,13 @@ export class PurchasesService {
              cgst_amount,
              sgst_amount,
              igst_amount,
-             line_total
+             line_total,
+             transportation_cost,
+             landed_rate
            )
            VALUES (
              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-             $11, $12, $13, $14, $15, $16, $17, $18
+             $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
            )
            RETURNING *`,
           [
@@ -317,6 +371,8 @@ export class PurchasesService {
             item.sgstAmount || 0,
             item.igstAmount || 0,
             item.lineTotal,
+            transCost,
+            landedRate,
           ],
         );
         insertedItems.push(this.mapItemRow(itemRes.rows[0]));
@@ -324,13 +380,16 @@ export class PurchasesService {
         // Atomic Stock Inward & Ledger insertion (if not draft)
         if (status !== PurchaseStatusEnum.draft) {
           if (item.itemType === PurchaseItemTypeEnum.rawMaterial && item.rawMaterialId) {
-            // Lock and update Raw Material
+            // Lock and update Raw Material with landed cost (including transportation)
+            const unitCost = Number(landedRate || item.landedRate || item.rate || 0);
             const updRm = await client.query<{ current_stock: string }>(
               `UPDATE raw_materials
-               SET current_stock = current_stock + $1, updated_at = now()
+               SET current_stock = current_stock + $1,
+                   default_purchase_price = CASE WHEN $3 > 0 THEN $3 ELSE default_purchase_price END,
+                   updated_at = now()
                WHERE id = $2 AND is_deleted = false
                RETURNING current_stock`,
-              [item.quantity, item.rawMaterialId],
+              [item.quantity, item.rawMaterialId, unitCost],
             );
             const newBal = Number(updRm.rows[0]?.current_stock || 0);
 
@@ -361,15 +420,17 @@ export class PurchasesService {
               ],
             );
           } else if (item.itemType === PurchaseItemTypeEnum.finishedProduct && item.finishedProductId) {
-            // Lock and update Finished Product
+            // Lock and update Finished Product with landed cost (including transportation)
+            const unitCost = Number(landedRate || item.landedRate || item.rate || 0);
             const updFp = await client.query<{ current_stock: string }>(
               `UPDATE finished_products
                SET current_stock = current_stock + $1,
                    purchased_stock = purchased_stock + $1,
+                   cost_price = CASE WHEN $3 > 0 THEN $3 ELSE cost_price END,
                    updated_at = now()
                WHERE id = $2 AND is_deleted = false
                RETURNING current_stock`,
-              [item.quantity, item.finishedProductId],
+              [item.quantity, item.finishedProductId, unitCost],
             );
             const newBal = Number(updFp.rows[0]?.current_stock || 0);
 
@@ -454,6 +515,7 @@ export class PurchasesService {
             totalAmount,
             paidAmount,
             pendingAmount,
+            transportationCharges,
             itemCount: dto.items.length,
           },
           correlationId,
@@ -621,6 +683,7 @@ export class PurchasesService {
       sgstAmount: Number(r.sgst_amount),
       igstAmount: Number(r.igst_amount),
       gstAmount: Number(r.gst_amount),
+      transportationCharges: Number(r.transportation_charges || 0),
       totalAmount: Number(r.total_amount),
       paidAmount: Number(r.paid_amount),
       pendingAmount: Number(r.pending_amount),
@@ -659,6 +722,8 @@ export class PurchasesService {
       sgstAmount: Number(r.sgst_amount),
       igstAmount: Number(r.igst_amount),
       lineTotal: Number(r.line_total),
+      transportationCost: Number(r.transportation_cost || 0),
+      landedRate: Number(r.landed_rate || 0),
       createdAt: r.created_at,
     };
   }

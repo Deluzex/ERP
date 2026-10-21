@@ -10,6 +10,8 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
@@ -24,6 +26,9 @@ class QuotationsScreen extends ConsumerStatefulWidget {
 class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
+  String _selectedStatusFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -51,16 +56,11 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
           LayoutBuilder(
             builder: (context, constraints) {
               final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Quotations & Commercial Estimates', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Manage quotes, revision branches, client approval & proforma conversion',
-                    style: AppTextStyles.subtitle,
-                  ),
-                ],
+              final titleBlock = Text(
+                'Manage quotes, revision branches, client approval & proforma conversion',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               );
 
               final actionBtn = ErpButton(
@@ -123,13 +123,44 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
           ),
           const SizedBox(height: 16),
 
-          // 3. Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search quotations by number, customer, project or executive...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // 3. Search and Filter Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 300,
+                child: ErpSearchInput(
+                  hintText: 'Search quote no, customer, project...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _selectedStatusFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                  DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                  DropdownMenuItem(value: 'SENT', child: Text('Sent / Pending')),
+                  DropdownMenuItem(value: 'ACCEPTED', child: Text('Accepted')),
+                  DropdownMenuItem(value: 'SUPERSEDED', child: Text('Superseded')),
+                  DropdownMenuItem(value: 'CONVERTED', child: Text('Converted')),
+                  DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() => _selectedStatusFilter = val);
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                }),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -162,6 +193,36 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         break;
       default:
         break;
+    }
+
+    // Filter by status dropdown
+    if (_selectedStatusFilter != 'ALL') {
+      filtered = filtered.where((q) {
+        switch (_selectedStatusFilter) {
+          case 'DRAFT':
+            return q.quotationStatus == QuotationStatus.draft;
+          case 'SENT':
+            return q.quotationStatus == QuotationStatus.sent;
+          case 'ACCEPTED':
+            return q.quotationStatus == QuotationStatus.accepted || q.quotationStatus == QuotationStatus.approved;
+          case 'SUPERSEDED':
+            return q.quotationStatus == QuotationStatus.superseded;
+          case 'CONVERTED':
+            return q.quotationStatus == QuotationStatus.converted;
+          case 'REJECTED':
+            return q.quotationStatus == QuotationStatus.rejected || q.quotationStatus == QuotationStatus.expired;
+          default:
+            return true;
+        }
+      }).toList();
+    }
+
+    // Filter by date range
+    if (_startDate != null) {
+      filtered = filtered.where((q) => !q.date.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))).toList();
+    }
+    if (_endDate != null) {
+      filtered = filtered.where((q) => !q.date.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))).toList();
     }
 
     // Filter by search query
@@ -316,23 +377,17 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         case 'send':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.sent.name);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Quotation ${quote.invoiceNumber} marked as SENT to client.'), backgroundColor: AppColors.info),
-          );
+          ErpToast.showInfo(context, 'Quotation ${quote.invoiceNumber} marked as sent to client.');
           break;
         case 'accept':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.accepted.name);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Quotation ${quote.invoiceNumber} ACCEPTED! You can now generate Proforma Invoice.'), backgroundColor: AppColors.success),
-          );
+          ErpToast.showSuccess(context, 'Quotation ${quote.invoiceNumber} accepted successfully.');
           break;
         case 'reject':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.rejected.name);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Quotation ${quote.invoiceNumber} marked as REJECTED.'), backgroundColor: AppColors.danger),
-          );
+          ErpToast.showWarning(context, 'Quotation ${quote.invoiceNumber} marked as rejected.');
           break;
         case 'revision':
           ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
@@ -342,9 +397,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         case 'proforma':
           final proforma = await db.convertQuotationToProformaAsync(quote.id);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Created Proforma Invoice ${proforma.invoiceNumber}!'), backgroundColor: AppColors.success),
-          );
+          ErpToast.showSuccess(context, 'Proforma invoice ${proforma.invoiceNumber} created successfully.');
           ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.proformaInvoices;
           break;
         case 'duplicate':
@@ -355,9 +408,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Action failed: $e'), backgroundColor: AppColors.danger),
-      );
+      ErpToast.showError(context, 'Action failed: $e');
     }
   }
 }

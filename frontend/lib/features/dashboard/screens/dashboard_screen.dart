@@ -23,6 +23,9 @@ class DashboardScreen extends ConsumerWidget {
     final isDesktop = MediaQuery.of(context).size.width >= 1100;
     final isTablet = MediaQuery.of(context).size.width >= 700;
 
+    // Current user context
+    final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
+
     // Computed values
     final totalSalesVal = db.totalSalesAmount > 0 ? db.totalSalesAmount : 1248750.0;
     final totalPurchaseVal = db.totalPurchaseAmount > 0 ? db.totalPurchaseAmount : 324800.0;
@@ -32,89 +35,62 @@ class DashboardScreen extends ConsumerWidget {
     final customerDueVal = db.pendingCustomerPayments > 0 ? db.pendingCustomerPayments : 245000.0;
     final vendorDueVal = db.pendingVendorPayments > 0 ? db.pendingVendorPayments : 120000.0;
     final pendingCommissionVal = db.pendingCommissionAmount > 0 ? db.pendingCommissionAmount : 35000.0;
-    final lowStockItemsCount = db.totalLowStockCount > 0 ? db.totalLowStockCount : 18;
+    final lowStockItemsCount = db.getLowStockCountForUser(currentUser);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // Actions & Operations Subtitle
           LayoutBuilder(
             builder: (context, constraints) {
               final isNarrow = constraints.maxWidth < 650;
+              final subtitleWidget = Text(
+                'Enterprise operations, stock valuation & financial overview',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              );
+              final actionButtons = Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ErpButton(
+                    text: 'Create Purchase',
+                    icon: Icons.shopping_bag_outlined,
+                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                  ),
+                  ErpButton(
+                    text: 'Create Sale',
+                    icon: Icons.point_of_sale_outlined,
+                    isOutlined: true,
+                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                  ),
+                ],
+              );
+
               if (isNarrow) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Dashboard', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Enterprise operations, stock valuation & financial overview',
-                      style: AppTextStyles.subtitle,
-                    ),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ErpButton(
-                          text: 'Create Purchase',
-                          icon: Icons.shopping_bag_outlined,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
-                        ),
-                        ErpButton(
-                          text: 'Create Sale',
-                          icon: Icons.point_of_sale_outlined,
-                          isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
-                        ),
-                      ],
-                    ),
+                    subtitleWidget,
+                    const SizedBox(height: 12),
+                    actionButtons,
                   ],
                 );
               }
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Dashboard', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Enterprise operations, stock valuation & financial overview',
-                          style: AppTextStyles.subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
+                  Expanded(child: subtitleWidget),
                   const SizedBox(width: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ErpButton(
-                        text: 'Create Purchase',
-                        icon: Icons.shopping_bag_outlined,
-                        onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
-                      ),
-                      ErpButton(
-                        text: 'Create Sale',
-                        icon: Icons.point_of_sale_outlined,
-                        isOutlined: true,
-                        onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
-                      ),
-                    ],
-                  ),
+                  actionButtons,
                 ],
               );
             },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // 1. Top Section: Total Sales | Total Purchase | Raw Material Stock (Combined Card)
           Container(

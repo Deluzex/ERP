@@ -56,6 +56,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
     final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     final termsCtrl = TextEditingController(text: existing?.paymentTerms ?? 'Net 30 Days');
     final creditCtrl = TextEditingController(text: existing?.creditLimit.toString() ?? '500000');
+    final transportCtrl = TextEditingController(text: existing?.defaultTransportationCharges.toString() ?? '0');
     final formKey = GlobalKey<FormState>();
 
     bool isSubmitting = false;
@@ -225,6 +226,16 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
+                          controller: transportCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Default Transportation / Freight (₹)',
+                            prefixIcon: Icon(Icons.local_shipping_outlined, size: 20),
+                            hintText: 'E.g., 500',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
                           controller: addressCtrl,
                           validator: (v) => Validators.requiredField(v, 'Registered factory address required'),
                           maxLines: 2,
@@ -281,6 +292,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                           });
 
                           final creditVal = double.tryParse(creditCtrl.text.trim()) ?? 0.0;
+                          final transportVal = double.tryParse(transportCtrl.text.trim()) ?? 0.0;
                           try {
                             if (isEdit) {
                               await db.updateVendorAsync(existing.copyWith(
@@ -295,6 +307,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                 pincode: pincodeCtrl.text.trim(),
                                 paymentTerms: termsCtrl.text.trim(),
                                 creditLimit: creditVal,
+                                defaultTransportationCharges: transportVal,
                               ));
                             } else {
                               final newVendor = Vendor(
@@ -310,6 +323,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                 pincode: pincodeCtrl.text.trim(),
                                 paymentTerms: termsCtrl.text.trim(),
                                 creditLimit: creditVal,
+                                defaultTransportationCharges: transportVal,
                                 outstandingBalance: 0.0,
                                 createdAt: DateTime.now(),
                               );
@@ -426,40 +440,34 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
+              final subtitleWidget = Text(
+                'Raw material suppliers, payment terms, credit limits, and outstanding balances',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              );
+              final actionButton = ErpButton(
+                text: 'Add Vendor',
+                icon: Icons.add,
+                onPressed: () => _openAddEditVendorDialog(),
+              );
+
               if (constraints.maxWidth < 550) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Vendors Master', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Raw material suppliers, payment terms, credit limits, and outstanding balances', style: AppTextStyles.subtitle),
+                    subtitleWidget,
                     const SizedBox(height: 12),
-                    ErpButton(
-                      text: 'Add Vendor',
-                      icon: Icons.add,
-                      onPressed: () => _openAddEditVendorDialog(),
-                    ),
+                    actionButton,
                   ],
                 );
               }
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Vendors Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Raw material suppliers, payment terms, credit limits, and outstanding balances', style: AppTextStyles.subtitle),
-                      ],
-                    ),
-                  ),
-                  ErpButton(
-                    text: 'Add Vendor',
-                    icon: Icons.add,
-                    onPressed: () => _openAddEditVendorDialog(),
-                  ),
+                  Expanded(child: subtitleWidget),
+                  const SizedBox(width: 12),
+                  actionButton,
                 ],
               );
             },

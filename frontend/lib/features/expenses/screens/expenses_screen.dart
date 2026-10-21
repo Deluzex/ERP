@@ -511,13 +511,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 children: [
                   ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Expense Management', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Track operational, project site, labour, utility, and maintenance overheads', style: AppTextStyles.subtitle),
-                      ],
+                    child: Text(
+                      'Track operational, project site, labour, utility, and maintenance overheads',
+                      style: AppTextStyles.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   ErpButton(

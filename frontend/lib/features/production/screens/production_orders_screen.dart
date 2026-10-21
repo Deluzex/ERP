@@ -829,13 +829,11 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
           LayoutBuilder(
             builder: (context, constraints) {
               final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Production Orders & Batches', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text('Manufacturing work orders, raw material consumption, and unit costing', style: AppTextStyles.subtitle),
-                ],
+              final titleBlock = Text(
+                'Manufacturing work orders, raw material consumption, and unit costing',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               );
 
               final actionBlock = Wrap(

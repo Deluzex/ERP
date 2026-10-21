@@ -56,6 +56,9 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
     final costCtrl = TextEditingController(
       text: existing?.costPrice.toString() ?? '1500',
     );
+    final transportCtrl = TextEditingController(
+      text: existing?.transportationCharge.toString() ?? '0',
+    );
     final dealerCtrl = TextEditingController(
       text: existing?.dealerSellingPrice.toString() ?? '2500',
     );
@@ -165,8 +168,19 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                     keyboardType: TextInputType.number,
                                     validator: Validators.positiveNumber,
                                     decoration: const InputDecoration(
-                                      labelText: 'Cost Price (₹) *',
-                                      hintText: 'Production cost',
+                                      labelText: 'Purchase / Cost Price (₹) *',
+                                      hintText: 'Purchase landed or production cost',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: transportCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.nonNegativeNumber,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Transportation Charge (₹)',
+                                      hintText: 'Freight per unit',
+                                      prefixIcon: Icon(Icons.local_shipping_outlined, size: 18),
                                     ),
                                   ),
                                   const SizedBox(height: 12),
@@ -282,8 +296,8 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                         keyboardType: TextInputType.number,
                                         validator: Validators.positiveNumber,
                                         decoration: const InputDecoration(
-                                          labelText: 'Cost Price (₹) *',
-                                          hintText: 'Production cost',
+                                          labelText: 'Purchase / Cost Price (₹) *',
+                                          hintText: 'Purchase landed or production cost',
                                         ),
                                       ),
                                     ),
@@ -339,6 +353,19 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                         ),
                                       ),
                                     ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: transportCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Trans. Charge (₹)',
+                                          hintText: 'Freight per unit',
+                                          prefixIcon: Icon(Icons.local_shipping_outlined, size: 18),
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ],
@@ -371,6 +398,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                           final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
                           final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
                           final costVal = double.tryParse(costCtrl.text.trim()) ?? 0.0;
+                          final transportVal = double.tryParse(transportCtrl.text.trim()) ?? 0.0;
                           final dealerVal = double.tryParse(dealerCtrl.text.trim()) ?? 0.0;
                           final custVal = double.tryParse(custCtrl.text.trim()) ?? 0.0;
                           final catObj = db.categories.firstWhere(
@@ -394,6 +422,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                 currentStock: stockVal,
                                 minimumStock: minVal,
                                 costPrice: costVal,
+                                transportationCharge: transportVal,
                                 dealerSellingPrice: dealerVal,
                                 customerSellingPrice: custVal,
                                 updatedAt: DateTime.now(),
@@ -411,6 +440,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                 openingStock: stockVal,
                                 minimumStock: minVal,
                                 costPrice: costVal,
+                                transportationCharge: transportVal,
                                 dealerSellingPrice: dealerVal,
                                 customerSellingPrice: custVal,
                                 gstPercent: 18.0,
@@ -558,16 +588,11 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                 children: [
                   ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Product Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Finished goods catalog, multi-tier pricing, category definitions, and specifications',
-                          style: AppTextStyles.subtitle,
-                        ),
-                      ],
+                    child: Text(
+                      'Finished goods catalog, multi-tier pricing, category definitions, and specifications',
+                      style: AppTextStyles.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   ErpButton(
@@ -643,7 +668,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
               ErpColumn(title: 'Product Name'),
               ErpColumn(title: 'Category'),
               ErpColumn(title: 'UOM'),
-              ErpColumn(title: 'Cost Price (₹)', isNumeric: true),
+              ErpColumn(title: 'Purchase / Cost Price (₹)', isNumeric: true),
               ErpColumn(title: 'Dealer Price (₹)', isNumeric: true),
               ErpColumn(title: 'Customer Price (₹)', isNumeric: true),
               ErpColumn(title: 'Current Stock', isNumeric: true),
@@ -656,7 +681,18 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                 Text(fp.name, style: AppTextStyles.bodyBold),
                 Text(fp.categoryName, style: AppTextStyles.bodySmall),
                 Text(fp.unit, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(Formatters.formatCurrency(fp.costPrice), style: AppTextStyles.bodySmall),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(Formatters.formatCurrency(fp.totalPurchaseCost), style: AppTextStyles.bodySmall),
+                    if (fp.transportationCharge > 0)
+                      Text(
+                        'Base: ₹${Formatters.formatNumber(fp.costPrice)} + Trans: ₹${Formatters.formatNumber(fp.transportationCharge)}',
+                        style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                      ),
+                  ],
+                ),
                 Text(Formatters.formatCurrency(fp.dealerSellingPrice), style: AppTextStyles.bodyMedium),
                 Text(
                   Formatters.formatCurrency(fp.customerSellingPrice),

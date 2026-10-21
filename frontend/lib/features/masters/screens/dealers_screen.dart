@@ -380,40 +380,34 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
+              final subtitleWidget = Text(
+                'Authorized distribution partners, retail showrooms, and channel receivables',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              );
+              final actionButton = ErpButton(
+                text: 'Add Dealer',
+                icon: Icons.add,
+                onPressed: () => _openAddEditDealerDialog(),
+              );
+
               if (constraints.maxWidth < 550) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Dealers & Franchise Network', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Authorized distribution partners, retail showrooms, and channel receivables', style: AppTextStyles.subtitle),
+                    subtitleWidget,
                     const SizedBox(height: 12),
-                    ErpButton(
-                      text: 'Add Dealer',
-                      icon: Icons.add,
-                      onPressed: () => _openAddEditDealerDialog(),
-                    ),
+                    actionButton,
                   ],
                 );
               }
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Dealers & Franchise Network', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Authorized distribution partners, retail showrooms, and channel receivables', style: AppTextStyles.subtitle),
-                      ],
-                    ),
-                  ),
-                  ErpButton(
-                    text: 'Add Dealer',
-                    icon: Icons.add,
-                    onPressed: () => _openAddEditDealerDialog(),
-                  ),
+                  Expanded(child: subtitleWidget),
+                  const SizedBox(width: 12),
+                  actionButton,
                 ],
               );
             },

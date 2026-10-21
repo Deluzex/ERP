@@ -12,6 +12,7 @@ import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import 'create_purchase_screen.dart';
 
 class PurchaseListScreen extends ConsumerStatefulWidget {
   const PurchaseListScreen({super.key});
@@ -168,6 +169,20 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                 Expanded(
                   child: Text('PO Details: ${p.purchaseNumber}', style: AppTextStyles.h3),
                 ),
+                if (p.status != PurchaseStatus.cancelled)
+                  IconButton(
+                    tooltip: 'Edit / Reopen Purchase',
+                    icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CreatePurchaseScreen(existingPurchase: p),
+                        ),
+                      );
+                    },
+                  ),
                 IconButton(
                   icon: const Icon(Icons.close),
                   onPressed: () => Navigator.pop(ctx),
@@ -183,22 +198,28 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Vendor: ${p.vendorName}', style: AppTextStyles.bodyBold),
-                            Text('Invoice #: ${p.vendorInvoiceNumber}', style: AppTextStyles.bodySmall),
-                            Text('Date: ${Formatters.formatDate(p.purchaseDate)}', style: AppTextStyles.bodySmall),
-                          ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Vendor: ${p.vendorName}', style: AppTextStyles.bodyBold),
+                              Text('Invoice #: ${p.vendorInvoiceNumber}', style: AppTextStyles.bodySmall),
+                              Text('Date: ${Formatters.formatDate(p.purchaseDate)}', style: AppTextStyles.bodySmall),
+                            ],
+                          ),
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text('Type: ${p.purchaseTypeLabel}', style: AppTextStyles.bodyBold),
-                            Text('Payment Mode: ${p.paymentMode.name.toUpperCase()}', style: AppTextStyles.bodySmall),
-                            Text('Status: ${p.statusLabel}', style: AppTextStyles.bodySmall),
-                          ],
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('Type: ${p.purchaseTypeLabel}', style: AppTextStyles.bodyBold),
+                              Text('Payment Mode: ${p.paymentMode.name.toUpperCase()}', style: AppTextStyles.bodySmall),
+                              Text('Status: ${p.statusLabel}', style: AppTextStyles.bodySmall),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -271,7 +292,18 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.all(8),
-                                  child: Text(Formatters.formatCurrency(item.rate), style: AppTextStyles.bodySmall),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(Formatters.formatCurrency(item.rate), style: AppTextStyles.bodySmall),
+                                      if (item.landedRate > 0 && p.transportationCharges > 0)
+                                        Text(
+                                          'Landed: ${Formatters.formatCurrency(item.landedRate)}',
+                                          style: const TextStyle(fontSize: 10, color: AppColors.success, fontWeight: FontWeight.w600),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.all(8),
@@ -294,6 +326,9 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                         children: [
                           Text('Subtotal: ${Formatters.formatCurrency(p.subtotalAmount)}', style: AppTextStyles.bodySmall),
                           Text('GST Tax: ${Formatters.formatCurrency(p.gstAmount)}', style: AppTextStyles.bodySmall),
+                          if (p.transportationCharges > 0)
+                            Text('Transportation Charges: ${Formatters.formatCurrency(p.transportationCharges)}',
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
                           Text('Total Amount: ${Formatters.formatCurrency(p.totalAmount)}', style: AppTextStyles.bodyBold),
                           Text('Paid Amount: ${Formatters.formatCurrency(p.paidAmount)}',
                               style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
@@ -538,6 +573,14 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                       case 'view':
                         _showPurchaseDetailsDialog(p);
                         break;
+                      case 'edit':
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CreatePurchaseScreen(existingPurchase: p),
+                          ),
+                        );
+                        break;
                       case 'cancel':
                         _confirmCancelPurchase(p);
                         break;
@@ -554,6 +597,17 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                         ],
                       ),
                     ),
+                    if (p.status != PurchaseStatus.cancelled)
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                            SizedBox(width: 8),
+                            Text('Edit / Reopen Purchase'),
+                          ],
+                        ),
+                      ),
                     if (p.status != PurchaseStatus.cancelled)
                       const PopupMenuItem(
                         value: 'cancel',

@@ -10,6 +10,8 @@ import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class StockAdjustmentScreen extends ConsumerStatefulWidget {
@@ -21,6 +23,8 @@ class StockAdjustmentScreen extends ConsumerStatefulWidget {
 
 class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
   String _searchQuery = '';
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -278,6 +282,10 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
 
                     db.performStockAdjustmentAsync(adjustment);
                     Navigator.of(ctx).pop();
+                    ErpToast.showSuccess(
+                      context,
+                      'Stock adjustment ${adjustment.adjustmentNumber} recorded successfully!',
+                    );
                   },
                 ),
               ],
@@ -293,13 +301,18 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
     final db = ref.watch(databaseServiceProvider);
     final adjustments = db.stockAdjustments.where((adj) {
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
+      final matchesQuery = query.isEmpty ||
           adj.adjustmentNumber.toLowerCase().contains(query) ||
           adj.itemName.toLowerCase().contains(query) ||
           adj.itemCode.toLowerCase().contains(query) ||
           adj.reasonLabel.toLowerCase().contains(query) ||
           adj.performedBy.toLowerCase().contains(query) ||
           (adj.remarks != null && adj.remarks!.toLowerCase().contains(query));
+
+      final matchesDate = (_startDate == null || !adj.adjustmentDate.isBefore(_startDate!)) &&
+          (_endDate == null || !adj.adjustmentDate.isAfter(_endDate!.add(const Duration(days: 1))));
+
+      return matchesQuery && matchesDate;
     }).toList();
 
     return SingleChildScrollView(
@@ -318,13 +331,11 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                 children: [
                   ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 240),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Stock Adjustments', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Reconcile physical stock counts, log damages, and record audited corrections', style: AppTextStyles.subtitle),
-                      ],
+                    child: Text(
+                      'Reconcile physical stock counts, log damages, and record audited corrections',
+                      style: AppTextStyles.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   ErpButton(
@@ -336,14 +347,30 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
               );
             },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search adjustments by number, item, reason, notes, or user...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // Global Filters
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search adjustments by number, item, reason...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() => _searchQuery = val),
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 20),
 

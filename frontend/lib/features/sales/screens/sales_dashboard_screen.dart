@@ -32,16 +32,11 @@ class SalesDashboardScreen extends ConsumerWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final isStacked = constraints.maxWidth < 750;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Sales Operations Dashboard', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Pipeline tracking: Quotations, Proformas, Orders, Dispatch & Revenue',
-                    style: AppTextStyles.subtitle,
-                  ),
-                ],
+              final titleBlock = Text(
+                'Pipeline tracking: Quotations, Proformas, Orders, Dispatch & Revenue',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               );
 
               final actionButtons = Wrap(

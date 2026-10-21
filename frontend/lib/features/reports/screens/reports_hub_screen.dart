@@ -1553,16 +1553,11 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           LayoutBuilder(
             builder: (context, constraints) {
               final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Reports & Analytics Hub', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Stock sources, purchase types, expense registers, and GST tax breakup statements',
-                    style: AppTextStyles.subtitle,
-                  ),
-                ],
+              final titleBlock = Text(
+                'Stock sources, purchase types, expense registers, and GST tax breakup statements',
+                style: AppTextStyles.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               );
 
               final actionBlock = Wrap(
