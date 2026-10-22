@@ -52,6 +52,14 @@ class CreatePurchaseScreen extends ConsumerStatefulWidget {
   ConsumerState<CreatePurchaseScreen> createState() => _CreatePurchaseScreenState();
 }
 
+/// System-wide transportation / freight configuration for procurement.
+/// If an item (product/raw material) does not specify an explicit per-unit transportationCharge (> 0),
+/// and the vendor does not specify defaultTransportationCharges (> 0), this configurable default applies.
+class PurchaseTransportationConfig {
+  /// Clearly defined configurable default transportation rate in ₹ per unit (default: ₹50.0 / unit).
+  static double defaultRatePerUnit = 50.0;
+}
+
 class _LineItemDraft {
   PurchaseItemType itemType;
   String itemId; // rawMaterialId or finishedProductId
@@ -130,6 +138,36 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     }
   }
 
+  double _resolveItemTransportationRate({
+    required PurchaseItemType type,
+    required String itemId,
+  }) {
+    final db = ref.read(databaseServiceProvider);
+    // 1. Existing ERP configuration: Item master explicit transportation rate
+    if (type == PurchaseItemType.rawMaterial) {
+      final rm = db.rawMaterials.where((r) => r.id == itemId).firstOrNull;
+      if (rm != null && rm.transportationCharge > 0) {
+        return rm.transportationCharge;
+      }
+    } else {
+      final fp = db.finishedProducts.where((f) => f.id == itemId).firstOrNull;
+      if (fp != null && fp.transportationCharge > 0) {
+        return fp.transportationCharge;
+      }
+    }
+
+    // 2. Existing ERP configuration: Supplier / Vendor default transportation rate
+    if (_selectedVendorId != null) {
+      final vendor = db.vendors.where((v) => v.id == _selectedVendorId).firstOrNull;
+      if (vendor != null && vendor.defaultTransportationCharges > 0) {
+        return vendor.defaultTransportationCharges;
+      }
+    }
+
+    // 3. Fallback to clearly defined configurable default rate
+    return PurchaseTransportationConfig.defaultRatePerUnit;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -160,6 +198,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
 
       _items.clear();
       for (final it in p.items) {
+        final unitTransRate = (it.transportationCost > 0 && it.quantity > 0)
+            ? (it.transportationCost / it.quantity)
+            : (p.transportationCharges > 0 && p.items.length == 1 && it.quantity > 0)
+                ? (p.transportationCharges / it.quantity)
+                : _resolveItemTransportationRate(type: it.itemType, itemId: it.itemId);
+
         _items.add(_LineItemDraft(
           itemType: it.itemType,
           itemId: it.itemId,
@@ -170,7 +214,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
           rate: it.rate,
           discount: it.discountAmount,
           gstPercent: it.gstPercent,
-          transportationCharge: it.transportationCost,
+          transportationCharge: unitTransRate,
         ));
       }
     } else {
@@ -194,14 +238,6 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
             final freshVendors = database.vendors.where((v) => !v.isDeleted).toList();
             if (freshVendors.isNotEmpty) {
               _selectedVendorId = freshVendors.first.id;
-              if (freshVendors.first.defaultTransportationCharges > 0 &&
-                  !_isManualTransportation &&
-                  (_transportationChargesCtrl.text.trim().isEmpty || _transportationChargesCtrl.text.trim() == '0')) {
-                _validTransportationCharges = freshVendors.first.defaultTransportationCharges;
-                _transportationChargesCtrl.text = freshVendors.first.defaultTransportationCharges % 1 == 0
-                    ? freshVendors.first.defaultTransportationCharges.toInt().toString()
-                    : freshVendors.first.defaultTransportationCharges.toStringAsFixed(2);
-              }
             }
           }
         });
@@ -212,15 +248,14 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   void _onVendorSelected(String? val) {
     setState(() {
       _selectedVendorId = val;
-      if (val != null) {
-        final vendor = ref.read(databaseServiceProvider).vendors.where((v) => v.id == val).firstOrNull;
-        if (vendor != null && vendor.defaultTransportationCharges > 0 && !_isManualTransportation) {
-          _validTransportationCharges = vendor.defaultTransportationCharges;
-          final formatted = vendor.defaultTransportationCharges % 1 == 0
-              ? vendor.defaultTransportationCharges.toInt().toString()
-              : vendor.defaultTransportationCharges.toStringAsFixed(2);
-          _transportationChargesCtrl.text = formatted;
+      if (!_isManualTransportation) {
+        for (final item in _items) {
+          item.transportationCharge = _resolveItemTransportationRate(
+            type: item.itemType,
+            itemId: item.itemId,
+          );
         }
+        _recalculateTransportation(force: true);
       }
     });
   }
@@ -259,7 +294,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         defaultRate = rm.defaultPurchasePrice;
         defaultGst = rm.gstPercent;
         currentStock = rm.currentStock;
-        itemTransportation = rm.transportationCharge;
+        itemTransportation = _resolveItemTransportationRate(
+          type: PurchaseItemType.rawMaterial,
+          itemId: rm.id,
+        );
       } else if (type == PurchaseItemType.finishedProduct && db.finishedProducts.isNotEmpty) {
         final fpList = db.finishedProducts.where((f) => !f.isDeleted).toList();
         final fp = fpList.isNotEmpty ? fpList.first : db.finishedProducts.first;
@@ -270,7 +308,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         defaultRate = fp.costPrice;
         defaultGst = fp.gstPercent;
         currentStock = fp.currentStock;
-        itemTransportation = fp.transportationCharge;
+        itemTransportation = _resolveItemTransportationRate(
+          type: PurchaseItemType.finishedProduct,
+          itemId: fp.id,
+        );
       } else {
         selectedItemId = null;
         selectedItemName = '';
@@ -391,7 +432,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 currentStock = rm.currentStock;
                                 rateCtrl.text = rm.defaultPurchasePrice.toString();
                                 gstCtrl.text = rm.gstPercent.toString();
-                                itemTransportation = rm.transportationCharge;
+                                itemTransportation = _resolveItemTransportationRate(
+                                  type: PurchaseItemType.rawMaterial,
+                                  itemId: rm.id,
+                                );
                               });
                             }
                           },
@@ -423,7 +467,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 currentStock = fp.currentStock;
                                 rateCtrl.text = fp.costPrice.toString();
                                 gstCtrl.text = fp.gstPercent.toString();
-                                itemTransportation = fp.transportationCharge;
+                                itemTransportation = _resolveItemTransportationRate(
+                                  type: PurchaseItemType.finishedProduct,
+                                  itemId: fp.id,
+                                );
                               });
                             }
                           },
@@ -617,7 +664,8 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       gstPercent: enteredGst,
                       transportationCharge: itemTransportation,
                     ));
-                    _recalculateTransportation();
+                    _isManualTransportation = false;
+                    _recalculateTransportation(force: true);
                   });
 
                   Navigator.of(ctx).pop();
@@ -630,31 +678,35 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     );
   }
 
-  void _recalculateTransportation() {
-    if (_isManualTransportation) return;
-    final itemTransSum = _items.fold<double>(0.0, (sum, i) => sum + (i.quantity * i.transportationCharge));
-    if (itemTransSum > 0) {
-      _validTransportationCharges = itemTransSum;
-      final formatted = itemTransSum % 1 == 0
-          ? itemTransSum.toInt().toString()
-          : itemTransSum.toStringAsFixed(2);
-      _transportationChargesCtrl.value = TextEditingValue(
-        text: formatted,
-        selection: TextSelection.collapsed(offset: formatted.length),
+  void _recalculateTransportation({bool force = false}) {
+    if (_isManualTransportation && !force) return;
+    if (_items.isEmpty) {
+      _validTransportationCharges = 0.0;
+      _transportationChargesCtrl.value = const TextEditingValue(
+        text: '0',
+        selection: TextSelection.collapsed(offset: 1),
       );
+      return;
     }
+    final itemTransSum = _items.fold<double>(0.0, (sum, i) => sum + (i.quantity * i.transportationCharge));
+    _validTransportationCharges = itemTransSum;
+    final formatted = itemTransSum % 1 == 0
+        ? itemTransSum.toInt().toString()
+        : itemTransSum.toStringAsFixed(2);
+    _transportationChargesCtrl.value = TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
   }
 
   void _removeLineItem(int index) {
     setState(() {
       _items.removeAt(index);
       if (_items.isEmpty) {
-        if (!_isManualTransportation) {
-          _validTransportationCharges = 0.0;
-          _transportationChargesCtrl.text = '0';
-        }
+        _validTransportationCharges = 0.0;
+        _transportationChargesCtrl.text = '0';
       } else {
-        _recalculateTransportation();
+        _recalculateTransportation(force: true);
       }
     });
   }
@@ -742,8 +794,9 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     }
 
     final purchase = Purchase(
-      id: IdGenerator.generateId('PUR'),
-      purchaseNumber: IdGenerator.generateDocNumber('PO', db.nextPurchaseNumber),
+      id: widget.existingPurchase?.id ?? IdGenerator.generateId('PUR'),
+      purchaseNumber: widget.existingPurchase?.purchaseNumber ??
+          IdGenerator.generateDocNumber('PO', db.nextPurchaseNumber),
       purchaseDate: _purchaseDate,
       vendorId: vendor.id,
       vendorName: vendor.name,
@@ -1356,8 +1409,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                           item.unit = rm.unit;
                                           item.rate = rm.defaultPurchasePrice;
                                           item.gstPercent = rm.gstPercent;
-                                          item.transportationCharge = rm.transportationCharge;
-                                          _recalculateTransportation();
+                                          item.transportationCharge = _resolveItemTransportationRate(
+                                            type: PurchaseItemType.rawMaterial,
+                                            itemId: rm.id,
+                                          );
+                                          _isManualTransportation = false;
+                                          _recalculateTransportation(force: true);
                                         });
                                       } else if (newType == PurchaseItemType.finishedProduct && db.finishedProducts.isNotEmpty) {
                                         final fp = db.finishedProducts.first;
@@ -1369,8 +1426,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                           item.unit = fp.unit;
                                           item.rate = fp.costPrice;
                                           item.gstPercent = fp.gstPercent;
-                                          item.transportationCharge = fp.transportationCharge;
-                                          _recalculateTransportation();
+                                          item.transportationCharge = _resolveItemTransportationRate(
+                                            type: PurchaseItemType.finishedProduct,
+                                            itemId: fp.id,
+                                          );
+                                          _isManualTransportation = false;
+                                          _recalculateTransportation(force: true);
                                         });
                                       }
                                     },
@@ -1406,8 +1467,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                                 item.unit = fp.unit;
                                                 item.rate = fp.costPrice;
                                                 item.gstPercent = fp.gstPercent;
-                                                item.transportationCharge = fp.transportationCharge;
-                                                _recalculateTransportation();
+                                                item.transportationCharge = _resolveItemTransportationRate(
+                                                  type: PurchaseItemType.finishedProduct,
+                                                  itemId: fp.id,
+                                                );
+                                                _isManualTransportation = false;
+                                                _recalculateTransportation(force: true);
                                               });
                                             }
                                           },
@@ -1436,8 +1501,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                                 item.unit = rm.unit;
                                                 item.rate = rm.defaultPurchasePrice;
                                                 item.gstPercent = rm.gstPercent;
-                                                item.transportationCharge = rm.transportationCharge;
-                                                _recalculateTransportation();
+                                                item.transportationCharge = _resolveItemTransportationRate(
+                                                  type: PurchaseItemType.rawMaterial,
+                                                  itemId: rm.id,
+                                                );
+                                                _isManualTransportation = false;
+                                                _recalculateTransportation(force: true);
                                               });
                                             }
                                           },
@@ -1458,7 +1527,8 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                       final num = double.tryParse(v) ?? 0.0;
                                       setState(() {
                                         item.quantity = num;
-                                        _recalculateTransportation();
+                                        _isManualTransportation = false;
+                                        _recalculateTransportation(force: true);
                                       });
                                     },
                                   ),
@@ -1476,7 +1546,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                     decoration: const InputDecoration(labelText: 'Rate (₹)'),
                                     onChanged: (v) {
                                       final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.rate = num);
+                                      setState(() {
+                                        item.rate = num;
+                                        _recalculateTransportation(force: true);
+                                      });
                                     },
                                   ),
                                 ),
