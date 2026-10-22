@@ -13,6 +13,7 @@ import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
@@ -373,52 +374,112 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
     final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
     final pagedDealers = totalRecords == 0 ? <Dealer>[] : dealers.sublist(startIndex, endIndex);
 
+    final totalDealersCount = db.dealers.where((d) => !d.isDeleted).length;
+    final withBalanceCount = db.dealers.where((d) => !d.isDeleted && d.outstandingAmount > 0).length;
+    final zeroBalanceCount = db.dealers.where((d) => !d.isDeleted && d.outstandingAmount <= 0).length;
+    final totalOutstanding = db.dealers.where((d) => !d.isDeleted).fold(0.0, (sum, d) => sum + d.outstandingAmount);
+
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header (Matching Figma Master Design)
           LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 550) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Dealers & Franchise Network', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Authorized distribution partners, retail showrooms, and channel receivables', style: AppTextStyles.subtitle),
-                    const SizedBox(height: 12),
-                    ErpButton(
-                      text: 'Add Dealer',
-                      icon: Icons.add,
-                      onPressed: () => _openAddEditDealerDialog(),
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              final isSmall = constraints.maxWidth < 650;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Dealers & Franchise Network', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Authorized distribution partners, retail showrooms, and channel receivables', style: AppTextStyles.subtitle),
+                        Text('Dealers', style: AppTextStyles.h1),
                       ],
                     ),
                   ),
-                  ErpButton(
-                    text: 'Add Dealer',
-                    icon: Icons.add,
+                  ElevatedButton.icon(
                     onPressed: () => _openAddEditDealerDialog(),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Dealer'),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
+
+          // 5 Summary Metric Cards
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (4 * 12)) / 5
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.store_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Dealers',
+                      value: '$totalDealersCount',
+                      subtext: 'Network Partners',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.storefront_outlined,
+                      iconColor: AppColors.success,
+                      title: 'Showrooms',
+                      value: '$totalDealersCount',
+                      subtext: 'Operational',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'With Balance',
+                      value: '$withBalanceCount',
+                      subtext: 'Pending Collection',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.verified_outlined,
+                      iconColor: AppColors.categoryTeal,
+                      title: 'Zero Balance',
+                      value: '$zeroBalanceCount',
+                      subtext: 'Fully Cleared',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.categoryGold,
+                      title: 'Total Outstanding',
+                      value: Formatters.formatCurrency(totalOutstanding),
+                      subtext: 'Total Receivables',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
 
           // Modern Filter Controls Bar
           Wrap(
@@ -485,7 +546,13 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(d.name, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                      Text(
+                        d.name,
+                        style: AppTextStyles.bodyBold.copyWith(
+                          fontSize: 13,
+                          color: const Color(0xFF1E293B),
+                        ),
+                      ),
                       if (d.address.isNotEmpty || d.state.isNotEmpty || d.pincode.isNotEmpty)
                         Text(
                           [
@@ -495,28 +562,29 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                           ].join(', '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                         ),
                     ],
                   ),
                 ),
-                Text(d.companyName, style: AppTextStyles.bodyMedium),
-                Text(d.contactPerson, style: AppTextStyles.bodySmall),
-                Text(d.state.isNotEmpty ? d.state : '-', style: AppTextStyles.bodyMedium),
+                Text(d.companyName, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
+                Text(d.contactPerson, style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                Text(d.state.isNotEmpty ? d.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(d.mobile, style: AppTextStyles.bodySmall),
+                    Text(d.mobile, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
                     if (d.email.isNotEmpty)
-                      Text(d.email, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                      Text(d.email, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                   ],
                 ),
-                Text(d.gstNumber.isNotEmpty ? d.gstNumber : '-', style: AppTextStyles.bodySmall),
+                Text(d.gstNumber.isNotEmpty ? d.gstNumber : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Text(
                   Formatters.formatCurrency(d.outstandingAmount),
                   style: AppTextStyles.bodyBold.copyWith(
-                    color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText,
+                    fontSize: 13,
+                    color: d.outstandingAmount > 0 ? AppColors.danger : const Color(0xFF1E293B),
                   ),
                 ),
                 PopupMenuButton<String>(

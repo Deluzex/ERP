@@ -13,6 +13,7 @@ import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -256,7 +257,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                               if (isAlsoArchitect) ...[
                                 const SizedBox(height: 10),
                                 DropdownButtonFormField<String?>(
-                                  value: linkedArchitectId,
+                                  initialValue: linkedArchitectId,
                                   isExpanded: true,
                                   decoration: const InputDecoration(
                                     labelText: 'Select Linked Architect Profile',
@@ -423,54 +424,113 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
     final pagedCustomers = totalRecords == 0 ? <Customer>[] : customers.sublist(startIndex, endIndex);
 
+    final totalCustomersCount = db.customers.where((c) => !c.isDeleted).length;
+    final directClientsCount = db.customers.where((c) => !c.isDeleted && !c.isAlsoArchitect && c.linkedArchitectId == null).length;
+    final archLinkedCount = db.customers.where((c) => !c.isDeleted && (c.isAlsoArchitect || c.linkedArchitectId != null)).length;
+    final withBalanceCount = db.customers.where((c) => !c.isDeleted && c.outstandingAmount > 0).length;
+    final totalOutstanding = db.customers.where((c) => !c.isDeleted).fold(0.0, (sum, c) => sum + c.outstandingAmount);
+
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header (Matching Figma Master Design)
           LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 550) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Customers Master', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Direct end-customers, project developers, and dual-entity Architect-Customers with WhatsApp action',
-                        style: AppTextStyles.subtitle),
-                    const SizedBox(height: 12),
-                    ErpButton(
-                      text: 'Add Customer',
-                      icon: Icons.add,
-                      onPressed: () => _openAddEditCustomerDialog(),
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              final isSmall = constraints.maxWidth < 650;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Customers Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Direct end-customers, project developers, and dual-entity Architect-Customers with WhatsApp action',
-                            style: AppTextStyles.subtitle),
+                        Text('Customers', style: AppTextStyles.h1),
                       ],
                     ),
                   ),
-                  ErpButton(
-                    text: 'Add Customer',
-                    icon: Icons.add,
+                  ElevatedButton.icon(
                     onPressed: () => _openAddEditCustomerDialog(),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Customer'),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
+
+          // 5 Summary Metric Cards
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (4 * 12)) / 5
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.people_outline,
+                      iconColor: AppColors.primary,
+                      title: 'Total Customers',
+                      value: '$totalCustomersCount',
+                      subtext: 'All Clients',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.person_outline,
+                      iconColor: AppColors.success,
+                      title: 'Direct Clients',
+                      value: '$directClientsCount',
+                      subtext: 'Direct Accounts',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.architecture_outlined,
+                      iconColor: AppColors.categoryPurple,
+                      title: 'Architect-Linked',
+                      value: '$archLinkedCount',
+                      subtext: 'Partner Accounts',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'With Balance',
+                      value: '$withBalanceCount',
+                      subtext: 'Pending Balance',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.categoryGold,
+                      title: 'Total Outstanding',
+                      value: Formatters.formatCurrency(totalOutstanding),
+                      subtext: 'Total Receivables',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
 
           // Modern Filter Controls Bar
           Wrap(
@@ -497,10 +557,12 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                   DropdownMenuItem(value: 'ARCHITECT', child: Text('Architect Linked / Dual')),
                 ],
                 onChanged: (val) {
-                  if (val != null) setState(() {
-                    _roleFilter = val;
-                    _currentPage = 0;
-                  });
+                  if (val != null) {
+                    setState(() {
+                      _roleFilter = val;
+                      _currentPage = 0;
+                    });
+                  }
                 },
               ),
               ErpFilterDropdown<String>(
@@ -511,10 +573,12 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                   DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance')),
                 ],
                 onChanged: (val) {
-                  if (val != null) setState(() {
-                    _balanceFilter = val;
-                    _currentPage = 0;
-                  });
+                  if (val != null) {
+                    setState(() {
+                      _balanceFilter = val;
+                      _currentPage = 0;
+                    });
+                  }
                 },
               ),
               ErpDateFilterBox(
@@ -560,8 +624,8 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       Text(
                         c.name,
                         style: AppTextStyles.bodyBold.copyWith(
-                          color: AppColors.primary,
-                          decoration: TextDecoration.underline,
+                          fontSize: 13,
+                          color: const Color(0xFF1E293B),
                         ),
                       ),
                       if (c.address.isNotEmpty || c.state.isNotEmpty || c.pincode.isNotEmpty)
@@ -573,7 +637,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                           ].join(', '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                         ),
                     ],
                   ),
@@ -585,25 +649,24 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                           ref.read(activeRecordDetailsStackProvider.notifier).push(linkedArch.id, 'architect', ErpNavSection.architects);
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.purple.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: Colors.purple.withValues(alpha: 0.25)),
+                            color: const Color(0xFFF3E8FF),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFD8B4FE)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.link, size: 12, color: Colors.purple),
+                              const Icon(Icons.link, size: 12, color: Color(0xFF7E22CE)),
                               const SizedBox(width: 4),
                               Flexible(
                                 child: Text(
                                   'Arch: ${linkedArch.name}',
                                   style: const TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.purple,
-                                    decoration: TextDecoration.underline,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF7E22CE),
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -614,20 +677,28 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       )
                     : (c.isAlsoArchitect
                         ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: Colors.purple.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-                            child: const Text('ARCH-CUSTOMER', style: TextStyle(fontSize: 10, color: Colors.purple, fontWeight: FontWeight.bold)),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3E8FF),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFD8B4FE)),
+                            ),
+                            child: const Text(
+                              'ARCH-CUSTOMER',
+                              style: TextStyle(fontSize: 11, color: Color(0xFF7E22CE), fontWeight: FontWeight.w600),
+                            ),
                           )
-                        : const Text('Direct Client', style: TextStyle(fontSize: 11, color: Colors.grey))),
-                Text(c.state.isNotEmpty ? c.state : '-', style: AppTextStyles.bodyMedium),
-                Text(c.mobile, style: AppTextStyles.bodyMedium),
-                Text(c.email, style: AppTextStyles.bodySmall),
-                Text(c.gstNumber.isNotEmpty ? c.gstNumber : '-', style: AppTextStyles.bodySmall),
-                Text(c.address, style: AppTextStyles.bodySmall),
+                        : const Text('Direct Client', style: TextStyle(fontSize: 12, color: Color(0xFF64748B)))),
+                Text(c.state.isNotEmpty ? c.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                Text(c.mobile, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
+                Text(c.email, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                Text(c.gstNumber.isNotEmpty ? c.gstNumber : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                Text(c.address, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                 Text(
                   Formatters.formatCurrency(c.outstandingAmount),
                   style: AppTextStyles.bodyBold.copyWith(
-                    color: c.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText,
+                    fontSize: 13,
+                    color: c.outstandingAmount > 0 ? AppColors.danger : const Color(0xFF1E293B),
                   ),
                 ),
                 PopupMenuButton<String>(

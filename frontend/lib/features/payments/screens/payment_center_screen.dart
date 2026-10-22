@@ -18,6 +18,7 @@ import '../../../core/utils/id_generator.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 
@@ -171,37 +172,15 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 240),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Payments & Treasury Center', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Manual payment entry (Full & Partial), invoice balance auto-reconciliation, and treasury tracking',
-                          style: AppTextStyles.subtitle,
-                        ),
-                      ],
-                    ),
-                  ),
-                  ErpButton(
-                    text: buttonLabel,
-                    icon: Icons.add,
-                    onPressed: () => _openRecordPaymentDialog(currentPaymentType),
-                  ),
-                ],
-              );
-            },
+          ErpSectionHeaderCard(
+            icon: Icons.payments_rounded,
+            title: 'Payments & Treasury Center',
+            badgeText: 'TREASURY & DISBURSEMENTS',
+            action: ErpButton(
+              text: buttonLabel,
+              icon: Icons.add,
+              onPressed: () => _openRecordPaymentDialog(currentPaymentType),
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -689,12 +668,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     showDialog(
       context: context,
       builder: (ctx) {
+        final isMobile = MediaQuery.of(ctx).size.width < 750;
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: isMobile ? 16 : 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 1140, maxHeight: 680),
-            padding: const EdgeInsets.all(24),
+            constraints: BoxConstraints(maxWidth: 1140, maxHeight: isMobile ? MediaQuery.of(ctx).size.height * 0.88 : 680),
+            padding: EdgeInsets.all(isMobile ? 14 : 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -702,36 +682,48 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE0F2FE),
-                            borderRadius: BorderRadius.circular(8),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE0F2FE),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.person, color: Color(0xFF0284C7), size: 20),
                           ),
-                          child: const Icon(Icons.person, color: Color(0xFF0284C7)),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              summary.customer.name.isNotEmpty ? summary.customer.name : 'Unnamed Customer',
-                              style: AppTextStyles.h2.copyWith(fontSize: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  summary.customer.name.isNotEmpty ? summary.customer.name : 'Unnamed Customer',
+                                  style: AppTextStyles.h2.copyWith(fontSize: isMobile ? 15 : 18),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  isMobile
+                                      ? 'Customer Ledger (${summary.entries.length} txns)'
+                                      : 'Customer Ledger & Transaction Statement (${summary.entries.length} Transactions)',
+                                  style: AppTextStyles.subtitle.copyWith(fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Customer Ledger & Transaction Statement (${summary.entries.length} Transactions)',
-                              style: AppTextStyles.subtitle.copyWith(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
+                      constraints: const BoxConstraints(),
+                      padding: EdgeInsets.zero,
                       onPressed: () {
                         FocusScope.of(ctx).unfocus();
                         Navigator.of(ctx).pop();
@@ -739,11 +731,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
                 // Summary Cards
                 Wrap(
-                  spacing: 12,
+                  spacing: 8,
                   runSpacing: 8,
                   children: [
                     _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
@@ -756,11 +748,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 const Divider(height: 1),
                 const SizedBox(height: 12),
 
-                // 9-Column Ledger Table (Sheet 2)
+                // 9-Column Ledger Table (Desktop) or Card List (Mobile)
                 Expanded(
                   child: summary.entries.isEmpty
                       ? Center(
@@ -773,67 +765,75 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ],
                           ),
                         )
-                      : ErpDataTable(
-                          enableVerticalScroll: true,
-                          fixedHeader: true,
-                          columnSpacing: 14,
-                          horizontalMargin: 16,
-                          columns: const [
-                            ErpColumn(title: 'Doc / Name', width: 145),
-                            ErpColumn(title: 'Total Pending', isNumeric: true, width: 105),
-                            ErpColumn(title: 'Type', width: 85),
-                            ErpColumn(title: 'Date', width: 95),
-                            ErpColumn(title: 'Mode', width: 120),
-                            ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
-                            ErpColumn(title: 'Discount', isNumeric: true, width: 85),
-                            ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
-                            ErpColumn(title: 'Remarks', width: 160),
-                          ],
-                          rows: summary.entries.map((entry) {
-                            return [
-                              Text(entry.docNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
-                              Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
-                              entry.type == 'Sale Invoice'
-                                  ? ErpStatusBadge.info('SALE')
-                                  : ErpStatusBadge.success('RECEIPT'),
-                              Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
-                              ErpStatusBadge.neutral(entry.paymentMode),
-                              Text(
-                                Formatters.formatCurrency(entry.amount),
-                                style: AppTextStyles.bodyBold.copyWith(
-                                  fontSize: 12,
-                                  color: entry.type == 'Sale Invoice' ? Colors.black87 : const Color(0xFF16A34A),
-                                ),
-                              ),
-                              Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
-                              Text(
-                                Formatters.formatCurrency(entry.closingPending),
-                                style: AppTextStyles.bodyBold.copyWith(
-                                  fontSize: 12,
-                                  color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
-                                ),
-                              ),
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 160),
-                                child: Tooltip(
-                                  message: entry.remarks,
-                                  child: Text(
-                                    entry.remarks.isNotEmpty ? entry.remarks : '—',
-                                    style: AppTextStyles.bodySmall,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                      : isMobile
+                          ? ListView.separated(
+                              itemCount: summary.entries.length,
+                              separatorBuilder: (c, i) => const SizedBox(height: 8),
+                              itemBuilder: (context, idx) => _buildMobileLedgerCard(summary.entries[idx]),
+                            )
+                          : ErpDataTable(
+                              enableVerticalScroll: true,
+                              fixedHeader: true,
+                              columnSpacing: 14,
+                              horizontalMargin: 16,
+                              columns: const [
+                                ErpColumn(title: 'Doc / Name', width: 145),
+                                ErpColumn(title: 'Total Pending', isNumeric: true, width: 105),
+                                ErpColumn(title: 'Type', width: 85),
+                                ErpColumn(title: 'Date', width: 95),
+                                ErpColumn(title: 'Mode', width: 120),
+                                ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                                ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                                ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
+                                ErpColumn(title: 'Remarks', width: 160),
+                              ],
+                              rows: summary.entries.map((entry) {
+                                return [
+                                  Text(entry.docNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
+                                  Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
+                                  entry.type == 'Sale Invoice'
+                                      ? ErpStatusBadge.info('SALE')
+                                      : ErpStatusBadge.success('RECEIPT'),
+                                  Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
+                                  ErpStatusBadge.neutral(entry.paymentMode),
+                                  Text(
+                                    Formatters.formatCurrency(entry.amount),
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      fontSize: 12,
+                                      color: entry.type == 'Sale Invoice' ? Colors.black87 : const Color(0xFF16A34A),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ];
-                          }).toList(),
-                        ),
+                                  Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
+                                  Text(
+                                    Formatters.formatCurrency(entry.closingPending),
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      fontSize: 12,
+                                      color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                    ),
+                                  ),
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(maxWidth: 160),
+                                    child: Tooltip(
+                                      message: entry.remarks,
+                                      child: Text(
+                                        entry.remarks.isNotEmpty ? entry.remarks : '—',
+                                        style: AppTextStyles.bodySmall,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                ];
+                              }).toList(),
+                            ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
                 // Action buttons footer
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 10,
+                  runSpacing: 8,
                   children: [
                     ErpButton(
                       text: 'Close',
@@ -843,7 +843,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                         Navigator.of(ctx).pop();
                       },
                     ),
-                    const SizedBox(width: 12),
                     ErpButton(
                       text: 'Record Transaction',
                       icon: Icons.edit_note_rounded,
@@ -1284,12 +1283,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     showDialog(
       context: context,
       builder: (ctx) {
+        final isMobile = MediaQuery.of(ctx).size.width < 750;
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: isMobile ? 16 : 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 1140, maxHeight: 680),
-            padding: const EdgeInsets.all(24),
+            constraints: BoxConstraints(maxWidth: 1140, maxHeight: isMobile ? MediaQuery.of(ctx).size.height * 0.88 : 680),
+            padding: EdgeInsets.all(isMobile ? 14 : 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1297,36 +1297,48 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDCFCE7),
-                            borderRadius: BorderRadius.circular(8),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDCFCE7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.storefront_outlined, color: Color(0xFF16A34A), size: 20),
                           ),
-                          child: const Icon(Icons.storefront_outlined, color: Color(0xFF16A34A)),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              summary.dealer.name.isNotEmpty ? summary.dealer.name : 'Unnamed Dealer',
-                              style: AppTextStyles.h2.copyWith(fontSize: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  summary.dealer.name.isNotEmpty ? summary.dealer.name : 'Unnamed Dealer',
+                                  style: AppTextStyles.h2.copyWith(fontSize: isMobile ? 15 : 18),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  isMobile
+                                      ? 'Dealer Ledger (${summary.entries.length} txns)'
+                                      : 'Dealer Ledger & Transaction Statement (${summary.entries.length} Transactions)',
+                                  style: AppTextStyles.subtitle.copyWith(fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Dealer Ledger & Transaction Statement (${summary.entries.length} Transactions)',
-                              style: AppTextStyles.subtitle.copyWith(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
+                      constraints: const BoxConstraints(),
+                      padding: EdgeInsets.zero,
                       onPressed: () {
                         FocusScope.of(ctx).unfocus();
                         Navigator.of(ctx).pop();
@@ -1334,11 +1346,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
                 // Summary Cards
                 Wrap(
-                  spacing: 12,
+                  spacing: 8,
                   runSpacing: 8,
                   children: [
                     _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
@@ -1351,11 +1363,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 const Divider(height: 1),
                 const SizedBox(height: 12),
 
-                // 9-Column Ledger Table (Sheet 2)
+                // 9-Column Ledger Table (Desktop) or Card List (Mobile)
                 Expanded(
                   child: summary.entries.isEmpty
                       ? Center(
@@ -1368,67 +1380,75 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ],
                           ),
                         )
-                      : ErpDataTable(
-                          enableVerticalScroll: true,
-                          fixedHeader: true,
-                          columnSpacing: 14,
-                          horizontalMargin: 16,
-                          columns: const [
-                            ErpColumn(title: 'Doc / Name', width: 145),
-                            ErpColumn(title: 'Total Pending', isNumeric: true, width: 105),
-                            ErpColumn(title: 'Type', width: 85),
-                            ErpColumn(title: 'Date', width: 95),
-                            ErpColumn(title: 'Mode', width: 120),
-                            ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
-                            ErpColumn(title: 'Discount', isNumeric: true, width: 85),
-                            ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
-                            ErpColumn(title: 'Remarks', width: 160),
-                          ],
-                          rows: summary.entries.map((entry) {
-                            return [
-                              Text(entry.docNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
-                              Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
-                              entry.type == 'Sale Invoice'
-                                  ? ErpStatusBadge.info('SALE')
-                                  : ErpStatusBadge.success('RECEIPT'),
-                              Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
-                              ErpStatusBadge.neutral(entry.paymentMode),
-                              Text(
-                                Formatters.formatCurrency(entry.amount),
-                                style: AppTextStyles.bodyBold.copyWith(
-                                  fontSize: 12,
-                                  color: entry.type == 'Sale Invoice' ? Colors.black87 : const Color(0xFF16A34A),
-                                ),
-                              ),
-                              Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
-                              Text(
-                                Formatters.formatCurrency(entry.closingPending),
-                                style: AppTextStyles.bodyBold.copyWith(
-                                  fontSize: 12,
-                                  color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
-                                ),
-                              ),
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 160),
-                                child: Tooltip(
-                                  message: entry.remarks,
-                                  child: Text(
-                                    entry.remarks.isNotEmpty ? entry.remarks : '—',
-                                    style: AppTextStyles.bodySmall,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                      : isMobile
+                          ? ListView.separated(
+                              itemCount: summary.entries.length,
+                              separatorBuilder: (c, i) => const SizedBox(height: 8),
+                              itemBuilder: (context, idx) => _buildMobileLedgerCard(summary.entries[idx]),
+                            )
+                          : ErpDataTable(
+                              enableVerticalScroll: true,
+                              fixedHeader: true,
+                              columnSpacing: 14,
+                              horizontalMargin: 16,
+                              columns: const [
+                                ErpColumn(title: 'Doc / Name', width: 145),
+                                ErpColumn(title: 'Total Pending', isNumeric: true, width: 105),
+                                ErpColumn(title: 'Type', width: 85),
+                                ErpColumn(title: 'Date', width: 95),
+                                ErpColumn(title: 'Mode', width: 120),
+                                ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                                ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                                ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
+                                ErpColumn(title: 'Remarks', width: 160),
+                              ],
+                              rows: summary.entries.map((entry) {
+                                return [
+                                  Text(entry.docNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
+                                  Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
+                                  entry.type == 'Sale Invoice'
+                                      ? ErpStatusBadge.info('SALE')
+                                      : ErpStatusBadge.success('RECEIPT'),
+                                  Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
+                                  ErpStatusBadge.neutral(entry.paymentMode),
+                                  Text(
+                                    Formatters.formatCurrency(entry.amount),
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      fontSize: 12,
+                                      color: entry.type == 'Sale Invoice' ? Colors.black87 : const Color(0xFF16A34A),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ];
-                          }).toList(),
-                        ),
+                                  Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
+                                  Text(
+                                    Formatters.formatCurrency(entry.closingPending),
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      fontSize: 12,
+                                      color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                    ),
+                                  ),
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(maxWidth: 160),
+                                    child: Tooltip(
+                                      message: entry.remarks,
+                                      child: Text(
+                                        entry.remarks.isNotEmpty ? entry.remarks : '—',
+                                        style: AppTextStyles.bodySmall,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                ];
+                              }).toList(),
+                            ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
                 // Action buttons footer
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 10,
+                  runSpacing: 8,
                   children: [
                     ErpButton(
                       text: 'Close',
@@ -1438,7 +1458,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                         Navigator.of(ctx).pop();
                       },
                     ),
-                    const SizedBox(width: 12),
                     ErpButton(
                       text: 'Record Transaction',
                       icon: Icons.edit_note_rounded,
@@ -2001,11 +2020,12 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     showDialog(
       context: context,
       builder: (ctx) {
+        final isMobile = MediaQuery.of(ctx).size.width < 750;
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: isMobile ? 16 : 24),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 1140, maxHeight: 700),
-            padding: const EdgeInsets.all(24),
+            constraints: BoxConstraints(maxWidth: 1140, maxHeight: isMobile ? MediaQuery.of(ctx).size.height * 0.88 : 700),
+            padding: EdgeInsets.all(isMobile ? 14 : 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2013,36 +2033,48 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(8),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB), size: 20),
                           ),
-                          child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB)),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              summary.vendor.name.isNotEmpty ? summary.vendor.name : 'Unnamed Vendor',
-                              style: AppTextStyles.h2.copyWith(fontSize: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  summary.vendor.name.isNotEmpty ? summary.vendor.name : 'Unnamed Vendor',
+                                  style: AppTextStyles.h2.copyWith(fontSize: isMobile ? 15 : 18),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  isMobile
+                                      ? 'Vendor Ledger (${summary.entries.length} txns)'
+                                      : 'Vendor Ledger & Transaction Statement (${summary.entries.length} Transactions)',
+                                  style: AppTextStyles.subtitle.copyWith(fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Vendor Ledger & Transaction Statement (${summary.entries.length} Transactions)',
-                              style: AppTextStyles.subtitle.copyWith(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
+                      constraints: const BoxConstraints(),
+                      padding: EdgeInsets.zero,
                       onPressed: () {
                         FocusScope.of(ctx).unfocus();
                         Navigator.of(ctx).pop();
@@ -2050,11 +2082,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
                 // Summary Cards
                 Wrap(
-                  spacing: 12,
+                  spacing: 8,
                   runSpacing: 8,
                   children: [
                     _buildHistoryStatCard('Purchase Total', Formatters.formatCurrency(summary.purchaseTotal), Colors.black87),
@@ -2067,11 +2099,11 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 const Divider(height: 1),
                 const SizedBox(height: 12),
 
-                // 8-Column Ledger Table (Sheet 2)
+                // 8-Column Ledger Table (Desktop) or Card List (Mobile)
                 Expanded(
                   child: summary.entries.isEmpty
                       ? Center(
@@ -2084,71 +2116,79 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ],
                           ),
                         )
-                      : ErpDataTable(
-                          enableVerticalScroll: true,
-                          fixedHeader: true,
-                          columnSpacing: 14,
-                          horizontalMargin: 16,
-                          columns: const [
-                            ErpColumn(title: 'Doc / Name', width: 145),
-                            ErpColumn(title: 'Total Pending (Opening)', isNumeric: true, width: 110),
-                            ErpColumn(title: 'Type', width: 85),
-                            ErpColumn(title: 'Date', width: 95),
-                            ErpColumn(title: 'Mode', width: 120),
-                            ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
-                            ErpColumn(title: 'Discount', isNumeric: true, width: 85),
-                            ErpColumn(title: 'New Pending (Closing)', isNumeric: true, width: 110),
-                            ErpColumn(title: 'Remarks', width: 160),
-                          ],
-                          rows: summary.entries.map((entry) {
-                            final isPurchase = entry.type.toLowerCase().contains('purchase') || entry.type.toLowerCase().contains('invoice');
-                            return [
-                              Text(
-                                entry.docNumber,
-                                style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary),
-                              ),
-                              Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
-                              isPurchase
-                                  ? ErpStatusBadge.neutral(entry.type)
-                                  : ErpStatusBadge.success(entry.type),
-                              Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
-                              ErpStatusBadge.neutral(entry.paymentMode),
-                              Text(
-                                Formatters.formatCurrency(entry.amount),
-                                style: AppTextStyles.bodyBold.copyWith(
-                                  fontSize: 12,
-                                  color: isPurchase ? Colors.black87 : const Color(0xFF16A34A),
-                                ),
-                              ),
-                              Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
-                              Text(
-                                Formatters.formatCurrency(entry.closingPending),
-                                style: AppTextStyles.bodyBold.copyWith(
-                                  fontSize: 12,
-                                  color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
-                                ),
-                              ),
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 160),
-                                child: Tooltip(
-                                  message: entry.remarks,
-                                  child: Text(
-                                    entry.remarks.isNotEmpty ? entry.remarks : '—',
-                                    style: AppTextStyles.bodySmall,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                      : isMobile
+                          ? ListView.separated(
+                              itemCount: summary.entries.length,
+                              separatorBuilder: (c, i) => const SizedBox(height: 8),
+                              itemBuilder: (context, idx) => _buildMobileLedgerCard(summary.entries[idx], isVendor: true),
+                            )
+                          : ErpDataTable(
+                              enableVerticalScroll: true,
+                              fixedHeader: true,
+                              columnSpacing: 14,
+                              horizontalMargin: 16,
+                              columns: const [
+                                ErpColumn(title: 'Doc / Name', width: 145),
+                                ErpColumn(title: 'Total Pending (Opening)', isNumeric: true, width: 110),
+                                ErpColumn(title: 'Type', width: 85),
+                                ErpColumn(title: 'Date', width: 95),
+                                ErpColumn(title: 'Mode', width: 120),
+                                ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                                ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                                ErpColumn(title: 'New Pending (Closing)', isNumeric: true, width: 110),
+                                ErpColumn(title: 'Remarks', width: 160),
+                              ],
+                              rows: summary.entries.map((entry) {
+                                final isPurchase = entry.type.toLowerCase().contains('purchase') || entry.type.toLowerCase().contains('invoice');
+                                return [
+                                  Text(
+                                    entry.docNumber,
+                                    style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary),
                                   ),
-                                ),
-                              ),
-                            ];
-                          }).toList(),
-                        ),
+                                  Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
+                                  isPurchase
+                                      ? ErpStatusBadge.neutral(entry.type)
+                                      : ErpStatusBadge.success(entry.type),
+                                  Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
+                                  ErpStatusBadge.neutral(entry.paymentMode),
+                                  Text(
+                                    Formatters.formatCurrency(entry.amount),
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      fontSize: 12,
+                                      color: isPurchase ? Colors.black87 : const Color(0xFF16A34A),
+                                    ),
+                                  ),
+                                  Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
+                                  Text(
+                                    Formatters.formatCurrency(entry.closingPending),
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      fontSize: 12,
+                                      color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                    ),
+                                  ),
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(maxWidth: 160),
+                                    child: Tooltip(
+                                      message: entry.remarks,
+                                      child: Text(
+                                        entry.remarks.isNotEmpty ? entry.remarks : '—',
+                                        style: AppTextStyles.bodySmall,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                ];
+                              }).toList(),
+                            ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
                 // Action buttons footer
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 10,
+                  runSpacing: 8,
                   children: [
                     ErpButton(
                       text: 'Close',
@@ -2158,7 +2198,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                         Navigator.of(ctx).pop();
                       },
                     ),
-                    const SizedBox(width: 12),
                     ErpButton(
                       text: 'Record Transaction',
                       icon: Icons.edit_note_rounded,
@@ -2304,7 +2343,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
 
   Widget _buildHistoryStatCard(String label, String value, Color valueColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
         borderRadius: BorderRadius.circular(8),
@@ -2313,9 +2352,123 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
           const SizedBox(height: 2),
-          Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: valueColor)),
+          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: valueColor)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileLedgerCard(CustomerLedgerEntry entry, {bool isVendor = false}) {
+    final isPurchase = entry.type.toLowerCase().contains('purchase') || entry.type.toLowerCase().contains('invoice');
+    final isCredit = isVendor ? isPurchase : (entry.type == 'Sale Invoice');
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: Doc Number + Type badge + Date
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        entry.docNumber,
+                        style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: AppColors.primary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (isVendor)
+                      (isPurchase ? ErpStatusBadge.neutral(entry.type) : ErpStatusBadge.success(entry.type))
+                    else
+                      (entry.type == 'Sale Invoice' ? ErpStatusBadge.info('SALE') : ErpStatusBadge.success('RECEIPT')),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                Formatters.formatDate(entry.date),
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Row 2: Amount + Mode
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Amount: ', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                  Text(
+                    Formatters.formatCurrency(entry.amount),
+                    style: AppTextStyles.bodyBold.copyWith(
+                      fontSize: 13,
+                      color: isCredit ? Colors.black87 : const Color(0xFF16A34A),
+                    ),
+                  ),
+                ],
+              ),
+              ErpStatusBadge.neutral(entry.paymentMode),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // Row 3: Opening -> Closing Balances + Discount
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'Bal: ${Formatters.formatCurrency(entry.openingPending)} → ${Formatters.formatCurrency(entry.closingPending)}',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (entry.discount > 0) ...[
+                const SizedBox(width: 8),
+                Text(
+                  'Disc: ${Formatters.formatCurrency(entry.discount)}',
+                  style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF7C3AED), fontWeight: FontWeight.w600),
+                ),
+              ],
+            ],
+          ),
+
+          // Row 4: Remarks (if any)
+          if (entry.remarks.isNotEmpty && entry.remarks != '—' && entry.remarks != '-') ...[
+            const SizedBox(height: 6),
+            Text(
+              'Remarks: ${entry.remarks}',
+              style: AppTextStyles.bodySmall.copyWith(color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ],
       ),
     );
@@ -2454,6 +2607,113 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   }
 
   Widget _buildPaymentTable(List<ErpPayment> payments) {
+    final isMobile = MediaQuery.of(context).size.width < 750;
+
+    if (isMobile) {
+      if (payments.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.payments_outlined, size: 48, color: Colors.grey.shade400),
+              const SizedBox(height: 8),
+              Text('No payment records found', style: AppTextStyles.bodyMedium),
+            ],
+          ),
+        );
+      }
+      return ListView.separated(
+        itemCount: payments.length,
+        separatorBuilder: (c, i) => const SizedBox(height: 10),
+        itemBuilder: (context, idx) {
+          final p = payments[idx];
+          final parentSection = switch (p.paymentType) {
+            PaymentType.customerPayment => ErpNavSection.customerPayments,
+            PaymentType.dealerPayment => ErpNavSection.dealerPayments,
+            PaymentType.vendorPayment => ErpNavSection.vendorPaymentsSection,
+            PaymentType.commissionPayment => ErpNavSection.commissionPayments,
+          };
+
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    InkWell(
+                      onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', parentSection),
+                      child: Text(
+                        p.paymentNumber,
+                        style: AppTextStyles.bodyBold.copyWith(
+                          fontSize: 13,
+                          color: AppColors.primary,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      Formatters.formatCurrency(p.amount),
+                      style: AppTextStyles.bodyBold.copyWith(
+                        fontSize: 13,
+                        color: (p.paymentType == PaymentType.customerPayment || p.paymentType == PaymentType.dealerPayment)
+                            ? AppColors.successText
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        p.partyName,
+                        style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    p.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL'),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                    ErpStatusBadge.neutral(p.paymentMode.toString().split('.').last.toUpperCase()),
+                  ],
+                ),
+                if (p.referenceDocumentNumber != null && p.referenceDocumentNumber!.isNotEmpty && p.referenceDocumentNumber != '-') ...[
+                  const SizedBox(height: 4),
+                  Text('Ref Doc: ${p.referenceDocumentNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                ],
+                if (p.transactionReference != null && p.transactionReference!.isNotEmpty && p.transactionReference != '-') ...[
+                  const SizedBox(height: 2),
+                  Text('UTR/Ref: ${p.transactionReference}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                ],
+              ],
+            ),
+          );
+        },
+      );
+    }
+
     return ErpDataTable(
       columns: const [
         ErpColumn(title: 'Payment No'),

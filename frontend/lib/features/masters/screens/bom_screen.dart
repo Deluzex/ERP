@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -14,6 +15,7 @@ import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class _BomItemDraft {
@@ -170,12 +172,24 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       item.dispose();
     }
     _draftItems.clear();
+
+    final db = ref.read(databaseServiceProvider);
     for (final itm in bom.items) {
+      // Intelligently match against database to resolve real ID/itemCode if seeded or legacy
+      final match = db.rawMaterials.where((r) =>
+          r.id == itm.rawMaterialId ||
+          r.itemCode == itm.rawMaterialId ||
+          (itm.safeCode.isNotEmpty && r.itemCode == itm.safeCode)).firstOrNull;
+      final rawId = match?.id ?? itm.rawMaterialId;
+      final rawName = match?.name ?? itm.safeName;
+      final rawCode = match?.itemCode ?? itm.safeCode;
+      final rawUnit = match?.unit ?? itm.safeUnit;
+
       _draftItems.add(_BomItemDraft(
-        rawMaterialId: itm.rawMaterialId,
-        rawMaterialName: itm.safeName,
-        rawMaterialCode: itm.safeCode,
-        unit: itm.safeUnit,
+        rawMaterialId: rawId,
+        rawMaterialName: rawName,
+        rawMaterialCode: rawCode,
+        unit: rawUnit,
         quantityPerUnit: itm.quantityPerUnit,
         wastagePercent: itm.wastagePercent,
         unitCost: itm.unitCost,
@@ -191,7 +205,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
         : bom.outputQuantity.toString();
     _selectedStatus = _normalizeStatus(bom.safeStatus);
 
-    final db = ref.read(databaseServiceProvider);
     final prod = db.finishedProducts.where((p) => p.id == bom.finishedProductId).firstOrNull;
     _unitCtrl.text = prod?.unit ?? 'PCS';
 
@@ -207,15 +220,19 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (dlgCtx, setDlgState) => AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           title: Row(
             children: [
               const Icon(Icons.published_with_changes, color: AppColors.primary, size: 20),
               const SizedBox(width: 8),
-              Text('Update BOM Status', style: AppTextStyles.h2),
+              Expanded(
+                child: Text('Update BOM Status', style: AppTextStyles.h2, overflow: TextOverflow.ellipsis),
+              ),
             ],
           ),
-          content: SizedBox(
-            width: 420,
+          content: Container(
+            constraints: const BoxConstraints(maxWidth: 420),
+            width: double.infinity,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -251,6 +268,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
               ],
             ),
           ),
+          actionsOverflowDirection: VerticalDirection.down,
           actions: [
             ErpButton(
               text: 'Cancel',
@@ -284,161 +302,279 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   void _openViewBomDialog(BillOfMaterial bom) {
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.description_outlined, color: AppColors.primary, size: 22),
-                const SizedBox(width: 8),
-                Text('BOM Recipe: ${bom.id}', style: AppTextStyles.h2),
-              ],
-            ),
-            _buildStatusBadge(bom.safeStatus),
-          ],
-        ),
-        content: Container(
-          constraints: const BoxConstraints(maxWidth: 750),
-          width: double.infinity,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Recipe Overview Box
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceMuted,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('RECIPE NAME', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 2),
-                            Text(bom.safeName, style: AppTextStyles.bodyBold),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('FINISHED PRODUCT', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 2),
-                            Text('${bom.safeProductName} (${bom.safeProductCode})', style: AppTextStyles.bodyMedium),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('BATCH QTY', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 2),
-                            Text('${Formatters.formatNumber(bom.outputQuantity)} Units', style: AppTextStyles.bodyBold),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
+      builder: (ctx) {
+        final isMobile = MediaQuery.of(ctx).size.width < 650;
 
-                // Cost Summary Strip
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Est. Cost / Unit: ${Formatters.formatCurrency(bom.totalMaterialCostPerUnit)}',
-                          style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark)),
-                      Text('Total Batch Cost: ${Formatters.formatCurrency(bom.totalBatchMaterialCost)}',
-                          style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark)),
-                    ],
-                  ),
+        return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.description_outlined, color: AppColors.primary, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'BOM Recipe: ${bom.id}',
+                        style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
+              ),
+              const SizedBox(width: 8),
+              _buildStatusBadge(bom.safeStatus),
+            ],
+          ),
+          content: Container(
+            constraints: const BoxConstraints(maxWidth: 750),
+            width: double.infinity,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Recipe Overview Box
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceMuted,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: isMobile
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('RECIPE NAME', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 2),
+                                        Text(bom.safeName, style: AppTextStyles.bodyBold),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text('BATCH QTY', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 2),
+                                      Text('${Formatters.formatNumber(bom.outputQuantity)} Units', style: AppTextStyles.bodyBold),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text('FINISHED PRODUCT', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 2),
+                              Text('${bom.safeProductName} (${bom.safeProductCode})', style: AppTextStyles.bodyMedium),
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('RECIPE NAME', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 2),
+                                    Text(bom.safeName, style: AppTextStyles.bodyBold),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('FINISHED PRODUCT', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 2),
+                                    Text('${bom.safeProductName} (${bom.safeProductCode})', style: AppTextStyles.bodyMedium),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('BATCH QTY', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 2),
+                                    Text('${Formatters.formatNumber(bom.outputQuantity)} Units', style: AppTextStyles.bodyBold),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(height: 16),
 
-                // Components Table
-                Text('Raw Material Components (${bom.items.length})', style: AppTextStyles.h3),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingRowColor: WidgetStateProperty.all(AppColors.background),
-                    columns: const [
-                      DataColumn(label: Text('#', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Component', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Code', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Qty/Unit', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Unit', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Wastage %', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Qty w/ Wastage', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Line Total', style: TextStyle(fontWeight: FontWeight.bold))),
-                    ],
-                    rows: bom.items.asMap().entries.map((entry) {
-                      final i = entry.key;
-                      final itm = entry.value;
-                      return DataRow(
-                        cells: [
-                          DataCell(Text('${i + 1}')),
-                          DataCell(Text(itm.safeName)),
-                          DataCell(Text(itm.safeCode, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600))),
-                          DataCell(Text(Formatters.formatNumber(itm.quantityPerUnit))),
-                          DataCell(Text(itm.safeUnit)),
-                          DataCell(Text('${Formatters.formatNumber(itm.wastagePercent)}%')),
-                          DataCell(Text(Formatters.formatNumber(itm.quantityWithWastage), style: AppTextStyles.bodyBold)),
-                          DataCell(Text(Formatters.formatCurrency(itm.unitCost))),
-                          DataCell(Text(Formatters.formatCurrency(itm.totalCostPerFinishedUnit), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary))),
+                  // Cost Summary Strip
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: isMobile
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Est. Cost / Unit: ${Formatters.formatCurrency(bom.totalMaterialCostPerUnit)}',
+                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Total Batch Cost: ${Formatters.formatCurrency(bom.totalBatchMaterialCost)}',
+                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Est. Cost / Unit: ${Formatters.formatCurrency(bom.totalMaterialCostPerUnit)}',
+                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark),
+                              ),
+                              Text(
+                                'Total Batch Cost: ${Formatters.formatCurrency(bom.totalBatchMaterialCost)}',
+                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark),
+                              ),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Components Table
+                  Text('Raw Material Components (${bom.items.length})', style: AppTextStyles.h3),
+                  const SizedBox(height: 8),
+                  if (isMobile)
+                    Column(
+                      children: bom.items.map((itm) {
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(itm.safeName, style: AppTextStyles.bodyBold, overflow: TextOverflow.ellipsis),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    Formatters.formatCurrency(itm.totalCostPerFinishedUnit),
+                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Code: ${itm.safeCode}', style: AppTextStyles.caption),
+                                  Text(
+                                    '${Formatters.formatNumber(itm.quantityWithWastage)} ${itm.safeUnit} @ ${Formatters.formatCurrency(itm.unitCost)}',
+                                    style: AppTextStyles.caption,
+                                  ),
+                                ],
+                              ),
+                              if (itm.wastagePercent > 0) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Wastage: ${Formatters.formatNumber(itm.wastagePercent)}% (Base: ${Formatters.formatNumber(itm.quantityPerUnit)})',
+                                  style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    )
+                  else
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        headingRowColor: WidgetStateProperty.all(AppColors.background),
+                        columns: const [
+                          DataColumn(label: Text('#', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Component', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Code', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Qty/Unit', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Unit', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Wastage %', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Qty w/ Wastage', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Line Total', style: TextStyle(fontWeight: FontWeight.bold))),
                         ],
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
+                        rows: bom.items.asMap().entries.map((entry) {
+                          final i = entry.key;
+                          final itm = entry.value;
+                          return DataRow(
+                            cells: [
+                              DataCell(Text('${i + 1}')),
+                              DataCell(Text(itm.safeName)),
+                              DataCell(Text(itm.safeCode, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600))),
+                              DataCell(Text(Formatters.formatNumber(itm.quantityPerUnit))),
+                              DataCell(Text(itm.safeUnit)),
+                              DataCell(Text('${Formatters.formatNumber(itm.wastagePercent)}%')),
+                              DataCell(Text(Formatters.formatNumber(itm.quantityWithWastage), style: AppTextStyles.bodyBold)),
+                              DataCell(Text(Formatters.formatCurrency(itm.unitCost))),
+                              DataCell(Text(Formatters.formatCurrency(itm.totalCostPerFinishedUnit), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary))),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
-        actions: [
-          ErpButton(
-            text: 'Close',
-            isOutlined: true,
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          ErpButton(
-            text: 'Edit Recipe',
-            icon: Icons.edit_outlined,
-            isOutlined: true,
-            onPressed: () {
-              Navigator.pop(ctx);
-              _startEdit(bom);
-            },
-          ),
-          ErpButton(
-            text: 'Produce',
-            icon: Icons.precision_manufacturing_rounded,
-            onPressed: () {
-              Navigator.pop(ctx);
-              _onProduce(bom);
-            },
-          ),
-        ],
-      ),
+          actionsOverflowDirection: VerticalDirection.down,
+          actions: [
+            ErpButton(
+              text: 'Close',
+              isOutlined: true,
+              onPressed: () => Navigator.pop(ctx),
+            ),
+            ErpButton(
+              text: 'Edit Recipe',
+              icon: Icons.edit_outlined,
+              isOutlined: true,
+              onPressed: () {
+                Navigator.pop(ctx);
+                _startEdit(bom);
+              },
+            ),
+            ErpButton(
+              text: 'Produce',
+              icon: Icons.precision_manufacturing_rounded,
+              onPressed: () {
+                Navigator.pop(ctx);
+                _onProduce(bom);
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -599,7 +735,11 @@ class _BomScreenState extends ConsumerState<BomScreen> {
 
   Future<void> _showAddRawMaterialDialog() async {
     final db = ref.read(databaseServiceProvider);
-    if (db.rawMaterials.isEmpty) {
+    final rawList = db.rawMaterials as List;
+    final seenRmIds = <String>{};
+    final uniqueRms = rawList.where((rm) => rm.id != null && seenRmIds.add(rm.id.toString())).toList();
+
+    if (uniqueRms.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No raw materials found in inventory catalog.'),
@@ -610,7 +750,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     }
 
     final dialogFormKey = GlobalKey<FormState>();
-    final unusedRm = db.rawMaterials.where((rm) => !_draftItems.any((d) => d.rawMaterialId == rm.id)).firstOrNull ?? db.rawMaterials.first;
+    final unusedRm = uniqueRms.where((rm) => !_draftItems.any((d) => d.rawMaterialId == rm.id)).firstOrNull ?? uniqueRms.first;
     String? selectedRmId = unusedRm.id;
     final qtyCtrl = TextEditingController(text: '1');
     final wastageCtrl = TextEditingController(text: '0');
@@ -624,9 +764,10 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) {
-          final selectedRm = db.rawMaterials.firstWhere(
+          final isNarrow = MediaQuery.of(ctx).size.width < 550;
+          final selectedRm = uniqueRms.firstWhere(
             (r) => r.id == selectedRmId,
-            orElse: () => db.rawMaterials.first,
+            orElse: () => uniqueRms.first,
           );
           final qty = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
           final wastage = double.tryParse(wastageCtrl.text.trim()) ?? 0.0;
@@ -684,8 +825,8 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                           labelText: 'Select Raw Material *',
                           prefixIcon: Icon(Icons.inventory_2_outlined, size: 20),
                         ),
-                        items: db.rawMaterials.map((rm) {
-                          return DropdownMenuItem(
+                        items: uniqueRms.map((rm) {
+                          return DropdownMenuItem<String>(
                             value: rm.id,
                             child: Text(
                               '${rm.itemCode} - ${rm.name} (Stock: ${Formatters.formatNumber(rm.currentStock)} ${rm.unit})',
@@ -696,7 +837,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                         }).toList(),
                         onChanged: (val) {
                           if (val != null) {
-                            final chosen = db.rawMaterials.firstWhere((r) => r.id == val);
+                            final chosen = uniqueRms.firstWhere((r) => r.id == val);
                             setDlgState(() {
                               selectedRmId = chosen.id;
                               unitCostCtrl.text = chosen.defaultPurchasePrice % 1 == 0
@@ -744,57 +885,108 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                       const SizedBox(height: 16),
 
                       // Quantity, Wastage % and Unit Cost
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 4,
-                            child: TextFormField(
-                              controller: qtyCtrl,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              validator: Validators.positiveNumber,
-                              decoration: InputDecoration(
-                                labelText: 'Req. Qty (${selectedRm.unit}) *',
-                                prefixIcon: const Icon(Icons.numbers, size: 20),
+                      if (isNarrow) ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: qtyCtrl,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                validator: Validators.positiveNumber,
+                                decoration: InputDecoration(
+                                  labelText: 'Req. Qty (${selectedRm.unit}) *',
+                                  prefixIcon: const Icon(Icons.numbers, size: 20),
+                                ),
+                                onChanged: (_) => setDlgState(() {}),
                               ),
-                              onChanged: (_) => setDlgState(() {}),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            flex: 3,
-                            child: TextFormField(
-                              controller: wastageCtrl,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return null;
-                                final num = double.tryParse(v.trim());
-                                if (num == null || num < 0) return 'Invalid';
-                                return null;
-                              },
-                              decoration: const InputDecoration(
-                                labelText: 'Wastage %',
-                                suffixText: '%',
+                            const SizedBox(width: 10),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: wastageCtrl,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) return null;
+                                  final num = double.tryParse(v.trim());
+                                  if (num == null || num < 0) return 'Invalid';
+                                  return null;
+                                },
+                                decoration: const InputDecoration(
+                                  labelText: 'Wastage %',
+                                  suffixText: '%',
+                                ),
+                                onChanged: (_) => setDlgState(() {}),
                               ),
-                              onChanged: (_) => setDlgState(() {}),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: unitCostCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          validator: Validators.positiveNumber,
+                          decoration: const InputDecoration(
+                            labelText: 'Unit Cost (₹) *',
+                            prefixIcon: Icon(Icons.currency_rupee, size: 20),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            flex: 4,
-                            child: TextFormField(
-                              controller: unitCostCtrl,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              validator: Validators.positiveNumber,
-                              decoration: const InputDecoration(
-                                labelText: 'Unit Cost (₹) *',
-                                prefixIcon: Icon(Icons.currency_rupee, size: 20),
+                          onChanged: (_) => setDlgState(() {}),
+                        ),
+                      ] else ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 4,
+                              child: TextFormField(
+                                controller: qtyCtrl,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                validator: Validators.positiveNumber,
+                                decoration: InputDecoration(
+                                  labelText: 'Req. Qty (${selectedRm.unit}) *',
+                                  prefixIcon: const Icon(Icons.numbers, size: 20),
+                                ),
+                                onChanged: (_) => setDlgState(() {}),
                               ),
-                              onChanged: (_) => setDlgState(() {}),
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: wastageCtrl,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) return null;
+                                  final num = double.tryParse(v.trim());
+                                  if (num == null || num < 0) return 'Invalid';
+                                  return null;
+                                },
+                                decoration: const InputDecoration(
+                                  labelText: 'Wastage %',
+                                  suffixText: '%',
+                                ),
+                                onChanged: (_) => setDlgState(() {}),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              flex: 4,
+                              child: TextFormField(
+                                controller: unitCostCtrl,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                validator: Validators.positiveNumber,
+                                decoration: const InputDecoration(
+                                  labelText: 'Unit Cost (₹) *',
+                                  prefixIcon: Icon(Icons.currency_rupee, size: 20),
+                                ),
+                                onChanged: (_) => setDlgState(() {}),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 16),
 
                       // Cost Preview Card (matching create_production_screen)
@@ -805,47 +997,85 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                           borderRadius: AppRadius.smBorderRadius,
                           border: Border.all(color: AppColors.border),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Qty Incl. Wastage:', style: AppTextStyles.bodySmall),
-                                Text(
-                                  '${Formatters.formatNumber(qtyWithWastage)} ${selectedRm.unit}',
-                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText, fontSize: 13),
-                                ),
-                              ],
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text('Cost per Unit:', style: AppTextStyles.bodySmall),
-                                Text(
-                                  Formatters.formatCurrency(lineCost),
-                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 13),
-                                ),
-                              ],
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text('Batch Total Cost:', style: AppTextStyles.bodySmall),
-                                Text(
-                                  Formatters.formatCurrency(batchCost),
-                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.textPrimary, fontSize: 13),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                        child: isNarrow
+                            ? Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text('Qty Incl. Wastage:', style: AppTextStyles.bodySmall),
+                                      Text(
+                                        '${Formatters.formatNumber(qtyWithWastage)} ${selectedRm.unit}',
+                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text('Cost per Unit:', style: AppTextStyles.bodySmall),
+                                      Text(
+                                        Formatters.formatCurrency(lineCost),
+                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text('Batch Total Cost:', style: AppTextStyles.bodySmall),
+                                      Text(
+                                        Formatters.formatCurrency(batchCost),
+                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.textPrimary, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Qty Incl. Wastage:', style: AppTextStyles.bodySmall),
+                                      Text(
+                                        '${Formatters.formatNumber(qtyWithWastage)} ${selectedRm.unit}',
+                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Text('Cost per Unit:', style: AppTextStyles.bodySmall),
+                                      Text(
+                                        Formatters.formatCurrency(lineCost),
+                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text('Batch Total Cost:', style: AppTextStyles.bodySmall),
+                                      Text(
+                                        Formatters.formatCurrency(batchCost),
+                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.textPrimary, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                       ),
                     ],
                   ),
                 ),
               ),
             ),
+            actionsOverflowDirection: VerticalDirection.down,
             actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             actions: [
               ErpButton(
@@ -953,154 +1183,246 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row: Title & + Create BOM button
+          // Header (Matching Figma Master Design)
           LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 600) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('BOM Master', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Manage manufacturing recipes, raw material consumption, and wastage per finished product',
-                      style: AppTextStyles.subtitle,
-                    ),
-                    const SizedBox(height: 12),
-                    ErpButton(
-                      text: 'Create BOM',
-                      icon: Icons.add,
-                      onPressed: _startCreate,
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              final isSmall = constraints.maxWidth < 650;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('BOM Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Manage manufacturing recipes, raw material consumption, and wastage per finished product',
-                          style: AppTextStyles.subtitle,
-                        ),
                       ],
                     ),
                   ),
-                  ErpButton(
-                    text: 'Create BOM',
-                    icon: Icons.add,
+                  ElevatedButton.icon(
                     onPressed: _startCreate,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Create BOM'),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
-          // 4 Metric Summary Cards in standard ERP style
+          // 4 Metric Summary Cards in Figma Style
           LayoutBuilder(
             builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 900;
-              if (isSmall) {
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(width: (constraints.maxWidth - 12) / 2, child: _buildKpiCard('Total BOMs', totalBoms.toString(), Icons.inventory_2_outlined, AppColors.primary)),
-                    SizedBox(width: (constraints.maxWidth - 12) / 2, child: _buildKpiCard('Active BOMs', activeBoms.toString(), Icons.check_circle_outline, AppColors.success)),
-                    SizedBox(width: (constraints.maxWidth - 12) / 2, child: _buildKpiCard('Draft BOMs', draftBoms.toString(), Icons.edit_note_outlined, AppColors.warning)),
-                    SizedBox(width: (constraints.maxWidth - 12) / 2, child: _buildKpiCard('Inactive BOMs', inactiveBoms.toString(), Icons.cancel_outlined, AppColors.danger)),
-                  ],
-                );
-              }
-              return Row(
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(child: _buildKpiCard('Total BOMs', totalBoms.toString(), Icons.inventory_2_outlined, AppColors.primary)),
-                  const SizedBox(width: 14),
-                  Expanded(child: _buildKpiCard('Active BOMs', activeBoms.toString(), Icons.check_circle_outline, AppColors.success)),
-                  const SizedBox(width: 14),
-                  Expanded(child: _buildKpiCard('Draft BOMs', draftBoms.toString(), Icons.edit_note_outlined, AppColors.warning)),
-                  const SizedBox(width: 14),
-                  Expanded(child: _buildKpiCard('Inactive BOMs', inactiveBoms.toString(), Icons.cancel_outlined, AppColors.danger)),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.inventory_2_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total BOMs',
+                      value: '$totalBoms',
+                      subtext: 'All Recipes',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.arrow_circle_down_outlined,
+                      iconColor: AppColors.success,
+                      title: 'Active BOMs',
+                      value: '$activeBoms',
+                      subtext: 'In Production',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.edit_note_outlined,
+                      iconColor: AppColors.warning,
+                      title: 'Draft BOMs',
+                      value: '$draftBoms',
+                      subtext: 'Under Review',
+                      subtextColor: AppColors.warning,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.cancel_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'Inactive BOMs',
+                      value: '$inactiveBoms',
+                      subtext: 'Archived',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
-          // Standard ERP Filter Controls Bar
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 280,
-                child: ErpSearchInput(
-                  hintText: 'Search by BOM #, recipe name, product...',
-                  initialValue: _searchQuery,
-                  onChanged: (v) => setState(() {
-                    _searchQuery = v;
-                    _currentPage = 0;
-                  }),
-                ),
-              ),
-              ErpFilterDropdown<String>(
-                value: _selectedProductFilter,
-                items: [
-                  const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
-                  ...db.finishedProducts.map((p) {
-                    return DropdownMenuItem<String>(
-                      value: p.id,
-                      child: Text(p.name, overflow: TextOverflow.ellipsis),
-                    );
-                  }),
+          // Standard ERP Filter Controls Bar (Responsive Mobile & Desktop)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 700;
+              if (isMobile) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ErpSearchInput(
+                      hintText: 'Search by BOM #, recipe name, product...',
+                      initialValue: _searchQuery,
+                      onChanged: (v) => setState(() {
+                        _searchQuery = v;
+                        _currentPage = 0;
+                      }),
+                    ),
+                    const SizedBox(height: 10),
+                    ErpFilterDropdown<String>(
+                      width: double.infinity,
+                      isExpanded: true,
+                      value: _selectedProductFilter,
+                      items: [
+                        const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
+                        ...db.finishedProducts.map((p) {
+                          return DropdownMenuItem<String>(
+                            value: p.id,
+                            child: Text(p.name, overflow: TextOverflow.ellipsis),
+                          );
+                        }),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() {
+                            _selectedProductFilter = v;
+                            _currentPage = 0;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ErpFilterDropdown<String>(
+                            width: double.infinity,
+                            isExpanded: true,
+                            value: _statusFilter,
+                            items: const [
+                              DropdownMenuItem(value: 'ALL', child: Text('All Status')),
+                              DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
+                              DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                              DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
+                            ],
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() {
+                                  _statusFilter = v;
+                                  _currentPage = 0;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ErpButton(
+                          text: 'Reset',
+                          icon: Icons.refresh,
+                          isOutlined: true,
+                          onPressed: () {
+                            setState(() {
+                              _searchQuery = '';
+                              _selectedProductFilter = 'ALL';
+                              _statusFilter = 'ALL';
+                              _currentPage = 0;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              }
+
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 280,
+                    child: ErpSearchInput(
+                      hintText: 'Search by BOM #, recipe name, product...',
+                      initialValue: _searchQuery,
+                      onChanged: (v) => setState(() {
+                        _searchQuery = v;
+                        _currentPage = 0;
+                      }),
+                    ),
+                  ),
+                  ErpFilterDropdown<String>(
+                    value: _selectedProductFilter,
+                    items: [
+                      const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
+                      ...db.finishedProducts.map((p) {
+                        return DropdownMenuItem<String>(
+                          value: p.id,
+                          child: Text(p.name, overflow: TextOverflow.ellipsis),
+                        );
+                      }),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          _selectedProductFilter = v;
+                          _currentPage = 0;
+                        });
+                      }
+                    },
+                  ),
+                  ErpFilterDropdown<String>(
+                    value: _statusFilter,
+                    items: const [
+                      DropdownMenuItem(value: 'ALL', child: Text('All Status')),
+                      DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
+                      DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                      DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          _statusFilter = v;
+                          _currentPage = 0;
+                        });
+                      }
+                    },
+                  ),
+                  ErpButton(
+                    text: 'Reset',
+                    icon: Icons.refresh,
+                    isOutlined: true,
+                    onPressed: () {
+                      setState(() {
+                        _searchQuery = '';
+                        _selectedProductFilter = 'ALL';
+                        _statusFilter = 'ALL';
+                        _currentPage = 0;
+                      });
+                    },
+                  ),
                 ],
-                onChanged: (v) {
-                  if (v != null) {
-                    setState(() {
-                      _selectedProductFilter = v;
-                      _currentPage = 0;
-                    });
-                  }
-                },
-              ),
-              ErpFilterDropdown<String>(
-                value: _statusFilter,
-                items: const [
-                  DropdownMenuItem(value: 'ALL', child: Text('All Status')),
-                  DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
-                  DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                  DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
-                ],
-                onChanged: (v) {
-                  if (v != null) {
-                    setState(() {
-                      _statusFilter = v;
-                      _currentPage = 0;
-                    });
-                  }
-                },
-              ),
-              ErpButton(
-                text: 'Reset',
-                icon: Icons.refresh,
-                isOutlined: true,
-                onPressed: () {
-                  setState(() {
-                    _searchQuery = '';
-                    _selectedProductFilter = 'ALL';
-                    _statusFilter = 'ALL';
-                    _currentPage = 0;
-                  });
-                },
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(height: 16),
 
@@ -1124,7 +1446,97 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                 ],
               ),
             )
-          else ...[
+          else if (MediaQuery.of(context).size.width < 850) ...[
+            Column(
+              children: pagedBoms.map((bom) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          InkWell(
+                            onTap: () => _openViewBomDialog(bom),
+                            child: Text(
+                              bom.id,
+                              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
+                            ),
+                          ),
+                          _buildStatusBadge(bom.safeStatus),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(bom.safeName, style: AppTextStyles.bodyBold),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Product: ${bom.safeProductName} (${bom.safeProductCode})',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                      ),
+                      const Divider(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Batch Cost: ${Formatters.formatCurrency(bom.totalBatchMaterialCost)}', style: AppTextStyles.bodyBold),
+                          Text('Unit: ${Formatters.formatCurrency(bom.totalMaterialCostPerUnit)}', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Created: ${Formatters.formatDate(bom.createdAt)}', style: AppTextStyles.caption),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.visibility_outlined, size: 20, color: AppColors.primary),
+                                tooltip: 'View Details',
+                                onPressed: () => _openViewBomDialog(bom),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.precision_manufacturing_rounded, size: 20, color: AppColors.primary),
+                                tooltip: 'Produce',
+                                onPressed: () => _onProduce(bom),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
+                                tooltip: 'Edit Recipe',
+                                onPressed: () => _startEdit(bom),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.published_with_changes, size: 20, color: AppColors.textMuted),
+                                tooltip: 'Change Status',
+                                onPressed: () => _openChangeStatusDialog(bom),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            ErpPaginationBar(
+              currentPage: safeCurrentPage,
+              pageSize: safePageSize,
+              totalRecords: totalRecords,
+              onPageChanged: (page) => setState(() => _currentPage = page),
+              onPageSizeChanged: (size) => setState(() {
+                _pageSize = size;
+                _currentPage = 0;
+              }),
+            ),
+          ] else ...[
             ErpDataTable(
               columns: const [
                 ErpColumn(title: 'BOM No.'),
@@ -1142,52 +1554,48 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                   // BOM No.
                   Text(
                     bom.id,
-                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
                   ),
 
-                  // BOM Name (Plain text, details opened via action button)
+                  // BOM Name
                   Text(
                     bom.safeName,
-                    style: AppTextStyles.bodyBold,
+                    style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
                   ),
 
                   // Finished Product
                   Text(
                     bom.safeProductName,
-                    style: AppTextStyles.bodyMedium,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
                   ),
 
                   // Product Code
                   Text(
                     bom.safeProductCode,
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563)),
                   ),
 
                   // Total Material Cost
                   Text(
                     Formatters.formatCurrency(bom.totalBatchMaterialCost),
-                    style: AppTextStyles.bodyMedium,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
                   ),
 
                   // Est. Cost / Unit
                   Text(
                     Formatters.formatCurrency(bom.totalMaterialCostPerUnit),
-                    style: AppTextStyles.bodyBold,
+                    style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
                   ),
 
-                  // Status (non-clickable static badge)
+                  // Status
                   _buildStatusBadge(bom.safeStatus),
 
                   // Created Date
                   Text(
                     Formatters.formatDate(bom.createdAt),
-                    style: AppTextStyles.caption,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                   ),
 
-                  // Actions: Single unified edit_note action menu matching Masters standard
                   PopupMenuButton<String>(
                     tooltip: 'Actions',
                     icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
@@ -1293,61 +1701,96 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   Widget _buildCreateEditView() {
     final db = ref.watch(databaseServiceProvider);
     final isEdit = _editingBom != null;
+    final isMobile = MediaQuery.of(context).size.width < 850;
 
     final batchOutputQty = double.tryParse(_prodQtyCtrl.text.trim()) ?? 1.0;
     final totalMaterialCost = _draftItems.fold(0.0, (sum, i) => sum + i.lineCost);
     final costPerUnit = batchOutputQty > 0 ? (totalMaterialCost / batchOutputQty) : totalMaterialCost;
 
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return SingleChildScrollView(
-      padding: AppSpacing.pagePadding,
+      padding: EdgeInsets.fromLTRB(
+        isMobile ? 16 : 24,
+        isMobile ? 16 : 20,
+        isMobile ? 16 : 24,
+        (isMobile ? 48 : 24) + bottomInset,
+      ),
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Top Header Row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 650;
+                final title = Text(
+                  isEdit ? 'Edit Bill of Materials (BOM)' : 'Create Bill of Materials (BOM)',
+                  style: isNarrow ? AppTextStyles.h2 : AppTextStyles.h1,
+                );
+                final buttons = isNarrow
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: ErpButton(
+                              text: 'Back',
+                              icon: Icons.arrow_back,
+                              isOutlined: true,
+                              onPressed: () => setState(() => _isCreateMode = false),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ErpButton(
+                              text: isEdit ? 'Update BOM' : 'Save BOM',
+                              icon: Icons.check,
+                              onPressed: _saveBom,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ErpButton(
+                            text: 'Back',
+                            icon: Icons.arrow_back,
+                            isOutlined: true,
+                            onPressed: () => setState(() => _isCreateMode = false),
+                          ),
+                          const SizedBox(width: 10),
+                          ErpButton(
+                            text: isEdit ? 'Update BOM' : 'Save BOM',
+                            icon: Icons.check,
+                            onPressed: _saveBom,
+                          ),
+                        ],
+                      );
+                if (isNarrow) {
+                  return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        isEdit ? 'Edit Bill of Materials (BOM)' : 'Create Bill of Materials (BOM)',
-                        style: AppTextStyles.h1,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Define raw materials and components required to manufacture this finished product',
-                        style: AppTextStyles.subtitle,
-                      ),
+                      title,
+                      const SizedBox(height: 12),
+                      buttons,
                     ],
-                  ),
-                ),
-                Row(
+                  );
+                }
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    ErpButton(
-                      text: 'Back',
-                      icon: Icons.arrow_back,
-                      isOutlined: true,
-                      onPressed: () => setState(() => _isCreateMode = false),
-                    ),
-                    const SizedBox(width: 10),
-                    ErpButton(
-                      text: isEdit ? 'Update BOM' : 'Save BOM',
-                      icon: Icons.check,
-                      onPressed: _saveBom,
-                    ),
+                    Expanded(child: title),
+                    buttons,
                   ],
-                ),
-              ],
+                );
+              },
             ),
             const SizedBox(height: 20),
 
             // Card 1: BOM Details
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(isMobile ? 16 : 20),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: AppRadius.lgBorderRadius,
@@ -1364,82 +1807,141 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // BOM Number
-                      Expanded(
-                        child: TextFormField(
-                          controller: _bomNumberCtrl,
-                          decoration: const InputDecoration(labelText: 'BOM Number *'),
-                          validator: (v) => Validators.requiredField(v, 'BOM number required'),
-                        ),
+                  if (isMobile) ...[
+                    // Mobile Vertical Form for BOM Details
+                    TextFormField(
+                      controller: _bomNumberCtrl,
+                      decoration: const InputDecoration(labelText: 'BOM Number *'),
+                      validator: (v) => Validators.requiredField(v, 'BOM number required'),
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _bomNameCtrl,
+                      decoration: const InputDecoration(labelText: 'BOM Recipe Name *'),
+                      validator: (v) => Validators.requiredField(v, 'BOM name required'),
+                    ),
+                    if (isEdit) ...[
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<String>(
+                        initialValue: _normalizeStatus(_selectedStatus),
+                        decoration: const InputDecoration(labelText: 'Status'),
+                        items: const [
+                          DropdownMenuItem(value: 'Active', child: Text('Active')),
+                          DropdownMenuItem(value: 'Draft', child: Text('Draft')),
+                          DropdownMenuItem(value: 'Inactive', child: Text('Inactive')),
+                        ],
+                        onChanged: (v) => setState(() => _selectedStatus = _normalizeStatus(v)),
                       ),
-                      const SizedBox(width: 16),
-                      // BOM Name
-                      Expanded(
-                        flex: isEdit ? 2 : 3,
-                        child: TextFormField(
-                          controller: _bomNameCtrl,
-                          decoration: const InputDecoration(labelText: 'BOM Recipe Name *'),
-                          validator: (v) => Validators.requiredField(v, 'BOM name required'),
-                        ),
-                      ),
-                      // Status is ONLY displayed while Editing an existing BOM
-                      if (isEdit) ...[
-                        const SizedBox(width: 16),
+                    ],
+                    const SizedBox(height: 14),
+                    _buildFinishedProductPicker(db),
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _normalizeStatus(_selectedStatus),
-                            decoration: const InputDecoration(labelText: 'Status'),
-                            items: const [
-                              DropdownMenuItem(value: 'Active', child: Text('Active')),
-                              DropdownMenuItem(value: 'Draft', child: Text('Draft')),
-                              DropdownMenuItem(value: 'Inactive', child: Text('Inactive')),
-                            ],
-                            onChanged: (v) => setState(() => _selectedStatus = _normalizeStatus(v)),
+                          child: TextFormField(
+                            controller: _productCodeCtrl,
+                            readOnly: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Product Code / SKU',
+                              filled: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _prodQtyCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: InputDecoration(
+                              labelText: 'Batch Qty *',
+                              suffixText: _unitCtrl.text.isNotEmpty ? _unitCtrl.text : 'PCS',
+                            ),
+                            validator: (v) => Validators.positiveNumber(v, 'Valid quantity required'),
+                            onChanged: (_) => setState(() {}),
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Finished Product Picker
-                      Expanded(
-                        flex: 2,
-                        child: _buildFinishedProductPicker(db),
-                      ),
-                      const SizedBox(width: 16),
-                      // Product Code (Read-only)
-                      Expanded(
-                        child: TextFormField(
-                          controller: _productCodeCtrl,
-                          readOnly: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Product Code / SKU',
-                            filled: true,
+                    ),
+                  ] else ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // BOM Number
+                        Expanded(
+                          child: TextFormField(
+                            controller: _bomNumberCtrl,
+                            decoration: const InputDecoration(labelText: 'BOM Number *'),
+                            validator: (v) => Validators.requiredField(v, 'BOM number required'),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      // Production Quantity
-                      Expanded(
-                        child: TextFormField(
-                          controller: _prodQtyCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(
-                            labelText: 'Batch Qty *',
-                            suffixText: _unitCtrl.text.isNotEmpty ? _unitCtrl.text : 'PCS',
+                        const SizedBox(width: 16),
+                        // BOM Name
+                        Expanded(
+                          flex: isEdit ? 2 : 3,
+                          child: TextFormField(
+                            controller: _bomNameCtrl,
+                            decoration: const InputDecoration(labelText: 'BOM Recipe Name *'),
+                            validator: (v) => Validators.requiredField(v, 'BOM name required'),
                           ),
-                          validator: (v) => Validators.positiveNumber(v, 'Valid quantity required'),
-                          onChanged: (_) => setState(() {}),
                         ),
-                      ),
-                    ],
-                  ),
+                        // Status is ONLY displayed while Editing an existing BOM
+                        if (isEdit) ...[
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _normalizeStatus(_selectedStatus),
+                              decoration: const InputDecoration(labelText: 'Status'),
+                              items: const [
+                                DropdownMenuItem(value: 'Active', child: Text('Active')),
+                                DropdownMenuItem(value: 'Draft', child: Text('Draft')),
+                                DropdownMenuItem(value: 'Inactive', child: Text('Inactive')),
+                              ],
+                              onChanged: (v) => setState(() => _selectedStatus = _normalizeStatus(v)),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Finished Product Picker
+                        Expanded(
+                          flex: 2,
+                          child: _buildFinishedProductPicker(db),
+                        ),
+                        const SizedBox(width: 16),
+                        // Product Code (Read-only)
+                        Expanded(
+                          child: TextFormField(
+                            controller: _productCodeCtrl,
+                            readOnly: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Product Code / SKU',
+                              filled: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Production Quantity
+                        Expanded(
+                          child: TextFormField(
+                            controller: _prodQtyCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: InputDecoration(
+                              labelText: 'Batch Qty *',
+                              suffixText: _unitCtrl.text.isNotEmpty ? _unitCtrl.text : 'PCS',
+                            ),
+                            validator: (v) => Validators.positiveNumber(v, 'Valid quantity required'),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1533,68 +2035,220 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                         ],
                       ),
                     )
-                  else ...[
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minWidth: MediaQuery.of(context).size.width < 1300 ? 1280 : MediaQuery.of(context).size.width - 320,
+                  else if (isMobile) ...[
+                    // Mobile Raw Material Component Cards (Merged Box)
+                    Container(
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceMuted,
+                        borderRadius: AppRadius.smBorderRadius,
+                        border: Border.all(
+                          color: AppColors.border,
+                          width: 1.0,
                         ),
-                        child: Column(
-                          children: List.generate(_draftItems.length, (index) {
-                            final item = _draftItems[index];
-                            final rm = db.rawMaterials.firstWhere(
-                              (r) => r.id == item.rawMaterialId,
-                              orElse: () => db.rawMaterials.first,
-                            );
-                            final totalBatchReq = item.quantityWithWastage * batchOutputQty;
-                            final isStockShort = rm.currentStock < totalBatchReq;
+                      ),
+                      child: Column(
+                        children: List.generate(_draftItems.length, (index) {
+                          final item = _draftItems[index];
+                          final rm = db.rawMaterials.where((r) => r.id == item.rawMaterialId).firstOrNull;
+                          final currentStock = rm?.currentStock ?? 0.0;
+                          final unit = rm?.unit ?? (item.unit.isNotEmpty ? item.unit : 'Unit');
+                          final totalBatchReq = item.quantityWithWastage * batchOutputQty;
+                          final isStockShort = currentStock < totalBatchReq;
 
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isStockShort ? AppColors.dangerLight.withValues(alpha: 0.2) : AppColors.surfaceMuted,
-                                borderRadius: AppRadius.smBorderRadius,
-                                border: Border.all(
-                                  color: isStockShort ? AppColors.danger : AppColors.border,
-                                  width: isStockShort ? 1.5 : 1.0,
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: index > 0
+                                  ? const Border(
+                                      top: BorderSide(
+                                        color: AppColors.border,
+                                        width: 1.0,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildRawMaterialDropdown(
+                                      db: db,
+                                      item: item,
+                                      isMobile: true,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 22),
+                                    tooltip: 'Remove component',
+                                    onPressed: () {
+                                      setState(() {
+                                        item.dispose();
+                                        _draftItems.removeAt(index);
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isStockShort ? AppColors.dangerLight : AppColors.successLight,
+                                  borderRadius: AppRadius.smBorderRadius,
+                                  border: Border.all(color: isStockShort ? AppColors.danger : AppColors.success),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      isStockShort ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                                      size: 15,
+                                      color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        isStockShort
+                                            ? 'Low Stock: Avail ${Formatters.formatNumber(currentStock)} $unit (Short: ${Formatters.formatNumber(totalBatchReq - currentStock)})'
+                                            : 'In Stock: Avail ${Formatters.formatNumber(currentStock)} $unit',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              child: Row(
+                              const SizedBox(height: 10),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  Expanded(
+                                    flex: 3,
+                                    child: TextFormField(
+                                      controller: item.qtyCtrl,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      validator: Validators.positiveNumber,
+                                      decoration: InputDecoration(labelText: 'Req. Qty (${item.unit})'),
+                                      onChanged: (v) {
+                                        final num = double.tryParse(v.trim()) ?? 0.0;
+                                        setState(() {
+                                          item.quantityPerUnit = num;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    flex: 2,
+                                    child: TextFormField(
+                                      controller: item.wastageCtrl,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      decoration: const InputDecoration(labelText: 'Wastage (%)', suffixText: '%'),
+                                      onChanged: (v) {
+                                        final num = double.tryParse(v.trim()) ?? 0.0;
+                                        setState(() {
+                                          item.wastagePercent = num;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    flex: 3,
+                                    child: TextFormField(
+                                      controller: item.unitCostCtrl,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      validator: Validators.positiveNumber,
+                                      decoration: const InputDecoration(labelText: 'Cost (₹)'),
+                                      onChanged: (v) {
+                                        final num = double.tryParse(v.trim()) ?? 0.0;
+                                        setState(() {
+                                          item.unitCost = num;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: AppRadius.smBorderRadius,
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Unit: ${Formatters.formatCurrency(item.lineCost)}', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                                    Text('Batch: ${Formatters.formatCurrency(item.lineCost * batchOutputQty)}', style: AppTextStyles.bodyBold),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                  ] else ...[
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        const minTableWidth = 1270.0;
+                        final effectiveWidth = math.max(constraints.maxWidth, minTableWidth);
+
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Container(
+                            width: effectiveWidth,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceMuted,
+                              borderRadius: AppRadius.smBorderRadius,
+                              border: Border.all(
+                                color: AppColors.border,
+                                width: 1.0,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: List.generate(_draftItems.length, (index) {
+                                final item = _draftItems[index];
+                                final rm = db.rawMaterials.where((r) => r.id == item.rawMaterialId).firstOrNull;
+                                final currentStock = rm?.currentStock ?? 0.0;
+                                final unit = rm?.unit ?? (item.unit.isNotEmpty ? item.unit : 'Unit');
+                                final totalBatchReq = item.quantityWithWastage * batchOutputQty;
+                                final isStockShort = currentStock < totalBatchReq;
+
+                                return Container(
+                                  width: effectiveWidth,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    border: index > 0
+                                        ? const Border(
+                                            top: BorderSide(
+                                              color: AppColors.border,
+                                              width: 1.0,
+                                            ),
+                                          )
+                                        : null,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
                                   // Dropdown to select/switch Raw Material
                                   SizedBox(
                                     width: 290,
-                                    child: DropdownButtonFormField<String>(
-                                      value: item.rawMaterialId,
-                                      isExpanded: true,
-                                      decoration: const InputDecoration(labelText: 'Raw Material'),
-                                      items: db.rawMaterials.map((r) {
-                                        return DropdownMenuItem(
-                                          value: r.id,
-                                          child: Text(
-                                            '${r.itemCode} - ${r.name} (Stock: ${Formatters.formatNumber(r.currentStock)} ${r.unit})',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        );
-                                      }).toList(),
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          final selected = db.rawMaterials.firstWhere((r) => r.id == val);
-                                          setState(() {
-                                            item.rawMaterialId = selected.id;
-                                            item.rawMaterialName = selected.name;
-                                            item.rawMaterialCode = selected.itemCode;
-                                            item.unit = selected.unit;
-                                            item.unitCost = selected.defaultPurchasePrice;
-                                            item.unitCostCtrl.text = selected.defaultPurchasePrice % 1 == 0
-                                                ? selected.defaultPurchasePrice.toInt().toString()
-                                                : selected.defaultPurchasePrice.toString();
-                                          });
-                                        }
-                                      },
+                                    child: _buildRawMaterialDropdown(
+                                      db: db,
+                                      item: item,
+                                      isMobile: false,
                                     ),
                                   ),
                                   const SizedBox(width: 12),
@@ -1634,8 +2288,8 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                               ),
                                               Text(
                                                 isStockShort
-                                                    ? 'Avail: ${Formatters.formatNumber(rm.currentStock)} ${rm.unit} (Short: ${Formatters.formatNumber(totalBatchReq - rm.currentStock)})'
-                                                    : 'Avail: ${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
+                                                    ? 'Avail: ${Formatters.formatNumber(currentStock)} $unit (Short: ${Formatters.formatNumber(totalBatchReq - currentStock)})'
+                                                    : 'Avail: ${Formatters.formatNumber(currentStock)} $unit',
                                                 style: TextStyle(
                                                   fontSize: 10.5,
                                                   fontWeight: FontWeight.w600,
@@ -1785,7 +2439,9 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                           }),
                         ),
                       ),
-                    ),
+                    );
+                  },
+                ),
 
                     const SizedBox(height: 12),
                     // Per Product BOM Recipe Summary Banner (matching create_production_screen)
@@ -1855,22 +2511,44 @@ class _BomScreenState extends ConsumerState<BomScreen> {
             const SizedBox(height: 24),
 
             // Bottom Action Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ErpButton(
-                  text: 'Cancel',
-                  isOutlined: true,
-                  onPressed: () => setState(() => _isCreateMode = false),
-                ),
-                const SizedBox(width: 12),
-                ErpButton(
-                  text: isEdit ? 'Update BOM' : 'Save BOM',
-                  icon: Icons.check,
-                  onPressed: _saveBom,
-                ),
-              ],
-            ),
+            if (isMobile)
+              Row(
+                children: [
+                  Expanded(
+                    child: ErpButton(
+                      text: 'Cancel',
+                      isOutlined: true,
+                      onPressed: () => setState(() => _isCreateMode = false),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ErpButton(
+                      text: isEdit ? 'Update BOM' : 'Save BOM',
+                      icon: Icons.check,
+                      onPressed: _saveBom,
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ErpButton(
+                    text: 'Cancel',
+                    isOutlined: true,
+                    onPressed: () => setState(() => _isCreateMode = false),
+                  ),
+                  const SizedBox(width: 12),
+                  ErpButton(
+                    text: isEdit ? 'Update BOM' : 'Save BOM',
+                    icon: Icons.check,
+                    onPressed: _saveBom,
+                  ),
+                ],
+              ),
+            SizedBox(height: isMobile ? 36 : 16),
           ],
         ),
       ),
@@ -1879,15 +2557,21 @@ class _BomScreenState extends ConsumerState<BomScreen> {
 
   Widget _buildFinishedProductPicker(dynamic db) {
     final list = db.finishedProducts as List;
-    final hasSelected = list.any((p) => p.id == _selectedProductId);
-    final effectiveValue = hasSelected ? _selectedProductId : (list.isNotEmpty ? list.first.id : null);
+    final seenProductIds = <String>{};
+    final uniqueProducts = list.where((p) => p.id != null && seenProductIds.add(p.id.toString())).toList();
+    final hasSelected = uniqueProducts.any((p) => p.id == _selectedProductId);
+    final effectiveValue = hasSelected
+        ? _selectedProductId
+        : (_selectedProductId != null && _selectedProductId!.isNotEmpty
+            ? _selectedProductId
+            : (uniqueProducts.isNotEmpty ? uniqueProducts.first.id : null));
 
     return DropdownButtonFormField<String>(
-      value: effectiveValue,
+      initialValue: effectiveValue,
       isExpanded: true,
       decoration: const InputDecoration(labelText: 'Finished Product *'),
       items: [
-        ...list.map((p) {
+        ...uniqueProducts.map((p) {
           return DropdownMenuItem<String>(
             value: p.id,
             child: Row(
@@ -1918,7 +2602,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
           ? null // Locked on edit
           : (val) {
               if (val != null) {
-                final chosen = list.firstWhere((p) => p.id == val);
+                final chosen = uniqueProducts.firstWhere((p) => p.id == val);
                 setState(() {
                   _selectedProductId = chosen.id;
                   _productCodeCtrl.text = chosen.itemCode;
@@ -1927,6 +2611,105 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                 });
               }
             },
+    );
+  }
+
+  Widget _buildRawMaterialDropdown({
+    required dynamic db,
+    required _BomItemDraft item,
+    required bool isMobile,
+  }) {
+    final rawList = db.rawMaterials as List;
+    final seenIds = <String>{};
+    final uniqueList = <dynamic>[];
+    for (final rm in rawList) {
+      final rmId = rm.id?.toString() ?? '';
+      if (rmId.isNotEmpty && seenIds.add(rmId)) {
+        uniqueList.add(rm);
+      }
+    }
+
+    bool hasMatch = item.rawMaterialId.isNotEmpty && seenIds.contains(item.rawMaterialId);
+
+    // If no direct ID match, attempt matching by itemCode (e.g. if rawMaterialId was set to item code)
+    if (!hasMatch && item.rawMaterialId.isNotEmpty) {
+      final matchedByCode = uniqueList.where((rm) => rm.itemCode == item.rawMaterialId).firstOrNull;
+      if (matchedByCode != null) {
+        item.rawMaterialId = matchedByCode.id;
+        item.rawMaterialName = matchedByCode.name;
+        item.rawMaterialCode = matchedByCode.itemCode;
+        item.unit = matchedByCode.unit;
+        hasMatch = true;
+      }
+    }
+
+    final dropdownItems = <DropdownMenuItem<String>>[];
+
+    for (final rm in uniqueList) {
+      final label = isMobile
+          ? '${rm.itemCode} - ${rm.name}'
+          : '${rm.itemCode} - ${rm.name} (Stock: ${Formatters.formatNumber(rm.currentStock)} ${rm.unit})';
+      dropdownItems.add(
+        DropdownMenuItem<String>(
+          value: rm.id,
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+
+    // Fallback menu item if item.rawMaterialId is not in catalog (prevents Assertion failed on legacy/seeded IDs like 'RM-001')
+    if (item.rawMaterialId.isNotEmpty && !hasMatch) {
+      final displayName = item.rawMaterialName.isNotEmpty ? item.rawMaterialName : 'Material';
+      final displayCode = item.rawMaterialCode.isNotEmpty ? '${item.rawMaterialCode} - ' : '';
+      dropdownItems.add(
+        DropdownMenuItem<String>(
+          value: item.rawMaterialId,
+          child: Text(
+            '$displayCode$displayName (${item.rawMaterialId}) [Archived]',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.textMuted),
+          ),
+        ),
+      );
+      hasMatch = true;
+    }
+
+    final effectiveValue = hasMatch
+        ? item.rawMaterialId
+        : (dropdownItems.isNotEmpty ? dropdownItems.first.value : null);
+
+    if (effectiveValue != null && item.rawMaterialId != effectiveValue) {
+      item.rawMaterialId = effectiveValue;
+    }
+
+    return DropdownButtonFormField<String>(
+      initialValue: effectiveValue,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Raw Material *'),
+      items: dropdownItems,
+      validator: (v) => v == null || v.isEmpty ? 'Please select a raw material' : null,
+      onChanged: (val) {
+        if (val != null) {
+          final selected = uniqueList.where((r) => r.id == val).firstOrNull;
+          if (selected != null) {
+            setState(() {
+              item.rawMaterialId = selected.id;
+              item.rawMaterialName = selected.name;
+              item.rawMaterialCode = selected.itemCode;
+              item.unit = selected.unit;
+              item.unitCost = selected.defaultPurchasePrice;
+              item.unitCostCtrl.text = selected.defaultPurchasePrice % 1 == 0
+                  ? selected.defaultPurchasePrice.toInt().toString()
+                  : selected.defaultPurchasePrice.toString();
+            });
+          }
+        }
+      },
     );
   }
 
@@ -1941,39 +2724,5 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       default:
         return ErpStatusBadge.danger('INACTIVE');
     }
-  }
-
-  Widget _buildKpiCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgBorderRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textMuted)),
-                const SizedBox(height: 3),
-                Text(value, style: AppTextStyles.h2.copyWith(fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

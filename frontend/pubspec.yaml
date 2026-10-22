@@ -47,6 +47,7 @@ dependencies:
 
   # Networking & HTTP Client
   dio: ^5.11.1
+  flutter_svg: ^2.3.0
 
 
 dev_dependencies:

@@ -9,9 +9,11 @@ import '../../../core/models/purchase_model.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
@@ -60,7 +62,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: AppColors.primaryLight.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: AppColors.primaryLight.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
                   child: const Icon(Icons.payments_outlined, color: AppColors.primary, size: 20),
                 ),
                 const SizedBox(width: 12),
@@ -219,51 +221,81 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
+          ErpSectionHeaderCard(
+            icon: Icons.receipt_long_outlined,
+            title: 'Proforma Invoices',
+            badgeText: 'COMMERCIAL BILLING',
+            action: ErpButton(
+              text: 'Create Proforma from Quote',
+              icon: Icons.receipt_long_outlined,
+              onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 2. Summary Metric Cards (Project Theme)
           LayoutBuilder(
             builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              final totalValue = db.proformaInvoices.fold(0.0, (sum, p) => sum + p.totalAmount);
+              final totalPaid = db.proformaInvoices.fold(0.0, (sum, p) => sum + p.paidAmount);
+              final totalPending = db.proformaInvoices.fold(0.0, (sum, p) => sum + p.pendingAmount);
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Text('Proforma Invoices', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Commercial advance billing (Not a Tax Invoice) & milestone payment receipts',
-                    style: AppTextStyles.subtitle,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.receipt_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Proformas',
+                      value: '${db.proformaInvoices.length}',
+                      subtext: 'Commercial Advance Notes',
+                    ),
                   ),
-                ],
-              );
-
-              final actionBtn = ErpButton(
-                text: 'Create Proforma from Quote',
-                icon: Icons.receipt_long_outlined,
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
-              );
-
-              if (isStacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    titleBlock,
-                    const SizedBox(height: 12),
-                    actionBtn,
-                  ],
-                );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: titleBlock),
-                  const SizedBox(width: 12),
-                  actionBtn,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.primary,
+                      title: 'Total Billed Value',
+                      value: Formatters.formatCurrency(totalValue),
+                      subtext: 'Cumulative Proforma Total',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      iconColor: AppColors.success,
+                      title: 'Advances Received',
+                      value: Formatters.formatCurrency(totalPaid),
+                      subtext: 'Realized Advance Cash',
+                      subtextColor: AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.warning,
+                      title: 'Pending Balance',
+                      value: Formatters.formatCurrency(totalPending),
+                      subtext: 'Outstanding Advance',
+                      subtextColor: AppColors.warning,
+                    ),
+                  ),
                 ],
               );
             },
           ),
           const SizedBox(height: 20),
 
-          // 2. Tabs: All, Issued, Partially Paid, Paid, Converted
+          // 3. Tabs: All, Issued, Partially Paid, Paid, Converted
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,

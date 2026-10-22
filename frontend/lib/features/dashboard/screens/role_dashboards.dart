@@ -11,6 +11,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 // =====================================================================
@@ -33,57 +34,36 @@ class InventoryRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.inventory_2_rounded,
             title: 'Inventory & Warehouse Dashboard',
-            subtitle: 'Real-time stock valuation, inventory balances, low stock alerts, and warehouse movements',
             badgeText: 'INVENTORY MANAGER',
-            badgeColor: Colors.blue,
-          ),
-          const SizedBox(height: 20),
-
-          // Quick Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            action: Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Text('Quick Inventory Actions:', style: AppTextStyles.bodyBold),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Raw Material Stock',
-                      icon: Icons.category_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                    ),
-                    ErpButton(
-                      text: 'Finished Product Stock',
-                      icon: Icons.inventory_2_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProductStock,
-                    ),
-                    ErpButton(
-                      text: 'Stock Movement Ledger',
-                      icon: Icons.swap_horiz_rounded,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
-                    ),
-                    ErpButton(
-                      text: 'New Stock Adjustment',
-                      icon: Icons.tune_rounded,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
-                    ),
-                  ],
+                ErpButton(
+                  text: 'New Stock Adjustment',
+                  icon: Icons.tune_rounded,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
+                ),
+                ErpButton(
+                  text: 'Raw Material Stock',
+                  icon: Icons.category_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
+                ),
+                ErpButton(
+                  text: 'Finished Product Stock',
+                  icon: Icons.inventory_2_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProductStock,
+                ),
+                ErpButton(
+                  text: 'Stock Movement Ledger',
+                  icon: Icons.swap_horiz_rounded,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
                 ),
               ],
             ),
@@ -314,57 +294,36 @@ class PurchaseRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.shopping_bag_outlined,
             title: 'Procurement & Purchase Hub',
-            subtitle: 'Purchase orders, vendor relations, raw material supplies, and delivery tracking',
             badgeText: 'PURCHASE MANAGER',
-            badgeColor: Colors.purple,
-          ),
-          const SizedBox(height: 20),
-
-          // Quick Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            action: Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Text('Purchase Actions:', style: AppTextStyles.bodyBold),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Create Direct Purchase',
-                      icon: Icons.add_shopping_cart,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
-                    ),
-                    ErpButton(
-                      text: 'Purchase Invoices',
-                      icon: Icons.list_alt_rounded,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
-                    ),
-                    ErpButton(
-                      text: 'Vendors Directory',
-                      icon: Icons.storefront_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendors,
-                    ),
-                    ErpButton(
-                      text: 'Vendor Settlements',
-                      icon: Icons.payments_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
-                    ),
-                  ],
+                ErpButton(
+                  text: 'Create Direct Purchase',
+                  icon: Icons.add_shopping_cart,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                ),
+                ErpButton(
+                  text: 'Purchase Invoices',
+                  icon: Icons.list_alt_rounded,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                ),
+                ErpButton(
+                  text: 'Vendors Directory',
+                  icon: Icons.storefront_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendors,
+                ),
+                ErpButton(
+                  text: 'Vendor Settlements',
+                  icon: Icons.payments_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
                 ),
               ],
             ),
@@ -487,51 +446,30 @@ class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboar
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.precision_manufacturing_rounded,
             title: 'Factory & Production Dashboard',
-            subtitle: 'Manufacturing work orders, shopfloor assembly batches, BOM consumption, and output yields',
             badgeText: 'PRODUCTION MANAGER',
-            badgeColor: Colors.indigo,
-          ),
-          const SizedBox(height: 20),
-
-          // Quick Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            action: Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Text('Production Actions:', style: AppTextStyles.bodyBold),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Create Production Order',
-                      icon: Icons.add_circle_outline,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
-                    ),
-                    ErpButton(
-                      text: 'Production Orders',
-                      icon: Icons.precision_manufacturing_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
-                    ),
-                    ErpButton(
-                      text: 'Raw Material Buffer',
-                      icon: Icons.inventory_2_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                    ),
-                  ],
+                ErpButton(
+                  text: 'Create Production Order',
+                  icon: Icons.add_circle_outline,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
+                ),
+                ErpButton(
+                  text: 'Production Orders',
+                  icon: Icons.precision_manufacturing_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                ),
+                ErpButton(
+                  text: 'Raw Material Buffer',
+                  icon: Icons.inventory_2_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
                 ),
               ],
             ),
@@ -634,57 +572,36 @@ class AccountsPaymentRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.payments_rounded,
             title: 'Finance, Accounts & Payment Control',
-            subtitle: 'Customer receivables, dealer ledgers, vendor disbursements, expense vouchers, and partner commissions',
             badgeText: 'ACCOUNTS & FINANCE',
-            badgeColor: Colors.teal,
-          ),
-          const SizedBox(height: 20),
-
-          // Quick Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            action: Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Text('Finance Actions:', style: AppTextStyles.bodyBold),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Customer Collections',
-                      icon: Icons.receipt_long_outlined,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments,
-                    ),
-                    ErpButton(
-                      text: 'Vendor Disbursements',
-                      icon: Icons.payments_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
-                    ),
-                    ErpButton(
-                      text: 'Commission Payouts',
-                      icon: Icons.monetization_on_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.commissionPayments,
-                    ),
-                    ErpButton(
-                      text: 'Expense Voucher Log',
-                      icon: Icons.receipt_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.expenseList,
-                    ),
-                  ],
+                ErpButton(
+                  text: 'Customer Collections',
+                  icon: Icons.receipt_long_outlined,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments,
+                ),
+                ErpButton(
+                  text: 'Vendor Disbursements',
+                  icon: Icons.payments_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
+                ),
+                ErpButton(
+                  text: 'Commission Payouts',
+                  icon: Icons.monetization_on_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.commissionPayments,
+                ),
+                ErpButton(
+                  text: 'Expense Voucher Log',
+                  icon: Icons.receipt_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.expenseList,
                 ),
               ],
             ),
@@ -777,57 +694,36 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.apartment_rounded,
             title: 'Architectural Projects Portfolio',
-            subtitle: 'Commercial project milestones, site deliverables, client scopes, and material budget consumption',
             badgeText: 'PROJECT MANAGER',
-            badgeColor: Colors.deepPurple,
-          ),
-          const SizedBox(height: 20),
-
-          // Quick Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            action: Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Text('Project Actions:', style: AppTextStyles.bodyBold),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Projects Directory',
-                      icon: Icons.apartment_rounded,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectList,
-                    ),
-                    ErpButton(
-                      text: 'Architect Partners',
-                      icon: Icons.architecture_rounded,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
-                    ),
-                    ErpButton(
-                      text: 'Client Masters',
-                      icon: Icons.people_outline,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customers,
-                    ),
-                    ErpButton(
-                      text: 'Project Reports Hub',
-                      icon: Icons.analytics_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectReports,
-                    ),
-                  ],
+                ErpButton(
+                  text: 'Projects Directory',
+                  icon: Icons.apartment_rounded,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectList,
+                ),
+                ErpButton(
+                  text: 'Architect Partners',
+                  icon: Icons.architecture_rounded,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
+                ),
+                ErpButton(
+                  text: 'Client Masters',
+                  icon: Icons.people_outline,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customers,
+                ),
+                ErpButton(
+                  text: 'Project Reports Hub',
+                  icon: Icons.analytics_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectReports,
                 ),
               ],
             ),
@@ -947,12 +843,10 @@ class _MastersRoleDashboardState extends ConsumerState<MastersRoleDashboard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.dataset_rounded,
             title: 'Master Data & Entity Registry',
-            subtitle: 'Centralized repository of commercial counterparties, architectural specifiers, SKUs, and units',
             badgeText: 'MASTER DATA MANAGER',
-            badgeColor: Colors.deepOrange,
           ),
           const SizedBox(height: 20),
 
@@ -1142,39 +1036,107 @@ class _MastersRoleDashboardState extends ConsumerState<MastersRoleDashboard> {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return _ModernMasterShortcutCard(
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      color: color,
       onTap: onTap,
-      borderRadius: AppRadius.mdBorderRadius,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: AppRadius.mdBorderRadius,
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: color, size: 20),
+    );
+  }
+}
+
+class _ModernMasterShortcutCard extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ModernMasterShortcutCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_ModernMasterShortcutCard> createState() => _ModernMasterShortcutCardState();
+}
+
+class _ModernMasterShortcutCardState extends State<_ModernMasterShortcutCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        onHover: (hovering) {
+          if (mounted && _isHovered != hovering) {
+            setState(() => _isHovered = hovering);
+          }
+        },
+        borderRadius: AppRadius.mdBorderRadius,
+        hoverColor: Colors.transparent,
+        splashColor: AppColors.primary.withValues(alpha: 0.08),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: AppRadius.mdBorderRadius,
+            border: Border.all(
+              color: _isHovered ? AppColors.primary : AppColors.border,
+              width: 1.0,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(title, style: AppTextStyles.bodyBold.copyWith(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(subtitle, style: AppTextStyles.caption.copyWith(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
+            boxShadow: [
+              if (_isHovered)
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.16),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 2),
+                )
+              else
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: widget.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(widget.icon, color: widget.color, size: 20),
               ),
-            ),
-            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textMuted),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(widget.title, style: AppTextStyles.bodyBold.copyWith(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(widget.subtitle, style: AppTextStyles.caption.copyWith(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: _isHovered ? AppColors.primary : AppColors.textMuted,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1196,12 +1158,27 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
-            title: 'Analytics & Reporting Hub (Read-Only)',
-            subtitle: 'Comprehensive audit trails, financial ledgers, stock reconciliations, and cross-department analytics',
+          ErpSectionHeaderCard(
+            icon: Icons.analytics_outlined,
+            title: 'Executive Financial Reports & Audit Hub',
             badgeText: 'AUDITOR & REPORT ANALYST',
-            badgeColor: Colors.amber.shade900,
+            action: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ErpButton(
+                  text: 'All ERP Statements',
+                  icon: Icons.bar_chart_rounded,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.reportsDashboard,
+                ),
+                ErpButton(
+                  text: 'Inventory Reports',
+                  icon: Icons.inventory_2_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.inventoryReports,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
 
@@ -1324,55 +1301,116 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return _ModernReportHubCard(
+      title: title,
+      description: description,
+      icon: icon,
+      color: color,
       onTap: onTap,
-      borderRadius: AppRadius.lgBorderRadius,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: AppRadius.lgBorderRadius,
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+    );
+  }
+}
+
+class _ModernReportHubCard extends StatefulWidget {
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ModernReportHubCard({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_ModernReportHubCard> createState() => _ModernReportHubCardState();
+}
+
+class _ModernReportHubCardState extends State<_ModernReportHubCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        onHover: (hovering) {
+          if (mounted && _isHovered != hovering) {
+            setState(() => _isHovered = hovering);
+          }
+        },
+        borderRadius: AppRadius.lgBorderRadius,
+        hoverColor: Colors.transparent,
+        splashColor: AppColors.primary.withValues(alpha: 0.08),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: AppRadius.lgBorderRadius,
+            border: Border.all(
+              color: _isHovered ? AppColors.primary : AppColors.border,
+              width: 1.0,
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                  child: Icon(icon, color: color, size: 22),
+            boxShadow: [
+              if (_isHovered)
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.16),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 2),
+                )
+              else
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
-                Icon(Icons.arrow_forward_rounded, color: color.withValues(alpha: 0.6), size: 16),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(title, style: AppTextStyles.h3, maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Text(
-              description,
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.3),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                Text('Open Report', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12.5)),
-                const SizedBox(width: 4),
-                Icon(Icons.arrow_forward_rounded, color: color, size: 14),
-              ],
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: widget.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                    child: Icon(widget.icon, color: widget.color, size: 22),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: _isHovered ? AppColors.primary : widget.color.withValues(alpha: 0.6),
+                    size: 16,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(widget.title, style: AppTextStyles.h3, maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 4),
+              Text(
+                widget.description,
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.3),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  Text('Open Report', style: TextStyle(color: _isHovered ? AppColors.primary : widget.color, fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_rounded, color: _isHovered ? AppColors.primary : widget.color, size: 14),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1394,12 +1432,10 @@ class DataEntryRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.edit_note_rounded,
             title: 'Data Entry Workspace',
-            subtitle: 'Direct data input shortcuts, draft creation queues, and recent document submissions',
             badgeText: 'DATA ENTRY OPERATOR',
-            badgeColor: Colors.blueGrey,
           ),
           const SizedBox(height: 24),
 
@@ -1470,34 +1506,103 @@ class DataEntryRoleDashboard extends ConsumerWidget {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return _ModernActionShortcutTile(
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      color: color,
       onTap: onTap,
-      borderRadius: AppRadius.mdBorderRadius,
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: AppRadius.mdBorderRadius,
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, color: color, size: 22),
+    );
+  }
+}
+
+class _ModernActionShortcutTile extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ModernActionShortcutTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_ModernActionShortcutTile> createState() => _ModernActionShortcutTileState();
+}
+
+class _ModernActionShortcutTileState extends State<_ModernActionShortcutTile> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        onHover: (hovering) {
+          if (mounted && _isHovered != hovering) {
+            setState(() => _isHovered = hovering);
+          }
+        },
+        borderRadius: AppRadius.mdBorderRadius,
+        hoverColor: Colors.transparent,
+        splashColor: AppColors.primary.withValues(alpha: 0.08),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: AppRadius.mdBorderRadius,
+            border: Border.all(
+              color: _isHovered ? AppColors.primary : AppColors.border,
+              width: 1.0,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(subtitle, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
+            boxShadow: [
+              if (_isHovered)
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.16),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 2),
+                )
+              else
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: widget.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                child: Icon(widget.icon, color: widget.color, size: 22),
               ),
-            ),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.title, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(widget.subtitle, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: _isHovered ? AppColors.primary : AppColors.textMuted,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1507,56 +1612,6 @@ class DataEntryRoleDashboard extends ConsumerWidget {
 // =====================================================================
 // SHARED RESPONSIVE HELPER WIDGETS
 // =====================================================================
-Widget _buildRoleHeader({
-  required BuildContext context,
-  required String title,
-  required String subtitle,
-  required String badgeText,
-  required Color badgeColor,
-}) {
-  return Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: AppColors.surface,
-      borderRadius: AppRadius.lgBorderRadius,
-      border: Border.all(color: AppColors.border),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(title, style: AppTextStyles.h1),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: badgeColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      badgeText,
-                      style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(subtitle, style: AppTextStyles.subtitle),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 Widget _buildMetricCard({
   required String title,
   required String value,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
-import '../../app/theme/app_radius.dart';
 import '../../app/theme/app_text_styles.dart';
 
 class ErpColumn {
@@ -80,9 +79,16 @@ class _ErpDataTableState extends State<ErpDataTable> {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgBorderRadius,
-        border: Border.all(color: AppColors.border, width: 1),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: LayoutBuilder(
@@ -112,10 +118,10 @@ class _ErpDataTableState extends State<ErpDataTable> {
                 children: [
                   // Pinned Header (Stays still when scrolling vertically)
                   Container(
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceMuted,
-                      border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+                    height: 46,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF8F9FA),
+                      border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
                     ),
                     padding: EdgeInsets.symmetric(horizontal: hMargin),
                     child: Row(
@@ -128,7 +134,12 @@ class _ErpDataTableState extends State<ErpDataTable> {
                                   (widget.columns[i].isNumeric ? Alignment.centerRight : Alignment.centerLeft),
                               child: Text(
                                 widget.columns[i].title.toUpperCase(),
-                                style: AppTextStyles.tableHeader.copyWith(fontSize: 11),
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1E293B),
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
                           ),
@@ -151,12 +162,12 @@ class _ErpDataTableState extends State<ErpDataTable> {
                             children: [
                               for (int r = 0; r < widget.rows.length; r++)
                                 Container(
-                                  constraints: const BoxConstraints(minHeight: 46),
-                                  decoration: BoxDecoration(
-                                    color: r.isOdd ? AppColors.surfaceMuted.withValues(alpha: 0.25) : AppColors.surface,
-                                    border: Border(bottom: BorderSide(color: AppColors.border.withValues(alpha: 0.5), width: 1)),
+                                  constraints: BoxConstraints(minHeight: widget.dataRowMinHeight ?? 56),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
                                   ),
-                                  padding: EdgeInsets.symmetric(horizontal: hMargin, vertical: 8),
+                                  padding: EdgeInsets.symmetric(horizontal: hMargin, vertical: 10),
                                   child: Row(
                                     children: [
                                       for (int i = 0; i < widget.columns.length; i++) ...[
@@ -183,12 +194,12 @@ class _ErpDataTableState extends State<ErpDataTable> {
                       children: [
                         for (int r = 0; r < widget.rows.length; r++)
                           Container(
-                            constraints: const BoxConstraints(minHeight: 46),
-                            decoration: BoxDecoration(
-                              color: r.isOdd ? AppColors.surfaceMuted.withValues(alpha: 0.25) : AppColors.surface,
-                              border: Border(bottom: BorderSide(color: AppColors.border.withValues(alpha: 0.5), width: 1)),
+                            constraints: BoxConstraints(minHeight: widget.dataRowMinHeight ?? 56),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
                             ),
-                            padding: EdgeInsets.symmetric(horizontal: hMargin, vertical: 8),
+                            padding: EdgeInsets.symmetric(horizontal: hMargin, vertical: 10),
                             child: Row(
                               children: [
                                 for (int i = 0; i < widget.columns.length; i++) ...[
@@ -226,18 +237,32 @@ class _ErpDataTableState extends State<ErpDataTable> {
               minWidth: constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width,
             ),
             child: DataTable(
-              headingRowColor: WidgetStateProperty.all(AppColors.surfaceMuted),
-              headingTextStyle: AppTextStyles.tableHeader,
+              headingRowColor: WidgetStateProperty.all(const Color(0xFFF8F9FA)),
+              headingTextStyle: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1E293B),
+                letterSpacing: 0.5,
+              ),
               dataTextStyle: AppTextStyles.tableCell,
               dividerThickness: 1,
-              horizontalMargin: widget.horizontalMargin ?? 20,
-              columnSpacing: widget.columnSpacing ?? 28,
-              dataRowMinHeight: widget.dataRowMinHeight ?? 48,
-              dataRowMaxHeight: widget.dataRowMaxHeight ?? 58,
+              border: const TableBorder(
+                horizontalInside: BorderSide(color: Color(0xFFF1F5F9), width: 1),
+              ),
+              horizontalMargin: widget.horizontalMargin ?? 16,
+              columnSpacing: widget.columnSpacing ?? 24,
+              dataRowMinHeight: widget.dataRowMinHeight ?? 56,
+              dataRowMaxHeight: widget.dataRowMaxHeight ?? 66,
+              headingRowHeight: 46,
               columns: widget.columns.map((col) {
                 Widget label = Text(
                   col.title.toUpperCase(),
-                  style: AppTextStyles.tableHeader.copyWith(fontSize: 11),
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1E293B),
+                    letterSpacing: 0.5,
+                  ),
                 );
                 if (col.width != null || col.alignment != null) {
                   label = SizedBox(

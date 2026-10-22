@@ -5,6 +5,7 @@ import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/utils/document_sharing_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
@@ -182,20 +183,12 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
   }
 
   Widget _buildPageHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Chat Support',
-          key: const ValueKey('broadcast-page-title'),
-          style: AppTextStyles.h1,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Send messages and updates to team members across WhatsApp and in-app notifications',
-          style: AppTextStyles.subtitle,
-        ),
-      ],
+    return const ErpSectionHeaderCard(
+      key: ValueKey('broadcast-page-title'),
+      icon: Icons.chat_bubble_outline,
+      title: 'Chat Support',
+      badgeText: 'TEAM BROADCAST',
+      subtitle: 'Send messages and updates to team members across WhatsApp and in-app notifications',
     );
   }
 

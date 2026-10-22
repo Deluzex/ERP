@@ -8,10 +8,11 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/purchase_model.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
-import '../../../core/widgets/stat_card.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
@@ -73,7 +74,6 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     if (!db.salesInvoices.any((i) => i.id == selectedInvoiceId)) {
       selectedInvoiceId = db.salesInvoices.isNotEmpty ? db.salesInvoices.first.id : '';
     }
-    ReturnCondition returnCondition = existingReturn?.returnCondition ?? ReturnCondition.resalable;
     ReturnFinancialAction financialAction = existingReturn?.returnFinancialAction ?? ReturnFinancialAction.adjustOutstanding;
     final reasonCtrl = TextEditingController(text: existingReturn?.returnReason ?? 'Client requested quantity adjustment');
     final notesCtrl = TextEditingController(text: existingReturn?.notes ?? '');
@@ -137,26 +137,41 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
           }
           final liveTotal = (liveSubtotal - liveDiscount).clamp(0.0, double.infinity) + liveGst;
 
+          final isMobile = MediaQuery.of(ctx).size.width < 700;
+
           return AlertDialog(
+            insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24, vertical: 24),
             title: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: AppColors.danger.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
                   child: const Icon(Icons.assignment_return_outlined, color: AppColors.danger, size: 22),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(isEdit ? 'Edit Sales Return (${existingReturn.invoiceNumber})' : 'Create Sales Return & Credit Note', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    const Text('Link to sales invoice, inspect product condition & apply audited adjustments', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isEdit ? 'Edit Sales Return (${existingReturn.invoiceNumber})' : 'Create Sales Return & Credit Note',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Link to sales invoice, inspect product condition & apply audited adjustments',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        maxLines: isMobile ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            content: SizedBox(
-              width: 820,
+            content: Container(
+              constraints: const BoxConstraints(maxWidth: 820),
+              width: double.infinity,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -183,7 +198,11 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                             items: db.salesInvoices.map((inv) {
                               return DropdownMenuItem(
                                 value: inv.id,
-                                child: Text('${inv.invoiceNumber} — ${inv.partyName} (Total: ${Formatters.formatCurrency(inv.totalAmount)}, Pending: ${Formatters.formatCurrency(inv.pendingAmount)})'),
+                                child: Text(
+                                  '${inv.invoiceNumber} — ${inv.partyName} (Total: ${Formatters.formatCurrency(inv.totalAmount)}, Pending: ${Formatters.formatCurrency(inv.pendingAmount)})',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               );
                             }).toList(),
                             onChanged: isEdit ? null : (val) {
@@ -197,38 +216,77 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                             },
                           ),
                           const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildInfoTag('Customer', selectedInvoice.partyName, Icons.business),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildInfoTag('Invoice Date', Formatters.formatDate(selectedInvoice.saleDate), Icons.calendar_today),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildInfoTag('Linked Order', selectedInvoice.salesOrderNumber ?? 'Direct Sale', Icons.shopping_bag_outlined),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildInfoTag('Paid Status', selectedInvoice.paidAmount >= selectedInvoice.totalAmount ? 'Fully Paid' : (selectedInvoice.paidAmount > 0 ? 'Partially Paid' : 'Unpaid'), Icons.payment),
-                              ),
-                            ],
-                          ),
+                          if (isMobile)
+                            Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildInfoTag('Customer', selectedInvoice.partyName, Icons.business),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _buildInfoTag('Invoice Date', Formatters.formatDate(selectedInvoice.saleDate), Icons.calendar_today),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildInfoTag('Linked Order', selectedInvoice.salesOrderNumber ?? 'Direct Sale', Icons.shopping_bag_outlined),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _buildInfoTag('Paid Status', selectedInvoice.paidAmount >= selectedInvoice.totalAmount ? 'Fully Paid' : (selectedInvoice.paidAmount > 0 ? 'Partially Paid' : 'Unpaid'), Icons.payment),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            )
+                          else
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildInfoTag('Customer', selectedInvoice.partyName, Icons.business),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildInfoTag('Invoice Date', Formatters.formatDate(selectedInvoice.saleDate), Icons.calendar_today),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildInfoTag('Linked Order', selectedInvoice.salesOrderNumber ?? 'Direct Sale', Icons.shopping_bag_outlined),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildInfoTag('Paid Status', selectedInvoice.paidAmount >= selectedInvoice.totalAmount ? 'Fully Paid' : (selectedInvoice.paidAmount > 0 ? 'Partially Paid' : 'Unpaid'), Icons.payment),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 16),
 
                     // 2. Return Line Items Table with condition selection
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Invoiced Line Items & Return Quantities:', style: AppTextStyles.h3.copyWith(fontSize: 14)),
-                        Text('Only positive return quantities will be processed', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                      ],
-                    ),
+                    if (isMobile)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Invoiced Line Items & Return Quantities:', style: AppTextStyles.h3.copyWith(fontSize: 14)),
+                          const SizedBox(height: 2),
+                          Text('Only positive return quantities will be processed', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                        ],
+                      )
+                    else
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Invoiced Line Items & Return Quantities:', style: AppTextStyles.h3.copyWith(fontSize: 14)),
+                          Text('Only positive return quantities will be processed', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                        ],
+                      ),
                     const SizedBox(height: 8),
 
                     Container(
@@ -247,64 +305,116 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
                           return Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                // Item details
-                                Expanded(
-                                  flex: 3,
-                                  child: Column(
+                            child: isMobile
+                                ? Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(item.finishedProductName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                      const SizedBox(height: 2),
+                                      const SizedBox(height: 3),
                                       Text(
-                                        'SKU: ${item.finishedProductCode} | Invoiced: ${item.quantity.toInt()} ${item.unit} | Prev Returned: ${prevReturnedOnOtherDocs.toInt()} ${item.unit} | Rate: ${Formatters.formatCurrency(item.rate)}',
+                                        'SKU: ${item.finishedProductCode} | Invoiced: ${item.quantity.toInt()} ${item.unit} | Prev: ${prevReturnedOnOtherDocs.toInt()} ${item.unit} | Rate: ${Formatters.formatCurrency(item.rate)}',
                                         style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            flex: 2,
+                                            child: TextFormField(
+                                              controller: ctrl,
+                                              keyboardType: TextInputType.number,
+                                              decoration: InputDecoration(
+                                                labelText: 'Return Qty',
+                                                isDense: true,
+                                                helperText: 'Max: ${maxReturnable.toInt()}',
+                                                helperStyle: TextStyle(fontSize: 10, color: maxReturnable > 0 ? AppColors.primary : AppColors.danger),
+                                              ),
+                                              onChanged: (val) => setDialogState(() {}),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            flex: 3,
+                                            child: DropdownButtonFormField<ReturnCondition>(
+                                              value: currentCondition,
+                                              isDense: true,
+                                              isExpanded: true,
+                                              decoration: const InputDecoration(labelText: 'Condition', isDense: true),
+                                              items: const [
+                                                DropdownMenuItem(value: ReturnCondition.resalable, child: Text('Resalable (Restock)', style: TextStyle(fontSize: 12))),
+                                                DropdownMenuItem(value: ReturnCondition.damaged, child: Text('Damaged (Quarantine)', style: TextStyle(fontSize: 12))),
+                                                DropdownMenuItem(value: ReturnCondition.scrap, child: Text('Scrap (Write-off)', style: TextStyle(fontSize: 12))),
+                                              ],
+                                              onChanged: (val) {
+                                                if (val != null) {
+                                                  setDialogState(() => itemConditions[item.finishedProductId] = val);
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      // Item details
+                                      Expanded(
+                                        flex: 3,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(item.finishedProductName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'SKU: ${item.finishedProductCode} | Invoiced: ${item.quantity.toInt()} ${item.unit} | Prev Returned: ${prevReturnedOnOtherDocs.toInt()} ${item.unit} | Rate: ${Formatters.formatCurrency(item.rate)}',
+                                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+
+                                      // Return quantity input
+                                      SizedBox(
+                                        width: 110,
+                                        child: TextFormField(
+                                          controller: ctrl,
+                                          keyboardType: TextInputType.number,
+                                          decoration: InputDecoration(
+                                            labelText: 'Return Qty',
+                                            isDense: true,
+                                            helperText: 'Max: ${maxReturnable.toInt()}',
+                                            helperStyle: TextStyle(fontSize: 10, color: maxReturnable > 0 ? AppColors.primary : AppColors.danger),
+                                          ),
+                                          onChanged: (val) => setDialogState(() {}),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+
+                                      // Item condition dropdown
+                                      SizedBox(
+                                        width: 160,
+                                        child: DropdownButtonFormField<ReturnCondition>(
+                                          value: currentCondition,
+                                          isDense: true,
+                                          decoration: const InputDecoration(labelText: 'Condition', isDense: true),
+                                          items: const [
+                                            DropdownMenuItem(value: ReturnCondition.resalable, child: Text('Resalable (Restock)', style: TextStyle(fontSize: 12))),
+                                            DropdownMenuItem(value: ReturnCondition.damaged, child: Text('Damaged (Quarantine)', style: TextStyle(fontSize: 12))),
+                                            DropdownMenuItem(value: ReturnCondition.scrap, child: Text('Scrap (Write-off)', style: TextStyle(fontSize: 12))),
+                                          ],
+                                          onChanged: (val) {
+                                            if (val != null) {
+                                              setDialogState(() => itemConditions[item.finishedProductId] = val);
+                                            }
+                                          },
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-
-                                // Return quantity input
-                                SizedBox(
-                                  width: 110,
-                                  child: TextFormField(
-                                    controller: ctrl,
-                                    keyboardType: TextInputType.number,
-                                    decoration: InputDecoration(
-                                      labelText: 'Return Qty',
-                                      isDense: true,
-                                      helperText: 'Max: ${maxReturnable.toInt()}',
-                                      helperStyle: TextStyle(fontSize: 10, color: maxReturnable > 0 ? AppColors.primary : AppColors.danger),
-                                    ),
-                                    onChanged: (val) => setDialogState(() {}),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-
-                                // Item condition dropdown
-                                SizedBox(
-                                  width: 160,
-                                  child: DropdownButtonFormField<ReturnCondition>(
-                                    value: currentCondition,
-                                    isDense: true,
-                                    decoration: const InputDecoration(labelText: 'Condition', isDense: true),
-                                    items: const [
-                                      DropdownMenuItem(value: ReturnCondition.resalable, child: Text('Resalable (Restock)', style: TextStyle(fontSize: 12))),
-                                      DropdownMenuItem(value: ReturnCondition.damaged, child: Text('Damaged (Quarantine)', style: TextStyle(fontSize: 12))),
-                                      DropdownMenuItem(value: ReturnCondition.scrap, child: Text('Scrap (Write-off)', style: TextStyle(fontSize: 12))),
-                                    ],
-                                    onChanged: (val) {
-                                      if (val != null) {
-                                        setDialogState(() => itemConditions[item.finishedProductId] = val);
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
                           );
                         },
                       ),
@@ -312,11 +422,12 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     const SizedBox(height: 16),
 
                     // 3. Reason & Settlement settings
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<ReturnFinancialAction>(
+                    if (isMobile)
+                      Column(
+                        children: [
+                          DropdownButtonFormField<ReturnFinancialAction>(
                             value: financialAction,
+                            isExpanded: true,
                             decoration: const InputDecoration(labelText: 'Financial Resolution Mode *'),
                             items: const [
                               DropdownMenuItem(value: ReturnFinancialAction.adjustOutstanding, child: Text('Adjust Outstanding Balance (Auto-Calculated)')),
@@ -327,19 +438,46 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                               if (val != null) setDialogState(() => financialAction = val);
                             },
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
+                          const SizedBox(height: 12),
+                          TextFormField(
                             controller: reasonCtrl,
                             decoration: const InputDecoration(
                               labelText: 'Reason for Return *',
                               hintText: 'E.g., Client ordered excess, Defective batch',
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<ReturnFinancialAction>(
+                              value: financialAction,
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: 'Financial Resolution Mode *'),
+                              items: const [
+                                DropdownMenuItem(value: ReturnFinancialAction.adjustOutstanding, child: Text('Adjust Outstanding Balance (Auto-Calculated)')),
+                                DropdownMenuItem(value: ReturnFinancialAction.creditNote, child: Text('Issue Customer Store Credit / Credit Note')),
+                                DropdownMenuItem(value: ReturnFinancialAction.refund, child: Text('Disburse Direct Refund (Cash/Bank/UPI)')),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) setDialogState(() => financialAction = val);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: reasonCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Reason for Return *',
+                                hintText: 'E.g., Client ordered excess, Defective batch',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     const SizedBox(height: 12),
 
                     TextFormField(
@@ -352,88 +490,175 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.primarySoft.withOpacity(0.4),
+                        color: AppColors.primarySoft.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
+                      child: isMobile
+                          ? Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Items Selected: $totalItemsToReturn products', style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                const SizedBox(height: 2),
-                                Text('Taxable: ${Formatters.formatCurrency(liveSubtotal - liveDiscount)} | GST: ${Formatters.formatCurrency(liveGst)}', style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Total Return Value:', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                                    Text(Formatters.formatCurrency(liveTotal), style: AppTextStyles.h2.copyWith(color: AppColors.danger, fontSize: 18)),
+                                  ],
+                                ),
+                                const Divider(height: 16),
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 4,
+                                  children: [
+                                    Text('Items: $totalItemsToReturn products', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
+                                    Text('Taxable: ${Formatters.formatCurrency(liveSubtotal - liveDiscount)}', style: AppTextStyles.bodySmall),
+                                    Text('GST: ${Formatters.formatCurrency(liveGst)}', style: AppTextStyles.bodySmall),
+                                  ],
+                                ),
+                              ],
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Items Selected: $totalItemsToReturn products', style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      const SizedBox(height: 2),
+                                      Text('Taxable: ${Formatters.formatCurrency(liveSubtotal - liveDiscount)} | GST: ${Formatters.formatCurrency(liveGst)}', style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('Total Return Value', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                                    Text(Formatters.formatCurrency(liveTotal), style: AppTextStyles.h2.copyWith(color: AppColors.danger)),
+                                  ],
+                                ),
                               ],
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('Total Return Value', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                              Text(Formatters.formatCurrency(liveTotal), style: AppTextStyles.h2.copyWith(color: AppColors.danger)),
-                            ],
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              if (!isEdit) ...[
-                ErpButton(
-                  text: 'Save as Draft',
-                  isOutlined: true,
-                  icon: Icons.edit_note,
-                  onPressed: () => _processReturnSubmission(
-                    context,
-                    db,
-                    selectedInvoice,
-                    returnQtyCtrls,
-                    itemConditions,
-                    reasonCtrl.text.trim(),
-                    financialAction,
-                    notesCtrl.text.trim(),
-                    SalesReturnStatus.draft,
-                    ctx,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ErpButton(
-                  text: 'Submit for Inspection',
-                  icon: Icons.send_outlined,
-                  onPressed: () => _processReturnSubmission(
-                    context,
-                    db,
-                    selectedInvoice,
-                    returnQtyCtrls,
-                    itemConditions,
-                    reasonCtrl.text.trim(),
-                    financialAction,
-                    notesCtrl.text.trim(),
-                    SalesReturnStatus.submitted,
-                    ctx,
-                  ),
-                ),
-              ] else ...[
-                ErpButton(
-                  text: 'Update Return Draft',
-                  icon: Icons.save_outlined,
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Sales return updated.'), backgroundColor: AppColors.success),
-                    );
-                  },
-                ),
-              ],
-            ],
+            actions: isMobile
+                ? [
+                    SizedBox(
+                      width: double.infinity,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (!isEdit) ...[
+                            ErpButton(
+                              text: 'Submit for Inspection',
+                              icon: Icons.send_outlined,
+                              onPressed: () => _processReturnSubmission(
+                                context,
+                                db,
+                                selectedInvoice,
+                                returnQtyCtrls,
+                                itemConditions,
+                                reasonCtrl.text.trim(),
+                                financialAction,
+                                notesCtrl.text.trim(),
+                                SalesReturnStatus.submitted,
+                                ctx,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ErpButton(
+                              text: 'Save as Draft',
+                              isOutlined: true,
+                              icon: Icons.edit_note,
+                              onPressed: () => _processReturnSubmission(
+                                context,
+                                db,
+                                selectedInvoice,
+                                returnQtyCtrls,
+                                itemConditions,
+                                reasonCtrl.text.trim(),
+                                financialAction,
+                                notesCtrl.text.trim(),
+                                SalesReturnStatus.draft,
+                                ctx,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                          ] else ...[
+                            ErpButton(
+                              text: 'Update Return Draft',
+                              icon: Icons.save_outlined,
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Sales return updated.'), backgroundColor: AppColors.success),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ]
+                : [
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                    if (!isEdit) ...[
+                      ErpButton(
+                        text: 'Save as Draft',
+                        isOutlined: true,
+                        icon: Icons.edit_note,
+                        onPressed: () => _processReturnSubmission(
+                          context,
+                          db,
+                          selectedInvoice,
+                          returnQtyCtrls,
+                          itemConditions,
+                          reasonCtrl.text.trim(),
+                          financialAction,
+                          notesCtrl.text.trim(),
+                          SalesReturnStatus.draft,
+                          ctx,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ErpButton(
+                        text: 'Submit for Inspection',
+                        icon: Icons.send_outlined,
+                        onPressed: () => _processReturnSubmission(
+                          context,
+                          db,
+                          selectedInvoice,
+                          returnQtyCtrls,
+                          itemConditions,
+                          reasonCtrl.text.trim(),
+                          financialAction,
+                          notesCtrl.text.trim(),
+                          SalesReturnStatus.submitted,
+                          ctx,
+                        ),
+                      ),
+                    ] else ...[
+                      ErpButton(
+                        text: 'Update Return Draft',
+                        icon: Icons.save_outlined,
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Sales return updated.'), backgroundColor: AppColors.success),
+                          );
+                        },
+                      ),
+                    ],
+                  ],
           );
         },
       ),
@@ -549,69 +774,108 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
   void _showApproveConfirmationDialog(BuildContext context, Sale returnDoc, MockDatabaseService db) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle_outline, color: AppColors.success, size: 24),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text('Approve Sales Return & Process Adjustments'),
-            ),
-          ],
-        ),
-        content: Container(
-          constraints: const BoxConstraints(maxWidth: 520),
-          width: double.infinity,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (ctx) {
+        final isMobile = MediaQuery.of(ctx).size.width < 550;
+        return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          title: const Row(
             children: [
-              Text('Are you sure you want to approve Sales Return ${returnDoc.invoiceNumber}?', style: AppTextStyles.bodyMedium),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Automated Actions Triggered upon Approval:', style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                    const SizedBox(height: 6),
-                    _buildBullet('Restock resalable items to finished product inventory'),
-                    _buildBullet('Record damaged/scrap adjustment records and stock movement ledgers'),
-                    _buildBullet('Adjust customer outstanding balance / generate refund voucher'),
-                    _buildBullet('Update Sales Invoice net totals without modifying historical items'),
-                    _buildBullet('Adjust Architect Commission & Project Revenue if applicable'),
-                  ],
-                ),
+              Icon(Icons.check_circle_outline, color: AppColors.success, size: 24),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text('Approve Sales Return & Process Adjustments'),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ErpButton(
-            text: 'Approve & Execute Adjustments',
-            icon: Icons.check,
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await db.approveSalesReturnAsync(returnDoc.id);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.'),
-                    backgroundColor: AppColors.success,
+          content: Container(
+            constraints: const BoxConstraints(maxWidth: 520),
+            width: double.infinity,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Are you sure you want to approve Sales Return ${returnDoc.invoiceNumber}?', style: AppTextStyles.bodyMedium),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Automated Actions Triggered upon Approval:', style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                      const SizedBox(height: 6),
+                      _buildBullet('Restock resalable items to finished product inventory'),
+                      _buildBullet('Record damaged/scrap adjustment records and stock movement ledgers'),
+                      _buildBullet('Adjust customer outstanding balance / generate refund voucher'),
+                      _buildBullet('Update Sales Invoice net totals without modifying historical items'),
+                      _buildBullet('Adjust Architect Commission & Project Revenue if applicable'),
+                    ],
                   ),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to approve return: $e'), backgroundColor: AppColors.danger),
-                );
-              }
-            },
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
+          actions: isMobile
+              ? [
+                  SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ErpButton(
+                          text: 'Approve & Execute Adjustments',
+                          icon: Icons.check,
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            try {
+                              await db.approveSalesReturnAsync(returnDoc.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to approve return: $e'), backgroundColor: AppColors.danger),
+                              );
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 6),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ]
+              : [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  ErpButton(
+                    text: 'Approve & Execute Adjustments',
+                    icon: Icons.check,
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      try {
+                        await db.approveSalesReturnAsync(returnDoc.id);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to approve return: $e'), backgroundColor: AppColors.danger),
+                        );
+                      }
+                    },
+                  ),
+                ],
+        );
+      },
     );
   }
 
@@ -619,51 +883,90 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     final reasonCtrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.cancel_outlined, color: AppColors.danger, size: 24),
-            SizedBox(width: 10),
-            Text('Reject Sales Return'),
-          ],
-        ),
-        content: SizedBox(
-          width: 450,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (ctx) {
+        final isMobile = MediaQuery.of(ctx).size.width < 550;
+        return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          title: const Row(
             children: [
-              Text('Rejecting ${returnDoc.invoiceNumber} will close this return without making any stock or financial adjustments.', style: AppTextStyles.bodyMedium),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: reasonCtrl,
-                decoration: const InputDecoration(labelText: 'Rejection Reason *', hintText: 'E.g., Outside return policy window, Unauthorized items'),
-              ),
+              Icon(Icons.cancel_outlined, color: AppColors.danger, size: 24),
+              SizedBox(width: 10),
+              Expanded(child: Text('Reject Sales Return')),
             ],
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ErpButton(
-            text: 'Confirm Rejection',
-            isDanger: true,
-            icon: Icons.close,
-            onPressed: () {
-              if (reasonCtrl.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please specify a rejection reason.'), backgroundColor: AppColors.danger),
-                );
-                return;
-              }
-              Navigator.pop(ctx);
-              db.rejectSalesReturn(returnDoc.id, reasonCtrl.text.trim());
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Sales Return ${returnDoc.invoiceNumber} rejected.'), backgroundColor: AppColors.neutral),
-              );
-            },
+          content: Container(
+            constraints: const BoxConstraints(maxWidth: 450),
+            width: double.infinity,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Rejecting ${returnDoc.invoiceNumber} will close this return without making any stock or financial adjustments.', style: AppTextStyles.bodyMedium),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: reasonCtrl,
+                  decoration: const InputDecoration(labelText: 'Rejection Reason *', hintText: 'E.g., Outside return policy window, Unauthorized items'),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
+          actions: isMobile
+              ? [
+                  SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ErpButton(
+                          text: 'Confirm Rejection',
+                          isDanger: true,
+                          icon: Icons.close,
+                          onPressed: () {
+                            if (reasonCtrl.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please specify a rejection reason.'), backgroundColor: AppColors.danger),
+                              );
+                              return;
+                            }
+                            Navigator.pop(ctx);
+                            db.rejectSalesReturn(returnDoc.id, reasonCtrl.text.trim());
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Sales Return ${returnDoc.invoiceNumber} rejected.'), backgroundColor: AppColors.neutral),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 6),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ]
+              : [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  ErpButton(
+                    text: 'Confirm Rejection',
+                    isDanger: true,
+                    icon: Icons.close,
+                    onPressed: () {
+                      if (reasonCtrl.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please specify a rejection reason.'), backgroundColor: AppColors.danger),
+                        );
+                        return;
+                      }
+                      Navigator.pop(ctx);
+                      db.rejectSalesReturn(returnDoc.id, reasonCtrl.text.trim());
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Sales Return ${returnDoc.invoiceNumber} rejected.'), backgroundColor: AppColors.neutral),
+                      );
+                    },
+                  ),
+                ],
+        );
+      },
     );
   }
 
@@ -678,6 +981,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          final isMobile = MediaQuery.of(ctx).size.width < 550;
           return AlertDialog(
             insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             title: Row(
@@ -710,25 +1014,46 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Approved Return Value', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                              Text(Formatters.formatCurrency(returnDoc.totalAmount), style: AppTextStyles.bodyBold),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('Eligible Refund Amount', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                              Text(Formatters.formatCurrency(returnDoc.refundAmount > 0 ? returnDoc.refundAmount : returnDoc.totalAmount), style: AppTextStyles.h3.copyWith(color: AppColors.successText)),
-                            ],
-                          ),
-                        ],
-                      ),
+                      child: isMobile
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Approved Return Value:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                                    Text(Formatters.formatCurrency(returnDoc.totalAmount), style: AppTextStyles.bodyBold),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Eligible Refund Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                                    Text(Formatters.formatCurrency(returnDoc.refundAmount > 0 ? returnDoc.refundAmount : returnDoc.totalAmount), style: AppTextStyles.h3.copyWith(color: AppColors.successText)),
+                                  ],
+                                ),
+                              ],
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Approved Return Value', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                                    Text(Formatters.formatCurrency(returnDoc.totalAmount), style: AppTextStyles.bodyBold),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('Eligible Refund Amount', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                                    Text(Formatters.formatCurrency(returnDoc.refundAmount > 0 ? returnDoc.refundAmount : returnDoc.totalAmount), style: AppTextStyles.h3.copyWith(color: AppColors.successText)),
+                                  ],
+                                ),
+                              ],
+                            ),
                     ),
                     const SizedBox(height: 16),
 
@@ -785,44 +1110,95 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                 ),
               ),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              ErpButton(
-                text: asCustomerCredit ? 'Issue Store Credit' : 'Disburse Refund',
-                icon: Icons.check,
-                onPressed: () async {
-                  final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
-                  if (amount <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter a valid refund amount.'), backgroundColor: AppColors.danger),
-                    );
-                    return;
-                  }
+            actions: isMobile
+                ? [
+                    SizedBox(
+                      width: double.infinity,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ErpButton(
+                            text: asCustomerCredit ? 'Issue Store Credit' : 'Disburse Refund',
+                            icon: Icons.check,
+                            onPressed: () async {
+                              final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
+                              if (amount <= 0) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Please enter a valid refund amount.'), backgroundColor: AppColors.danger),
+                                );
+                                return;
+                              }
 
-                  try {
-                    await db.disburseRefundAsync(
-                      returnId: returnDoc.id,
-                      paymentMode: asCustomerCredit ? PaymentMode.creditNote : refundMode,
-                      amount: amount,
-                      transactionRef: refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : null,
-                      notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
-                    );
+                              try {
+                                await db.disburseRefundAsync(
+                                  returnId: returnDoc.id,
+                                  paymentMode: asCustomerCredit ? PaymentMode.creditNote : refundMode,
+                                  amount: amount,
+                                  transactionRef: refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : null,
+                                  notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
+                                );
 
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!'),
-                        backgroundColor: AppColors.success,
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              } catch (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to process refund: $e'), backgroundColor: AppColors.danger),
+                                );
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 6),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+                          ),
+                        ],
                       ),
-                    );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to process refund: $e'), backgroundColor: AppColors.danger),
-                    );
-                  }
-                },
-              ),
-            ],
+                    ),
+                  ]
+                : [
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                    ErpButton(
+                      text: asCustomerCredit ? 'Issue Store Credit' : 'Disburse Refund',
+                      icon: Icons.check,
+                      onPressed: () async {
+                        final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
+                        if (amount <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter a valid refund amount.'), backgroundColor: AppColors.danger),
+                          );
+                          return;
+                        }
+
+                        try {
+                          await db.disburseRefundAsync(
+                            returnId: returnDoc.id,
+                            paymentMode: asCustomerCredit ? PaymentMode.creditNote : refundMode,
+                            amount: amount,
+                            transactionRef: refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : null,
+                            notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
+                          );
+
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to process refund: $e'), backgroundColor: AppColors.danger),
+                          );
+                        }
+                      },
+                    ),
+                  ],
           );
         },
       ),
@@ -904,92 +1280,95 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
+          ErpSectionHeaderCard(
+            icon: Icons.assignment_return_outlined,
+            title: 'Sales Returns & Credit Notes',
+            badgeText: 'RETURN VERIFICATION',
+            action: ErpButton(
+              text: 'Create Sales Return',
+              icon: Icons.assignment_return_outlined,
+              onPressed: () => _showCreateOrEditSalesReturnDialog(context, db),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 2. Summary Metric Cards (Responsive: 100% vertical on mobile, 2x2 on tablet, 4 in a row on desktop)
           LayoutBuilder(
             builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Sales Returns & Credit Notes', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Multi-stage return verification: QA Inspection, Condition Routing (Resalable/Damaged/Scrap), Ledger Adjustments & Refunds',
-                    style: AppTextStyles.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              );
-              final actionButton = ErpButton(
-                text: 'Create Sales Return',
+              final isMobile = constraints.maxWidth < 650;
+              final isTablet = constraints.maxWidth < 950;
+              final totalReturnVal = db.salesReturns.fold(0.0, (sum, r) => sum + r.totalAmount);
+
+              final card1 = FigmaMetricCard(
                 icon: Icons.assignment_return_outlined,
-                onPressed: () => _showCreateOrEditSalesReturnDialog(context, db),
+                iconColor: AppColors.primary,
+                title: 'Total Sales Returns',
+                value: '${db.salesReturns.length}',
+                subtext: '₹${Formatters.formatNumber(totalReturnVal)} Total Return Value',
+              );
+              final card2 = FigmaMetricCard(
+                icon: Icons.check_circle_outline_rounded,
+                iconColor: AppColors.success,
+                title: 'Approved & Restocked',
+                value: '$approvedCount',
+                subtext: Formatters.formatCurrency(db.totalSalesReturnsAmount),
+                subtextColor: AppColors.success,
+              );
+              final card3 = FigmaMetricCard(
+                icon: Icons.pending_actions_outlined,
+                iconColor: AppColors.warning,
+                title: 'In Inspection & Review',
+                value: '$inspectionCount',
+                subtext: '$draftCount drafts pending submission',
+                subtextColor: AppColors.warning,
+              );
+              final card4 = FigmaMetricCard(
+                icon: Icons.payments_outlined,
+                iconColor: AppColors.danger,
+                title: 'Pending Refunds',
+                value: '${db.pendingRefundsCount}',
+                subtext: 'Customer payout or credit required',
+                subtextColor: AppColors.danger,
               );
 
-              if (isNarrow) {
+              if (isMobile) {
                 return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    titleBlock,
-                    const SizedBox(height: 12),
-                    actionButton,
+                    card1,
+                    const SizedBox(height: 10),
+                    card2,
+                    const SizedBox(height: 10),
+                    card3,
+                    const SizedBox(height: 10),
+                    card4,
+                  ],
+                );
+              }
+
+              if (isTablet) {
+                final halfWidth = (constraints.maxWidth - 12) / 2;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    SizedBox(width: halfWidth, child: card1),
+                    SizedBox(width: halfWidth, child: card2),
+                    SizedBox(width: halfWidth, child: card3),
+                    SizedBox(width: halfWidth, child: card4),
                   ],
                 );
               }
 
               return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(child: titleBlock),
+                  Expanded(child: card1),
                   const SizedBox(width: 12),
-                  actionButton,
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-
-          // 2. Stat Cards Grid
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth >= 1200
-                  ? 4
-                  : constraints.maxWidth >= 750
-                      ? 2
-                      : 1;
-
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 2.2,
-                children: [
-                  StatCard(
-                    title: 'Total Sales Returns',
-                    value: '${db.salesReturns.length}',
-                    trendText: '₹${Formatters.formatNumber(db.salesReturns.fold(0.0, (sum, r) => sum + r.totalAmount))} total return value',
-                    icon: const Icon(Icons.assignment_return_outlined, color: AppColors.primary, size: 20),
-                  ),
-                  StatCard(
-                    title: 'Approved & Restocked',
-                    value: '$approvedCount',
-                    trendText: Formatters.formatCurrency(db.totalSalesReturnsAmount),
-                    icon: const Icon(Icons.check_circle_outline, color: AppColors.success, size: 20),
-                  ),
-                  StatCard(
-                    title: 'In Inspection & Review',
-                    value: '$inspectionCount',
-                    trendText: '$draftCount drafts pending submission',
-                    icon: const Icon(Icons.pending_actions_outlined, color: AppColors.warning, size: 20),
-                  ),
-                  StatCard(
-                    title: 'Pending Refunds',
-                    value: '${db.pendingRefundsCount}',
-                    trendText: 'Customer payout or credit required',
-                    icon: const Icon(Icons.payments_outlined, color: AppColors.danger, size: 20),
-                  ),
+                  Expanded(child: card2),
+                  const SizedBox(width: 12),
+                  Expanded(child: card3),
+                  const SizedBox(width: 12),
+                  Expanded(child: card4),
                 ],
               );
             },
@@ -1022,10 +1401,11 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
           ),
           const SizedBox(height: 16),
 
-          // 4. Search and Dropdown Filter Row
+          // 4. Search and Dropdown Filter Row (Responsive: 100% vertical on mobile)
           LayoutBuilder(
             builder: (context, filterBox) {
-              final isStacked = filterBox.maxWidth < 750;
+              final isMobile = filterBox.maxWidth < 650;
+              final isTablet = filterBox.maxWidth < 900;
 
               final searchField = TextField(
                 onChanged: (val) => setState(() => _searchQuery = val),
@@ -1058,7 +1438,20 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                 onChanged: (val) => setState(() => _selectedReturnTypeFilter = val),
               );
 
-              if (isStacked) {
+              if (isMobile) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    searchField,
+                    const SizedBox(height: 10),
+                    customerDropdown,
+                    const SizedBox(height: 10),
+                    typeDropdown,
+                  ],
+                );
+              }
+
+              if (isTablet) {
                 return Column(
                   children: [
                     searchField,
@@ -1087,7 +1480,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
           ),
           const SizedBox(height: 16),
 
-          // 5. Returns Data Table
+          // 5. Returns Data View (Responsive: vertical card list on mobile, ErpDataTable on desktop)
           if (filtered.isEmpty)
             Container(
               padding: const EdgeInsets.symmetric(vertical: 40),
@@ -1108,167 +1501,298 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
               ),
             )
           else
-            ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'Return No'),
-                ErpColumn(title: 'Date'),
-                ErpColumn(title: 'Customer / Party'),
-                ErpColumn(title: 'Original Invoice'),
-                ErpColumn(title: 'Return Type'),
-                ErpColumn(title: 'Return Value', isNumeric: true),
-                ErpColumn(title: 'Refund Status'),
-                ErpColumn(title: 'Return Status'),
-                ErpColumn(title: 'Created By'),
-                ErpColumn(title: 'Actions'),
-              ],
-              rows: filtered.map((ret) {
-                // Status Badges
-                ErpStatusBadge statusBadge;
-                switch (ret.salesReturnStatus ?? SalesReturnStatus.draft) {
-                  case SalesReturnStatus.approved:
-                  case SalesReturnStatus.completed:
-                    statusBadge = ErpStatusBadge.success('COMPLETED');
-                    break;
-                  case SalesReturnStatus.inspection:
-                    statusBadge = ErpStatusBadge.warning('INSPECTION');
-                    break;
-                  case SalesReturnStatus.itemsReceived:
-                    statusBadge = ErpStatusBadge.info('RECEIVED');
-                    break;
-                  case SalesReturnStatus.submitted:
-                    statusBadge = ErpStatusBadge.purple('SUBMITTED');
-                    break;
-                  case SalesReturnStatus.draft:
-                    statusBadge = ErpStatusBadge.neutral('DRAFT');
-                    break;
-                  case SalesReturnStatus.rejected:
-                    statusBadge = ErpStatusBadge.danger('REJECTED');
-                    break;
-                  default:
-                    statusBadge = ErpStatusBadge.neutral('PENDING');
+            LayoutBuilder(
+              builder: (context, tableConstraints) {
+                final isMobileView = tableConstraints.maxWidth < 750;
+
+                if (isMobileView) {
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (ctx, idx) {
+                      final ret = filtered[idx];
+                      final statusBadge = _getStatusBadge(ret.salesReturnStatus ?? SalesReturnStatus.draft);
+                      final refundBadge = _getRefundBadge(ret.refundStatus ?? RefundStatus.notRequired);
+
+                      return Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x05000000),
+                              blurRadius: 6,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Header Row: Return Number + Date + Action Menu
+                            Row(
+                              children: [
+                                InkWell(
+                                  onTap: () {
+                                    ref.read(activeRecordDetailsStackProvider.notifier).push(ret.id, 'salesReturn', ErpNavSection.salesReturns);
+                                  },
+                                  child: Text(
+                                    ret.invoiceNumber,
+                                    style: AppTextStyles.bodyBold.copyWith(fontSize: 13.5, color: AppColors.primary),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  Formatters.formatDate(ret.saleDate),
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                                ),
+                                const Spacer(),
+                                _buildRowActionMenu(context, ret, db),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+
+                            // Customer Name
+                            Text(
+                              ret.partyName,
+                              style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
+                            ),
+                            const SizedBox(height: 4),
+
+                            // Original Invoice Link
+                            if (ret.originalInvoiceNumber != null && ret.originalInvoiceNumber!.isNotEmpty) ...[
+                              Row(
+                                children: [
+                                  Text(
+                                    'Original Inv: ',
+                                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                                  ),
+                                  InkWell(
+                                    onTap: () {
+                                      if (ret.originalInvoiceId != null) {
+                                        ref.read(activeRecordDetailsStackProvider.notifier).push(ret.originalInvoiceId!, 'invoice', ErpNavSection.salesReturns);
+                                      }
+                                    },
+                                    child: Text(
+                                      ret.originalInvoiceNumber!,
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w600,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+
+                            // Return Value & Badges
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    children: [
+                                      statusBadge,
+                                      refundBadge,
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      Formatters.formatCurrency(ret.totalAmount),
+                                      style: AppTextStyles.bodyBold.copyWith(fontSize: 15, color: AppColors.danger),
+                                    ),
+                                    Text(
+                                      ret.returnType == ReturnType.fullReturn ? 'Full Return' : 'Partial Return',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: ret.returnType == ReturnType.fullReturn ? AppColors.dangerText : AppColors.primaryDark,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
                 }
 
-                ErpStatusBadge refundBadge;
-                switch (ret.refundStatus ?? RefundStatus.notRequired) {
-                  case RefundStatus.processed:
-                    refundBadge = ErpStatusBadge.success('REFUNDED');
-                    break;
-                  case RefundStatus.pending:
-                    refundBadge = ErpStatusBadge.danger('REFUND DUE');
-                    break;
-                  case RefundStatus.approved:
-                    refundBadge = ErpStatusBadge.warning('REFUND APPR');
-                    break;
-                  case RefundStatus.notRequired:
-                    refundBadge = ErpStatusBadge.neutral('NOT REQ');
-                    break;
-                  case RefundStatus.cancelled:
-                    refundBadge = ErpStatusBadge.neutral('CANCELLED');
-                    break;
-                }
+                return ErpDataTable(
+                  columns: const [
+                    ErpColumn(title: 'Return No'),
+                    ErpColumn(title: 'Date'),
+                    ErpColumn(title: 'Customer / Party'),
+                    ErpColumn(title: 'Original Invoice'),
+                    ErpColumn(title: 'Return Type'),
+                    ErpColumn(title: 'Return Value', isNumeric: true),
+                    ErpColumn(title: 'Refund Status'),
+                    ErpColumn(title: 'Return Status'),
+                    ErpColumn(title: 'Created By'),
+                    ErpColumn(title: 'Actions'),
+                  ],
+                  rows: filtered.map((ret) {
+                    final statusBadge = _getStatusBadge(ret.salesReturnStatus ?? SalesReturnStatus.draft);
+                    final refundBadge = _getRefundBadge(ret.refundStatus ?? RefundStatus.notRequired);
 
-                return [
-                  InkWell(
-                    onTap: () {
-                      ref.read(activeRecordDetailsStackProvider.notifier).push(ret.id, 'salesReturn', ErpNavSection.salesReturns);
-                    },
-                    child: Text(
-                      ret.invoiceNumber,
-                      style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary),
-                    ),
-                  ),
-                  Text(Formatters.formatDate(ret.saleDate), style: AppTextStyles.bodySmall),
-                  Text(ret.partyName, style: AppTextStyles.bodyMedium),
-                  InkWell(
-                    onTap: () {
-                      if (ret.originalInvoiceId != null) {
-                        ref.read(activeRecordDetailsStackProvider.notifier).push(ret.originalInvoiceId!, 'invoice', ErpNavSection.salesReturns);
-                      }
-                    },
-                    child: Text(
-                      ret.originalInvoiceNumber ?? '-',
-                      style: AppTextStyles.bodyBold.copyWith(fontSize: 11.5, color: AppColors.primary, decoration: TextDecoration.underline),
-                    ),
-                  ),
-                  Text(
-                    ret.returnType == ReturnType.fullReturn ? 'Full Return' : 'Partial',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: ret.returnType == ReturnType.fullReturn ? AppColors.dangerText : AppColors.primaryDark,
-                    ),
-                  ),
-                  Text(Formatters.formatCurrency(ret.totalAmount), style: AppTextStyles.bodyBold),
-                  refundBadge,
-                  statusBadge,
-                  Text(ret.createdBy ?? 'Staff', style: AppTextStyles.bodySmall),
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, size: 18),
-                    tooltip: 'Workflow Actions',
-                    onSelected: (val) {
-                      switch (val) {
-                        case 'view':
+                    return [
+                      InkWell(
+                        onTap: () {
                           ref.read(activeRecordDetailsStackProvider.notifier).push(ret.id, 'salesReturn', ErpNavSection.salesReturns);
-                          break;
-                        case 'edit':
-                          _showCreateOrEditSalesReturnDialog(context, db, initialExistingReturn: ret);
-                          break;
-                        case 'submit':
-                          db.updateSalesReturnStatus(ret.id, SalesReturnStatus.submitted);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return submitted for review.'), backgroundColor: AppColors.primary));
-                          break;
-                        case 'receive':
-                          db.updateSalesReturnStatus(ret.id, SalesReturnStatus.itemsReceived);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Items marked as received at warehouse.'), backgroundColor: AppColors.info));
-                          break;
-                        case 'inspect':
-                          db.updateSalesReturnStatus(ret.id, SalesReturnStatus.inspection);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return moved to QA inspection.'), backgroundColor: AppColors.warning));
-                          break;
-                        case 'approve':
-                          _showApproveConfirmationDialog(context, ret, db);
-                          break;
-                        case 'reject':
-                          _showRejectConfirmationDialog(context, ret, db);
-                          break;
-                        case 'refund':
-                          _showProcessRefundDialog(context, ret, db);
-                          break;
-                        case 'pdf':
-                          SalesPdfGeneratorDialog.show(context, ret, db);
-                          break;
-                        case 'view_invoice':
+                        },
+                        child: Text(
+                          ret.invoiceNumber,
+                          style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary),
+                        ),
+                      ),
+                      Text(Formatters.formatDate(ret.saleDate), style: AppTextStyles.bodySmall),
+                      Text(ret.partyName, style: AppTextStyles.bodyMedium),
+                      InkWell(
+                        onTap: () {
                           if (ret.originalInvoiceId != null) {
                             ref.read(activeRecordDetailsStackProvider.notifier).push(ret.originalInvoiceId!, 'invoice', ErpNavSection.salesReturns);
                           }
-                          break;
-                      }
-                    },
-                    itemBuilder: (ctx) => [
-                      const PopupMenuItem(value: 'view', child: Row(children: [Icon(Icons.visibility_outlined, size: 16), SizedBox(width: 8), Text('View Full Details')])),
-                      if (ret.salesReturnStatus == SalesReturnStatus.draft) ...[
-                        const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 16), SizedBox(width: 8), Text('Edit Draft')])),
-                        const PopupMenuItem(value: 'submit', child: Row(children: [Icon(Icons.send_outlined, size: 16, color: AppColors.primary), SizedBox(width: 8), Text('Submit for Review')])),
-                      ],
-                      if (ret.salesReturnStatus == SalesReturnStatus.submitted)
-                        const PopupMenuItem(value: 'receive', child: Row(children: [Icon(Icons.inventory_2_outlined, size: 16, color: AppColors.info), SizedBox(width: 8), Text('Mark Items Received')])),
-                      if (ret.salesReturnStatus == SalesReturnStatus.itemsReceived)
-                        const PopupMenuItem(value: 'inspect', child: Row(children: [Icon(Icons.find_in_page_outlined, size: 16, color: AppColors.warning), SizedBox(width: 8), Text('Start QA Inspection')])),
-                      if (ret.salesReturnStatus != SalesReturnStatus.approved && ret.salesReturnStatus != SalesReturnStatus.completed && ret.salesReturnStatus != SalesReturnStatus.rejected) ...[
-                        const PopupMenuItem(value: 'approve', child: Row(children: [Icon(Icons.check_circle_outline, size: 16, color: AppColors.success), SizedBox(width: 8), Text('Approve & Restock')])),
-                        const PopupMenuItem(value: 'reject', child: Row(children: [Icon(Icons.cancel_outlined, size: 16, color: AppColors.danger), SizedBox(width: 8), Text('Reject Return')])),
-                      ],
-                      if (ret.refundStatus == RefundStatus.pending || ret.refundStatus == RefundStatus.approved)
-                        const PopupMenuItem(value: 'refund', child: Row(children: [Icon(Icons.payments_outlined, size: 16, color: AppColors.success), SizedBox(width: 8), Text('Process Refund / Credit')])),
-                      const PopupMenuItem(value: 'view_invoice', child: Row(children: [Icon(Icons.receipt_long_outlined, size: 16), SizedBox(width: 8), Text('View Original Invoice')])),
-                      const PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf, size: 16, color: AppColors.primary), SizedBox(width: 8), Text('Credit Note PDF')])),
-                    ],
-                  ),
-                ];
-              }).toList(),
+                        },
+                        child: Text(
+                          ret.originalInvoiceNumber ?? '-',
+                          style: AppTextStyles.bodyBold.copyWith(fontSize: 11.5, color: AppColors.primary, decoration: TextDecoration.underline),
+                        ),
+                      ),
+                      Text(
+                        ret.returnType == ReturnType.fullReturn ? 'Full Return' : 'Partial',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: ret.returnType == ReturnType.fullReturn ? AppColors.dangerText : AppColors.primaryDark,
+                        ),
+                      ),
+                      Text(Formatters.formatCurrency(ret.totalAmount), style: AppTextStyles.bodyBold),
+                      refundBadge,
+                      statusBadge,
+                      Text(ret.createdBy ?? 'Staff', style: AppTextStyles.bodySmall),
+                      _buildRowActionMenu(context, ret, db),
+                    ];
+                  }).toList(),
+                );
+              },
             ),
         ],
       ),
+    );
+  }
+
+  ErpStatusBadge _getStatusBadge(SalesReturnStatus status) {
+    switch (status) {
+      case SalesReturnStatus.approved:
+      case SalesReturnStatus.completed:
+        return ErpStatusBadge.success('COMPLETED');
+      case SalesReturnStatus.inspection:
+        return ErpStatusBadge.warning('INSPECTION');
+      case SalesReturnStatus.itemsReceived:
+        return ErpStatusBadge.info('RECEIVED');
+      case SalesReturnStatus.submitted:
+        return ErpStatusBadge.purple('SUBMITTED');
+      case SalesReturnStatus.draft:
+        return ErpStatusBadge.neutral('DRAFT');
+      case SalesReturnStatus.rejected:
+        return ErpStatusBadge.danger('REJECTED');
+      default:
+        return ErpStatusBadge.neutral('PENDING');
+    }
+  }
+
+  ErpStatusBadge _getRefundBadge(RefundStatus status) {
+    switch (status) {
+      case RefundStatus.processed:
+        return ErpStatusBadge.success('REFUNDED');
+      case RefundStatus.pending:
+        return ErpStatusBadge.danger('REFUND DUE');
+      case RefundStatus.approved:
+        return ErpStatusBadge.warning('REFUND APPR');
+      case RefundStatus.notRequired:
+        return ErpStatusBadge.neutral('NOT REQ');
+      case RefundStatus.cancelled:
+        return ErpStatusBadge.neutral('CANCELLED');
+    }
+  }
+
+  Widget _buildRowActionMenu(BuildContext context, Sale ret, MockDatabaseService db) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 18),
+      tooltip: 'Workflow Actions',
+      onSelected: (val) {
+        switch (val) {
+          case 'view':
+            ref.read(activeRecordDetailsStackProvider.notifier).push(ret.id, 'salesReturn', ErpNavSection.salesReturns);
+            break;
+          case 'edit':
+            _showCreateOrEditSalesReturnDialog(context, db, initialExistingReturn: ret);
+            break;
+          case 'submit':
+            db.updateSalesReturnStatus(ret.id, SalesReturnStatus.submitted);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return submitted for review.'), backgroundColor: AppColors.primary));
+            break;
+          case 'receive':
+            db.updateSalesReturnStatus(ret.id, SalesReturnStatus.itemsReceived);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Items marked as received at warehouse.'), backgroundColor: AppColors.info));
+            break;
+          case 'inspect':
+            db.updateSalesReturnStatus(ret.id, SalesReturnStatus.inspection);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return moved to QA inspection.'), backgroundColor: AppColors.warning));
+            break;
+          case 'approve':
+            _showApproveConfirmationDialog(context, ret, db);
+            break;
+          case 'reject':
+            _showRejectConfirmationDialog(context, ret, db);
+            break;
+          case 'refund':
+            _showProcessRefundDialog(context, ret, db);
+            break;
+          case 'pdf':
+            SalesPdfGeneratorDialog.show(context, ret, db);
+            break;
+          case 'view_invoice':
+            if (ret.originalInvoiceId != null) {
+              ref.read(activeRecordDetailsStackProvider.notifier).push(ret.originalInvoiceId!, 'invoice', ErpNavSection.salesReturns);
+            }
+            break;
+        }
+      },
+      itemBuilder: (ctx) => [
+        const PopupMenuItem(value: 'view', child: Row(children: [Icon(Icons.visibility_outlined, size: 16), SizedBox(width: 8), Text('View Full Details')])),
+        if (ret.salesReturnStatus == SalesReturnStatus.draft) ...[
+          const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 16), SizedBox(width: 8), Text('Edit Draft')])),
+          const PopupMenuItem(value: 'submit', child: Row(children: [Icon(Icons.send_outlined, size: 16, color: AppColors.primary), SizedBox(width: 8), Text('Submit for Review')])),
+        ],
+        if (ret.salesReturnStatus == SalesReturnStatus.submitted)
+          const PopupMenuItem(value: 'receive', child: Row(children: [Icon(Icons.inventory_2_outlined, size: 16, color: AppColors.info), SizedBox(width: 8), Text('Mark Items Received')])),
+        if (ret.salesReturnStatus == SalesReturnStatus.itemsReceived)
+          const PopupMenuItem(value: 'inspect', child: Row(children: [Icon(Icons.find_in_page_outlined, size: 16, color: AppColors.warning), SizedBox(width: 8), Text('Start QA Inspection')])),
+        if (ret.salesReturnStatus != SalesReturnStatus.approved && ret.salesReturnStatus != SalesReturnStatus.completed && ret.salesReturnStatus != SalesReturnStatus.rejected) ...[
+          const PopupMenuItem(value: 'approve', child: Row(children: [Icon(Icons.check_circle_outline, size: 16, color: AppColors.success), SizedBox(width: 8), Text('Approve & Restock')])),
+          const PopupMenuItem(value: 'reject', child: Row(children: [Icon(Icons.cancel_outlined, size: 16, color: AppColors.danger), SizedBox(width: 8), Text('Reject Return')])),
+        ],
+        if (ret.refundStatus == RefundStatus.pending || ret.refundStatus == RefundStatus.approved)
+          const PopupMenuItem(value: 'refund', child: Row(children: [Icon(Icons.payments_outlined, size: 16, color: AppColors.success), SizedBox(width: 8), Text('Process Refund / Credit')])),
+        const PopupMenuItem(value: 'view_invoice', child: Row(children: [Icon(Icons.receipt_long_outlined, size: 16), SizedBox(width: 8), Text('View Original Invoice')])),
+        const PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf, size: 16, color: AppColors.primary), SizedBox(width: 8), Text('Credit Note PDF')])),
+      ],
     );
   }
 }

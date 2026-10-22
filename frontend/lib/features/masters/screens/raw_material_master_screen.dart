@@ -13,6 +13,7 @@ import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class RawMaterialMasterScreen extends ConsumerStatefulWidget {
@@ -84,7 +85,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text(isEdit ? 'Edit Raw Material' : 'Raw Material Entry', style: AppTextStyles.h2),
               content: Container(
-                constraints: const BoxConstraints(maxWidth: 580),
+                constraints: BoxConstraints(maxWidth: 580, maxHeight: MediaQuery.of(ctx).size.height * 0.72),
                 width: double.infinity,
                 child: Form(
                   key: formKey,
@@ -463,6 +464,23 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
     );
   }
 
+  Widget _buildCategoryChip(String catName) {
+    final lower = catName.toLowerCase();
+    if (lower.contains('metal') || lower.contains('aluminum') || lower.contains('alu')) {
+      return ErpStatusBadge.categoryPurple(catName);
+    } else if (lower.contains('glass') || lower.contains('acrylic')) {
+      return ErpStatusBadge.categoryBlue(catName);
+    } else if (lower.contains('wire') || lower.contains('cable') || lower.contains('driver')) {
+      return ErpStatusBadge.categoryOrange(catName);
+    } else if (lower.contains('led') || lower.contains('chip') || lower.contains('pcb')) {
+      return ErpStatusBadge.categoryTeal(catName);
+    } else if (lower.contains('screws') || lower.contains('fastener')) {
+      return ErpStatusBadge.categoryGreen(catName);
+    } else {
+      return ErpStatusBadge.categoryNeutral(catName);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -502,14 +520,21 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
       ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
     ];
 
+    final totalRawMaterialsCount = db.rawMaterials.where((m) => !m.isDeleted).length;
+    final inStockCount = db.rawMaterials.where((m) => !m.isDeleted && m.currentStock > 0).length;
+    final lowStockCount = db.rawMaterials.where((m) => !m.isDeleted && m.isLowStock && m.currentStock > 0).length;
+    final outOfStockCount = db.rawMaterials.where((m) => !m.isDeleted && m.currentStock <= 0).length;
+    final totalCategoriesCount = db.categories.length;
+
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header (Matching Figma Products/Materials Screen)
           LayoutBuilder(
             builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
+              final isSmall = constraints.maxWidth < 650;
               return Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -517,29 +542,92 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 280),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Raw Material Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Configure raw materials, specifications, pricing, UOM, and supplier information',
-                          style: AppTextStyles.subtitle,
-                        ),
+                        Text('Raw Materials', style: AppTextStyles.h1),
                       ],
                     ),
                   ),
-                  ErpButton(
-                    text: 'Add Raw Material',
-                    icon: Icons.add,
+                  ElevatedButton.icon(
                     onPressed: () => _openAddEditDialog(),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Material'),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
+
+          // 5 Summary Metric Cards (Matching Figma Screenshot 2)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (4 * 12)) / 5
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.inventory_2_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Materials',
+                      value: '$totalRawMaterialsCount',
+                      subtext: 'All Raw Materials',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.arrow_circle_down_outlined,
+                      iconColor: AppColors.success,
+                      title: 'In Stock',
+                      value: '$inStockCount',
+                      subtext: 'Available',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.warning_amber_rounded,
+                      iconColor: AppColors.danger,
+                      title: 'Low Stock Items',
+                      value: '$lowStockCount',
+                      subtext: 'Reorder Soon',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.cancel_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'Out of Stock',
+                      value: '$outOfStockCount',
+                      subtext: 'Zero Stock',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.category_outlined,
+                      iconColor: AppColors.categoryGold,
+                      title: 'Total Categories',
+                      value: '$totalCategoriesCount',
+                      subtext: 'Categories',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
 
           // Modern Filter Controls Bar
           Wrap(
@@ -596,49 +684,76 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
           ),
           const SizedBox(height: 16),
 
-          // Data Table
+          // Data Table with All Deluzex ERP Raw Material Fields & Figma Typography
           ErpDataTable(
             columns: const [
-              ErpColumn(title: 'SKU / Code'),
-              ErpColumn(title: 'Material Name'),
-              ErpColumn(title: 'Category'),
-              ErpColumn(title: 'UOM'),
-              ErpColumn(title: 'Unit Price (₹)', isNumeric: true),
-              ErpColumn(title: 'Current Stock', isNumeric: true),
-              ErpColumn(title: 'Supplier / Vendor'),
-              ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
+              ErpColumn(title: 'MATERIAL NAME'),
+              ErpColumn(title: 'SKU / CODE'),
+              ErpColumn(title: 'CATEGORY'),
+              ErpColumn(title: 'UNIT'),
+              ErpColumn(title: 'STOCK', isNumeric: true),
+              ErpColumn(title: 'UNIT PRICE', isNumeric: true),
+              ErpColumn(title: 'STATUS'),
+              ErpColumn(title: 'ACTIONS'),
             ],
             rows: pagedMaterials.map((rm) {
-              final vendorDisplay = rm.preferredVendorNames.isNotEmpty
-                  ? rm.preferredVendorNames.join(', ')
-                  : 'Unassigned';
-
               return [
-                Text(rm.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                // Material Name + Category Subtitle (Clickable to detail page)
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(rm.id, 'rawMaterial', ErpNavSection.rawMaterials),
-                  child: Text(
-                    rm.name,
-                    style: AppTextStyles.bodyBold.copyWith(
-                      color: AppColors.primary,
-                      decoration: TextDecoration.underline,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        rm.name,
+                        style: AppTextStyles.bodyBold.copyWith(
+                          fontSize: 13,
+                          color: const Color(0xFF1E293B),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (rm.categoryName.isNotEmpty)
+                        Text(
+                          rm.categoryName,
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+                Text(rm.itemCode, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563))),
+                _buildCategoryChip(rm.categoryName),
+                Text(rm.unit, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                // Stock Column with Bold Quantity + Min Stock subtitle
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
                     ),
-                  ),
+                    Text(
+                      'Min: ${Formatters.formatNumber(rm.minimumStock)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
                 ),
-                Text(rm.categoryName, style: AppTextStyles.bodySmall),
-                Text(rm.unit, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
                 Text(
-                  '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: rm.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
-                  ),
+                  Formatters.formatCurrency(rm.defaultPurchasePrice),
+                  style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
                 ),
-                Text(vendorDisplay, style: AppTextStyles.bodySmall),
                 rm.isLowStock
-                    ? ErpStatusBadge.danger('LOW STOCK')
-                    : ErpStatusBadge.success('AVAILABLE'),
+                    ? ErpStatusBadge.warning('Low Stock')
+                    : (rm.currentStock <= 0 ? ErpStatusBadge.danger('Out of Stock') : ErpStatusBadge.success('In Stock')),
+                // Previous Single Action Button
                 PopupMenuButton<String>(
                   tooltip: 'Actions',
                   icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
@@ -684,7 +799,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                         children: [
                           Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
                           SizedBox(width: 8),
-                          Text('Delete Material'),
+                          Text('Delete Material', style: TextStyle(color: AppColors.danger)),
                         ],
                       ),
                     ),

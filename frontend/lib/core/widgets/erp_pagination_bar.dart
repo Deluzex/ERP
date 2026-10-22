@@ -39,7 +39,11 @@ class ErpPaginationBar extends StatelessWidget {
 
         final infoText = Text(
           'Showing ${totalRecords == 0 ? 0 : startIndex + 1} to $endIndex of $totalRecords records',
-          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+          style: const TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF64748B),
+          ),
         );
 
         final effectivePageSize = pageSizeOptions.contains(safePageSize) ? safePageSize : pageSizeOptions.first;
@@ -47,32 +51,58 @@ class ErpPaginationBar extends StatelessWidget {
         final pageSizeSelector = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Rows:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+            const Text(
+              'Rows:',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF64748B),
+              ),
+            ),
             const SizedBox(width: 6),
             Container(
-              height: 30,
-              padding: const EdgeInsets.symmetric(horizontal: 6),
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: effectivePageSize,
-                  isDense: true,
-                  style: AppTextStyles.bodySmall,
-                  items: pageSizeOptions.map((size) {
-                    return DropdownMenuItem<int>(
-                      value: size,
-                      child: Text('$size'),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null && onPageSizeChanged != null) {
-                      onPageSizeChanged!(val);
-                    }
-                  },
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  canvasColor: Colors.white,
+                  highlightColor: AppColors.primarySoft,
+                  hoverColor: AppColors.primarySoft.withValues(alpha: 0.5),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: effectivePageSize,
+                    isDense: true,
+                    dropdownColor: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    elevation: 4,
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: AppColors.primary),
+                    style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600, color: const Color(0xFF1E293B)),
+                    items: pageSizeOptions.map((size) {
+                      final isSelected = size == effectivePageSize;
+                      return DropdownMenuItem<int>(
+                        value: size,
+                        child: Text(
+                          '$size',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                            color: isSelected ? AppColors.primaryDark : const Color(0xFF334155),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null && onPageSizeChanged != null) {
+                        onPageSizeChanged!(val);
+                      }
+                    },
+                  ),
                 ),
               ),
             ),
@@ -82,15 +112,56 @@ class ErpPaginationBar extends StatelessWidget {
         // Page selector buttons
         final List<Widget> pageButtons = [];
 
-        // Previous button
+        Widget buildSquareButton({
+          required Widget child,
+          VoidCallback? onTap,
+          bool isActive = false,
+        }) {
+          final isEnabled = onTap != null;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2.0),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isActive ? AppColors.primary : (isEnabled ? Colors.white : const Color(0xFFF9FAFB)),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: isActive ? AppColors.primary : const Color(0xFFE5E7EB),
+                    width: 1,
+                  ),
+                ),
+                child: child,
+              ),
+            ),
+          );
+        }
+
+        // First page button «
         pageButtons.add(
-          IconButton(
-            icon: const Icon(Icons.chevron_left, size: 18),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-            onPressed: safeCurrentPage > 0
-                ? () => onPageChanged(safeCurrentPage - 1)
-                : null,
+          buildSquareButton(
+            child: Icon(
+              Icons.first_page,
+              size: 16,
+              color: safeCurrentPage > 0 ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+            ),
+            onTap: safeCurrentPage > 0 ? () => onPageChanged(0) : null,
+          ),
+        );
+
+        // Previous button ‹
+        pageButtons.add(
+          buildSquareButton(
+            child: Icon(
+              Icons.chevron_left,
+              size: 16,
+              color: safeCurrentPage > 0 ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+            ),
+            onTap: safeCurrentPage > 0 ? () => onPageChanged(safeCurrentPage - 1) : null,
           ),
         );
 
@@ -113,50 +184,53 @@ class ErpPaginationBar extends StatelessWidget {
         for (final p in pagesToShow) {
           if (p < 0) {
             pageButtons.add(
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Text('...', style: TextStyle(color: Colors.grey)),
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                child: const Text('...', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
               ),
             );
           } else {
             final isCurrent = p == safeCurrentPage;
             pageButtons.add(
-              InkWell(
-                onTap: () => onPageChanged(p),
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  width: 30,
-                  height: 30,
-                  alignment: Alignment.center,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: isCurrent ? AppColors.primary : Colors.transparent,
-                    borderRadius: BorderRadius.circular(6),
-                    border: isCurrent ? null : Border.all(color: AppColors.border.withValues(alpha: 0.6)),
-                  ),
-                  child: Text(
-                    '${p + 1}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                      color: isCurrent ? Colors.white : AppColors.textPrimary,
-                    ),
+              buildSquareButton(
+                isActive: isCurrent,
+                child: Text(
+                  '${p + 1}',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                    color: isCurrent ? Colors.white : const Color(0xFF475569),
                   ),
                 ),
+                onTap: () => onPageChanged(p),
               ),
             );
           }
         }
 
-        // Next button
+        // Next button ›
         pageButtons.add(
-          IconButton(
-            icon: const Icon(Icons.chevron_right, size: 18),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-            onPressed: safeCurrentPage < totalPages - 1
-                ? () => onPageChanged(safeCurrentPage + 1)
-                : null,
+          buildSquareButton(
+            child: Icon(
+              Icons.chevron_right,
+              size: 16,
+              color: safeCurrentPage < totalPages - 1 ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+            ),
+            onTap: safeCurrentPage < totalPages - 1 ? () => onPageChanged(safeCurrentPage + 1) : null,
+          ),
+        );
+
+        // Last page button »
+        pageButtons.add(
+          buildSquareButton(
+            child: Icon(
+              Icons.last_page,
+              size: 16,
+              color: safeCurrentPage < totalPages - 1 ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+            ),
+            onTap: safeCurrentPage < totalPages - 1 ? () => onPageChanged(totalPages - 1) : null,
           ),
         );
 

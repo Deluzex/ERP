@@ -6,7 +6,10 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/stock_movement_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_data_table.dart';
-import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
+import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/stock_movement_icons.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 enum StockLedgerCategory {
@@ -78,54 +81,190 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Stock Movement Ledger', style: AppTextStyles.h1),
-          const SizedBox(height: 4),
-          Text(
-            'Immutable audit trail of all inventory inward, outward, consumption and adjustment events',
-            style: AppTextStyles.subtitle,
+          ErpSectionHeaderCard(
+            icon: Icons.swap_horiz_rounded,
+            title: 'Stock Movement Ledger',
+            badgeText: 'AUDIT TRAIL',
+            subtitle: 'Immutable audit trail of all inventory inward, outward, consumption and adjustment events',
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobile = actionBox.maxWidth < 520;
+                return SizedBox(
+                  width: isMobile ? double.infinity : null,
+                  child: ErpButton(
+                    text: 'Refresh Ledger',
+                    icon: Icons.refresh,
+                    isOutlined: true,
+                    onPressed: () => db.loadStockMovements(forceRefresh: true),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 4 Key Metrics
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.swap_horiz_rounded,
+                      iconColor: AppColors.primary,
+                      title: 'Total Movements',
+                      value: '${allMovements.length}',
+                      subtext: 'Audited Ledger Entries',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      iconWidget: const StockInIcon(size: 16, color: Color(0xFF16A34A)),
+                      title: 'Stock In Events',
+                      value: '$inCount',
+                      subtext: 'Inward Receipts',
+                      subtextColor: const Color(0xFF16A34A),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      iconWidget: const StockOutIcon(size: 16, color: Color(0xFFEF4444)),
+                      title: 'Stock Out Events',
+                      value: '$outCount',
+                      subtext: 'Dispatch & Usage',
+                      subtextColor: const Color(0xFFEF4444),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.tune_rounded,
+                      iconColor: AppColors.primary,
+                      title: 'Stock Adjustments',
+                      value: '$adjCount',
+                      subtext: 'Audited Discrepancies',
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
-          // Primary Filter Tabs
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildCategoryTab(
-                  label: 'All Movements',
-                  count: allMovements.length,
-                  category: StockLedgerCategory.all,
-                  icon: Icons.all_inclusive,
-                ),
-                const SizedBox(width: 8),
-                _buildCategoryTab(
-                  label: 'Stock In',
-                  count: inCount,
-                  category: StockLedgerCategory.stockIn,
-                  icon: Icons.arrow_downward_rounded,
-                  activeColor: AppColors.successText,
-                  badgeBg: AppColors.successLight,
-                ),
-                const SizedBox(width: 8),
-                _buildCategoryTab(
-                  label: 'Stock Out',
-                  count: outCount,
-                  category: StockLedgerCategory.stockOut,
-                  icon: Icons.arrow_upward_rounded,
-                  activeColor: AppColors.dangerText,
-                  badgeBg: AppColors.dangerLight,
-                ),
-                const SizedBox(width: 8),
-                _buildCategoryTab(
-                  label: 'Stock Adjustments',
-                  count: adjCount,
-                  category: StockLedgerCategory.stockAdjustments,
-                  icon: Icons.tune_rounded,
-                  activeColor: AppColors.primary,
-                  badgeBg: AppColors.primaryLight,
-                ),
-              ],
-            ),
+          // Primary Filter Tabs (Responsive: vertical stack on mobile, horizontal wrap on desktop)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 650;
+              if (isMobile) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildCategoryTab(
+                      label: 'All Movements',
+                      count: allMovements.length,
+                      category: StockLedgerCategory.all,
+                      icon: Icons.all_inclusive,
+                      isFullWidth: true,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCategoryTab(
+                      label: 'Stock In',
+                      count: inCount,
+                      category: StockLedgerCategory.stockIn,
+                      iconWidget: StockInIcon(
+                        size: 16,
+                        color: _selectedCategory == StockLedgerCategory.stockIn
+                            ? const Color(0xFF16A34A)
+                            : AppColors.textSecondary,
+                      ),
+                      activeColor: AppColors.successText,
+                      badgeBg: AppColors.successLight,
+                      isFullWidth: true,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCategoryTab(
+                      label: 'Stock Out',
+                      count: outCount,
+                      category: StockLedgerCategory.stockOut,
+                      iconWidget: StockOutIcon(
+                        size: 16,
+                        color: _selectedCategory == StockLedgerCategory.stockOut
+                            ? const Color(0xFFEF4444)
+                            : AppColors.textSecondary,
+                      ),
+                      activeColor: AppColors.dangerText,
+                      badgeBg: AppColors.dangerLight,
+                      isFullWidth: true,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCategoryTab(
+                      label: 'Stock Adjustments',
+                      count: adjCount,
+                      category: StockLedgerCategory.stockAdjustments,
+                      icon: Icons.tune_rounded,
+                      activeColor: AppColors.primary,
+                      badgeBg: AppColors.primaryLight,
+                      isFullWidth: true,
+                    ),
+                  ],
+                );
+              }
+
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildCategoryTab(
+                    label: 'All Movements',
+                    count: allMovements.length,
+                    category: StockLedgerCategory.all,
+                    icon: Icons.all_inclusive,
+                  ),
+                  _buildCategoryTab(
+                    label: 'Stock In',
+                    count: inCount,
+                    category: StockLedgerCategory.stockIn,
+                    iconWidget: StockInIcon(
+                      size: 16,
+                      color: _selectedCategory == StockLedgerCategory.stockIn
+                          ? const Color(0xFF16A34A)
+                          : AppColors.textSecondary,
+                    ),
+                    activeColor: AppColors.successText,
+                    badgeBg: AppColors.successLight,
+                  ),
+                  _buildCategoryTab(
+                    label: 'Stock Out',
+                    count: outCount,
+                    category: StockLedgerCategory.stockOut,
+                    iconWidget: StockOutIcon(
+                      size: 16,
+                      color: _selectedCategory == StockLedgerCategory.stockOut
+                          ? const Color(0xFFEF4444)
+                          : AppColors.textSecondary,
+                    ),
+                    activeColor: AppColors.dangerText,
+                    badgeBg: AppColors.dangerLight,
+                  ),
+                  _buildCategoryTab(
+                    label: 'Stock Adjustments',
+                    count: adjCount,
+                    category: StockLedgerCategory.stockAdjustments,
+                    icon: Icons.tune_rounded,
+                    activeColor: AppColors.primary,
+                    badgeBg: AppColors.primaryLight,
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
@@ -167,20 +306,43 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
                   m.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product',
                   style: AppTextStyles.bodySmall,
                 ),
-                ErpStatusBadge(
-                  label: m.transactionTypeLabel,
-                  backgroundColor: m.stockIn > 0 ? AppColors.successLight : AppColors.dangerLight,
-                  textColor: m.stockIn > 0 ? AppColors.successText : AppColors.dangerText,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    m.stockIn > 0
+                        ? const StockInIcon(size: 16, color: Color(0xFF16A34A))
+                        : const StockOutIcon(size: 16, color: Color(0xFFEF4444)),
+                    const SizedBox(width: 8),
+                    Text(m.transactionTypeLabel, style: AppTextStyles.bodyBold),
+                  ],
                 ),
                 Text(m.referenceNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                Text(
-                  m.stockIn > 0 ? '+${Formatters.formatNumber(m.stockIn)} ${m.unit}' : '-',
-                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText),
-                ),
-                Text(
-                  m.stockOut > 0 ? '-${Formatters.formatNumber(m.stockOut)} ${m.unit}' : '-',
-                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
-                ),
+                m.stockIn > 0
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const StockInIcon(size: 13, color: Color(0xFF16A34A)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '+${Formatters.formatNumber(m.stockIn)} ${m.unit}',
+                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText),
+                          ),
+                        ],
+                      )
+                    : const Text('-', style: TextStyle(color: AppColors.textSecondary)),
+                m.stockOut > 0
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const StockOutIcon(size: 13, color: Color(0xFFEF4444)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '-${Formatters.formatNumber(m.stockOut)} ${m.unit}',
+                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
+                          ),
+                        ],
+                      )
+                    : const Text('-', style: TextStyle(color: AppColors.textSecondary)),
                 Text(
                   '${Formatters.formatNumber(m.currentBalance)} ${m.unit}',
                   style: AppTextStyles.bodyBold.copyWith(color: AppColors.textPrimary),
@@ -198,9 +360,11 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
     required String label,
     required int count,
     required StockLedgerCategory category,
-    required IconData icon,
+    IconData? icon,
+    Widget? iconWidget,
     Color? activeColor,
     Color? badgeBg,
+    bool isFullWidth = false,
   }) {
     final isSelected = _selectedCategory == category;
     final color = activeColor ?? AppColors.primary;
@@ -210,9 +374,10 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
       onTap: () => setState(() => _selectedCategory = category),
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        width: isFullWidth ? double.infinity : null,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.08) : Colors.transparent,
+          color: isSelected ? color.withValues(alpha: 0.08) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? color : AppColors.border,
@@ -220,18 +385,27 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
           ),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: isFullWidth ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(icon, size: 16, color: isSelected ? color : AppColors.textSecondary),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: isSelected ? color : AppColors.textPrimary,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (iconWidget != null)
+                  iconWidget
+                else if (icon != null)
+                  Icon(icon, size: 16, color: isSelected ? color : AppColors.textSecondary),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: isSelected ? color : AppColors.textPrimary,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
+            if (!isFullWidth) const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(

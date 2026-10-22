@@ -8,9 +8,11 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/purchase_model.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
@@ -59,7 +61,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: AppColors.success.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
                   child: const Icon(Icons.payments_outlined, color: AppColors.success, size: 20),
                 ),
                 const SizedBox(width: 12),
@@ -214,63 +216,91 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
+          ErpSectionHeaderCard(
+            icon: Icons.receipt_outlined,
+            title: 'Sales Invoices & Revenue',
+            badgeText: 'TAX INVOICES',
+            action: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ErpButton(
+                  text: 'Invoice from Delivery',
+                  icon: Icons.local_shipping_outlined,
+                  isOutlined: true,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesDeliveries,
+                ),
+                ErpButton(
+                  text: 'Create Direct Sale',
+                  icon: Icons.point_of_sale_outlined,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 2. Summary Metric Cards (Project Theme)
           LayoutBuilder(
             builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 750;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Sales Invoices & Revenue', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Tax invoices created from delivered goods, payment receipts & customer outstanding balances',
-                    style: AppTextStyles.subtitle,
-                  ),
-                ],
-              );
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              final totalPaid = db.salesInvoices.fold(0.0, (sum, inv) => sum + inv.paidAmount);
 
-              final actionButtons = Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  ErpButton(
-                    text: 'Invoice from Delivery',
-                    icon: Icons.local_shipping_outlined,
-                    isOutlined: true,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesDeliveries,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.point_of_sale_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Invoiced Revenue',
+                      value: Formatters.formatCurrency(db.totalInvoicedRevenue),
+                      subtext: 'Gross Revenue Billed',
+                    ),
                   ),
-                  ErpButton(
-                    text: 'Create Direct Sale',
-                    icon: Icons.point_of_sale_outlined,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.receipt_long_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Tax Invoices',
+                      value: '${db.salesInvoices.length}',
+                      subtext: 'Generated Invoices',
+                    ),
                   ),
-                ],
-              );
-
-              if (isStacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    titleBlock,
-                    const SizedBox(height: 16),
-                    actionButtons,
-                  ],
-                );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: titleBlock),
-                  const SizedBox(width: 12),
-                  actionButtons,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      iconColor: AppColors.success,
+                      title: 'Collected to Date',
+                      value: Formatters.formatCurrency(totalPaid),
+                      subtext: 'Realized Revenue',
+                      subtextColor: AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'Customer Due / Balance',
+                      value: Formatters.formatCurrency(db.pendingCustomerPayments),
+                      subtext: 'Outstanding Receivables',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
                 ],
               );
             },
           ),
           const SizedBox(height: 20),
 
-          // 2. Tabs: All, Unpaid/Active, Partially Paid, Fully Paid, Overdue
+          // 3. Tabs: All, Unpaid/Active, Partially Paid, Fully Paid, Overdue
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -410,7 +440,6 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
             returnBadge = ErpStatusBadge.warning('PARTIAL RETURN');
             break;
           case InvoiceReturnIndicator.noReturn:
-          default:
             returnBadge = ErpStatusBadge.neutral('NO RETURN');
             break;
         }

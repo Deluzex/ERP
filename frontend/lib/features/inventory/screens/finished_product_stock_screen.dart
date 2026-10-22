@@ -9,6 +9,8 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class FinishedProductStockScreen extends ConsumerStatefulWidget {
@@ -53,7 +55,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text('Edit Finished Product', style: AppTextStyles.h2),
               content: Container(
-                constraints: const BoxConstraints(maxWidth: 580),
+                constraints: BoxConstraints(maxWidth: 580, maxHeight: MediaQuery.of(context).size.height * 0.72),
                 width: double.infinity,
                 child: Form(
                   key: formKey,
@@ -80,10 +82,11 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     value: selectedCategory.isNotEmpty ? selectedCategory : null,
                                     decoration: const InputDecoration(labelText: 'Category'),
                                     items: db.categories.map((cat) {
-                                      return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
+                                      return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis));
                                     }).toList(),
                                     onChanged: (val) {
                                       if (val != null) setDlgState(() => selectedCategory = val);
@@ -152,10 +155,11 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         value: selectedCategory.isNotEmpty ? selectedCategory : null,
                                         decoration: const InputDecoration(labelText: 'Category'),
                                         items: db.categories.map((cat) {
-                                          return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
+                                          return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis));
                                         }).toList(),
                                         onChanged: (val) {
                                           if (val != null) setDlgState(() => selectedCategory = val);
@@ -305,20 +309,86 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Finished Product Stock', style: AppTextStyles.h1),
-              const SizedBox(height: 4),
-              Text(
-                'Manage finished goods catalog, multi-tier pricing, and stock levels',
-                style: AppTextStyles.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+          ErpSectionHeaderCard(
+            icon: Icons.inventory_2_outlined,
+            title: 'Finished Product Stock',
+            badgeText: 'FINISHED GOODS',
+            subtitle: 'Manage finished goods catalog, multi-tier pricing, and stock levels',
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobile = actionBox.maxWidth < 520;
+                return SizedBox(
+                  width: isMobile ? double.infinity : null,
+                  child: ErpButton(
+                    text: 'Refresh Stock',
+                    icon: Icons.refresh,
+                    isOutlined: true,
+                    onPressed: () => db.loadFinishedProducts(forceRefresh: true),
+                  ),
+                );
+              },
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
+
+          // 4 Key Metrics
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final activeProds = db.finishedProducts.where((p) => !p.isDeleted).toList();
+              final totalUnits = activeProds.fold(0.0, (sum, p) => sum + p.currentStock);
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.inventory_2_rounded,
+                      iconColor: AppColors.primary,
+                      title: 'Finished Goods Value',
+                      value: Formatters.formatCurrency(db.finishedProductStockValue),
+                      subtext: 'Total Inventory Assets',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.inventory_2_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Product SKUs',
+                      value: '${activeProds.length}',
+                      subtext: 'Active Catalog SKUs',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.warning_amber_rounded,
+                      iconColor: db.lowStockFinishedProducts.isNotEmpty ? AppColors.danger : AppColors.success,
+                      title: 'Low Stock Items',
+                      value: '${db.lowStockFinishedProducts.length}',
+                      subtext: db.lowStockFinishedProducts.isNotEmpty ? 'Below minimum buffer' : 'Adequate buffer',
+                      subtextColor: db.lowStockFinishedProducts.isNotEmpty ? AppColors.danger : AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      iconColor: AppColors.success,
+                      title: 'Total Stock Units',
+                      value: Formatters.formatNumber(totalUnits),
+                      subtext: 'Units on Hand',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 20),
 
           // Filter bar
           LayoutBuilder(

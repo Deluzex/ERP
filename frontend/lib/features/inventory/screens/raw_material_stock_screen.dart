@@ -10,6 +10,8 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class RawMaterialStockScreen extends ConsumerStatefulWidget {
@@ -53,7 +55,7 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text(isEdit ? 'Edit Raw Material' : 'Add Raw Material', style: AppTextStyles.h2),
               content: Container(
-                constraints: const BoxConstraints(maxWidth: 540),
+                constraints: BoxConstraints(maxWidth: 540, maxHeight: MediaQuery.of(context).size.height * 0.72),
                 width: double.infinity,
                 child: Form(
                   key: formKey,
@@ -80,10 +82,11 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     value: selectedCategory.isNotEmpty ? selectedCategory : null,
                                     decoration: const InputDecoration(labelText: 'Category'),
                                     items: db.categories.map((cat) {
-                                      return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
+                                      return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis));
                                     }).toList(),
                                     onChanged: (val) {
                                       if (val != null) setDlgState(() => selectedCategory = val);
@@ -138,10 +141,11 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         value: selectedCategory.isNotEmpty ? selectedCategory : null,
                                         decoration: const InputDecoration(labelText: 'Category'),
                                         items: db.categories.map((cat) {
-                                          return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
+                                          return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis));
                                         }).toList(),
                                         onChanged: (val) {
                                           if (val != null) setDlgState(() => selectedCategory = val);
@@ -204,12 +208,13 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String?>(
+                          isExpanded: true,
                           value: selectedVendorId,
                           decoration: const InputDecoration(labelText: 'Preferred Vendor'),
                           items: [
-                            const DropdownMenuItem(value: null, child: Text('None')),
+                            const DropdownMenuItem(value: null, child: Text('None', maxLines: 1, overflow: TextOverflow.ellipsis)),
                             ...db.vendors.map((v) {
-                              return DropdownMenuItem(value: v.id, child: Text(v.name));
+                              return DropdownMenuItem(value: v.id, child: Text(v.name, maxLines: 1, overflow: TextOverflow.ellipsis));
                             }),
                           ],
                           onChanged: (val) => setDlgState(() => selectedVendorId = val),
@@ -303,20 +308,118 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Raw Material Stock', style: AppTextStyles.h1),
-              const SizedBox(height: 4),
-              Text(
-                'Manage raw material quantities, thresholds, and valuations',
-                style: AppTextStyles.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+          ErpSectionHeaderCard(
+            icon: Icons.layers_outlined,
+            title: 'Raw Material Stock',
+            badgeText: 'INVENTORY ASSETS',
+            subtitle: 'Manage raw material quantities, thresholds, and valuations',
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobile = actionBox.maxWidth < 520;
+                if (isMobile) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Add Raw Material',
+                          icon: Icons.add,
+                          onPressed: () => _openAddEditDialog(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Refresh',
+                          icon: Icons.refresh,
+                          isOutlined: true,
+                          onPressed: () => db.loadRawMaterials(forceRefresh: true),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    ErpButton(
+                      text: 'Add Raw Material',
+                      icon: Icons.add,
+                      onPressed: () => _openAddEditDialog(),
+                    ),
+                    ErpButton(
+                      text: 'Refresh',
+                      icon: Icons.refresh,
+                      isOutlined: true,
+                      onPressed: () => db.loadRawMaterials(forceRefresh: true),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
+
+          // 4 Key Metrics
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Raw Material Valuation',
+                      value: Formatters.formatCurrency(db.rawMaterialStockValue),
+                      subtext: 'Total Inventory Assets',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.category_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Materials',
+                      value: '${db.rawMaterials.where((r) => !r.isDeleted).length}',
+                      subtext: 'Active Catalog Items',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.warning_amber_rounded,
+                      iconColor: db.lowStockRawMaterials.isNotEmpty ? AppColors.danger : AppColors.success,
+                      title: 'Low Stock Items',
+                      value: '${db.lowStockRawMaterials.length}',
+                      subtext: db.lowStockRawMaterials.isNotEmpty ? 'Below minimum buffer' : 'Adequate buffer',
+                      subtextColor: db.lowStockRawMaterials.isNotEmpty ? AppColors.danger : AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.folder_open_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Categories',
+                      value: '${db.categories.length}',
+                      subtext: 'Active Classifications',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 20),
 
           // Filter bar
           LayoutBuilder(

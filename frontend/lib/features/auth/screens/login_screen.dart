@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../app/constants/app_constants.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radius.dart';
@@ -69,7 +70,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     },
     {
       'roleId': 'accounts_manager',
-      'roleName': 'Accounts / Finance',
+      'roleName': 'Payments Manager',
       'email': 'accounts@deluzex.com',
       'pass': 'Admin@123',
       'color': '0xFF0D9488',
@@ -179,73 +180,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Logo & Brand Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Flexible(
-                            child: SizedBox(
-                              height: 38,
-                              child: Image.asset(
-                                'assets/images/logo.png',
-                                height: 38,
-                                fit: BoxFit.contain,
-                                alignment: Alignment.centerLeft,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'd',
-                                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 22),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                      SizedBox(
+                        height: 38,
+                        child: SvgPicture.asset(
+                          'assets/images/logo_dark.svg',
+                          height: 38,
+                          fit: BoxFit.contain,
+                          alignment: Alignment.centerLeft,
+                          placeholderBuilder: (context) => Image.asset(
+                            'assets/images/logo_dark.png',
+                            height: 38,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.centerLeft,
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                            ),
-                            child: const Text(
-                              'ENTERPRISE RBAC',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF16A34A).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.4)),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.check_circle, size: 11, color: Color(0xFF16A34A)),
-                                SizedBox(width: 4),
-                                Text(
-                                  'v1.0.1 LIVE',
-                                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                       const SizedBox(height: 20),
-                      Text('Enterprise Portal Login (v1.0.1)', style: AppTextStyles.h1),
+                      Text('Enterprise Portal Login', style: AppTextStyles.h1),
                       const SizedBox(height: 4),
-                      Text('Authenticate to access your role-specific dashboard and workspace', style: AppTextStyles.subtitle),
+                      Text('Sign in to continue to your workspace', style: AppTextStyles.subtitle),
                       const SizedBox(height: 24),
 
                       // Error Alert Banner
@@ -301,22 +254,170 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Role Dropdown Selector (Optional / Auto-identified)
-                      DropdownButtonFormField<String?>(
-                        value: _selectedRoleId,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Assigned Role Verification',
-                          prefixIcon: Icon(Icons.shield_outlined, size: 18),
-                        ),
-                        items: [
-                          const DropdownMenuItem(value: null, child: Text('(Auto-detect from user account)')),
-                          ...db.roles.map((r) => DropdownMenuItem(
-                                value: r.id,
-                                child: Text(r.name),
-                              )),
-                        ],
-                        onChanged: (val) => setState(() => _selectedRoleId = val),
+                      // Role Dropdown Selector (Optional / Auto-identified) - styled like ErpFilterDropdown
+                      Builder(
+                        builder: (context) {
+                          final roleExists = _selectedRoleId == null || db.roles.any((r) => r.id == _selectedRoleId);
+                          final safeRoleId = roleExists ? _selectedRoleId : null;
+                          final hasSelectedRole = safeRoleId != null;
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Assigned Role Verification',
+                                style: AppTextStyles.caption.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: hasSelectedRole ? AppColors.primaryDark : const Color(0xFF64748B),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                height: 44,
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: hasSelectedRole ? AppColors.primarySoft.withValues(alpha: 0.45) : Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: hasSelectedRole ? AppColors.primary : const Color(0xFFE2E8F0),
+                                    width: hasSelectedRole ? 1.2 : 1.0,
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Color(0x04000000),
+                                      blurRadius: 4,
+                                      offset: Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                                child: Theme(
+                                  data: Theme.of(context).copyWith(
+                                    canvasColor: Colors.white,
+                                    highlightColor: AppColors.primarySoft,
+                                    hoverColor: AppColors.primarySoft.withValues(alpha: 0.5),
+                                    splashColor: AppColors.primaryLight.withValues(alpha: 0.25),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String?>(
+                                      value: safeRoleId,
+                                      isExpanded: true,
+                                      isDense: true,
+                                      dropdownColor: Colors.white,
+                                      borderRadius: BorderRadius.circular(10),
+                                      elevation: 4,
+                                      menuMaxHeight: 360,
+                                      icon: Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        size: 18,
+                                        color: hasSelectedRole ? AppColors.primaryDark : AppColors.primary,
+                                      ),
+                                      selectedItemBuilder: (BuildContext context) {
+                                        return [
+                                          Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Row(
+                                              children: const [
+                                                Icon(Icons.shield_outlined, size: 18, color: Color(0xFF64748B)),
+                                                SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    '(Auto-detect from user account)',
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w500,
+                                                      color: Color(0xFF64748B),
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          ...db.roles.map((r) => Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.shield_outlined,
+                                                      size: 18,
+                                                      color: hasSelectedRole ? AppColors.primaryDark : const Color(0xFF64748B),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Text(
+                                                        r.name,
+                                                        style: TextStyle(
+                                                          fontSize: 13,
+                                                          fontWeight: hasSelectedRole ? FontWeight.w600 : FontWeight.w500,
+                                                          color: hasSelectedRole ? AppColors.primaryDark : const Color(0xFF1E293B),
+                                                        ),
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              )),
+                                        ];
+                                      },
+                                      items: [
+                                        DropdownMenuItem<String?>(
+                                          value: null,
+                                          child: Row(
+                                            children: const [
+                                              Icon(Icons.shield_outlined, size: 18, color: Color(0xFF64748B)),
+                                              SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  '(Auto-detect from user account)',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w400,
+                                                    color: Color(0xFF64748B),
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        ...db.roles.map((r) {
+                                          final isSelected = safeRoleId == r.id;
+                                          return DropdownMenuItem<String?>(
+                                            value: r.id,
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.shield_outlined,
+                                                  size: 18,
+                                                  color: isSelected ? AppColors.primaryDark : const Color(0xFF64748B),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    r.name,
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                                                      color: isSelected ? AppColors.primaryDark : const Color(0xFF334155),
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                      ],
+                                      onChanged: (val) => setState(() => _selectedRoleId = val),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 24),
 

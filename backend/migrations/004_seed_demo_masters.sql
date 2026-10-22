@@ -30,7 +30,7 @@ BEGIN
     ('inventory_manager', 'Inventory Manager', 'Warehouse operations, raw material stock, finished goods, and adjustments', true, true, 'inventoryDashboard'),
     ('purchase_manager', 'Purchase Manager', 'Supplier procurement, vendor management, POs, and GRNs', true, true, 'purchaseDashboard'),
     ('production_manager', 'Production Manager', 'Manufacturing work orders, BOM assembly, routing, and machine assignment', true, true, 'productionDashboard'),
-    ('accounts_manager', 'Accounts Manager', 'Receivables, payables, dealer ledgers, expenses, and GST reporting', true, true, 'paymentsDashboard'),
+    ('accounts_manager', 'Payments Manager', 'Receivables, payables, dealer ledgers, expenses, and GST reporting', true, true, 'paymentsDashboard'),
     ('project_manager', 'Project Manager', 'Architectural project portfolio, site tracking, and material budget consumption', true, true, 'projectList'),
     ('report_viewer', 'Auditor / Report Viewer', 'Read-only analytics, financial ledgers, compliance audits, and tax registers', true, true, 'reportsSection'),
     ('data_entry', 'Data Entry Clerk', 'Restricted transactional entry with maker-checker controls', true, true, 'dashboard')

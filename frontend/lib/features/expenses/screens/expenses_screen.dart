@@ -11,6 +11,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ExpensesScreen extends ConsumerStatefulWidget {
@@ -49,7 +50,6 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     ExpensePaymentStatus paymentStatus = existing?.paymentStatus ?? ExpensePaymentStatus.paid;
     String paymentMethod = existing?.paymentMethod ?? 'Bank Transfer';
     String? selectedProjId = existing?.projectId;
-    String? selectedPurchId = existing?.purchaseId;
     String? selectedProdId = existing?.productionId;
 
     final formKey = GlobalKey<FormState>();
@@ -534,49 +534,54 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           // KPI Cards
           LayoutBuilder(
             builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              if (width < 600) {
-                return Column(
-                  children: [
-                    _buildKpiCard('Total Expenses', Formatters.formatCurrency(totalExp), Icons.account_balance_wallet_outlined, AppColors.primary),
-                    const SizedBox(height: 12),
-                    _buildKpiCard('Project Expenses', Formatters.formatCurrency(projectExp), Icons.business_outlined, AppColors.purple),
-                    const SizedBox(height: 12),
-                    _buildKpiCard('Production Expenses', Formatters.formatCurrency(prodExp), Icons.precision_manufacturing_outlined, AppColors.warning),
-                    const SizedBox(height: 12),
-                    _buildKpiCard('Operational Overhead', Formatters.formatCurrency(opsExp), Icons.apartment_outlined, AppColors.info),
-                  ],
-                );
-              } else if (width < 1050) {
-                return Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: _buildKpiCard('Total Expenses', Formatters.formatCurrency(totalExp), Icons.account_balance_wallet_outlined, AppColors.primary)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _buildKpiCard('Project Expenses', Formatters.formatCurrency(projectExp), Icons.business_outlined, AppColors.purple)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: _buildKpiCard('Production Expenses', Formatters.formatCurrency(prodExp), Icons.precision_manufacturing_outlined, AppColors.warning)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _buildKpiCard('Operational Overhead', Formatters.formatCurrency(opsExp), Icons.apartment_outlined, AppColors.info)),
-                      ],
-                    ),
-                  ],
-                );
-              }
-              return Row(
+              final cardWidth = constraints.maxWidth > 1100
+                  ? (constraints.maxWidth - 36) / 4
+                  : (constraints.maxWidth > 650 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(child: _buildKpiCard('Total Expenses', Formatters.formatCurrency(totalExp), Icons.account_balance_wallet_outlined, AppColors.primary)),
-                  const SizedBox(width: 16),
-                  Expanded(child: _buildKpiCard('Project Expenses', Formatters.formatCurrency(projectExp), Icons.business_outlined, AppColors.purple)),
-                  const SizedBox(width: 16),
-                  Expanded(child: _buildKpiCard('Production Expenses', Formatters.formatCurrency(prodExp), Icons.precision_manufacturing_outlined, AppColors.warning)),
-                  const SizedBox(width: 16),
-                  Expanded(child: _buildKpiCard('Operational Overhead', Formatters.formatCurrency(opsExp), Icons.apartment_outlined, AppColors.info)),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      title: 'Total Expenses',
+                      value: Formatters.formatCurrency(totalExp),
+                      subtext: '${filteredExpenses.length} Logged records',
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.primary,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      title: 'Project Expenses',
+                      value: Formatters.formatCurrency(projectExp),
+                      subtext: '${filteredExpenses.where((e) => e.projectId != null).length} Site projects',
+                      icon: Icons.business_outlined,
+                      iconColor: AppColors.purple,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      title: 'Production Expenses',
+                      value: Formatters.formatCurrency(prodExp),
+                      subtext: '${filteredExpenses.where((e) => e.productionId != null).length} Manufacturing jobs',
+                      icon: Icons.precision_manufacturing_outlined,
+                      iconColor: AppColors.warning,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      title: 'Operational Overhead',
+                      value: Formatters.formatCurrency(opsExp),
+                      subtext: 'General utilities & admin',
+                      icon: Icons.apartment_outlined,
+                      iconColor: AppColors.info,
+                    ),
+                  ),
                 ],
               );
             },
@@ -680,56 +685,87 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             )
           else
             ErpDataTable(
+              dataRowMinHeight: 58,
+              dataRowMaxHeight: 68,
+              columnSpacing: 16,
+              horizontalMargin: 16,
               columns: const [
-                ErpColumn(title: 'Voucher No'),
-                ErpColumn(title: 'Date'),
-                ErpColumn(title: 'Expense Title & Category'),
-                ErpColumn(title: 'Linked Project / Production'),
-                ErpColumn(title: 'Paid By & Method'),
-                ErpColumn(title: 'Amount', isNumeric: true),
-                ErpColumn(title: 'Status'),
-                ErpColumn(title: 'Actions'),
+                ErpColumn(title: 'Voucher No', width: 130),
+                ErpColumn(title: 'Date', width: 110),
+                ErpColumn(title: 'Expense Title & Category', width: 220),
+                ErpColumn(title: 'Linked Project / Production', width: 200),
+                ErpColumn(title: 'Paid By & Method', width: 170),
+                ErpColumn(title: 'Amount', isNumeric: true, width: 120),
+                ErpColumn(title: 'Status', width: 110),
+                ErpColumn(title: 'Actions', width: 90),
               ],
               rows: filteredExpenses.map((exp) {
                 return [
-                  Text(exp.expenseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                  Text(exp.expenseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 12.5)),
                   Text(Formatters.formatDate(exp.expenseDate), style: AppTextStyles.bodySmall),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(exp.expenseName, style: AppTextStyles.bodyBold),
-                      Text(exp.categoryLabel, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                    ],
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(exp.expenseName, style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 2),
+                        Text(exp.categoryLabel, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
+                      ],
+                    ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (exp.projectName != null)
-                        Text('Proj: ${exp.projectName}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.purple))
-                      else if (exp.productionNumber != null)
-                        Text('Prod: ${exp.productionNumber}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.warning))
-                      else
-                        const Text('Operational', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    ],
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 200),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (exp.projectName != null)
+                          Text('Proj: ${exp.projectName}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.purple), maxLines: 1, overflow: TextOverflow.ellipsis)
+                        else if (exp.productionNumber != null)
+                          Text('Prod: ${exp.productionNumber}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.warning), maxLines: 1, overflow: TextOverflow.ellipsis)
+                        else
+                          const Text('Operational Overhead', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(exp.paidBy, style: AppTextStyles.bodyMedium),
-                      Text(exp.paymentMethod, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 10.5)),
-                    ],
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 170),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(exp.paidBy, style: AppTextStyles.bodyMedium.copyWith(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 2),
+                        Text(exp.paymentMethod, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 10.5)),
+                      ],
+                    ),
                   ),
-                  Text(Formatters.formatCurrency(exp.amount), style: AppTextStyles.bodyBold),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(Formatters.formatCurrency(exp.amount), style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5)),
+                  ),
                   ErpStatusBadge.success(exp.paymentStatus.name.toUpperCase()),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        icon: const Icon(Icons.edit_outlined, color: AppColors.info, size: 18),
+                        tooltip: 'Edit Expense',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
                         onPressed: () => _openAddEditExpenseDialog(exp),
                       ),
+                      const SizedBox(width: 4),
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                        tooltip: 'Delete Expense',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
                         onPressed: () => _confirmDeleteExpense(exp),
                       ),
                     ],
@@ -741,48 +777,5 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       ),
     );
   }
-
-  Widget _buildKpiCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgBorderRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: AppTextStyles.bodySmall.copyWith(fontSize: 11),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(value, style: AppTextStyles.h2.copyWith(fontSize: 16)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
+

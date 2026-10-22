@@ -14,6 +14,7 @@ import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -419,52 +420,112 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
     final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
     final pagedVendors = totalRecords == 0 ? <Vendor>[] : vendors.sublist(startIndex, endIndex);
 
+    final totalVendorsCount = db.vendors.where((v) => !v.isDeleted).length;
+    final withDuesCount = db.vendors.where((v) => !v.isDeleted && v.outstandingBalance > 0).length;
+    final zeroDuesCount = db.vendors.where((v) => !v.isDeleted && v.outstandingBalance <= 0).length;
+    final totalPayables = db.vendors.where((v) => !v.isDeleted).fold(0.0, (sum, v) => sum + v.outstandingBalance);
+
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header (Matching Figma Master Design)
           LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 550) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Vendors Master', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Raw material suppliers, payment terms, credit limits, and outstanding balances', style: AppTextStyles.subtitle),
-                    const SizedBox(height: 12),
-                    ErpButton(
-                      text: 'Add Vendor',
-                      icon: Icons.add,
-                      onPressed: () => _openAddEditVendorDialog(),
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              final isSmall = constraints.maxWidth < 650;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Vendors Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Raw material suppliers, payment terms, credit limits, and outstanding balances', style: AppTextStyles.subtitle),
+                        Text('Vendors', style: AppTextStyles.h1),
                       ],
                     ),
                   ),
-                  ErpButton(
-                    text: 'Add Vendor',
-                    icon: Icons.add,
+                  ElevatedButton.icon(
                     onPressed: () => _openAddEditVendorDialog(),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Vendor'),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
+
+          // 5 Summary Metric Cards
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (4 * 12)) / 5
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.local_shipping_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Vendors',
+                      value: '$totalVendorsCount',
+                      subtext: 'All Suppliers',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.check_circle_outline,
+                      iconColor: AppColors.success,
+                      title: 'Active Vendors',
+                      value: '$totalVendorsCount',
+                      subtext: 'Operational',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'With Dues',
+                      value: '$withDuesCount',
+                      subtext: 'Payment Pending',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.verified_outlined,
+                      iconColor: AppColors.categoryTeal,
+                      title: 'Settled Vendors',
+                      value: '$zeroDuesCount',
+                      subtext: 'Zero Balance',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.categoryGold,
+                      title: 'Total Payables',
+                      value: Formatters.formatCurrency(totalPayables),
+                      subtext: 'Current Dues',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
 
           // Modern Filter Controls Bar
           Wrap(
@@ -531,7 +592,13 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(v.name, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                      Text(
+                        v.name,
+                        style: AppTextStyles.bodyBold.copyWith(
+                          fontSize: 13,
+                          color: const Color(0xFF1E293B),
+                        ),
+                      ),
                       if (v.address.isNotEmpty || v.state.isNotEmpty || v.pincode.isNotEmpty)
                         Text(
                           [
@@ -541,26 +608,28 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                           ].join(', '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                         ),
                     ],
                   ),
                 ),
-                Text(v.contactPerson, style: AppTextStyles.bodyMedium),
+                Text(v.contactPerson, style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(v.mobile, style: AppTextStyles.bodySmall),
-                    Text(v.email, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                    Text(v.mobile, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
+                    if (v.email.isNotEmpty)
+                      Text(v.email, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                   ],
                 ),
-                Text(v.state.isNotEmpty ? v.state : '-', style: AppTextStyles.bodyMedium),
-                Text(v.gstNumber.trim().isNotEmpty ? v.gstNumber : '-', style: AppTextStyles.bodySmall),
+                Text(v.state.isNotEmpty ? v.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                Text(v.gstNumber.trim().isNotEmpty ? v.gstNumber : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Text(
                   Formatters.formatCurrency(v.outstandingBalance),
                   style: AppTextStyles.bodyBold.copyWith(
-                    color: v.outstandingBalance > 0 ? AppColors.dangerText : AppColors.textMuted,
+                    fontSize: 13,
+                    color: v.outstandingBalance > 0 ? AppColors.danger : const Color(0xFF1E293B),
                   ),
                 ),
                 v.isDeleted

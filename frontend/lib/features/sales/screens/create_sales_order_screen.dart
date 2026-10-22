@@ -9,6 +9,7 @@ import '../../../core/models/purchase_model.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
@@ -226,22 +227,11 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isStacked = constraints.maxWidth < 750;
-                final titleBlock = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Create Sales Order', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Direct confirmed order with automated stock reservation & production shortage creation',
-                      style: AppTextStyles.subtitle,
-                    ),
-                  ],
-                );
-
-                final actionButtons = Wrap(
+            ErpSectionHeaderCard(
+                icon: Icons.add_shopping_cart_outlined,
+                title: 'Create Sales Order',
+                badgeText: 'NEW SALES ORDER',
+                action: Wrap(
                   spacing: 12,
                   runSpacing: 8,
                   children: [
@@ -256,29 +246,8 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
                       onPressed: _createSalesOrder,
                     ),
                   ],
-                );
-
-                if (isStacked) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      titleBlock,
-                      const SizedBox(height: 16),
-                      actionButtons,
-                    ],
-                  );
-                }
-
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(child: titleBlock),
-                    const SizedBox(width: 16),
-                    actionButtons,
-                  ],
-                );
-              },
-            ),
+                ),
+              ),
             const SizedBox(height: 24),
 
             // Party & Order Info Card

@@ -7,9 +7,11 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
@@ -48,55 +50,85 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
+          ErpSectionHeaderCard(
+            icon: Icons.request_quote_outlined,
+            title: 'Quotations & Commercial Estimates',
+            badgeText: 'COMMERCIAL QUOTES',
+            action: ErpButton(
+              text: 'Create Quotation',
+              icon: Icons.add,
+              onPressed: () {
+                ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
+                ref.read(salesCreateSourceDocIdProvider.notifier).state = null;
+                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 2. Summary Metric Cards (Project Theme)
           LayoutBuilder(
             builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              final totalPipeline = db.quotations.fold(0.0, (sum, q) => sum + q.totalAmount);
+              final sentCount = db.quotations.where((q) => q.quotationStatus == QuotationStatus.sent).length;
+              final acceptedCount = db.quotations.where((q) => q.quotationStatus == QuotationStatus.accepted || q.quotationStatus == QuotationStatus.approved).length;
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Text('Quotations & Commercial Estimates', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Manage quotes, revision branches, client approval & proforma conversion',
-                    style: AppTextStyles.subtitle,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.request_quote_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Quotations',
+                      value: '${db.quotations.length}',
+                      subtext: 'Commercial Estimates',
+                    ),
                   ),
-                ],
-              );
-
-              final actionBtn = ErpButton(
-                text: 'Create Quotation',
-                icon: Icons.add,
-                onPressed: () {
-                  ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
-                  ref.read(salesCreateSourceDocIdProvider.notifier).state = null;
-                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
-                },
-              );
-
-              if (isStacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    titleBlock,
-                    const SizedBox(height: 12),
-                    actionBtn,
-                  ],
-                );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: titleBlock),
-                  const SizedBox(width: 12),
-                  actionBtn,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.schedule_outlined,
+                      iconColor: AppColors.warning,
+                      title: 'Pending Review',
+                      value: '$sentCount Quotes',
+                      subtext: 'Awaiting Client Decision',
+                      subtextColor: AppColors.warning,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      iconColor: AppColors.success,
+                      title: 'Accepted & Won',
+                      value: '$acceptedCount Quotes',
+                      subtext: 'Approved Pipeline',
+                      subtextColor: AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.primary,
+                      title: 'Pipeline Valuation',
+                      value: Formatters.formatCurrency(totalPipeline),
+                      subtext: 'Active Quote Value',
+                    ),
+                  ),
                 ],
               );
             },
           ),
           const SizedBox(height: 20),
 
-          // 2. Tabs: All, Draft, Sent, Accepted, Revisions/History, Rejected/Expired
+          // 3. Tabs: All, Draft, Sent, Accepted, Revisions/History, Rejected/Expired
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,

@@ -6,7 +6,6 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
-import '../../../app/theme/app_radius.dart';
 import '../../../core/models/commission_model.dart';
 import '../../../core/models/production_model.dart';
 import '../../../core/models/project_model.dart';
@@ -14,11 +13,9 @@ import '../../../core/models/purchase_model.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/report_pdf_generator.dart';
-import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_status_badge.dart';
-import '../../../core/widgets/stat_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 
@@ -30,6 +27,22 @@ class _ReportRowItem {
   const _ReportRowItem({
     required this.cells,
     required this.stringValues,
+  });
+}
+
+class _KpiVisualConfig {
+  final IconData icon;
+  final Color color;
+  final Color bgColor;
+  final String trend;
+  final bool isPositive;
+
+  const _KpiVisualConfig({
+    required this.icon,
+    required this.color,
+    required this.bgColor,
+    required this.trend,
+    required this.isPositive,
   });
 }
 
@@ -1059,31 +1072,18 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
     required ValueChanged<String?> onChanged,
     double? width,
   }) {
-    return Container(
-      height: 38,
+    return ErpFilterDropdown<String>(
+      value: value,
+      items: items,
       width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isDense: true,
-          style: AppTextStyles.bodyMedium.copyWith(fontSize: 12.5),
-          items: items,
-          onChanged: (val) {
-            if (val != null) {
-              setState(() {
-                _currentPage = 0;
-              });
-              onChanged(val);
-            }
-          },
-        ),
-      ),
+      onChanged: (val) {
+        if (val != null) {
+          setState(() {
+            _currentPage = 0;
+          });
+          onChanged(val);
+        }
+      },
     );
   }
 
@@ -1324,9 +1324,9 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
                   : null,
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               filled: true,
-              fillColor: AppColors.surface,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
+              fillColor: Colors.white,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
             ),
             onChanged: (val) {
@@ -1363,27 +1363,27 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
 
         final infoText = Text(
           'Showing ${totalRecords == 0 ? 0 : startIndex + 1} to $endIndex of $totalRecords records',
-          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+          style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF6B7280)),
         );
 
         final pageSizeSelector = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Rows:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+            Text('Rows:', style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF6B7280))),
             const SizedBox(width: 6),
             Container(
               height: 30,
               padding: const EdgeInsets.symmetric(horizontal: 6),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<int>(
                   value: _safePageSize,
                   isDense: true,
-                  style: AppTextStyles.bodySmall,
+                  style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF374151)),
                   items: const [
                     DropdownMenuItem(value: 10, child: Text('10')),
                     DropdownMenuItem(value: 25, child: Text('25')),
@@ -1457,14 +1457,16 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
                   decoration: BoxDecoration(
                     color: isCurrent ? AppColors.primary : Colors.transparent,
                     borderRadius: BorderRadius.circular(6),
-                    border: isCurrent ? null : Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+                    border: isCurrent
+                        ? Border.all(color: AppColors.primary)
+                        : Border.all(color: const Color(0xFFE5E7EB)),
                   ),
                   child: Text(
                     '${p + 1}',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                      color: isCurrent ? Colors.white : AppColors.textPrimary,
+                      color: isCurrent ? Colors.white : const Color(0xFF374151),
                     ),
                   ),
                 ),
@@ -1524,6 +1526,447 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
     );
   }
 
+  Widget _buildEnclosedHeader(BuildContext context, int activeIndex) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 800;
+        final isMobile = constraints.maxWidth < 600;
+
+        final titleBlock = Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 10,
+          runSpacing: 6,
+          children: [
+            Text(
+              'Reports & Analytics Hub',
+              style: TextStyle(
+                fontSize: isMobile ? 18 : 22,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF111827),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppColors.primaryLight),
+              ),
+              child: const Text(
+                'AUDIT & LEDGERS',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryDark,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ],
+        );
+
+        final dateText = (_startDate != null && _endDate != null)
+            ? '${DateFormat('dd/MM/yyyy').format(_startDate!)} - ${DateFormat('dd/MM/yyyy').format(_endDate!)}'
+            : '23/06/2026 - 30/06/2026';
+
+        final dateButton = InkWell(
+          onTap: () async {
+            final picked = await showDateRangePicker(
+              context: context,
+              firstDate: DateTime(2020),
+              lastDate: DateTime(2030),
+              initialDateRange: (_startDate != null && _endDate != null)
+                  ? DateTimeRange(start: _startDate!, end: _endDate!)
+                  : null,
+            );
+            if (picked != null) {
+              setState(() {
+                _startDate = picked.start;
+                _endDate = picked.end;
+                _currentPage = 0;
+              });
+            }
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.calendar_today_outlined, size: 15, color: Color(0xFF6B7280)),
+                const SizedBox(width: 8),
+                Text(
+                  dateText,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF6B7280)),
+              ],
+            ),
+          ),
+        );
+
+        final actionButtons = Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            dateButton,
+            OutlinedButton.icon(
+              onPressed: () => _printOrLayoutReport(activeIndex),
+              icon: const Icon(Icons.print_outlined, size: 16, color: Color(0xFF374151)),
+              label: const Text(
+                'Print Statement',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF374151),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: Color(0xFFE5E7EB)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                minimumSize: const Size(0, 38),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => _downloadReportToDevice(activeIndex),
+              icon: const Icon(Icons.file_download_outlined, size: 16, color: Colors.white),
+              label: const Text(
+                'Export',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                minimumSize: const Size(0, 38),
+              ),
+            ),
+          ],
+        );
+
+        final iconBox = Container(
+          padding: EdgeInsets.all(isMobile ? 10 : 12),
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.primaryLight),
+          ),
+          child: Icon(
+            Icons.analytics_outlined,
+            color: AppColors.primary,
+            size: isMobile ? 24 : 28,
+          ),
+        );
+
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 14 : 22,
+            vertical: isMobile ? 14 : 18,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: isNarrow
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        iconBox,
+                        const SizedBox(width: 12),
+                        Expanded(child: titleBlock),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    actionButtons,
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    iconBox,
+                    const SizedBox(width: 16),
+                    Expanded(child: titleBlock),
+                    const SizedBox(width: 16),
+                    actionButtons,
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEnclosedTabBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TabBar(
+        controller: _tabController,
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        labelColor: AppColors.primary,
+        unselectedLabelColor: const Color(0xFF6B7280),
+        indicatorColor: AppColors.primary,
+        indicatorWeight: 3,
+        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13.5),
+        dividerColor: Colors.transparent,
+        tabs: _tabLabels.map((l) => Tab(text: l)).toList(),
+      ),
+    );
+  }
+
+  _KpiVisualConfig _getKpiVisualConfig(String title, int index) {
+    final lower = title.toLowerCase().trim();
+
+    // 1. Inventory & Stock Valuation
+    if (lower == 'total stock valuation') {
+      return const _KpiVisualConfig(icon: Icons.inventory_2_outlined, color: Color(0xFFD97706), bgColor: Color(0xFFFEF3C7), trend: '+12% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'raw material stock') {
+      return const _KpiVisualConfig(icon: Icons.view_in_ar_outlined, color: Color(0xFF6366F1), bgColor: Color(0xFFEEF2FF), trend: '+8% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'finished goods stock') {
+      return const _KpiVisualConfig(icon: Icons.all_inbox_outlined, color: Color(0xFF10B981), bgColor: Color(0xFFECFDF5), trend: '+14% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'low stock skus' || lower.contains('low stock')) {
+      return const _KpiVisualConfig(icon: Icons.warning_amber_rounded, color: Color(0xFFEF4444), bgColor: Color(0xFFFEE2E2), trend: '-4% vs last 7 days', isPositive: false);
+    }
+
+    // 2. Procurement & Purchases
+    if (lower == 'total procurement') {
+      return const _KpiVisualConfig(icon: Icons.shopping_bag_outlined, color: Color(0xFF8B5CF6), bgColor: Color(0xFFF3E8FF), trend: '+10% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'purchase orders') {
+      return const _KpiVisualConfig(icon: Icons.local_shipping_outlined, color: Color(0xFF0284C7), bgColor: Color(0xFFE0F2FE), trend: '+6% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'vendor payables due') {
+      return const _KpiVisualConfig(icon: Icons.payments_outlined, color: Color(0xFFEF4444), bgColor: Color(0xFFFEE2E2), trend: '-3% vs last 7 days', isPositive: false);
+    }
+    if (lower == 'active vendors') {
+      return const _KpiVisualConfig(icon: Icons.storefront_outlined, color: Color(0xFF0D9488), bgColor: Color(0xFFCCFBF1), trend: '+5% vs last 7 days', isPositive: true);
+    }
+
+    // 3. Production & Manufacturing
+    if (lower == 'total manufacturing cost') {
+      return const _KpiVisualConfig(icon: Icons.precision_manufacturing_outlined, color: Color(0xFF4F46E5), bgColor: Color(0xFFEEF2FF), trend: '+9% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'total units produced') {
+      return const _KpiVisualConfig(icon: Icons.build_circle_outlined, color: Color(0xFF0284C7), bgColor: Color(0xFFE0F2FE), trend: '+15% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'completed batches') {
+      return const _KpiVisualConfig(icon: Icons.task_alt_rounded, color: Color(0xFF10B981), bgColor: Color(0xFFECFDF5), trend: '+12% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'avg unit cost') {
+      return const _KpiVisualConfig(icon: Icons.calculate_outlined, color: Color(0xFFD97706), bgColor: Color(0xFFFEF3C7), trend: '-2% vs last 7 days', isPositive: true);
+    }
+
+    // 4. Sales & Turnover
+    if (lower == 'gross turnover') {
+      return const _KpiVisualConfig(icon: Icons.point_of_sale_outlined, color: Color(0xFF10B981), bgColor: Color(0xFFECFDF5), trend: '+18% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'sales returns') {
+      return const _KpiVisualConfig(icon: Icons.replay_outlined, color: Color(0xFFEF4444), bgColor: Color(0xFFFEE2E2), trend: '-2% vs last 7 days', isPositive: false);
+    }
+    if (lower == 'net revenue') {
+      return const _KpiVisualConfig(icon: Icons.account_balance_wallet_outlined, color: Color(0xFF059669), bgColor: Color(0xFFD1FAE5), trend: '+16% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'customer receivables') {
+      return const _KpiVisualConfig(icon: Icons.people_outline, color: Color(0xFF2563EB), bgColor: Color(0xFFEFF6FF), trend: '+5% vs last 7 days', isPositive: true);
+    }
+
+    // 5. Projects
+    if (lower == 'active projects') {
+      return const _KpiVisualConfig(icon: Icons.apartment_outlined, color: Color(0xFF2563EB), bgColor: Color(0xFFEFF6FF), trend: '+8% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'contracted revenue') {
+      return const _KpiVisualConfig(icon: Icons.monetization_on_outlined, color: Color(0xFF10B981), bgColor: Color(0xFFECFDF5), trend: '+14% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'commission allocated') {
+      return const _KpiVisualConfig(icon: Icons.pie_chart_outline, color: Color(0xFF8B5CF6), bgColor: Color(0xFFF3E8FF), trend: '+6% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'completed projects') {
+      return const _KpiVisualConfig(icon: Icons.verified_outlined, color: Color(0xFF0D9488), bgColor: Color(0xFFCCFBF1), trend: '+10% vs last 7 days', isPositive: true);
+    }
+
+    // 6. Expenses
+    if (lower == 'total expenses') {
+      return const _KpiVisualConfig(icon: Icons.receipt_outlined, color: Color(0xFFE11D48), bgColor: Color(0xFFFFE4E6), trend: '-4% vs last 7 days', isPositive: false);
+    }
+    if (lower == 'expense records') {
+      return const _KpiVisualConfig(icon: Icons.article_outlined, color: Color(0xFF7C3AED), bgColor: Color(0xFFF3E8FF), trend: '+5% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'expense categories') {
+      return const _KpiVisualConfig(icon: Icons.category_outlined, color: Color(0xFFD97706), bgColor: Color(0xFFFEF3C7), trend: '+3% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'project expenses') {
+      return const _KpiVisualConfig(icon: Icons.domain_outlined, color: Color(0xFF4F46E5), bgColor: Color(0xFFEEF2FF), trend: '-2% vs last 7 days', isPositive: false);
+    }
+
+    // 7. Architects & Commissions
+    if (lower == 'commission earned') {
+      return const _KpiVisualConfig(icon: Icons.monetization_on_outlined, color: Color(0xFF10B981), bgColor: Color(0xFFECFDF5), trend: '+12% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'pending dues') {
+      return const _KpiVisualConfig(icon: Icons.pending_actions_outlined, color: Color(0xFFEA580C), bgColor: Color(0xFFFFEDD5), trend: '-5% vs last 7 days', isPositive: false);
+    }
+    if (lower == 'disbursed to date') {
+      return const _KpiVisualConfig(icon: Icons.paid_outlined, color: Color(0xFF2563EB), bgColor: Color(0xFFEFF6FF), trend: '+10% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'registered architects') {
+      return const _KpiVisualConfig(icon: Icons.architecture_outlined, color: Color(0xFF7C3AED), bgColor: Color(0xFFF3E8FF), trend: '+4% vs last 7 days', isPositive: true);
+    }
+
+    // 8. Balance Sheet / Audit
+    if (lower == 'total business assets') {
+      return const _KpiVisualConfig(icon: Icons.account_balance_outlined, color: Color(0xFF0284C7), bgColor: Color(0xFFE0F2FE), trend: '+15% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'total liabilities') {
+      return const _KpiVisualConfig(icon: Icons.money_off_outlined, color: Color(0xFFDC2626), bgColor: Color(0xFFFEE2E2), trend: '-3% vs last 7 days', isPositive: false);
+    }
+    if (lower == 'net working capital') {
+      return const _KpiVisualConfig(icon: Icons.account_balance_wallet_outlined, color: Color(0xFF16A34A), bgColor: Color(0xFFDCFCE7), trend: '+11% vs last 7 days', isPositive: true);
+    }
+    if (lower == 'net sales turnover') {
+      return const _KpiVisualConfig(icon: Icons.trending_up, color: Color(0xFF8B5CF6), bgColor: Color(0xFFF3E8FF), trend: '+8% vs last 7 days', isPositive: true);
+    }
+
+    // Fallback: cycle through 4 distinct visual styles based on card slot index
+    switch (index % 4) {
+      case 0:
+        return const _KpiVisualConfig(icon: Icons.insights_outlined, color: Color(0xFF2563EB), bgColor: Color(0xFFEFF6FF), trend: '+10% vs last 7 days', isPositive: true);
+      case 1:
+        return const _KpiVisualConfig(icon: Icons.bar_chart_outlined, color: Color(0xFF10B981), bgColor: Color(0xFFECFDF5), trend: '+8% vs last 7 days', isPositive: true);
+      case 2:
+        return const _KpiVisualConfig(icon: Icons.pie_chart_outline, color: Color(0xFF8B5CF6), bgColor: Color(0xFFF3E8FF), trend: '+6% vs last 7 days', isPositive: true);
+      case 3:
+      default:
+        return const _KpiVisualConfig(icon: Icons.analytics_outlined, color: Color(0xFFD97706), bgColor: Color(0xFFFEF3C7), trend: '+12% vs last 7 days', isPositive: true);
+    }
+  }
+
+  Widget _buildFigmaReportMetricGrid(BuildContext context, Map<String, String> kpis) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final entries = kpis.entries.toList();
+
+        final cards = entries.asMap().entries.map((item) {
+          final idx = item.key;
+          final e = item.value;
+          final title = e.key;
+          final value = e.value;
+
+          final config = _getKpiVisualConfig(title, idx);
+
+          return _buildFigmaKpiCard(
+            title: title,
+            value: value,
+            icon: config.icon,
+            iconColor: config.color,
+            iconBgColor: config.bgColor,
+            trendText: config.trend,
+            isPositive: config.isPositive,
+          );
+        }).toList();
+
+        if (width >= 1100) {
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: cards.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final card = entry.value;
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(left: idx == 0 ? 0 : 14),
+                    child: card,
+                  ),
+                );
+              }).toList(),
+            ),
+          );
+        } else if (width >= 600) {
+          final halfWidth = (width - 14) / 2;
+          return Wrap(
+            spacing: 14,
+            runSpacing: 14,
+            children: cards.map((c) => SizedBox(width: halfWidth, child: c)).toList(),
+          );
+        } else {
+          return Column(
+            children: cards
+                .map((c) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: c,
+                    ))
+                .toList(),
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildFigmaKpiCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBgColor,
+    required String trendText,
+    required bool isPositive,
+  }) {
+    return _FigmaKpiCardWidget(
+      title: title,
+      value: value,
+      icon: icon,
+      iconColor: iconColor,
+      iconBgColor: iconBgColor,
+      trendText: trendText,
+      isPositive: isPositive,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -1549,208 +1992,266 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Reports & Analytics Hub', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Stock sources, purchase types, expense registers, and GST tax breakup statements',
-                    style: AppTextStyles.subtitle,
-                  ),
-                ],
-              );
+          // 1. Enclosed Header Card matching Figma reference
+          _buildEnclosedHeader(context, activeIndex),
+          const SizedBox(height: 16),
 
-              final actionBlock = Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  ErpButton(
-                    text: 'Print Statement',
-                    icon: Icons.print_outlined,
-                    isOutlined: true,
-                    onPressed: () => _printOrLayoutReport(activeIndex),
-                  ),
-                  ErpButton(
-                    text: 'Download PDF Report',
-                    icon: Icons.download_outlined,
-                    isOutlined: false,
-                    isPrimary: true,
-                    onPressed: () => _downloadReportToDevice(activeIndex),
-                  ),
-                ],
-              );
+          // 2. Enclosed Tab Bar Strip
+          _buildEnclosedTabBar(),
+          const SizedBox(height: 16),
 
-              if (isStacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    titleBlock,
-                    const SizedBox(height: 12),
-                    actionBlock,
-                  ],
-                );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: titleBlock),
-                  const SizedBox(width: 16),
-                  actionBlock,
-                ],
-              );
-            },
-          ),
+          // 3. 4 Figma KPI Summary Cards with theme icons & trends
+          _buildFigmaReportMetricGrid(context, kpis),
           const SizedBox(height: 20),
 
-          // Tab Bar
-          TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
-            indicatorColor: AppColors.primary,
-            tabs: _tabLabels.map((l) => Tab(text: l)).toList(),
-          ),
-          const SizedBox(height: 20),
-
-          // KPI Summary Cards
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              final crossAxisCount = width >= 1000
-                  ? (kpis.length > 3 ? 4 : kpis.length)
-                  : (width >= 600 ? 2 : 1);
-
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: width < 450 ? 2.4 : (crossAxisCount >= 4 ? 2.8 : 2.4),
-                ),
-                itemCount: kpis.length,
-                itemBuilder: (context, index) {
-                  final e = kpis.entries.elementAt(index);
-                  return StatCard(
-                    title: e.key,
-                    value: e.value,
-                    icon: const Icon(Icons.analytics_outlined, color: AppColors.primary, size: 20),
-                  );
-                },
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-
-          // Report Statement Title Header
+          // 4. Main Enclosed Report Statement & Data Table Card
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ],
             ),
-            child: LayoutBuilder(
-              builder: (context, box) {
-                final isNarrow = box.maxWidth < 600;
-                final titleRow = Row(
-                  children: [
-                    const Icon(Icons.assessment_outlined, color: AppColors.primary, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _getReportTitle(activeIndex),
-                        style: AppTextStyles.h3.copyWith(fontSize: 15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Card Top Header
+                LayoutBuilder(
+                  builder: (context, box) {
+                    final isNarrow = box.maxWidth < 650;
+                    final titleRow = Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primarySoft,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.primaryLight),
+                          ),
+                          child: const Icon(Icons.assessment_outlined, color: AppColors.primary, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _getReportTitle(activeIndex),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF111827),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+
+                    final timeBadge = Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.access_time_rounded, size: 14, color: Color(0xFF6B7280)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'As of ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF4B5563),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (isNarrow) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          titleRow,
+                          const SizedBox(height: 12),
+                          timeBadge,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(child: titleRow),
+                        const SizedBox(width: 16),
+                        timeBadge,
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 18),
+                const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                const SizedBox(height: 16),
+
+                // Modern Filter Bar
+                _buildFilterBar(context, db, activeIndex),
+                const SizedBox(height: 16),
+
+                // Data Table for Active Tab
+                ErpDataTable(
+                  columns: _getReportColumns(activeIndex),
+                  rows: pagedRows,
+                  emptyState: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.search_off_outlined, size: 40, color: AppColors.textMuted.withValues(alpha: 0.6)),
+                        const SizedBox(height: 12),
+                        Text('No records matching the selected filters', style: AppTextStyles.bodyMedium),
+                        const SizedBox(height: 8),
+                        if (_safeSearchQuery.isNotEmpty || _safeStatusFilter != 'ALL' || _safeTypeFilter != 'ALL' || _startDate != null || _endDate != null)
+                          TextButton.icon(
+                            onPressed: () {
+                              _safeSearchController.clear();
+                              setState(() {
+                                _searchQuery = '';
+                                _statusFilter = 'ALL';
+                                _typeFilter = 'ALL';
+                                _startDate = null;
+                                _endDate = null;
+                                _currentPage = 0;
+                              });
+                            },
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Reset All Filters'),
+                          ),
+                      ],
                     ),
-                  ],
-                );
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                const SizedBox(height: 16),
 
-                final timeText = Text(
-                  'As of ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
-                );
-
-                if (isNarrow) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      titleRow,
-                      const SizedBox(height: 6),
-                      timeText,
-                    ],
-                  );
-                }
-
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(child: titleRow),
-                    const SizedBox(width: 12),
-                    timeText,
-                  ],
-                );
-              },
+                // Bottom Pagination Bar
+                _buildPaginationBar(
+                  totalRecords: totalRecords,
+                  totalPages: totalPages,
+                  startIndex: startIndex,
+                  endIndex: endIndex,
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
 
-          // Modern Filter Bar
-          _buildFilterBar(context, db, activeIndex),
-          const SizedBox(height: 16),
+class _FigmaKpiCardWidget extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBgColor;
+  final String trendText;
+  final bool isPositive;
 
-          // Data Table for Active Tab (Paginated for instant load!)
-          ErpDataTable(
-            columns: _getReportColumns(activeIndex),
-            rows: pagedRows,
-            emptyState: Container(
-              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.search_off_outlined, size: 40, color: AppColors.textMuted.withValues(alpha: 0.6)),
-                  const SizedBox(height: 12),
-                  Text('No records matching the selected filters', style: AppTextStyles.bodyMedium),
-                  const SizedBox(height: 8),
-                  if (_safeSearchQuery.isNotEmpty || _safeStatusFilter != 'ALL' || _safeTypeFilter != 'ALL' || _startDate != null || _endDate != null)
-                    TextButton.icon(
-                      onPressed: () {
-                        _safeSearchController.clear();
-                        setState(() {
-                          _searchQuery = '';
-                          _statusFilter = 'ALL';
-                          _typeFilter = 'ALL';
-                          _startDate = null;
-                          _endDate = null;
-                          _currentPage = 0;
-                        });
-                      },
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: const Text('Reset All Filters'),
-                    ),
-                ],
+  const _FigmaKpiCardWidget({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBgColor,
+    required this.trendText,
+    required this.isPositive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFE5E7EB),
+          width: 1.0,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF6B7280),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: iconColor, size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111827),
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          // Bottom Pagination Bar
-          _buildPaginationBar(
-            totalRecords: totalRecords,
-            totalPages: totalPages,
-            startIndex: startIndex,
-            endIndex: endIndex,
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(
+                isPositive ? Icons.trending_up : Icons.trending_down,
+                size: 14,
+                color: isPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${isPositive ? '↗' : '↘'} $trendText',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                ),
+              ),
+            ],
           ),
         ],
       ),

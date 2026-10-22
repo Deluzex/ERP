@@ -259,19 +259,29 @@ class _AppShellState extends ConsumerState<AppShell> {
 
               // Main White/Light Content Area
               Expanded(
-                child: Column(
-                  children: [
-                    ErpHeader(
-                      onMenuToggle: () {
-                        _scaffoldKey.currentState?.openDrawer();
-                      },
-                    ),
-                    Expanded(
-                      child: RepaintBoundary(
-                        child: contentWidget,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxHeight <= 1.0 || constraints.maxWidth <= 1.0) {
+                      return const SizedBox.shrink();
+                    }
+                    return ClipRect(
+                      child: Column(
+                        children: [
+                          if (constraints.maxHeight > 64)
+                            ErpHeader(
+                              onMenuToggle: () {
+                                _scaffoldKey.currentState?.openDrawer();
+                              },
+                            ),
+                          Expanded(
+                            child: RepaintBoundary(
+                              child: contentWidget,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
             ],

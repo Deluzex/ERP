@@ -78,15 +78,15 @@ class AppTextStyles {
       );
 
   static TextStyle get tableHeader => GoogleFonts.plusJakartaSans(
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textMuted,
-        letterSpacing: 0.2,
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF1E293B),
+        letterSpacing: 0.5,
       );
 
   static TextStyle get tableCell => GoogleFonts.plusJakartaSans(
         fontSize: 13,
         fontWeight: FontWeight.w500,
-        color: AppColors.textPrimary,
+        color: const Color(0xFF1E293B),
       );
 }

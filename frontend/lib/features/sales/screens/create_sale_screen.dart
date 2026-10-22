@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -14,6 +15,7 @@ import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -664,22 +666,11 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isStacked = constraints.maxWidth < 750;
-                final titleBlock = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Create Sales Invoice', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Dispatch finished products, link project/architect, and record revenue',
-                      style: AppTextStyles.subtitle,
-                    ),
-                  ],
-                );
-
-                final actionButtons = Wrap(
+            ErpSectionHeaderCard(
+                icon: Icons.point_of_sale_outlined,
+                title: 'Create Sales Invoice',
+                badgeText: 'DIRECT SALE / INVOICE',
+                action: Wrap(
                   spacing: 12,
                   runSpacing: 8,
                   children: [
@@ -699,29 +690,8 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                       onPressed: () => _createInvoice(false),
                     ),
                   ],
-                );
-
-                if (isStacked) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      titleBlock,
-                      const SizedBox(height: 16),
-                      actionButtons,
-                    ],
-                  );
-                }
-
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(child: titleBlock),
-                    const SizedBox(width: 16),
-                    actionButtons,
-                  ],
-                );
-              },
-            ),
+                ),
+              ),
             const SizedBox(height: 24),
 
             // Party & Billing Card
@@ -1056,26 +1026,32 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: MediaQuery.of(context).size.width < 1100 ? 980 : MediaQuery.of(context).size.width - 320,
-                      ),
-                      child: Column(
-                        children: List.generate(_items.length, (index) {
-                          final item = _items[index];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceMuted,
-                              borderRadius: AppRadius.smBorderRadius,
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Row(
-                              children: [
-                                // Product dropdown
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      const minTableWidth = 950.0;
+                      final effectiveWidth = math.max(constraints.maxWidth, minTableWidth);
+
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: effectiveWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: List.generate(_items.length, (index) {
+                              final item = _items[index];
+                              return Container(
+                                width: effectiveWidth,
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceMuted,
+                                  borderRadius: AppRadius.smBorderRadius,
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // Product dropdown
                                 SizedBox(
                                   width: 280,
                                   child: DropdownButtonFormField<String>(
@@ -1202,7 +1178,9 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                         }),
                       ),
                     ),
-                  ),
+                  );
+                },
+              ),
                 ],
               ),
             ),

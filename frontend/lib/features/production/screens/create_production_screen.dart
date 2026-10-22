@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -12,6 +13,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class _RawMaterialUsageDraft {
@@ -295,10 +297,10 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isStockShort ? AppColors.dangerLight : AppColors.successLight,
-                          borderRadius: AppRadius.smBorderRadius,
+                          color: isStockShort ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                            color: isStockShort ? AppColors.danger : AppColors.success,
+                            color: isStockShort ? const Color(0xFFFECACA) : const Color(0xFFA7F3D0),
                           ),
                         ),
                         child: Row(
@@ -306,7 +308,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                             Icon(
                               isStockShort ? Icons.warning_amber_rounded : Icons.check_circle_outline,
                               size: 18,
-                              color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                              color: isStockShort ? const Color(0xFF991B1B) : const Color(0xFF065F46),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -317,7 +319,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                                  color: isStockShort ? const Color(0xFF991B1B) : const Color(0xFF065F46),
                                 ),
                               ),
                             ),
@@ -363,9 +365,9 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceMuted,
-                          borderRadius: AppRadius.smBorderRadius,
-                          border: Border.all(color: AppColors.border),
+                          color: const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -696,68 +698,108 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isSmall = constraints.maxWidth < 650;
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 460),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Create Production Order', style: AppTextStyles.h1),
-                          const SizedBox(height: 4),
-                          Text('Consume raw materials, record labor & overhead expenses, and output finished goods', style: AppTextStyles.subtitle),
-                        ],
-                      ),
-                    ),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 8,
+            // Header enclosed in section header card
+            ErpSectionHeaderCard(
+              icon: Icons.precision_manufacturing_rounded,
+              title: 'Create Production Order',
+              badgeText: 'SHOPFLOOR WORK ORDER',
+              action: LayoutBuilder(
+                builder: (context, actionBox) {
+                  final isMobile = actionBox.maxWidth < 600;
+                  if (isMobile) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        ErpButton(
-                          text: 'Cancel',
-                          isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: 'Complete & Produce Stock',
+                            icon: Icons.check_circle_outline,
+                            isLoading: _isCompleting == true,
+                            onPressed: _isSubmitting ? null : _completeProduction,
+                          ),
                         ),
-                        ErpButton(
-                          text: 'Save as Waiting Approval',
-                          icon: Icons.hourglass_top_outlined,
-                          isOutlined: true,
-                          isLoading: _isSavingPlanned == true,
-                          onPressed: _isSubmitting ? null : _saveAsPlanned,
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: 'Save as Waiting Approval',
+                            icon: Icons.hourglass_top_outlined,
+                            isOutlined: true,
+                            isLoading: _isSavingPlanned == true,
+                            onPressed: _isSubmitting ? null : _saveAsPlanned,
+                          ),
                         ),
-                        ErpButton(
-                          text: 'Complete & Produce Stock',
-                          icon: Icons.check_circle_outline,
-                          isLoading: _isCompleting == true,
-                          onPressed: _isSubmitting ? null : _completeProduction,
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: 'Cancel',
+                            isOutlined: true,
+                            onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                          ),
                         ),
                       ],
-                    ),
-                  ],
-                );
-              },
+                    );
+                  }
+
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      ErpButton(
+                        text: 'Cancel',
+                        isOutlined: true,
+                        onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                      ),
+                      ErpButton(
+                        text: 'Save as Waiting Approval',
+                        icon: Icons.hourglass_top_outlined,
+                        isOutlined: true,
+                        isLoading: _isSavingPlanned == true,
+                        onPressed: _isSubmitting ? null : _saveAsPlanned,
+                      ),
+                      ErpButton(
+                        text: 'Complete & Produce Stock',
+                        icon: Icons.check_circle_outline,
+                        isLoading: _isCompleting == true,
+                        onPressed: _isSubmitting ? null : _completeProduction,
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             // Product & Quantities Card
             Container(
-              padding: AppSpacing.cardPadding,
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.lgBorderRadius,
-                border: Border.all(color: AppColors.border),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Finished Product to Produce', style: AppTextStyles.h3),
+                  const Text(
+                    'Finished Product to Produce',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                      letterSpacing: -0.2,
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   LayoutBuilder(
                     builder: (context, constraints) {
@@ -845,15 +887,22 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             // Raw Material Consumption Table
             Container(
-              padding: AppSpacing.cardPadding,
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.lgBorderRadius,
-                border: Border.all(color: AppColors.border),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -861,7 +910,15 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final isNarrow = constraints.maxWidth < 650;
-                      final title = Text('Raw Materials Consumed', style: AppTextStyles.h3);
+                      const title = Text(
+                        'Raw Materials Consumed',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                          letterSpacing: -0.2,
+                        ),
+                      );
                       final button = ErpButton(
                         text: 'Add Raw Material',
                         icon: Icons.grain,
@@ -895,9 +952,9 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
-                        borderRadius: AppRadius.smBorderRadius,
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                        color: const Color(0xFFEEF2FF),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFC7D2FE)),
                       ),
                       child: Row(
                         children: [
@@ -916,9 +973,9 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: AppColors.surface,
+                                        color: Colors.white,
                                         borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                                        border: Border.all(color: const Color(0xFFC7D2FE)),
                                       ),
                                       child: Text(
                                         '${_activeBom!.itemsCount} materials · Base: ${_activeBom!.outputQuantity.toStringAsFixed(0)} unit',
@@ -947,32 +1004,6 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                         ],
                       ),
                     ),
-                  ] else if (db.finishedProducts.isNotEmpty) ...[
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.warningLight.withValues(alpha: 0.3),
-                        borderRadius: AppRadius.smBorderRadius,
-                        border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.info_outline, color: AppColors.warning, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'No BOM recipe registered for this product. You can manually specify components below or register a BOM recipe in Masters.',
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.billOfMaterials,
-                            child: const Text('Go to BOM Master', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                   if (_rawMaterialsUsed.isEmpty)
                     Container(
@@ -980,9 +1011,9 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                       padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceMuted,
-                        borderRadius: AppRadius.smBorderRadius,
-                        border: Border.all(color: AppColors.border),
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -1006,37 +1037,54 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                       ),
                     )
                   else ...[
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: MediaQuery.of(context).size.width < 1300 ? 1280 : MediaQuery.of(context).size.width - 320,
-                      ),
-                      child: Column(
-                        children: List.generate(_rawMaterialsUsed.length, (index) {
-                          final item = _rawMaterialsUsed[index];
-                          final prodQty = _actualQty > 0 ? _actualQty : 1.0;
-                          final perUnitQty = item.quantityUsed / prodQty;
-                          final perUnitCost = item.totalCost / prodQty;
-                          final rm = db.rawMaterials.firstWhere(
-                            (r) => r.id == item.rawMaterialId,
-                            orElse: () => db.rawMaterials.first,
-                          );
-                          final isStockShort = rm.currentStock < item.quantityUsed;
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        const minTableWidth = 1240.0;
+                        final effectiveWidth = math.max(constraints.maxWidth, minTableWidth);
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Container(
+                            width: effectiveWidth,
+                            clipBehavior: Clip.antiAlias,
                             decoration: BoxDecoration(
-                              color: isStockShort ? AppColors.dangerLight.withValues(alpha: 0.2) : AppColors.surfaceMuted,
-                              borderRadius: AppRadius.smBorderRadius,
+                              color: const Color(0xFFF9FAFB),
+                              borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: isStockShort ? AppColors.danger : AppColors.border,
-                                width: isStockShort ? 1.5 : 1.0,
+                                color: const Color(0xFFE5E7EB),
+                                width: 1.0,
                               ),
                             ),
-                            child: Row(
-                              children: [
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: List.generate(_rawMaterialsUsed.length, (index) {
+                                final item = _rawMaterialsUsed[index];
+                                final prodQty = _actualQty > 0 ? _actualQty : 1.0;
+                                final perUnitQty = item.quantityUsed / prodQty;
+                                final perUnitCost = item.totalCost / prodQty;
+                                final rm = db.rawMaterials.firstWhere(
+                                  (r) => r.id == item.rawMaterialId,
+                                  orElse: () => db.rawMaterials.first,
+                                );
+                                final isStockShort = rm.currentStock < item.quantityUsed;
+
+                                return Container(
+                                  width: effectiveWidth,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: isStockShort ? const Color(0xFFFEF2F2) : Colors.transparent,
+                                    border: index > 0
+                                        ? const Border(
+                                            top: BorderSide(
+                                              color: Color(0xFFE5E7EB),
+                                              width: 1.0,
+                                            ),
+                                          )
+                                        : null,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
                                 SizedBox(
                                   width: 320,
                                   child: DropdownButtonFormField<String>(
@@ -1073,15 +1121,15 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                 ),
                                 const SizedBox(width: 12),
 
-                                // Current Stock Status Pill (matching popup)
+                                // Current Stock Status Pill (matching Figma soft badge)
                                 Container(
                                   width: 190,
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: isStockShort ? AppColors.dangerLight : AppColors.successLight,
-                                    borderRadius: AppRadius.smBorderRadius,
+                                    color: isStockShort ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
+                                    borderRadius: BorderRadius.circular(6),
                                     border: Border.all(
-                                      color: isStockShort ? AppColors.danger : AppColors.success,
+                                      color: isStockShort ? const Color(0xFFFECACA) : const Color(0xFFA7F3D0),
                                     ),
                                   ),
                                   child: Row(
@@ -1090,7 +1138,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                       Icon(
                                         isStockShort ? Icons.warning_amber_rounded : Icons.check_circle_outline,
                                         size: 16,
-                                        color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                                        color: isStockShort ? const Color(0xFF991B1B) : const Color(0xFF065F46),
                                       ),
                                       const SizedBox(width: 6),
                                       Expanded(
@@ -1099,11 +1147,12 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Text(
-                                              isStockShort ? 'Low Stock' : 'In Stock',
+                                              isStockShort ? 'LOW STOCK' : 'IN STOCK',
                                               style: TextStyle(
-                                                fontSize: 11,
+                                                fontSize: 10,
                                                 fontWeight: FontWeight.w700,
-                                                color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                                                letterSpacing: 0.3,
+                                                color: isStockShort ? const Color(0xFF991B1B) : const Color(0xFF065F46),
                                               ),
                                             ),
                                             Text(
@@ -1113,7 +1162,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                               style: TextStyle(
                                                 fontSize: 10.5,
                                                 fontWeight: FontWeight.w600,
-                                                color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                                                color: isStockShort ? const Color(0xFF991B1B) : const Color(0xFF065F46),
                                               ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
@@ -1165,9 +1214,9 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                   width: 220,
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: AppColors.surface,
-                                    borderRadius: AppRadius.smBorderRadius,
-                                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFE5E7EB)),
                                   ),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1191,7 +1240,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                                       const SizedBox(height: 2),
                                       Text(
                                         '${perUnitQty.toStringAsFixed(2)} ${item.unit} / unit',
-                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText, fontSize: 12),
+                                        style: AppTextStyles.bodyBold.copyWith(color: const Color(0xFF065F46), fontSize: 12),
                                       ),
                                     ],
                                   ),
@@ -1222,74 +1271,14 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                         }),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(height: 12),
-                  // Per Product BOM Recipe Summary Banner
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: AppRadius.smBorderRadius,
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, bannerBox) {
-                        final isNarrow = bannerBox.maxWidth < 650;
-                        final leftBlock = Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.calculate_outlined, color: AppColors.primaryDark, size: 22),
-                            const SizedBox(width: 10),
-                            Flexible(
-                              child: Text(
-                                'Per Product Raw Material Calculation',
-                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark),
-                              ),
-                            ),
-                          ],
-                        );
-
-                        final rightPill = Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
-                          ),
-                          child: Text(
-                            'Raw Material Cost: ${Formatters.formatCurrency(_actualQty > 0 ? _rawMaterialCost / _actualQty : 0.0)} / unit',
-                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 13),
-                          ),
-                        );
-
-                        if (isNarrow) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              leftBlock,
-                              const SizedBox(height: 10),
-                              rightPill,
-                            ],
-                          );
-                        }
-
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(child: leftBlock),
-                            const SizedBox(width: 12),
-                            rightPill,
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                  ],
-                ],
+                  );
+                },
               ),
-            ),
-            const SizedBox(height: 24),
+            ],
+          ],
+        ),
+      ),
+            const SizedBox(height: 20),
 
             // Costing & Overhead Breakdown
             LayoutBuilder(
@@ -1297,16 +1286,31 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                 final isStacked = costBox.maxWidth < 800;
 
                 final labourCard = Container(
-                  padding: AppSpacing.cardPadding,
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.lgBorderRadius,
-                    border: Border.all(color: AppColors.border),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x06000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Labour & Additional Overhead Expenses', style: AppTextStyles.h3),
+                      const Text(
+                        'Labour & Additional Overhead Expenses',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       LayoutBuilder(
                         builder: (context, fieldBox) {
@@ -1350,17 +1354,46 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                 );
 
                 final summaryCard = Container(
-                  padding: AppSpacing.cardPadding,
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.lgBorderRadius,
-                    border: Border.all(color: AppColors.border),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x06000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Production Costing Summary', style: AppTextStyles.h3),
+                      const Text(
+                        'Production Costing Summary',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
                       const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text('Per Raw Material Cost:', style: AppTextStyles.bodyMedium),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            Formatters.formatCurrency(_actualQty > 0 ? _rawMaterialCost / _actualQty : 0.0),
+                            style: AppTextStyles.bodyBold,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1429,12 +1462,12 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                           Text(Formatters.formatCurrency(_totalProductionCost), style: AppTextStyles.h2),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.primarySoft,
-                          borderRadius: AppRadius.smBorderRadius,
+                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                         ),
                         child: Row(
@@ -1444,15 +1477,29 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Total Cost per Product:', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark)),
-                                  Text('Materials + Labour + Overheads', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
+                                  const Text(
+                                    'Total Cost per Product:',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primaryDark,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Materials + Labour + Overheads',
+                                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                  ),
                                 ],
                               ),
                             ),
                             const SizedBox(width: 8),
                             Text(
                               Formatters.formatCurrency(_costPerUnit),
-                              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark, fontSize: 16),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primaryDark,
+                              ),
                             ),
                           ],
                         ),
@@ -1481,34 +1528,91 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                 );
               },
             ),
-            const SizedBox(height: 24),
-            // Bottom Action Bar
-            Align(
-              alignment: Alignment.centerRight,
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 10,
-                runSpacing: 8,
-                children: [
-                  ErpButton(
-                    text: 'Cancel',
-                    isOutlined: true,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
-                  ),
-                  ErpButton(
-                    text: 'Save as Waiting Approval',
-                    icon: Icons.hourglass_top_outlined,
-                    isOutlined: true,
-                    isLoading: _isSavingPlanned == true,
-                    onPressed: _isSubmitting ? null : _saveAsPlanned,
-                  ),
-                  ErpButton(
-                    text: 'Complete & Produce Stock',
-                    icon: Icons.check_circle_outline,
-                    isLoading: _isCompleting == true,
-                    onPressed: _isSubmitting ? null : _completeProduction,
+            const SizedBox(height: 20),
+            // Bottom Action Bar enclosed in Figma card container
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
                   ),
                 ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, actionBox) {
+                  final isMobile = actionBox.maxWidth < 600;
+                  if (isMobile) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: 'Complete & Produce Stock',
+                            icon: Icons.check_circle_outline,
+                            isLoading: _isCompleting == true,
+                            onPressed: _isSubmitting ? null : _completeProduction,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: 'Save as Waiting Approval',
+                            icon: Icons.hourglass_top_outlined,
+                            isOutlined: true,
+                            isLoading: _isSavingPlanned == true,
+                            onPressed: _isSubmitting ? null : _saveAsPlanned,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: 'Cancel',
+                            isOutlined: true,
+                            onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        ErpButton(
+                          text: 'Cancel',
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                        ),
+                        ErpButton(
+                          text: 'Save as Waiting Approval',
+                          icon: Icons.hourglass_top_outlined,
+                          isOutlined: true,
+                          isLoading: _isSavingPlanned == true,
+                          onPressed: _isSubmitting ? null : _saveAsPlanned,
+                        ),
+                        ErpButton(
+                          text: 'Complete & Produce Stock',
+                          icon: Icons.check_circle_outline,
+                          isLoading: _isCompleting == true,
+                          onPressed: _isSubmitting ? null : _completeProduction,
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 32),

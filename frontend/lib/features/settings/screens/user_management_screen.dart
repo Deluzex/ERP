@@ -9,6 +9,7 @@ import '../../../core/models/rbac_models.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/api/roles_api_service.dart';
@@ -66,10 +67,17 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
         return StatefulBuilder(
           builder: (context, setDlgState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(isEdit ? 'Edit ERP User' : 'Add New ERP User', style: AppTextStyles.h2),
+                  Expanded(
+                    child: Text(
+                      isEdit ? 'Edit ERP User' : 'Add New ERP User',
+                      style: AppTextStyles.h2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(ctx).pop()),
                 ],
               ),
@@ -137,14 +145,18 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
 
                         // Primary Role Dropdown
                         DropdownButtonFormField<String>(
-                          value: selectedPrimaryRoleId,
+                          initialValue: selectedPrimaryRoleId,
+                          isExpanded: true,
                           decoration: const InputDecoration(
                             labelText: 'Primary Role (Determines Landing Dashboard & Menus) *',
                             prefixIcon: Icon(Icons.shield_outlined, size: 18),
                           ),
                           items: db.roles.map((r) => DropdownMenuItem(
                             value: r.id,
-                            child: Text('${r.name} ${r.isSystemRole ? "(Default Role)" : "(Custom)"}'),
+                            child: Text(
+                              '${r.name} ${r.isSystemRole ? "(Default Role)" : "(Custom)"}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           )).toList(),
                           onChanged: (val) {
                             if (val != null) {
@@ -744,13 +756,11 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('User & Role Access Management (RBAC)', style: AppTextStyles.h1),
-              const SizedBox(height: 4),
-              Text('Manage ERP operators, primary & multi-department roles, and granular permission matrices', style: AppTextStyles.subtitle),
-            ],
+          ErpSectionHeaderCard(
+            icon: Icons.admin_panel_settings_outlined,
+            title: 'User & Role Access Management (RBAC)',
+            badgeText: 'SECURITY MATRIX',
+            subtitle: 'Manage ERP operators, primary & multi-department roles, and granular permission matrices',
           ),
           const SizedBox(height: 16),
           Container(

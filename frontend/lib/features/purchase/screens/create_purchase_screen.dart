@@ -1,10 +1,10 @@
+import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
-import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/purchase_model.dart';
@@ -12,6 +12,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class _MaxAmountTextInputFormatter extends TextInputFormatter {
@@ -240,7 +241,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
               ],
             ),
             content: Container(
-              constraints: const BoxConstraints(maxWidth: 500),
+              constraints: BoxConstraints(
+                maxWidth: 500,
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
+              ),
               width: double.infinity,
               child: Form(
                 key: formKey,
@@ -251,15 +255,24 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                     children: [
                       DropdownButtonFormField<PurchaseItemType>(
                         value: selectedType,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Item Classification *'),
                         items: const [
                           DropdownMenuItem(
                             value: PurchaseItemType.rawMaterial,
-                            child: Text('Raw Material (Components / Metals / Drivers)'),
+                            child: Text(
+                              'Raw Material (Components / Metals / Drivers)',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
                           ),
                           DropdownMenuItem(
                             value: PurchaseItemType.finishedProduct,
-                            child: Text('Finished Good (Direct Stock Inward)'),
+                            child: Text(
+                              'Finished Good (Direct Stock Inward)',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
                           ),
                         ],
                         onChanged: (val) {
@@ -341,10 +354,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
-                            color: AppColors.successLight,
-                            borderRadius: AppRadius.smBorderRadius,
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: AppColors.success,
+                              color: const Color(0xFFA7F3D0),
                             ),
                           ),
                           child: Row(
@@ -352,7 +365,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                               const Icon(
                                 Icons.inventory_2_outlined,
                                 size: 18,
-                                color: AppColors.successText,
+                                color: Color(0xFF065F46),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -363,7 +376,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: AppColors.successText,
+                                    color: Color(0xFF065F46),
                                   ),
                                 ),
                               ),
@@ -372,7 +385,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: AppColors.success,
+                                    color: const Color(0xFF10B981),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
@@ -461,9 +474,9 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceMuted,
+                          color: const Color(0xFFF9FAFB),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -686,6 +699,82 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     }
   }
 
+  Widget _buildTaxModeOption({
+    required bool isInterState,
+    required String label,
+    bool isFullWidth = false,
+  }) {
+    final isSelected = isInterState ? _isInterStateTax : !_isInterStateTax;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => setState(() => _isInterStateTax = isInterState),
+        borderRadius: BorderRadius.circular(20),
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: AppColors.primarySoft.withValues(alpha: 0.4),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          width: isFullWidth ? double.infinity : null,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primarySoft : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? AppColors.primary : AppColors.border,
+              width: 1.0,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: isFullWidth ? MainAxisSize.max : MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? AppColors.primary : Colors.transparent,
+                  border: Border.all(
+                    color: isSelected ? AppColors.primary : AppColors.border,
+                    width: 1.5,
+                  ),
+                ),
+                child: AnimatedOpacity(
+                  opacity: isSelected ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(Icons.check, size: 10, color: Colors.white),
+                ),
+              ),
+              const SizedBox(width: 8),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected ? (isInterState ? AppColors.primaryDark : AppColors.primary) : AppColors.textMuted,
+                ),
+                child: Text(label),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -697,135 +786,210 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isSmall = constraints.maxWidth < 700;
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 380),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Create Direct Purchase', style: AppTextStyles.h1),
-                          const SizedBox(height: 4),
-                          Text('Inward Raw Materials or Finished Goods directly into stock with GST tax breakup',
-                              style: AppTextStyles.subtitle),
-                        ],
-                      ),
-                    ),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 8,
+            // Header enclosed in section header card
+            ErpSectionHeaderCard(
+              icon: Icons.shopping_bag_outlined,
+              title: 'Create Direct Purchase',
+              badgeText: 'DIRECT PROCUREMENT',
+              action: LayoutBuilder(
+                builder: (context, actionBox) {
+                  final isMobile = actionBox.maxWidth < 600;
+                  if (isMobile) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        ErpButton(
-                          text: 'Cancel',
-                          isOutlined: true,
-                          onPressed: _isSubmitting
-                              ? null
-                              : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: _isSubmitting ? 'Saving & Inwarding...' : 'Save & Inward Stock',
+                            icon: _isSubmitting ? null : Icons.check,
+                            onPressed: _isSubmitting ? null : () => _savePurchase(false),
+                          ),
                         ),
-                        ErpButton(
-                          text: 'Save Draft',
-                          isOutlined: true,
-                          onPressed: _isSubmitting ? null : () => _savePurchase(true),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: 'Save Draft',
+                            isOutlined: true,
+                            onPressed: _isSubmitting ? null : () => _savePurchase(true),
+                          ),
                         ),
-                        ErpButton(
-                          text: _isSubmitting ? 'Saving & Inwarding...' : 'Save & Inward Stock',
-                          icon: _isSubmitting ? null : Icons.check,
-                          onPressed: _isSubmitting ? null : () => _savePurchase(false),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: 'Cancel',
+                            isOutlined: true,
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                          ),
                         ),
                       ],
-                    ),
-                  ],
-                );
-              },
+                    );
+                  }
+
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      ErpButton(
+                        text: 'Cancel',
+                        isOutlined: true,
+                        onPressed: _isSubmitting
+                            ? null
+                            : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                      ),
+                      ErpButton(
+                        text: 'Save Draft',
+                        isOutlined: true,
+                        onPressed: _isSubmitting ? null : () => _savePurchase(true),
+                      ),
+                      ErpButton(
+                        text: _isSubmitting ? 'Saving & Inwarding...' : 'Save & Inward Stock',
+                        icon: _isSubmitting ? null : Icons.check,
+                        onPressed: _isSubmitting ? null : () => _savePurchase(false),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             // Vendor & Header Card
             Container(
-              padding: AppSpacing.cardPadding,
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.lgBorderRadius,
-                border: Border.all(color: AppColors.border),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      return Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        alignment: WrapAlignment.spaceBetween,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                      final isMobile = constraints.maxWidth < 600;
+
+                      final taxHeader = Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('Vendor & Invoice Details', style: AppTextStyles.h3),
-                          // GST Tax Region Selector
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: _isInterStateTax ? Colors.purple.withValues(alpha: 0.08) : Colors.blue.withValues(alpha: 0.08),
-                              borderRadius: AppRadius.smBorderRadius,
-                              border: Border.all(
-                                color: _isInterStateTax ? Colors.purple.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _isInterStateTax ? Icons.map_outlined : Icons.location_on_outlined,
-                                      size: 16,
-                                      color: _isInterStateTax ? Colors.purple : Colors.blue,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Tax Mode:',
-                                      style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
-                                ),
-                                ChoiceChip(
-                                  label: const Text('Intra-State (CGST + SGST)'),
-                                  selected: !_isInterStateTax,
-                                  selectedColor: AppColors.primary.withValues(alpha: 0.15),
-                                  labelStyle: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: !_isInterStateTax ? FontWeight.bold : FontWeight.normal,
-                                    color: !_isInterStateTax ? AppColors.primary : AppColors.textMuted,
-                                  ),
-                                  onSelected: (val) {
-                                    if (val) setState(() => _isInterStateTax = false);
-                                  },
-                                ),
-                                ChoiceChip(
-                                  label: const Text('Inter-State (IGST)'),
-                                  selected: _isInterStateTax,
-                                  selectedColor: Colors.purple.withValues(alpha: 0.15),
-                                  labelStyle: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: _isInterStateTax ? FontWeight.bold : FontWeight.normal,
-                                    color: _isInterStateTax ? Colors.purple : AppColors.textMuted,
-                                  ),
-                                  onSelected: (val) {
-                                    if (val) setState(() => _isInterStateTax = true);
-                                  },
-                                ),
-                              ],
+                          Icon(
+                            _isInterStateTax ? Icons.map_outlined : Icons.location_on_outlined,
+                            size: 16,
+                            color: _isInterStateTax ? AppColors.primary : AppColors.info,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Tax Mode:',
+                            style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      );
+
+                      Widget taxSelector;
+                      if (isMobile) {
+                        taxSelector = Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _isInterStateTax ? const Color(0xFFFAF5FF) : const Color(0xFFEEF2FF),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _isInterStateTax ? const Color(0xFFE9D5FF) : const Color(0xFFC7D2FE),
                             ),
                           ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              taxHeader,
+                              const SizedBox(height: 8),
+                              _buildTaxModeOption(
+                                isInterState: false,
+                                label: 'Intra-State (CGST + SGST)',
+                                isFullWidth: true,
+                              ),
+                              const SizedBox(height: 6),
+                              _buildTaxModeOption(
+                                isInterState: true,
+                                label: 'Inter-State (IGST)',
+                                isFullWidth: true,
+                              ),
+                            ],
+                          ),
+                        );
+                      } else {
+                        taxSelector = Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _isInterStateTax ? const Color(0xFFFAF5FF) : const Color(0xFFEEF2FF),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _isInterStateTax ? const Color(0xFFE9D5FF) : const Color(0xFFC7D2FE),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              taxHeader,
+                              const SizedBox(width: 8),
+                              _buildTaxModeOption(
+                                isInterState: false,
+                                label: 'Intra-State (CGST + SGST)',
+                              ),
+                              const SizedBox(width: 8),
+                              _buildTaxModeOption(
+                                isInterState: true,
+                                label: 'Inter-State (IGST)',
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      if (isMobile) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Vendor & Invoice Details',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF111827),
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            taxSelector,
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'Vendor & Invoice Details',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF111827),
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          taxSelector,
                         ],
                       );
                     },
@@ -1083,15 +1247,22 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             // Line Items Table Card
             Container(
-              padding: AppSpacing.cardPadding,
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.lgBorderRadius,
-                border: Border.all(color: AppColors.border),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1102,10 +1273,20 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       final headerText = Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Items Ordered (Raw Materials & Finished Goods)', style: AppTextStyles.h3),
+                          const Text(
+                            'Items Ordered (Raw Materials & Finished Goods)',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF111827),
+                              letterSpacing: -0.2,
+                            ),
+                          ),
                           const SizedBox(height: 4),
-                          Text('Direct Finished Product purchases are added to Finished Goods stock directly',
-                              style: AppTextStyles.caption.copyWith(color: AppColors.textMuted)),
+                          Text(
+                            'Direct Finished Product purchases are added to Finished Goods stock directly',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                          ),
                         ],
                       );
                       final buttonRow = Wrap(
@@ -1154,9 +1335,9 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceMuted,
-                        borderRadius: AppRadius.smBorderRadius,
-                        border: Border.all(color: AppColors.border),
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -1173,29 +1354,47 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       ),
                     )
                   else
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: MediaQuery.of(context).size.width < 1200 ? 1050 : MediaQuery.of(context).size.width - 320,
-                      ),
-                      child: Column(
-                        children: List.generate(_items.length, (index) {
-                          final item = _items[index];
-                          final isFp = item.itemType == PurchaseItemType.finishedProduct;
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        const minTableWidth = 1050.0;
+                        final effectiveWidth = math.max(constraints.maxWidth, minTableWidth);
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Container(
+                            width: effectiveWidth,
+                            clipBehavior: Clip.antiAlias,
                             decoration: BoxDecoration(
-                              color: isFp ? Colors.teal.withOpacity(0.04) : AppColors.surfaceMuted,
-                              borderRadius: AppRadius.smBorderRadius,
+                              color: const Color(0xFFF9FAFB),
+                              borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: isFp ? Colors.teal.withOpacity(0.2) : AppColors.border,
+                                color: const Color(0xFFE5E7EB),
+                                width: 1.0,
                               ),
                             ),
-                            child: Row(
-                              children: [
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: List.generate(_items.length, (index) {
+                                final item = _items[index];
+                                final isFp = item.itemType == PurchaseItemType.finishedProduct;
+
+                                return Container(
+                                  width: effectiveWidth,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: isFp ? const Color(0xFFF0FDFA) : Colors.transparent,
+                                    border: index > 0
+                                        ? const Border(
+                                            top: BorderSide(
+                                              color: Color(0xFFE5E7EB),
+                                              width: 1.0,
+                                            ),
+                                          )
+                                        : null,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
                                 // Type badge / toggle
                                 SizedBox(
                                   width: 130,
@@ -1205,7 +1404,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                     decoration: InputDecoration(
                                       labelText: 'Item Type',
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                      fillColor: isFp ? Colors.teal.withOpacity(0.1) : null,
+                                      fillColor: isFp ? const Color(0xFFCCFBF1) : null,
                                     ),
                                     items: const [
                                       DropdownMenuItem(
@@ -1214,7 +1413,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                       ),
                                       DropdownMenuItem(
                                         value: PurchaseItemType.finishedProduct,
-                                        child: Text('Fin Good', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal)),
+                                        child: Text('Fin Good', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F766E))),
                                       ),
                                     ],
                                     onChanged: (newType) {
@@ -1355,7 +1554,6 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                       FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
                                       _MaxAmountTextInputFormatter(() => (item.quantity * item.rate).clamp(0.0, double.infinity)),
                                     ],
-
                                     decoration: const InputDecoration(labelText: 'Disc (₹)'),
                                     onChanged: (v) {
                                       final num = double.tryParse(v) ?? 0.0;
@@ -1409,27 +1607,44 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                         }),
                       ),
                     ),
-                  ),
+                  );
+                },
+              ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             // Summary & Payment Card
             LayoutBuilder(
               builder: (context, constraints) {
                 final isStacked = constraints.maxWidth < 800;
                 final leftCard = Container(
-                  padding: AppSpacing.cardPadding,
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.lgBorderRadius,
-                    border: Border.all(color: AppColors.border),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x06000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Invoice / Proof Attachment', style: AppTextStyles.h3),
+                      const Text(
+                        'Invoice / Proof Attachment',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
                       const SizedBox(height: 6),
                       Text('Attach bill or vendor document from device storage',
                           style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
@@ -1438,9 +1653,9 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                           ? Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: AppColors.surfaceMuted,
-                                borderRadius: AppRadius.smBorderRadius,
-                                border: Border.all(color: AppColors.border),
+                                color: const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFE5E7EB)),
                               ),
                               child: Row(
                                 children: [
@@ -1468,16 +1683,16 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                               ),
                             )
                           : Material(
-                              color: AppColors.surfaceMuted,
-                              borderRadius: AppRadius.mdBorderRadius,
+                              color: const Color(0xFFF9FAFB),
+                              borderRadius: BorderRadius.circular(8),
                               child: InkWell(
                                 onTap: _pickAttachmentFile,
-                                borderRadius: AppRadius.mdBorderRadius,
+                                borderRadius: BorderRadius.circular(8),
                                 child: Container(
                                   height: 90,
                                   decoration: BoxDecoration(
-                                    border: Border.all(color: AppColors.border, style: BorderStyle.solid),
-                                    borderRadius: AppRadius.mdBorderRadius,
+                                    border: Border.all(color: const Color(0xFFE5E7EB), style: BorderStyle.solid),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Center(
                                     child: Wrap(
@@ -1509,16 +1724,31 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                 );
 
                 final rightCard = Container(
-                  padding: AppSpacing.cardPadding,
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.lgBorderRadius,
-                    border: Border.all(color: AppColors.border),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x06000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Financial & Tax Summary', style: AppTextStyles.h3),
+                      const Text(
+                        'Financial & Tax Summary',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
                       const SizedBox(height: 14),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1528,44 +1758,62 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      if (!_isInterStateTax) ...[
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(child: Text('CGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))),
-                            Text(Formatters.formatCurrency(_cgstAmount),
-                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                          ],
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOut,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          switchInCurve: Curves.easeIn,
+                          switchOutCurve: Curves.easeOut,
+                          child: _isInterStateTax
+                              ? KeyedSubtree(
+                                  key: const ValueKey('purchase_tax_igst'),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text('IGST (Inter-State Tax):',
+                                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.primaryDark)),
+                                      ),
+                                      Text(Formatters.formatCurrency(_igstAmount),
+                                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                )
+                              : KeyedSubtree(
+                                  key: const ValueKey('purchase_tax_intra'),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(child: Text('CGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))),
+                                          Text(Formatters.formatCurrency(_cgstAmount),
+                                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(child: Text('SGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))),
+                                          Text(Formatters.formatCurrency(_sgstAmount),
+                                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(child: Text('SGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))),
-                            Text(Formatters.formatCurrency(_sgstAmount),
-                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                          ],
-                        ),
-                      ] else ...[
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text('IGST (Inter-State Tax):',
-                                  style: AppTextStyles.bodySmall.copyWith(color: Colors.purple)),
-                            ),
-                            Text(Formatters.formatCurrency(_igstAmount),
-                                style: AppTextStyles.bodySmall.copyWith(color: Colors.purple, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ],
+                      ),
                       const Divider(height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(child: Text('Grand Total:', style: AppTextStyles.h3)),
                           Text(Formatters.formatCurrency(_totalAmount),
-                              style: AppTextStyles.h2.copyWith(color: AppColors.primary)),
+                                style: AppTextStyles.h2.copyWith(color: AppColors.primary)),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -1636,7 +1884,92 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                 );
               },
             ),
-            const SizedBox(height: 100),
+            const SizedBox(height: 20),
+            // Bottom Action Bar enclosed in Figma card container
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, btmBox) {
+                  final isMobile = btmBox.maxWidth < 600;
+                  if (isMobile) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: _isSubmitting ? 'Saving & Inwarding...' : 'Save & Inward Stock',
+                            icon: _isSubmitting ? null : Icons.check,
+                            onPressed: _isSubmitting ? null : () => _savePurchase(false),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: 'Save Draft',
+                            isOutlined: true,
+                            onPressed: _isSubmitting ? null : () => _savePurchase(true),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ErpButton(
+                            text: 'Cancel',
+                            isOutlined: true,
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        ErpButton(
+                          text: 'Cancel',
+                          isOutlined: true,
+                          onPressed: _isSubmitting
+                              ? null
+                              : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                        ),
+                        ErpButton(
+                          text: 'Save Draft',
+                          isOutlined: true,
+                          onPressed: _isSubmitting ? null : () => _savePurchase(true),
+                        ),
+                        ErpButton(
+                          text: _isSubmitting ? 'Saving & Inwarding...' : 'Save & Inward Stock',
+                          icon: _isSubmitting ? null : Icons.check,
+                          onPressed: _isSubmitting ? null : () => _savePurchase(false),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 32),
           ],
         ),
       ),

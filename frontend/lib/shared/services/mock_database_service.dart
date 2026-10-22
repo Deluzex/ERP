@@ -243,7 +243,7 @@ class MockDatabaseService extends ChangeNotifier {
       ),
       Role(
         id: 'accounts_manager',
-        name: 'Accounts / Payment Manager',
+        name: 'Payments Manager',
         description: 'Customer receivables, dealer ledger, vendor settlements, expenses, and commission payouts.',
         isSystemRole: true,
         isActive: true,

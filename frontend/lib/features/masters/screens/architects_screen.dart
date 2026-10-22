@@ -17,6 +17,7 @@ import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -48,6 +49,9 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(databaseServiceProvider).loadArchitects();
       ref.read(databaseServiceProvider).loadCustomers();
@@ -300,7 +304,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                               if (isAlsoCustomer || linkedCustomerId != null) ...[
                                 const SizedBox(height: 10),
                                 DropdownButtonFormField<String?>(
-                                  value: linkedCustomerId,
+                                  initialValue: linkedCustomerId,
                                   isExpanded: true,
                                   decoration: const InputDecoration(
                                     labelText: 'Architect-Customer Name (Customer Master)',
@@ -465,7 +469,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                 Text('Commission Amount: ${Formatters.formatCurrency(comm.commissionAmount)}', style: AppTextStyles.h2),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<PaymentMode>(
-                  value: selectedMode,
+                  initialValue: selectedMode,
                   decoration: const InputDecoration(labelText: 'Payment Mode'),
                   items: PaymentMode.values.map((mode) {
                     return DropdownMenuItem(value: mode, child: Text(mode.toString().split('.').last.toUpperCase()));
@@ -582,54 +586,113 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     final commEndIndex = (commStartIndex + commSafePageSize).clamp(0, commTotalRecords);
     final pagedCommissions = commTotalRecords == 0 ? <ArchitectCommission>[] : commissions.sublist(commStartIndex, commEndIndex);
 
+    final totalArchitectsCount = db.architects.where((a) => !a.isDeleted).length;
+    final dualCustomerCount = db.architects.where((a) => !a.isDeleted && (a.isAlsoCustomer || a.linkedCustomerId != null)).length;
+    final independentCount = db.architects.where((a) => !a.isDeleted && !a.isAlsoCustomer && a.linkedCustomerId == null).length;
+    final unpaidCommissions = db.commissions.where((c) => c.status != CommissionStatus.paid && c.status != CommissionStatus.rejected).length;
+    final totalCommissionPaid = db.commissions.where((c) => c.status == CommissionStatus.paid).fold(0.0, (sum, c) => sum + c.commissionAmount);
+
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header (Matching Figma Master Design)
           LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 550) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Architects & Commission Hub', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Architect profiles, dual Architect-Customer entities, and commission lifecycle (Generated → Review → Approved → Paid)',
-                        style: AppTextStyles.subtitle),
-                    const SizedBox(height: 12),
-                    ErpButton(
-                      text: 'Add Architect',
-                      icon: Icons.add,
-                      onPressed: () => _openAddEditArchitectDialog(),
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              final isSmall = constraints.maxWidth < 650;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Architects & Commission Hub', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Architect profiles, dual Architect-Customer entities, and commission lifecycle (Generated → Review → Approved → Paid)',
-                            style: AppTextStyles.subtitle),
+                        Text('Architects', style: AppTextStyles.h1),
                       ],
                     ),
                   ),
-                  ErpButton(
-                    text: 'Add Architect',
-                    icon: Icons.add,
+                  ElevatedButton.icon(
                     onPressed: () => _openAddEditArchitectDialog(),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Architect'),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
+
+          // 5 Summary Metric Cards
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (4 * 12)) / 5
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.architecture_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Architects',
+                      value: '$totalArchitectsCount',
+                      subtext: 'Design Partners',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.people_outline,
+                      iconColor: AppColors.categoryPurple,
+                      title: 'Dual Entities',
+                      value: '$dualCustomerCount',
+                      subtext: 'Architect-Customer',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.person_outline,
+                      iconColor: AppColors.success,
+                      title: 'Independent',
+                      value: '$independentCount',
+                      subtext: 'Consultants',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.pending_actions_outlined,
+                      iconColor: AppColors.warning,
+                      title: 'Pending Comms',
+                      value: '$unpaidCommissions',
+                      subtext: 'Awaiting Payout',
+                      subtextColor: AppColors.warning,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.categoryGold,
+                      title: 'Total Paid',
+                      value: Formatters.formatCurrency(totalCommissionPaid),
+                      subtext: 'Disbursed',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
 
           // Tabs: Architect Directory & Commission Ledger
           TabBar(
@@ -646,60 +709,59 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
           ),
           const SizedBox(height: 20),
 
-          SizedBox(
-            height: 720,
-            child: TabBarView(
-              controller: _tabController,
+          if (_tabController.index == 0)
+            // Tab 1: Architect Directory
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Tab 1: Architect Directory
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 280,
-                          child: ErpSearchInput(
-                            hintText: 'Search architect by name, studio...',
-                            initialValue: _archSearchQuery,
-                            onChanged: (val) => setState(() {
-                              _archSearchQuery = val;
-                              _archCurrentPage = 0;
-                            }),
-                          ),
-                        ),
-                        ErpFilterDropdown<String>(
-                          value: _archCustomerFilter,
-                          items: const [
-                            DropdownMenuItem(value: 'ALL', child: Text('All Architects')),
-                            DropdownMenuItem(value: 'DUAL_CUSTOMER', child: Text('Dual Arch-Customer / Linked')),
-                            DropdownMenuItem(value: 'INDEPENDENT', child: Text('Independent Studios')),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) setState(() {
-                              _archCustomerFilter = val;
-                              _archCurrentPage = 0;
-                            });
-                          },
-                        ),
-                        ErpDateFilterBox(
-                          startDate: _archStartDate,
-                          endDate: _archEndDate,
-                          onDateRangeSelected: (start, end) => setState(() {
-                            _archStartDate = start;
-                            _archEndDate = end;
-                            _archCurrentPage = 0;
-                          }),
-                        ),
-                      ],
+                    SizedBox(
+                      width: 280,
+                      child: ErpSearchInput(
+                        hintText: 'Search architect by name, studio...',
+                        initialValue: _archSearchQuery,
+                        onChanged: (val) => setState(() {
+                          _archSearchQuery = val;
+                          _archCurrentPage = 0;
+                        }),
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    Expanded(
-                      child: ErpDataTable(
-                        columns: const [
+                    ErpFilterDropdown<String>(
+                      value: _archCustomerFilter,
+                      items: const [
+                        DropdownMenuItem(value: 'ALL', child: Text('All Architects')),
+                        DropdownMenuItem(value: 'DUAL_CUSTOMER', child: Text('Dual Arch-Customer / Linked')),
+                        DropdownMenuItem(value: 'INDEPENDENT', child: Text('Independent Studios')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _archCustomerFilter = val;
+                            _archCurrentPage = 0;
+                          });
+                        }
+                      },
+                    ),
+                    ErpDateFilterBox(
+                      startDate: _archStartDate,
+                      endDate: _archEndDate,
+                      onDateRangeSelected: (start, end) => setState(() {
+                        _archStartDate = start;
+                        _archEndDate = end;
+                        _archCurrentPage = 0;
+                      }),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                ErpDataTable(
+                  dataRowMinHeight: 56,
+                  dataRowMaxHeight: 72,
+                  columns: const [
                           ErpColumn(title: 'Architect Name'),
                           ErpColumn(title: 'Architect-Customer Name'),
                           ErpColumn(title: 'Studio / Company'),
@@ -745,8 +807,8 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                   Text(
                                     a.name,
                                     style: AppTextStyles.bodyBold.copyWith(
-                                      color: AppColors.primary,
-                                      decoration: TextDecoration.underline,
+                                      fontSize: 13,
+                                      color: const Color(0xFF1E293B),
                                     ),
                                   ),
                                   if (a.address.isNotEmpty || a.state.isNotEmpty || a.pincode.isNotEmpty)
@@ -758,10 +820,10 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       ].join(', '),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+                                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                                     )
                                   else
-                                    Text('ID: ${a.id}', style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
+                                    Text('ID: ${a.id}', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                                 ],
                               ),
                             ),
@@ -772,25 +834,24 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       ref.read(activeRecordDetailsStackProvider.notifier).push(linkedCust.id, 'customer', ErpNavSection.customers);
                                     },
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: Colors.purple.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: Colors.purple.withValues(alpha: 0.25)),
+                                        color: const Color(0xFFF3E8FF),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFFD8B4FE)),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Icon(Icons.link, size: 12, color: Colors.purple),
+                                          const Icon(Icons.link, size: 12, color: Color(0xFF7E22CE)),
                                           const SizedBox(width: 4),
                                           Flexible(
                                             child: Text(
                                               linkedCust.name,
                                               style: const TextStyle(
                                                 fontSize: 11,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.purple,
-                                                decoration: TextDecoration.underline,
+                                                fontWeight: FontWeight.w600,
+                                                color: Color(0xFF7E22CE),
                                               ),
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -805,16 +866,16 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       color: Colors.grey.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: const Text('Not Linked', style: TextStyle(fontSize: 10.5, color: Colors.grey)),
+                                    child: const Text('Not Linked', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                                   ),
-                            Text(a.companyName.isNotEmpty ? a.companyName : '-', style: AppTextStyles.bodyMedium),
-                            Text(a.state.isNotEmpty ? a.state : '-', style: AppTextStyles.bodyMedium),
-                            Text(a.mobile, style: AppTextStyles.bodySmall),
-                            Text('${a.defaultCommissionRate}%', style: AppTextStyles.bodyMedium),
-                            Text(Formatters.formatCurrency(displayEarned), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
-                            Text(Formatters.formatCurrency(displayPending), style: AppTextStyles.bodySmall.copyWith(color: AppColors.warningText)),
-                            Text(Formatters.formatCurrency(displayApproved), style: AppTextStyles.bodySmall.copyWith(color: AppColors.infoText)),
-                            Text(Formatters.formatCurrency(displayPaid), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                            Text(a.companyName.isNotEmpty ? a.companyName : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
+                            Text(a.state.isNotEmpty ? a.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                            Text(a.mobile, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
+                            Text('${a.defaultCommissionRate}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563))),
+                            Text(Formatters.formatCurrency(displayEarned), style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: AppColors.purple)),
+                            Text(Formatters.formatCurrency(displayPending), style: const TextStyle(fontSize: 12, color: AppColors.warningText)),
+                            Text(Formatters.formatCurrency(displayApproved), style: const TextStyle(fontSize: 12, color: AppColors.infoText)),
+                            Text(Formatters.formatCurrency(displayPaid), style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: AppColors.successText)),
                             PopupMenuButton<String>(
                               tooltip: 'Actions',
                               icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
@@ -887,72 +948,74 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           ];
                         }).toList(),
                       ),
+                      const SizedBox(height: 16),
+                      ErpPaginationBar(
+                        currentPage: archSafeCurrentPage,
+                        pageSize: archSafePageSize,
+                        totalRecords: archTotalRecords,
+                        onPageChanged: (newPage) => setState(() => _archCurrentPage = newPage),
+                        onPageSizeChanged: (newSize) => setState(() {
+                          _archPageSize = newSize;
+                          _archCurrentPage = 0;
+                        }),
+                      ),
+                    ],
+                  )
+          else
+            // Tab 2: Commission Ledger & Approvals Lifecycle
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 280,
+                      child: ErpSearchInput(
+                        hintText: 'Search voucher, architect, invoice...',
+                        initialValue: _commSearchQuery,
+                        onChanged: (val) => setState(() {
+                          _commSearchQuery = val;
+                          _commCurrentPage = 0;
+                        }),
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    ErpPaginationBar(
-                      currentPage: archSafeCurrentPage,
-                      pageSize: archSafePageSize,
-                      totalRecords: archTotalRecords,
-                      onPageChanged: (newPage) => setState(() => _archCurrentPage = newPage),
-                      onPageSizeChanged: (newSize) => setState(() {
-                        _archPageSize = newSize;
-                        _archCurrentPage = 0;
+                    ErpFilterDropdown<String>(
+                      value: _commStatusFilter,
+                      items: const [
+                        DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                        DropdownMenuItem(value: 'PENDING', child: Text('Pending Review')),
+                        DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+                        DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+                        DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _commStatusFilter = val;
+                            _commCurrentPage = 0;
+                          });
+                        }
+                      },
+                    ),
+                    ErpDateFilterBox(
+                      startDate: _commStartDate,
+                      endDate: _commEndDate,
+                      onDateRangeSelected: (start, end) => setState(() {
+                        _commStartDate = start;
+                        _commEndDate = end;
+                        _commCurrentPage = 0;
                       }),
                     ),
                   ],
                 ),
-
-                // Tab 2: Commission Ledger & Approvals Lifecycle
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 280,
-                          child: ErpSearchInput(
-                            hintText: 'Search voucher, architect, invoice...',
-                            initialValue: _commSearchQuery,
-                            onChanged: (val) => setState(() {
-                              _commSearchQuery = val;
-                              _commCurrentPage = 0;
-                            }),
-                          ),
-                        ),
-                        ErpFilterDropdown<String>(
-                          value: _commStatusFilter,
-                          items: const [
-                            DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
-                            DropdownMenuItem(value: 'PENDING', child: Text('Pending Review')),
-                            DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
-                            DropdownMenuItem(value: 'PAID', child: Text('Paid')),
-                            DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) setState(() {
-                              _commStatusFilter = val;
-                              _commCurrentPage = 0;
-                            });
-                          },
-                        ),
-                        ErpDateFilterBox(
-                          startDate: _commStartDate,
-                          endDate: _commEndDate,
-                          onDateRangeSelected: (start, end) => setState(() {
-                            _commStartDate = start;
-                            _commEndDate = end;
-                            _commCurrentPage = 0;
-                          }),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Expanded(
-                      child: ErpDataTable(
-                        columns: const [
+                const SizedBox(height: 16),
+                ErpDataTable(
+                  dataRowMinHeight: 56,
+                  dataRowMaxHeight: 72,
+                  columns: const [
                           ErpColumn(title: 'Commission No'),
                           ErpColumn(title: 'Date'),
                           ErpColumn(title: 'Architect'),
@@ -982,14 +1045,14 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           }
 
                           return [
-                            Text(comm.commissionNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                            Text(Formatters.formatDate(comm.generatedDate), style: AppTextStyles.bodySmall),
-                            Text(comm.architectName, style: AppTextStyles.bodyMedium),
-                            Text(comm.saleInvoiceNumber, style: AppTextStyles.bodySmall),
-                            Text(comm.projectName ?? 'Direct Sale', style: AppTextStyles.bodySmall),
-                            Text(Formatters.formatCurrency(comm.saleAmount), style: AppTextStyles.bodySmall),
-                            Text('${comm.commissionRate}%', style: AppTextStyles.bodySmall),
-                            Text(Formatters.formatCurrency(comm.commissionAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
+                            Text(comm.commissionNumber, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+                            Text(Formatters.formatDate(comm.generatedDate), style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                            Text(comm.architectName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+                            Text(comm.saleInvoiceNumber, style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                            Text(comm.projectName ?? 'Direct Sale', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                            Text(Formatters.formatCurrency(comm.saleAmount), style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                            Text('${comm.commissionRate}%', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                            Text(Formatters.formatCurrency(comm.commissionAmount), style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: AppColors.purple)),
                             badge,
                             Row(
                               mainAxisSize: MainAxisSize.min,
@@ -1078,23 +1141,19 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           ];
                         }).toList(),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    ErpPaginationBar(
-                      currentPage: commSafeCurrentPage,
-                      pageSize: commSafePageSize,
-                      totalRecords: commTotalRecords,
-                      onPageChanged: (newPage) => setState(() => _commCurrentPage = newPage),
-                      onPageSizeChanged: (newSize) => setState(() {
-                        _commPageSize = newSize;
-                        _commCurrentPage = 0;
-                      }),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+                      const SizedBox(height: 16),
+                      ErpPaginationBar(
+                        currentPage: commSafeCurrentPage,
+                        pageSize: commSafePageSize,
+                        totalRecords: commTotalRecords,
+                        onPageChanged: (newPage) => setState(() => _commCurrentPage = newPage),
+                        onPageSizeChanged: (newSize) => setState(() {
+                          _commPageSize = newSize;
+                          _commCurrentPage = 0;
+                        }),
+                      ),
+                    ],
+                  ),
         ],
       ),
     );

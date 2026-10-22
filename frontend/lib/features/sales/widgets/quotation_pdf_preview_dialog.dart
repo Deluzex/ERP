@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../core/models/sale_model.dart';
@@ -156,29 +157,40 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'd',
-                                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 22),
+                        SvgPicture.asset(
+                          'assets/images/logo_dark.svg',
+                          height: 34,
+                          fit: BoxFit.contain,
+                          alignment: Alignment.centerLeft,
+                          placeholderBuilder: (context) => Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Center(
+                                  child: Text(
+                                    'd',
+                                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 22),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            const Text(
-                              'DELUZEX LIGHTING PVT. LTD.',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: 0.5),
-                            ),
-                          ],
+                              const SizedBox(width: 10),
+                              const Text(
+                                'DELUZEX LIGHTING PVT. LTD.',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: 0.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'DELUZEX LIGHTING PVT. LTD.',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: 0.5),
                         ),
                         const SizedBox(height: 6),
                         Text(

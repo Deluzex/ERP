@@ -9,7 +9,10 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/stock_movement_icons.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class StockAdjustmentScreen extends ConsumerStatefulWidget {
@@ -299,7 +302,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
           adj.itemCode.toLowerCase().contains(query) ||
           adj.reasonLabel.toLowerCase().contains(query) ||
           adj.performedBy.toLowerCase().contains(query) ||
-          (adj.remarks != null && adj.remarks!.toLowerCase().contains(query));
+          adj.remarks.toLowerCase().contains(query);
     }).toList();
 
     return SingleChildScrollView(
@@ -307,36 +310,74 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 240),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Stock Adjustments', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Reconcile physical stock counts, log damages, and record audited corrections', style: AppTextStyles.subtitle),
-                      ],
-                    ),
-                  ),
-                  ErpButton(
+          ErpSectionHeaderCard(
+            icon: Icons.tune_rounded,
+            title: 'Stock Adjustments',
+            badgeText: 'AUDIT & RECONCILIATION',
+            subtitle: 'Reconcile physical stock counts, log damages, and record audited corrections',
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobile = actionBox.maxWidth < 520;
+                return SizedBox(
+                  width: isMobile ? double.infinity : null,
+                  child: ErpButton(
                     text: 'New Stock Adjustment',
                     icon: Icons.tune_rounded,
                     onPressed: _openCreateAdjustmentDialog,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 3 Key Metrics
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final increases = db.stockAdjustments.where((a) => a.adjustmentQuantity > 0).length;
+              final reductions = db.stockAdjustments.where((a) => a.adjustmentQuantity < 0).length;
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (2 * 12)) / 3
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.tune_rounded,
+                      iconColor: AppColors.primary,
+                      title: 'Total Adjustments',
+                      value: '${adjustments.length}',
+                      subtext: 'Audited Corrections',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      iconWidget: const StockInIcon(size: 16, color: Color(0xFF16A34A)),
+                      title: 'Stock Increases',
+                      value: '$increases',
+                      subtext: 'Physical Count Surplus',
+                      subtextColor: const Color(0xFF16A34A),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      iconWidget: const StockOutIcon(size: 16, color: Color(0xFFEF4444)),
+                      title: 'Stock Reductions / Damage',
+                      value: '$reductions',
+                      subtext: 'Shortages & Damages',
+                      subtextColor: const Color(0xFFEF4444),
+                    ),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           TextField(
             onChanged: (val) => setState(() => _searchQuery = val),
@@ -375,11 +416,20 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                 ),
                 Text(adj.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product', style: AppTextStyles.bodySmall),
                 Text('${Formatters.formatNumber(adj.currentStockBefore)} ${adj.unit}', style: AppTextStyles.bodySmall),
-                Text(
-                  '${adj.adjustmentQuantity >= 0 ? "+" : ""}${Formatters.formatNumber(adj.adjustmentQuantity)} ${adj.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: adj.adjustmentQuantity >= 0 ? AppColors.successText : AppColors.dangerText,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    adj.adjustmentQuantity >= 0
+                        ? const StockInIcon(size: 13, color: Color(0xFF16A34A))
+                        : const StockOutIcon(size: 13, color: Color(0xFFEF4444)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${adj.adjustmentQuantity >= 0 ? "+" : ""}${Formatters.formatNumber(adj.adjustmentQuantity)} ${adj.unit}',
+                      style: AppTextStyles.bodyBold.copyWith(
+                        color: adj.adjustmentQuantity >= 0 ? AppColors.successText : AppColors.dangerText,
+                      ),
+                    ),
+                  ],
                 ),
                 Text('${Formatters.formatNumber(adj.adjustedStockAfter)} ${adj.unit}', style: AppTextStyles.bodyBold),
                 Text(adj.reasonLabel, style: AppTextStyles.bodyMedium),

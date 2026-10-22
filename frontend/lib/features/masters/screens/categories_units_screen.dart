@@ -791,11 +791,6 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
         children: [
           // Header
           Text('Category Master', style: AppTextStyles.h1),
-          const SizedBox(height: 4),
-          Text(
-            'Centralized master governance for Item Classifications, Expense Categories, Payment Modes, and Units of Measure',
-            style: AppTextStyles.subtitle,
-          ),
           const SizedBox(height: 20),
 
           // Top Modern Segmented Tab Bar
@@ -1001,13 +996,18 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                 return [
                   SizedBox(
                     width: nameWidth,
-                    child: Text(c.name, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      c.name,
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   SizedBox(
                     width: descWidth,
                     child: Text(
                       c.description.trim().isNotEmpty ? c.description : '-',
-                      style: AppTextStyles.bodySmall,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1110,13 +1110,18 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                 return [
                   SizedBox(
                     width: nameWidth,
-                    child: Text(exp.name, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      exp.name,
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   SizedBox(
                     width: descWidth,
                     child: Text(
                       exp.description.trim().isNotEmpty ? exp.description : '-',
-                      style: AppTextStyles.bodySmall,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1219,13 +1224,18 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                 return [
                   SizedBox(
                     width: nameWidth,
-                    child: Text(pm.name, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      pm.name,
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   SizedBox(
                     width: descWidth,
                     child: Text(
                       pm.description.trim().isNotEmpty ? pm.description : '-',
-                      style: AppTextStyles.bodySmall,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1328,7 +1338,12 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                 return [
                   SizedBox(
                     width: nameWidth,
-                    child: Text(u.name, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      u.name,
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   SizedBox(
                     width: symbolColWidth,
@@ -1337,9 +1352,9 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
+                          color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: Text(
                           u.symbol,
@@ -1347,7 +1362,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                             fontFamily: 'monospace',
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDark,
+                            color: Color(0xFF1E293B),
                             letterSpacing: 0.5,
                           ),
                         ),

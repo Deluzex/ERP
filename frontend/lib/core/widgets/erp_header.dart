@@ -1,3 +1,4 @@
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_colors.dart';
@@ -43,6 +44,16 @@ class ErpHeader extends ConsumerWidget {
                   constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 ),
                 const SizedBox(width: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: SvgPicture.asset(
+                    'assets/images/deluzex_tab_logo.svg',
+                    height: 28,
+                    width: 28,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                const SizedBox(width: 8),
               ],
 
               // Search Field pill with filter icon

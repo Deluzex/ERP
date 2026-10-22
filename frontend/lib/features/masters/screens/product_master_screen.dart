@@ -12,6 +12,7 @@ import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ProductMasterScreen extends ConsumerStatefulWidget {
@@ -84,7 +85,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text(isEdit ? 'Edit Product Item' : 'Product / Item Entry', style: AppTextStyles.h2),
               content: Container(
-                constraints: const BoxConstraints(maxWidth: 580),
+                constraints: BoxConstraints(maxWidth: 580, maxHeight: MediaQuery.of(ctx).size.height * 0.72),
                 width: double.infinity,
                 child: Form(
                   key: formKey,
@@ -504,6 +505,23 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
     );
   }
 
+  Widget _buildCategoryChip(String catName) {
+    final lower = catName.toLowerCase();
+    if (lower.contains('table') || lower.contains('lamp')) {
+      return ErpStatusBadge.categoryPurple(catName);
+    } else if (lower.contains('pendant')) {
+      return ErpStatusBadge.categoryBlue(catName);
+    } else if (lower.contains('chandel')) {
+      return ErpStatusBadge.categoryOrange(catName);
+    } else if (lower.contains('track')) {
+      return ErpStatusBadge.categoryTeal(catName);
+    } else if (lower.contains('profile') || lower.contains('strip')) {
+      return ErpStatusBadge.categoryGreen(catName);
+    } else {
+      return ErpStatusBadge.categoryNeutral(catName);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -542,14 +560,21 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
       ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
     ];
 
+    final totalProductsCount = db.finishedProducts.where((p) => !p.isDeleted).length;
+    final activeProductsCount = db.finishedProducts.where((p) => !p.isDeleted && p.currentStock > 0).length;
+    final lowStockCount = db.finishedProducts.where((p) => !p.isDeleted && p.isLowStock && p.currentStock > 0).length;
+    final outOfStockCount = db.finishedProducts.where((p) => !p.isDeleted && p.currentStock <= 0).length;
+    final totalCategoriesCount = db.categories.length;
+
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header (Matching Figma Products Screen)
           LayoutBuilder(
             builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
+              final isSmall = constraints.maxWidth < 650;
               return Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -557,29 +582,92 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
+                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 280),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Product Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Finished goods catalog, multi-tier pricing, category definitions, and specifications',
-                          style: AppTextStyles.subtitle,
-                        ),
+                        Text('Products', style: AppTextStyles.h1),
                       ],
                     ),
                   ),
-                  ErpButton(
-                    text: 'Add Product Item',
-                    icon: Icons.add,
+                  ElevatedButton.icon(
                     onPressed: () => _openAddEditDialog(),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Product'),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
+
+          // 5 Summary Metric Cards (Matching Figma Screenshot 2)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (4 * 12)) / 5
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.inventory_2_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Products',
+                      value: '$totalProductsCount',
+                      subtext: 'All Products',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.arrow_circle_down_outlined,
+                      iconColor: AppColors.success,
+                      title: 'Active Products',
+                      value: '$activeProductsCount',
+                      subtext: 'Enabled',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.warning_amber_rounded,
+                      iconColor: AppColors.danger,
+                      title: 'Low Stock Items',
+                      value: '$lowStockCount',
+                      subtext: 'Reorder Soon',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.cancel_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'Out of Stock',
+                      value: '$outOfStockCount',
+                      subtext: 'No Stock',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.category_outlined,
+                      iconColor: AppColors.categoryGold,
+                      title: 'Total Categories',
+                      value: '$totalCategoriesCount',
+                      subtext: 'Categories',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
 
           // Modern Filter Controls Bar
           Wrap(
@@ -590,7 +678,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
               SizedBox(
                 width: 280,
                 child: ErpSearchInput(
-                  hintText: 'Search product by SKU, name, category...',
+                  hintText: 'Search by name, SKU, barcode...',
                   initialValue: _searchQuery,
                   onChanged: (val) => setState(() {
                     _searchQuery = val;
@@ -611,10 +699,10 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
               ErpFilterDropdown<String>(
                 value: _stockFilter,
                 items: const [
-                  DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                  DropdownMenuItem(value: 'ALL', child: Text('All Collections')),
                   DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
                   DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
-                  DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                  DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock')),
                 ],
                 onChanged: (val) {
                   if (val != null) setState(() {
@@ -636,41 +724,76 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Data Table
+          // Data Table (Matching Figma Screenshot 2 Columns)
+          // Data Table with All Deluzex ERP Product Master Fields & Figma Typography
           ErpDataTable(
             columns: const [
-              ErpColumn(title: 'SKU / Code'),
-              ErpColumn(title: 'Product Name'),
-              ErpColumn(title: 'Category'),
-              ErpColumn(title: 'UOM'),
-              ErpColumn(title: 'Cost Price (₹)', isNumeric: true),
-              ErpColumn(title: 'Dealer Price (₹)', isNumeric: true),
-              ErpColumn(title: 'Customer Price (₹)', isNumeric: true),
-              ErpColumn(title: 'Current Stock', isNumeric: true),
-              ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
+              ErpColumn(title: 'PRODUCT NAME'),
+              ErpColumn(title: 'SKU / CODE'),
+              ErpColumn(title: 'CATEGORY'),
+              ErpColumn(title: 'UNIT'),
+              ErpColumn(title: 'STOCK', isNumeric: true),
+              ErpColumn(title: 'DEALER PRICE', isNumeric: true),
+              ErpColumn(title: 'CUSTOMER PRICE', isNumeric: true),
+              ErpColumn(title: 'STATUS'),
+              ErpColumn(title: 'ACTIONS'),
             ],
             rows: pagedProducts.map((fp) {
               return [
-                Text(fp.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                Text(fp.name, style: AppTextStyles.bodyBold),
-                Text(fp.categoryName, style: AppTextStyles.bodySmall),
-                Text(fp.unit, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(Formatters.formatCurrency(fp.costPrice), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(fp.dealerSellingPrice), style: AppTextStyles.bodyMedium),
+                // Product Name + Category Subtitle
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      fp.name,
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (fp.categoryName.isNotEmpty)
+                      Text(
+                        fp.categoryName,
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+                Text(fp.itemCode, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563))),
+                _buildCategoryChip(fp.categoryName),
+                Text(fp.unit, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                // Stock Column with Bold Quantity + Status subtitle
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${Formatters.formatNumber(fp.currentStock)} ${fp.unit}',
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
+                    ),
+                    Text(
+                      'Min: ${Formatters.formatNumber(fp.minimumStock)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  Formatters.formatCurrency(fp.dealerSellingPrice),
+                  style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
+                ),
                 Text(
                   Formatters.formatCurrency(fp.customerSellingPrice),
-                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-                ),
-                Text(
-                  '${Formatters.formatNumber(fp.currentStock)} ${fp.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: fp.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
-                  ),
+                  style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
                 ),
                 fp.isLowStock
-                    ? ErpStatusBadge.danger('LOW STOCK')
-                    : ErpStatusBadge.success('AVAILABLE'),
+                    ? ErpStatusBadge.warning('Low Stock')
+                    : (fp.currentStock <= 0 ? ErpStatusBadge.danger('Out of Stock') : ErpStatusBadge.success('Active')),
+                // Previous Single Action Button
                 PopupMenuButton<String>(
                   tooltip: 'Actions',
                   icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),

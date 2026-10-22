@@ -824,8 +824,6 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Project Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Manage architectural projects, client assignments, lead architects, and lifecycle status', style: AppTextStyles.subtitle),
                       ],
                     ),
                   ),

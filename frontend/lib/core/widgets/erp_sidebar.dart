@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../app/routes/app_routes.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_text_styles.dart';
@@ -32,62 +33,76 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
     });
   }
 
+  bool _isGroupActive(String group, ErpNavSection section) {
+    switch (group) {
+      case 'Inventory':
+        return section == ErpNavSection.inventoryDashboard ||
+            section == ErpNavSection.rawMaterialStock ||
+            section == ErpNavSection.finishedProductStock ||
+            section == ErpNavSection.stockMovement ||
+            section == ErpNavSection.stockAdjustments;
+      case 'Purchase':
+        return section == ErpNavSection.purchaseDashboard ||
+            section == ErpNavSection.purchaseList ||
+            section == ErpNavSection.purchaseHistory ||
+            section == ErpNavSection.createPurchase ||
+            section == ErpNavSection.vendorPayments;
+      case 'Production':
+        return section == ErpNavSection.productionDashboard ||
+            section == ErpNavSection.productionOrders ||
+            section == ErpNavSection.createProduction ||
+            section == ErpNavSection.productionHistory ||
+            section == ErpNavSection.productionCosting;
+      case 'Sales':
+        return section == ErpNavSection.salesDashboard ||
+            section == ErpNavSection.quotations ||
+            section == ErpNavSection.createQuotation ||
+            section == ErpNavSection.proformaInvoices ||
+            section == ErpNavSection.salesOrders ||
+            section == ErpNavSection.createSalesOrder ||
+            section == ErpNavSection.salesDeliveries ||
+            section == ErpNavSection.salesInvoiceList ||
+            section == ErpNavSection.createSale ||
+            section == ErpNavSection.salesReturns ||
+            section == ErpNavSection.createSalesReturn;
+      case 'Payments':
+        return section == ErpNavSection.paymentsDashboard ||
+            section == ErpNavSection.customerPayments ||
+            section == ErpNavSection.dealerPayments ||
+            section == ErpNavSection.vendorPaymentsSection ||
+            section == ErpNavSection.commissionPayments ||
+            section == ErpNavSection.expenseList;
+      case 'Masters':
+        return section == ErpNavSection.mastersDashboard ||
+            section == ErpNavSection.categoriesUnits ||
+            section == ErpNavSection.rawMaterials ||
+            section == ErpNavSection.finishedProducts ||
+            section == ErpNavSection.billOfMaterials ||
+            section == ErpNavSection.vendors ||
+            section == ErpNavSection.customers ||
+            section == ErpNavSection.dealers ||
+            section == ErpNavSection.architects ||
+            section == ErpNavSection.projectList ||
+            section == ErpNavSection.createProject;
+      case 'Reports':
+        return section == ErpNavSection.reportsDashboard ||
+            section == ErpNavSection.inventoryReports ||
+            section == ErpNavSection.purchaseReports ||
+            section == ErpNavSection.productionReports ||
+            section == ErpNavSection.salesReports ||
+            section == ErpNavSection.projectReports ||
+            section == ErpNavSection.commissionReports ||
+            section == ErpNavSection.financialReports;
+      default:
+        return false;
+    }
+  }
+
   void _autoExpandForSection(ErpNavSection section) {
-    if (section == ErpNavSection.inventoryDashboard ||
-        section == ErpNavSection.rawMaterialStock ||
-        section == ErpNavSection.finishedProductStock ||
-        section == ErpNavSection.stockMovement ||
-        section == ErpNavSection.stockAdjustments) {
-      _expandedGroups['Inventory'] = true;
-    } else if (section == ErpNavSection.purchaseDashboard ||
-        section == ErpNavSection.purchaseList ||
-        section == ErpNavSection.purchaseHistory ||
-        section == ErpNavSection.createPurchase ||
-        section == ErpNavSection.vendorPayments) {
-      _expandedGroups['Purchase'] = true;
-    } else if (section == ErpNavSection.productionDashboard ||
-        section == ErpNavSection.productionOrders ||
-        section == ErpNavSection.createProduction ||
-        section == ErpNavSection.productionHistory) {
-      _expandedGroups['Production'] = true;
-    } else if (section == ErpNavSection.salesDashboard ||
-        section == ErpNavSection.quotations ||
-        section == ErpNavSection.createQuotation ||
-        section == ErpNavSection.proformaInvoices ||
-        section == ErpNavSection.salesOrders ||
-        section == ErpNavSection.createSalesOrder ||
-        section == ErpNavSection.salesDeliveries ||
-        section == ErpNavSection.salesInvoiceList ||
-        section == ErpNavSection.createSale ||
-        section == ErpNavSection.salesReturns ||
-        section == ErpNavSection.createSalesReturn) {
-      _expandedGroups['Sales'] = true;
-    } else if (section == ErpNavSection.paymentsDashboard ||
-        section == ErpNavSection.customerPayments ||
-        section == ErpNavSection.dealerPayments ||
-        section == ErpNavSection.vendorPaymentsSection ||
-        section == ErpNavSection.commissionPayments ||
-        section == ErpNavSection.expenseList) {
-      _expandedGroups['Payments'] = true;
-    } else if (section == ErpNavSection.mastersDashboard ||
-        section == ErpNavSection.categoriesUnits ||
-        section == ErpNavSection.rawMaterials ||
-        section == ErpNavSection.finishedProducts ||
-        section == ErpNavSection.vendors ||
-        section == ErpNavSection.customers ||
-        section == ErpNavSection.dealers ||
-        section == ErpNavSection.architects ||
-        section == ErpNavSection.projectList) {
-      _expandedGroups['Masters'] = true;
-    } else if (section == ErpNavSection.reportsDashboard ||
-        section == ErpNavSection.inventoryReports ||
-        section == ErpNavSection.purchaseReports ||
-        section == ErpNavSection.productionReports ||
-        section == ErpNavSection.salesReports ||
-        section == ErpNavSection.projectReports ||
-        section == ErpNavSection.commissionReports ||
-        section == ErpNavSection.financialReports) {
-      _expandedGroups['Reports'] = true;
+    for (final group in _expandedGroups.keys) {
+      if (_isGroupActive(group, section)) {
+        _expandedGroups[group] = true;
+      }
     }
   }
 
@@ -157,12 +172,12 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
               alignment: Alignment.centerLeft,
-              child: Image.asset(
-                'assets/images/logo.png',
+              child: SvgPicture.asset(
+                'assets/images/logo_white.svg',
                 height: 38,
                 fit: BoxFit.contain,
                 alignment: Alignment.centerLeft,
-                errorBuilder: (context, error, stackTrace) => Container(
+                placeholderBuilder: (context) => Container(
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
@@ -205,48 +220,50 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                     _buildNavGroup(
                       groupTitle: 'Inventory',
                       icon: Icons.inventory_2_outlined,
-                    isRestricted: !canAccessInventory,
-                    isExpanded: _expandedGroups['Inventory'] ?? false,
-                    onGroupTap: () => _toggleGroup('Inventory'),
-                    children: [
-                      _buildSubNavItem(
-                        title: 'Inventory Dashboard',
-                        isRestricted: !canAccessInventory,
-                        isSelected: currentSection == ErpNavSection.inventoryDashboard,
-                        onTap: () => _handleNavigation(context, ErpNavSection.inventoryDashboard, ErpModule.inventory),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Raw Material Stock',
-                        isRestricted: !canAccessInventory,
-                        isSelected: currentSection == ErpNavSection.rawMaterialStock,
-                        onTap: () => _handleNavigation(context, ErpNavSection.rawMaterialStock, ErpModule.inventory),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Finished Product Stock',
-                        isRestricted: !canAccessInventory,
-                        isSelected: currentSection == ErpNavSection.finishedProductStock,
-                        onTap: () => _handleNavigation(context, ErpNavSection.finishedProductStock, ErpModule.inventory),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Stock Movement (Ledger)',
-                        isRestricted: !canAccessInventory,
-                        isSelected: currentSection == ErpNavSection.stockMovement,
-                        onTap: () => _handleNavigation(context, ErpNavSection.stockMovement, ErpModule.inventory),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Stock Adjustments',
-                        isRestricted: !canAccessInventory,
-                        isSelected: currentSection == ErpNavSection.stockAdjustments,
-                        onTap: () => _handleNavigation(context, ErpNavSection.stockAdjustments, ErpModule.inventory),
-                      ),
-                    ],
-                  ),
+                      isActive: _isGroupActive('Inventory', currentSection),
+                      isRestricted: !canAccessInventory,
+                      isExpanded: _expandedGroups['Inventory'] ?? false,
+                      onGroupTap: () => _toggleGroup('Inventory'),
+                      children: [
+                        _buildSubNavItem(
+                          title: 'Inventory Dashboard',
+                          isRestricted: !canAccessInventory,
+                          isSelected: currentSection == ErpNavSection.inventoryDashboard,
+                          onTap: () => _handleNavigation(context, ErpNavSection.inventoryDashboard, ErpModule.inventory),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Raw Material Stock',
+                          isRestricted: !canAccessInventory,
+                          isSelected: currentSection == ErpNavSection.rawMaterialStock,
+                          onTap: () => _handleNavigation(context, ErpNavSection.rawMaterialStock, ErpModule.inventory),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Finished Product Stock',
+                          isRestricted: !canAccessInventory,
+                          isSelected: currentSection == ErpNavSection.finishedProductStock,
+                          onTap: () => _handleNavigation(context, ErpNavSection.finishedProductStock, ErpModule.inventory),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Stock Movement (Ledger)',
+                          isRestricted: !canAccessInventory,
+                          isSelected: currentSection == ErpNavSection.stockMovement,
+                          onTap: () => _handleNavigation(context, ErpNavSection.stockMovement, ErpModule.inventory),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Stock Adjustments',
+                          isRestricted: !canAccessInventory,
+                          isSelected: currentSection == ErpNavSection.stockAdjustments,
+                          onTap: () => _handleNavigation(context, ErpNavSection.stockAdjustments, ErpModule.inventory),
+                        ),
+                      ],
+                    ),
 
                   // 3. Purchase (Group)
                   if (canAccessPurchase)
                     _buildNavGroup(
                       groupTitle: 'Purchase',
                       icon: Icons.shopping_bag_outlined,
+                      isActive: _isGroupActive('Purchase', currentSection),
                       isRestricted: !canAccessPurchase,
                       isExpanded: _expandedGroups['Purchase'] ?? false,
                       onGroupTap: () => _toggleGroup('Purchase'),
@@ -275,38 +292,40 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                   // 4. Production (Group)
                   if (canAccessProduction)
                     _buildNavGroup(
-                    groupTitle: 'Production',
-                    icon: Icons.precision_manufacturing_outlined,
-                    isRestricted: !canAccessProduction,
-                    isExpanded: _expandedGroups['Production'] ?? false,
-                    onGroupTap: () => _toggleGroup('Production'),
-                    children: [
-                      _buildSubNavItem(
-                        title: 'Production Dashboard',
-                        isRestricted: !canAccessProduction,
-                        isSelected: currentSection == ErpNavSection.productionDashboard,
-                        onTap: () => _handleNavigation(context, ErpNavSection.productionDashboard, ErpModule.production),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Production Invoices',
-                        isRestricted: !canAccessProduction,
-                        isSelected: currentSection == ErpNavSection.productionOrders,
-                        onTap: () => _handleNavigation(context, ErpNavSection.productionOrders, ErpModule.production),
-                      ),
-                      _buildSubNavItem(
-                        title: 'Create Production',
-                        isRestricted: !canAccessProduction,
-                        isSelected: currentSection == ErpNavSection.createProduction,
-                        onTap: () => _handleNavigation(context, ErpNavSection.createProduction, ErpModule.production, ErpAction.create),
-                      ),
-                    ],
-                  ),
+                      groupTitle: 'Production',
+                      icon: Icons.precision_manufacturing_outlined,
+                      isActive: _isGroupActive('Production', currentSection),
+                      isRestricted: !canAccessProduction,
+                      isExpanded: _expandedGroups['Production'] ?? false,
+                      onGroupTap: () => _toggleGroup('Production'),
+                      children: [
+                        _buildSubNavItem(
+                          title: 'Production Dashboard',
+                          isRestricted: !canAccessProduction,
+                          isSelected: currentSection == ErpNavSection.productionDashboard,
+                          onTap: () => _handleNavigation(context, ErpNavSection.productionDashboard, ErpModule.production),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Production Invoices',
+                          isRestricted: !canAccessProduction,
+                          isSelected: currentSection == ErpNavSection.productionOrders,
+                          onTap: () => _handleNavigation(context, ErpNavSection.productionOrders, ErpModule.production),
+                        ),
+                        _buildSubNavItem(
+                          title: 'Create Production',
+                          isRestricted: !canAccessProduction,
+                          isSelected: currentSection == ErpNavSection.createProduction,
+                          onTap: () => _handleNavigation(context, ErpNavSection.createProduction, ErpModule.production, ErpAction.create),
+                        ),
+                      ],
+                    ),
 
                   // 5. Sales (Group)
                   if (canAccessSales)
                     _buildNavGroup(
                       groupTitle: 'Sales',
                       icon: Icons.point_of_sale_outlined,
+                      isActive: _isGroupActive('Sales', currentSection),
                       isRestricted: !canAccessSales,
                       isExpanded: _expandedGroups['Sales'] ?? false,
                       onGroupTap: () => _toggleGroup('Sales'),
@@ -367,6 +386,7 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                     _buildNavGroup(
                       groupTitle: 'Payments',
                       icon: Icons.payments_outlined,
+                      isActive: _isGroupActive('Payments', currentSection),
                       isRestricted: !canAccessPayments,
                       isExpanded: _expandedGroups['Payments'] ?? false,
                       onGroupTap: () => _toggleGroup('Payments'),
@@ -415,6 +435,7 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                     _buildNavGroup(
                       groupTitle: 'Masters',
                       icon: Icons.dataset_outlined,
+                      isActive: _isGroupActive('Masters', currentSection),
                       isRestricted: !canAccessMasters,
                       isExpanded: _expandedGroups['Masters'] ?? false,
                       onGroupTap: () => _toggleGroup('Masters'),
@@ -487,6 +508,7 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
                     _buildNavGroup(
                       groupTitle: 'Reports',
                       icon: Icons.bar_chart_rounded,
+                      isActive: _isGroupActive('Reports', currentSection),
                       isRestricted: !canAccessReports,
                       isExpanded: _expandedGroups['Reports'] ?? false,
                       onGroupTap: () => _toggleGroup('Reports'),
@@ -787,64 +809,171 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
     required String groupTitle,
     required IconData icon,
     required bool isExpanded,
+    bool isActive = false,
     bool isRestricted = false,
     required VoidCallback onGroupTap,
     required List<Widget> children,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          height: 44,
-          margin: const EdgeInsets.only(left: 12, right: 12, bottom: 2),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onGroupTap,
-              splashFactory: NoSplash.splashFactory,
-              highlightColor: Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-              hoverColor: AppColors.sidebarHover,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Icon(
-                      icon,
-                      size: 20,
-                      color: isRestricted ? Colors.white70 : Colors.white,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        groupTitle,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: isRestricted ? Colors.white70 : Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
+    final Widget headerWidget = isActive
+        ? Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Top inverse curve
+                Positioned(
+                  top: -20,
+                  right: 0,
+                  width: 20,
+                  height: 20,
+                  child: Container(
+                    color: AppColors.surface,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: AppColors.sidebarBackground,
+                        borderRadius: BorderRadius.only(
+                          bottomRight: Radius.circular(20),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (isRestricted) ...[
-                      const Icon(Icons.lock_outline, size: 13, color: Colors.white38),
-                      const SizedBox(width: 4),
-                    ],
-                    Icon(
-                      isExpanded ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_right_rounded,
-                      size: 18,
-                      color: Colors.white70,
+                  ),
+                ),
+                // Bottom inverse curve
+                Positioned(
+                  bottom: -20,
+                  right: 0,
+                  width: 20,
+                  height: 20,
+                  child: Container(
+                    color: AppColors.surface,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: AppColors.sidebarBackground,
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(20),
+                        ),
+                      ),
                     ),
-                  ],
+                  ),
+                ),
+                // Active module pill extending to right edge
+                Container(
+                  height: 48,
+                  margin: const EdgeInsets.only(left: 12),
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(24),
+                      bottomLeft: Radius.circular(24),
+                    ),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: onGroupTap,
+                      splashFactory: NoSplash.splashFactory,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(24),
+                        bottomLeft: Radius.circular(24),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            Icon(
+                              icon,
+                              size: 20,
+                              color: AppColors.sidebarActiveText,
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Text(
+                                groupTitle,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.sidebarActiveText,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isRestricted) ...[
+                              Icon(Icons.lock_outline, size: 14, color: AppColors.sidebarActiveText.withValues(alpha: 0.7)),
+                              const SizedBox(width: 4),
+                            ],
+                            Icon(
+                              isExpanded ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_right_rounded,
+                              size: 18,
+                              color: AppColors.sidebarActiveText,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        : Container(
+            height: 44,
+            margin: const EdgeInsets.only(left: 12, right: 12, bottom: 2),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onGroupTap,
+                splashFactory: NoSplash.splashFactory,
+                highlightColor: Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                hoverColor: AppColors.sidebarHover,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Icon(
+                        icon,
+                        size: 20,
+                        color: isRestricted ? Colors.white70 : Colors.white,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          groupTitle,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: isRestricted ? Colors.white70 : Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isRestricted) ...[
+                        const Icon(Icons.lock_outline, size: 13, color: Colors.white38),
+                        const SizedBox(width: 4),
+                      ],
+                      Icon(
+                        isExpanded ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_right_rounded,
+                        size: 18,
+                        color: Colors.white70,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
+          );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        headerWidget,
         if (isExpanded)
           Padding(
-            padding: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
             child: Column(
               children: children,
             ),
@@ -859,146 +988,58 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
     bool isRestricted = false,
     required VoidCallback onTap,
   }) {
-    if (isSelected) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 2),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Top inverse curve
-            Positioned(
-              top: -18,
-              right: 0,
-              width: 18,
-              height: 18,
-              child: Container(
-                color: AppColors.surface,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: AppColors.sidebarBackground,
-                    borderRadius: BorderRadius.only(
-                      bottomRight: Radius.circular(18),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            // Bottom inverse curve
-            Positioned(
-              bottom: -18,
-              right: 0,
-              width: 18,
-              height: 18,
-              child: Container(
-                color: AppColors.surface,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: AppColors.sidebarBackground,
-                    borderRadius: BorderRadius.only(
-                      topRight: Radius.circular(18),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            // Active sub item pill
-            Container(
-              height: 42,
-              margin: const EdgeInsets.only(left: 20),
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(21),
-                  bottomLeft: Radius.circular(21),
-                ),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onTap,
-                  splashFactory: NoSplash.splashFactory,
-                  highlightColor: Colors.transparent,
-                  hoverColor: Colors.transparent,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(21),
-                    bottomLeft: Radius.circular(21),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 5,
-                          height: 5,
-                          decoration: const BoxDecoration(
-                            color: AppColors.sidebarActiveText,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.sidebarActiveText,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isRestricted)
-                          Icon(Icons.lock_outline, size: 12, color: AppColors.sidebarActiveText.withValues(alpha: 0.7)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Container(
       height: 38,
-      margin: const EdgeInsets.only(left: 20, right: 12, bottom: 2),
+      margin: const EdgeInsets.only(left: 12, right: 12, bottom: 4),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFF2C2219) : Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
           splashFactory: NoSplash.splashFactory,
           highlightColor: Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          hoverColor: AppColors.sidebarHover,
+          borderRadius: BorderRadius.circular(20),
+          hoverColor: isSelected
+              ? Colors.transparent
+              : Colors.white.withValues(alpha: 0.06),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
               children: [
                 Container(
-                  width: 4,
-                  height: 4,
+                  width: 5,
+                  height: 15,
                   decoration: BoxDecoration(
-                    color: isRestricted ? Colors.white38 : Colors.white,
-                    shape: BoxShape.circle,
+                    color: isSelected
+                        ? AppColors.sidebarActiveText
+                        : (isRestricted ? Colors.white24 : const Color(0xFF6B7280)),
+                    borderRadius: BorderRadius.circular(3),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     title,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: isRestricted ? Colors.white70 : Colors.white,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 12.5,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: isSelected
+                          ? AppColors.sidebarActiveText
+                          : (isRestricted ? Colors.white38 : const Color(0xFFCBD5E1)),
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontSize: 13.5,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 if (isRestricted)
-                  const Icon(Icons.lock_outline, size: 12, color: Colors.white30),
+                  Icon(
+                    Icons.lock_outline,
+                    size: 13,
+                    color: isSelected ? AppColors.sidebarActiveText : Colors.white38,
+                  ),
               ],
             ),
           ),

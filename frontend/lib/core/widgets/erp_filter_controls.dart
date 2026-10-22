@@ -38,6 +38,14 @@ class _ErpSearchInputState extends State<ErpSearchInput> {
   }
 
   @override
+  void didUpdateWidget(covariant ErpSearchInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.controller == null && widget.initialValue != null && widget.initialValue != _controller.text) {
+      _controller.text = widget.initialValue!;
+    }
+  }
+
+  @override
   void dispose() {
     if (_ownsController) {
       _controller.dispose();
@@ -48,33 +56,32 @@ class _ErpSearchInputState extends State<ErpSearchInput> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 38,
+      height: 40,
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: ValueListenableBuilder<TextEditingValue>(
         valueListenable: _controller,
         builder: (context, value, _) {
           return TextField(
             controller: _controller,
-            style: AppTextStyles.bodyMedium.copyWith(fontSize: 13),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B)),
             decoration: InputDecoration(
               hintText: widget.hintText,
-              hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted, fontSize: 13),
-              prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textMuted),
+              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
               suffixIcon: value.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear, size: 16, color: AppColors.textMuted),
+                      icon: const Icon(Icons.clear, size: 16, color: Color(0xFF94A3B8)),
                       onPressed: () {
                         _controller.clear();
                         widget.onChanged('');
                       },
                     )
-                  : null,
+                  : const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               isDense: true,
             ),
             onChanged: widget.onChanged,
@@ -91,6 +98,7 @@ class ErpFilterDropdown<T> extends StatelessWidget {
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?> onChanged;
   final double? width;
+  final bool isExpanded;
 
   const ErpFilterDropdown({
     super.key,
@@ -98,27 +106,115 @@ class ErpFilterDropdown<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
     this.width,
+    this.isExpanded = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final safeValue = items.any((i) => i.value == value) ? value : (items.isNotEmpty ? items.first.value : null);
+    final valStr = safeValue?.toString().toUpperCase() ?? '';
+    final isFilterActive = valStr.isNotEmpty && valStr != 'ALL' && valStr != 'NONE';
+
+    final styledItems = items.map<DropdownMenuItem<T>>((item) {
+      final isSelected = item.value == safeValue;
+      Widget content = item.child;
+
+      if (content is Text) {
+        final textData = content.data ?? content.textSpan?.toPlainText() ?? '';
+        content = Text(
+          textData,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+            color: isSelected ? AppColors.primaryDark : const Color(0xFF334155),
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        );
+      }
+
+      return DropdownMenuItem<T>(
+        value: item.value,
+        enabled: item.enabled,
+        onTap: item.onTap,
+        alignment: item.alignment,
+        child: content,
+      );
+    }).toList();
+
     return Container(
-      height: 38,
+      height: 40,
       width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: isFilterActive ? AppColors.primarySoft.withValues(alpha: 0.45) : Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: isFilterActive ? AppColors.primary : const Color(0xFFE2E8F0),
+          width: isFilterActive ? 1.2 : 1.0,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x04000000),
+            blurRadius: 4,
+            offset: Offset(0, 1),
+          ),
+        ],
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: items.any((i) => i.value == value) ? value : (items.isNotEmpty ? items.first.value : null),
-          isDense: true,
-          style: AppTextStyles.bodyMedium.copyWith(fontSize: 13, color: AppColors.textPrimary),
-          icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textMuted),
-          items: items,
-          onChanged: onChanged,
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          canvasColor: Colors.white,
+          highlightColor: AppColors.primarySoft,
+          hoverColor: AppColors.primarySoft.withValues(alpha: 0.5),
+          splashColor: AppColors.primaryLight.withValues(alpha: 0.25),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<T>(
+            value: safeValue,
+            isDense: true,
+            isExpanded: isExpanded,
+            dropdownColor: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            elevation: 4,
+            menuMaxHeight: 360,
+            icon: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: isFilterActive ? AppColors.primaryDark : AppColors.primary,
+            ),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF1E293B),
+            ),
+            selectedItemBuilder: (BuildContext context) {
+              return items.map<Widget>((DropdownMenuItem<T> item) {
+                if (item.child is Text) {
+                  final text = item.child as Text;
+                  final textData = text.data ?? text.textSpan?.toPlainText() ?? '';
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      textData,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isFilterActive ? FontWeight.w600 : FontWeight.w500,
+                        color: isFilterActive ? AppColors.primaryDark : const Color(0xFF1E293B),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  );
+                }
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: item.child,
+                );
+              }).toList();
+            },
+            items: styledItems,
+            onChanged: onChanged,
+          ),
         ),
       ),
     );
