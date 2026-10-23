@@ -11,6 +11,8 @@ import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
@@ -26,6 +28,9 @@ class QuotationsScreen extends ConsumerStatefulWidget {
 class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
+  String _selectedStatusFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -155,13 +160,28 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
           ),
           const SizedBox(height: 16),
 
-          // 3. Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search quotations by number, customer, project or executive...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // 3. Global Filters
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search quotation, client, project...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() => _searchQuery = val),
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -362,9 +382,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         case 'reject':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.rejected.name);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Quotation ${quote.invoiceNumber} marked as REJECTED.'), backgroundColor: AppColors.danger),
-          );
+          ErpToast.showSuccess(context, 'Quotation ${quote.invoiceNumber} marked as REJECTED.');
           break;
         case 'revision':
           ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
@@ -374,9 +392,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         case 'proforma':
           final proforma = await db.convertQuotationToProformaAsync(quote.id);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Created Proforma Invoice ${proforma.invoiceNumber}!'), backgroundColor: AppColors.success),
-          );
+          ErpToast.showSuccess(context, 'Created Proforma Invoice ${proforma.invoiceNumber}!');
           ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.proformaInvoices;
           break;
         case 'duplicate':
@@ -387,9 +403,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Action failed: $e'), backgroundColor: AppColors.danger),
-      );
+      ErpToast.showError(context, 'Action failed: $e');
     }
   }
 }

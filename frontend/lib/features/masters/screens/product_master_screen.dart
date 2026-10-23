@@ -8,6 +8,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -56,6 +57,9 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
     );
     final costCtrl = TextEditingController(
       text: existing?.costPrice.toString() ?? '1500',
+    );
+    final transportCtrl = TextEditingController(
+      text: existing?.transportationCharge.toString() ?? '0',
     );
     final dealerCtrl = TextEditingController(
       text: existing?.dealerSellingPrice.toString() ?? '2500',
@@ -166,8 +170,19 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                     keyboardType: TextInputType.number,
                                     validator: Validators.positiveNumber,
                                     decoration: const InputDecoration(
-                                      labelText: 'Cost Price (₹) *',
-                                      hintText: 'Production cost',
+                                      labelText: 'Purchase / Cost Price (₹) *',
+                                      hintText: 'Purchase landed or production cost',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: transportCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.nonNegativeNumber,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Transportation Charge (₹)',
+                                      hintText: 'Freight per unit',
+                                      prefixIcon: Icon(Icons.local_shipping_outlined, size: 18),
                                     ),
                                   ),
                                   const SizedBox(height: 12),
@@ -283,8 +298,8 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                         keyboardType: TextInputType.number,
                                         validator: Validators.positiveNumber,
                                         decoration: const InputDecoration(
-                                          labelText: 'Cost Price (₹) *',
-                                          hintText: 'Production cost',
+                                          labelText: 'Purchase / Cost Price (₹) *',
+                                          hintText: 'Purchase landed or production cost',
                                         ),
                                       ),
                                     ),
@@ -340,6 +355,19 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                         ),
                                       ),
                                     ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: transportCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Trans. Charge (₹)',
+                                          hintText: 'Freight per unit',
+                                          prefixIcon: Icon(Icons.local_shipping_outlined, size: 18),
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ],
@@ -372,6 +400,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                           final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
                           final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
                           final costVal = double.tryParse(costCtrl.text.trim()) ?? 0.0;
+                          final transportVal = double.tryParse(transportCtrl.text.trim()) ?? 0.0;
                           final dealerVal = double.tryParse(dealerCtrl.text.trim()) ?? 0.0;
                           final custVal = double.tryParse(custCtrl.text.trim()) ?? 0.0;
                           final catObj = db.categories.firstWhere(
@@ -395,6 +424,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                 currentStock: stockVal,
                                 minimumStock: minVal,
                                 costPrice: costVal,
+                                transportationCharge: transportVal,
                                 dealerSellingPrice: dealerVal,
                                 customerSellingPrice: custVal,
                                 updatedAt: DateTime.now(),
@@ -412,6 +442,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                                 openingStock: stockVal,
                                 minimumStock: minVal,
                                 costPrice: costVal,
+                                transportationCharge: transportVal,
                                 dealerSellingPrice: dealerVal,
                                 customerSellingPrice: custVal,
                                 gstPercent: 18.0,
@@ -571,33 +602,15 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (Matching Figma Products Screen)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 650;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 280),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Products', style: AppTextStyles.h1),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () => _openAddEditDialog(),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add Product'),
-                  ),
-                ],
-              );
-            },
+          ErpSectionHeaderCard(
+            icon: Icons.inventory_2_outlined,
+            title: 'Products Master',
+            badgeText: 'FINISHED GOODS',
+            action: ErpButton(
+              text: 'Add Product',
+              icon: Icons.add,
+              onPressed: () => _openAddEditDialog(),
+            ),
           ),
           const SizedBox(height: 18),
 

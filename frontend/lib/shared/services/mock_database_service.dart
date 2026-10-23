@@ -35,6 +35,8 @@ import '../../core/api/projects_api_service.dart';
 import '../../core/api/payments_api_service.dart';
 import '../../core/api/expenses_api_service.dart';
 import '../../core/api/reports_api_service.dart';
+import '../../core/models/notification_model.dart';
+import '../../core/api/notifications_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
@@ -73,6 +75,7 @@ class MockDatabaseService extends ChangeNotifier {
   List<WhatsAppAlertRecipient> alertRecipients = [];
   List<LowStockAlertRecord> alertHistory = [];
   List<WhatsAppMessageLog> messageLogs = [];
+  List<NotificationItem> notifications = [];
   GlobalSupportConfig globalSupportConfig = const GlobalSupportConfig();
 
   // Counters for doc numbering
@@ -2235,6 +2238,66 @@ class MockDatabaseService extends ChangeNotifier {
         status: 'Delivered',
       ),
     ];
+
+    // Seed Initial Role-Based Notifications
+    notifications = [
+      NotificationItem(
+        id: 'NOTIF-001',
+        title: 'Purchase Requisition: Brass Architectural Sconce',
+        message: 'Requisition of 40 PCS requested for Sales Order DLZ/SO/2026/0074 (Customer: Oberoi Sky City Residences).',
+        notificationType: 'purchase_requisition',
+        targetRole: 'purchase_manager',
+        recipientUserId: 'USR-003',
+        recipientName: 'Vikram Mehta',
+        recipientEmail: 'purchase@deluzex.com',
+        sourceModule: 'sales',
+        relatedEntityType: 'sales_order',
+        relatedEntityId: 'SO-001',
+        data: {
+          'salesOrderNumber': 'DLZ/SO/2026/0074',
+          'salesOrderId': 'SO-001',
+          'customerName': 'Oberoi Sky City Residences',
+          'productName': 'Brass Architectural Sconce',
+          'productSku': 'DLX-WL-001',
+          'requestedQuantity': 50.0,
+          'availableStock': 10.0,
+          'shortageQuantity': 40.0,
+          'requestType': 'Purchase',
+          'sourceModule': 'Sales Orders',
+          'route': '/purchase/orders',
+        },
+        isRead: false,
+        createdAt: now.subtract(const Duration(hours: 1)),
+      ),
+      NotificationItem(
+        id: 'NOTIF-002',
+        title: 'Production Requisition: Aura Halo Minimalist Ring Light 900mm',
+        message: 'Requisition of 15 PCS requested for Sales Order DLZ/SO/2026/0074 (Customer: Oberoi Sky City Residences).',
+        notificationType: 'production_requisition',
+        targetRole: 'production_manager',
+        recipientUserId: 'USR-004',
+        recipientName: 'Ananya Desai',
+        recipientEmail: 'production@deluzex.com',
+        sourceModule: 'sales',
+        relatedEntityType: 'sales_order',
+        relatedEntityId: 'SO-001',
+        data: {
+          'salesOrderNumber': 'DLZ/SO/2026/0074',
+          'salesOrderId': 'SO-001',
+          'customerName': 'Oberoi Sky City Residences',
+          'productName': 'Aura Halo Minimalist Ring Light 900mm',
+          'productSku': 'DLX-CH-003',
+          'requestedQuantity': 20.0,
+          'availableStock': 5.0,
+          'shortageQuantity': 15.0,
+          'requestType': 'Production',
+          'sourceModule': 'Sales Orders',
+          'route': '/production/orders',
+        },
+        isRead: false,
+        createdAt: now.subtract(const Duration(minutes: 45)),
+      ),
+    ];
   }
 
   // -------------------------------------------------------------
@@ -2276,10 +2339,15 @@ class MockDatabaseService extends ChangeNotifier {
   // PURCHASE WORKFLOWS
   // -------------------------------------------------------------
   void createPurchase(Purchase purchase) {
-    purchases.insert(0, purchase);
+    final allocatedItems = PurchaseLineItem.allocateTransportation(
+      items: purchase.items,
+      transportationCharges: purchase.transportationCharges,
+    );
+    final finalPurchase = purchase.copyWith(items: allocatedItems);
+    purchases.insert(0, finalPurchase);
 
-    if (purchase.status != PurchaseStatus.draft && purchase.status != PurchaseStatus.cancelled) {
-      for (final line in purchase.items) {
+    if (finalPurchase.status != PurchaseStatus.draft && finalPurchase.status != PurchaseStatus.cancelled) {
+      for (final line in finalPurchase.items) {
         if (purchase.purchaseType == PurchaseItemType.finishedProduct || line.itemType == PurchaseItemType.finishedProduct) {
           // 1A. Finished Product Purchase: Increase Finished Product Stock
           final fpIndex = finishedProducts.indexWhere((fp) =>
@@ -2289,9 +2357,11 @@ class MockDatabaseService extends ChangeNotifier {
             final fp = finishedProducts[fpIndex];
             final updatedStock = fp.currentStock + line.quantity;
             final updatedPurchased = fp.purchasedStock + line.quantity;
+            final newCost = line.landedRate > 0 ? line.landedRate : fp.costPrice;
             finishedProducts[fpIndex] = fp.copyWith(
               currentStock: updatedStock,
               purchasedStock: updatedPurchased,
+              costPrice: newCost,
               updatedAt: DateTime.now(),
             );
 
@@ -2315,8 +2385,10 @@ class MockDatabaseService extends ChangeNotifier {
           if (rmIndex != -1) {
             final rm = rawMaterials[rmIndex];
             final updatedStock = rm.currentStock + line.quantity;
+            final newRate = line.landedRate > 0 ? line.landedRate : rm.defaultPurchasePrice;
             rawMaterials[rmIndex] = rm.copyWith(
               currentStock: updatedStock,
+              defaultPurchasePrice: newRate,
               updatedAt: DateTime.now(),
             );
 
@@ -4474,6 +4546,225 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
+  // ROLE-BASED NOTIFICATIONS & LIFECYCLE
+  // -------------------------------------------------------------
+  List<NotificationItem> getNotificationsForUser([AppUser? user]) {
+    final targetUser = user ?? currentUser;
+    final role = targetUser.primaryRoleId.toLowerCase();
+    final userId = targetUser.id;
+
+    if (role == 'admin') {
+      return List.unmodifiable(notifications);
+    }
+
+    if (role == 'purchase_manager' || role == 'purchase') {
+      return notifications.where((n) {
+        final targetRole = (n.targetRole ?? '').toLowerCase();
+        return targetRole == 'purchase_manager' ||
+            targetRole == 'purchase' ||
+            n.recipientUserId == userId;
+      }).toList();
+    }
+
+    if (role == 'production_manager' || role == 'production') {
+      return notifications.where((n) {
+        final targetRole = (n.targetRole ?? '').toLowerCase();
+        return targetRole == 'production_manager' ||
+            targetRole == 'production' ||
+            n.recipientUserId == userId;
+      }).toList();
+    }
+
+    if (role == 'sales_manager' || role == 'sales') {
+      return notifications.where((n) {
+        final targetRole = (n.targetRole ?? '').toLowerCase();
+        return targetRole == 'sales_manager' ||
+            targetRole == 'sales' ||
+            n.recipientUserId == userId;
+      }).toList();
+    }
+
+    // Other internal roles:
+    final internalRoles = ['inventory_manager', 'accounts_manager', 'project_manager'];
+    if (internalRoles.contains(role)) {
+      return notifications.where((n) {
+        final targetRole = (n.targetRole ?? '').toLowerCase();
+        return targetRole == role || n.recipientUserId == userId;
+      }).toList();
+    }
+
+    // Unrelated / external roles (customers, vendors, guests, data_entry):
+    return notifications.where((n) {
+      return n.recipientUserId == userId &&
+          !n.notificationType.contains('purchase') &&
+          !n.notificationType.contains('production');
+    }).toList();
+  }
+
+  int getUnreadNotificationCount([AppUser? user]) {
+    final list = getNotificationsForUser(user);
+    return list.where((n) => !n.isRead).length;
+  }
+
+  /// Determine whether a given user has the operational role or permission to view low stock alerts.
+  /// Low stock alerts are relevant to warehouse/inventory, procurement/purchases, production lines,
+  /// and executive administration. They are hidden for unrelated roles such as Sales, Accounts,
+  /// Data Entry, or Auditors.
+  bool canViewLowStockAlerts([AppUser? user]) {
+    final targetUser = user ?? currentUser;
+    final role = targetUser.primaryRoleId.toLowerCase().trim();
+
+    // 1. Roles with direct operational stock, replenishment, or oversight responsibility
+    if (role.contains('admin') ||
+        role.contains('inventory') ||
+        role.contains('purchase') ||
+        role.contains('production')) {
+      return true;
+    }
+
+    // 2. Also check if the user has an active temporary grant or custom permission override for inventory
+    if (temporaryGrants.any((g) => !g.isExpired && g.grantedToUserId == targetUser.id && g.module == ErpModule.inventory)) {
+      return true;
+    }
+    if (targetUser.customPermissionOverrides.containsKey(ErpModule.inventory) &&
+        targetUser.customPermissionOverrides[ErpModule.inventory]!.contains(ErpAction.view)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Get role-appropriate low stock count
+  int getLowStockCountForUser([AppUser? user]) {
+    final targetUser = user ?? currentUser;
+    if (!canViewLowStockAlerts(targetUser)) return 0;
+    final role = targetUser.primaryRoleId.toLowerCase().trim();
+
+    if (role.contains('purchase')) {
+      return lowStockRawMaterials.length;
+    }
+    if (role.contains('production')) {
+      return lowStockFinishedProducts.length;
+    }
+    if (role.contains('admin') || role.contains('inventory')) {
+      return totalLowStockCount;
+    }
+    return 0;
+  }
+
+  /// Get role-appropriate low stock label
+  String getLowStockAlertLabelForUser([AppUser? user]) {
+    final targetUser = user ?? currentUser;
+    final role = targetUser.primaryRoleId.toLowerCase().trim();
+
+    if (role.contains('purchase')) {
+      final count = lowStockRawMaterials.length;
+      return '$count Raw Material Alerts';
+    }
+    if (role.contains('production')) {
+      final count = lowStockFinishedProducts.length;
+      return '$count Finished Goods Alerts';
+    }
+    final count = totalLowStockCount;
+    return '$count Low Stock Alerts';
+  }
+
+
+  void createNotification(NotificationItem notification) {
+    // Idempotent retry protection: prevent duplicate notifications within 60 seconds
+    final existing = notifications.where((n) {
+      final isSameSO = n.salesOrderNumber != null &&
+          n.salesOrderNumber == notification.salesOrderNumber;
+      final isSameSku = n.productSku != null &&
+          n.productSku == notification.productSku;
+      final isSameRole = n.targetRole == notification.targetRole;
+      final isRecent = DateTime.now().difference(n.createdAt).inSeconds < 60;
+      return isSameSO && isSameSku && isSameRole && isRecent;
+    }).firstOrNull;
+
+    if (existing != null) return;
+
+    notifications.insert(0, notification);
+    notifyListeners();
+  }
+
+  Future<void> createNotificationAsync(NotificationItem notification) async {
+    try {
+      await _notificationsApi.createNotification(notification.toJson());
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] createNotificationAsync remote fallback: $e');
+      }
+    }
+  }
+
+  void markNotificationAsRead(String id, [AppUser? user]) {
+    final index = notifications.indexWhere((n) => n.id == id);
+    if (index != -1) {
+      final item = notifications[index];
+      notifications[index] = item.copyWith(
+        isRead: true,
+        readAt: DateTime.now(),
+      );
+      notifyListeners();
+    }
+  }
+
+  Future<void> markNotificationAsReadAsync(String id) async {
+    try {
+      await _notificationsApi.markAsRead(id);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] markNotificationAsReadAsync remote fallback: $e');
+      }
+    }
+  }
+
+  void markAllNotificationsAsRead([AppUser? user]) {
+    final visibleIds = getNotificationsForUser(user).map((n) => n.id).toSet();
+    for (int i = 0; i < notifications.length; i++) {
+      if (visibleIds.contains(notifications[i].id)) {
+        notifications[i] = notifications[i].copyWith(
+          isRead: true,
+          readAt: DateTime.now(),
+        );
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> markAllNotificationsAsReadAsync() async {
+    try {
+      await _notificationsApi.markAllAsRead();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] markAllNotificationsAsReadAsync remote fallback: $e');
+      }
+    }
+  }
+
+  Future<void> loadNotificationsAsync() async {
+    try {
+      final res = await _notificationsApi.getNotifications();
+      final remoteItems = res['items'] as List<NotificationItem>? ?? [];
+      for (final r in remoteItems) {
+        final idx = notifications.indexWhere((n) => n.id == r.id);
+        if (idx == -1) {
+          notifications.add(r);
+        } else {
+          notifications[idx] = r;
+        }
+      }
+      notifications.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] loadNotificationsAsync fallback: $e');
+      }
+    }
+  }
+
+  // -------------------------------------------------------------
   // ARCHITECT AS CUSTOMER RELATIONSHIP
   // -------------------------------------------------------------
   void linkArchitectAndCustomer({required String customerId, required String architectId}) {
@@ -4582,6 +4873,7 @@ class MockDatabaseService extends ChangeNotifier {
   final PaymentsApiService _paymentsApi = PaymentsApiService();
   final ExpensesApiService _expensesApi = ExpensesApiService();
   final ReportsApiService _reportsApi = ReportsApiService();
+  final NotificationsApiService _notificationsApi = NotificationsApiService();
 
   bool _isLoadingProjects = false;
   bool get isLoadingProjects => _isLoadingProjects;
@@ -6304,14 +6596,18 @@ class MockDatabaseService extends ChangeNotifier {
   Future<Sale> convertQuotationToProformaAsync(String quotationId) async {
     try {
       final proforma = await _salesApi.convertQuotationToProforma(quotationId);
-      await loadQuotations(forceRefresh: true);
+      await Future.wait([
+        loadQuotations(forceRefresh: true),
+        loadProforma(forceRefresh: true),
+      ]);
       sales.removeWhere((s) => s.id == proforma.id);
       sales.insert(0, proforma);
       notifyListeners();
       return proforma;
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] convertQuotationToProformaAsync remote failed: $e');
-      rethrow;
+      final fallback = createProformaFromQuotation(quotationId);
+      return fallback;
     }
   }
 
@@ -6332,6 +6628,7 @@ class MockDatabaseService extends ChangeNotifier {
       );
       final idx = sales.indexWhere((s) => s.id == proformaId);
       if (idx != -1) sales[idx] = updated;
+      await loadProforma(forceRefresh: true);
       notifyListeners();
       return updated;
     } catch (e) {

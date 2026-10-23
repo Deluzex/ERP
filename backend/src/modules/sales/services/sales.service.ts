@@ -35,12 +35,40 @@ export class SalesService {
   // ==========================================================================
   private async getNextSequenceNumber(prefix: string): Promise<string> {
     const year = new Date().getFullYear();
-    const countRes = await this.db.query<{ count: string }>(
-      `SELECT count(*)::text as count FROM sales WHERE invoice_number LIKE $1`,
-      [`%${prefix}/${year}/%`],
+    const pattern = `%/${prefix}/${year}/%`;
+    const res = await this.db.query<{ invoice_number: string }>(
+      `SELECT invoice_number FROM sales WHERE invoice_number LIKE $1`,
+      [pattern],
     );
-    const seq = parseInt(countRes.rows[0].count, 10) + 1;
-    return `DLZ/${prefix}/${year}/${seq.toString().padStart(4, '0')}`;
+
+    let maxSeq = 0;
+    const regex = new RegExp(`/${prefix}/${year}/(\\d+)`);
+    for (const row of res.rows) {
+      const match = row.invoice_number.match(regex);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxSeq) {
+          maxSeq = num;
+        }
+      }
+    }
+
+    let nextSeq = maxSeq + 1;
+    let candidate = `DLZ/${prefix}/${year}/${nextSeq.toString().padStart(4, '0')}`;
+
+    while (true) {
+      const existsRes = await this.db.query<{ id: string }>(
+        `SELECT id FROM sales WHERE invoice_number = $1`,
+        [candidate],
+      );
+      if (existsRes.rows.length === 0) {
+        break;
+      }
+      nextSeq++;
+      candidate = `DLZ/${prefix}/${year}/${nextSeq.toString().padStart(4, '0')}`;
+    }
+
+    return candidate;
   }
 
   private async getPartyDetails(partyType: string, partyId: string) {
@@ -89,20 +117,57 @@ export class SalesService {
 
     const computedItems: any[] = [];
     for (const item of dto.items) {
-      const fpRes = await this.db.query<{ name: string; item_code: string; unit: string; customer_selling_price: string; gst_percent: string }>(
-        `SELECT fp.name, fp.item_code, mu.symbol as unit, fp.customer_selling_price, fp.gst_percent
-         FROM finished_products fp
-         JOIN measurement_units mu ON mu.id = fp.unit_id
-         WHERE fp.id = $1`,
-        [item.finishedProductId],
-      );
-      if (fpRes.rows.length === 0) {
-        throw new NotFoundException(`Finished product ${item.finishedProductId} not found`);
+      const isRawMaterial = item.itemType === 'raw_material' || (!item.finishedProductId && !!item.rawMaterialId);
+      let name = '';
+      let code = '';
+      let unit = '';
+      let defaultPrice = '0';
+      let gstPercentVal = 18;
+      let finishedProductId: string | null = null;
+      let rawMaterialId: string | null = null;
+
+      if (isRawMaterial) {
+        const rmId = item.rawMaterialId || item.finishedProductId;
+        const rmRes = await this.db.query<{ name: string; item_code: string; unit: string; default_purchase_price: string; gst_percent: string }>(
+          `SELECT rm.name, rm.item_code, mu.symbol as unit, rm.default_purchase_price, rm.gst_percent
+           FROM raw_materials rm
+           JOIN measurement_units mu ON mu.id = rm.unit_id
+           WHERE rm.id = $1`,
+          [rmId],
+        );
+        if (rmRes.rows.length === 0) {
+          throw new NotFoundException(`Raw material ${rmId} not found`);
+        }
+        const rm = rmRes.rows[0];
+        name = item.rawMaterialName || rm.name;
+        code = item.rawMaterialCode || rm.item_code;
+        unit = rm.unit;
+        defaultPrice = rm.default_purchase_price;
+        gstPercentVal = parseFloat(rm.gst_percent || '18');
+        rawMaterialId = rmId!;
+      } else {
+        const fpRes = await this.db.query<{ name: string; item_code: string; unit: string; customer_selling_price: string; gst_percent: string }>(
+          `SELECT fp.name, fp.item_code, mu.symbol as unit, fp.customer_selling_price, fp.gst_percent
+           FROM finished_products fp
+           JOIN measurement_units mu ON mu.id = fp.unit_id
+           WHERE fp.id = $1`,
+          [item.finishedProductId],
+        );
+        if (fpRes.rows.length === 0) {
+          throw new NotFoundException(`Finished product ${item.finishedProductId} not found`);
+        }
+        const fp = fpRes.rows[0];
+        name = item.finishedProductName || fp.name;
+        code = item.finishedProductCode || fp.item_code;
+        unit = fp.unit;
+        defaultPrice = fp.customer_selling_price;
+        gstPercentVal = parseFloat(fp.gst_percent || '18');
+        finishedProductId = item.finishedProductId!;
       }
-      const fp = fpRes.rows[0];
-      const rate = item.rate ?? parseFloat(fp.customer_selling_price);
+
+      const rate = item.rate ?? parseFloat(defaultPrice);
       const discount = item.discountAmount ?? 0;
-      const gstPercent = item.gstPercent ?? parseFloat(fp.gst_percent);
+      const gstPercent = item.gstPercent ?? gstPercentVal;
       const taxable = Math.max(0, item.quantity * rate - discount);
       const gst = taxable * (gstPercent / 100);
       const lineTotal = taxable + gst;
@@ -112,12 +177,14 @@ export class SalesService {
       totalGst += gst;
 
       computedItems.push({
-        finishedProductId: item.finishedProductId,
-        finishedProductName: fp.name,
-        finishedProductCode: fp.item_code,
+        itemType: isRawMaterial ? 'raw_material' : 'finished_product',
+        rawMaterialId,
+        finishedProductId,
+        finishedProductName: name,
+        finishedProductCode: code,
         productDescription: item.productDescription ?? '',
         quantity: item.quantity,
-        unit: fp.unit,
+        unit,
         rate,
         discountAmount: discount,
         gstPercent,
@@ -168,12 +235,12 @@ export class SalesService {
     for (const i of computedItems) {
       await this.db.query(
         `INSERT INTO sale_items (
-          sale_id, finished_product_id, finished_product_name, finished_product_code,
+          sale_id, item_type, raw_material_id, finished_product_id, finished_product_name, finished_product_code,
           product_description, quantity, unit, rate, discount_amount, gst_percent,
           taxable_amount, cgst_amount, sgst_amount, igst_amount, line_total
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
         [
-          saleId, i.finishedProductId, i.finishedProductName, i.finishedProductCode,
+          saleId, i.itemType, i.rawMaterialId, i.finishedProductId, i.finishedProductName, i.finishedProductCode,
           i.productDescription, i.quantity, i.unit, i.rate, i.discountAmount, i.gstPercent,
           i.taxableAmount, i.cgstAmount, i.sgstAmount, i.igstAmount, i.lineTotal,
         ],
@@ -550,8 +617,30 @@ export class SalesService {
     // Auto-create Production Orders for shortages
     for (const shortage of shortagesToProduce) {
       const year = new Date().getFullYear();
-      const prdCount = await this.db.query<{ count: string }>(`SELECT count(*)::text as count FROM production_orders WHERE production_number LIKE $1`, [`%PRD-${year}-%`]);
-      const prdNum = `PRD-${year}-${(parseInt(prdCount.rows[0].count, 10) + 1).toString().padStart(4, '0')}`;
+      const prdRes = await this.db.query<{ production_number: string }>(
+        `SELECT production_number FROM production_orders WHERE production_number LIKE $1`,
+        [`%PRD-${year}-%`],
+      );
+      let maxPrdSeq = 0;
+      const regex = new RegExp(`PRD-${year}-(\\d+)`);
+      for (const row of prdRes.rows) {
+        const match = row.production_number.match(regex);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxPrdSeq) maxPrdSeq = num;
+        }
+      }
+      let nextSeq = maxPrdSeq + 1;
+      let prdNum = `PRD-${year}-${nextSeq.toString().padStart(4, '0')}`;
+      while (true) {
+        const exists = await this.db.query<{ id: string }>(
+          `SELECT id FROM production_orders WHERE production_number = $1`,
+          [prdNum],
+        );
+        if (exists.rows.length === 0) break;
+        nextSeq++;
+        prdNum = `PRD-${year}-${nextSeq.toString().padStart(4, '0')}`;
+      }
 
       await this.db.query(
         `INSERT INTO production_orders (
@@ -1357,9 +1446,22 @@ export class SalesService {
       params.push(query.documentType);
     }
 
-    if (query.status) {
-      conditions.push(`s.status = $${idx++}`);
+    if (query.status && query.status !== 'all') {
+      if (query.documentType === 'quotation') {
+        conditions.push(`(s.quotation_status = $${idx} OR s.status = $${idx})`);
+      } else if (query.documentType === 'proformaInvoice') {
+        conditions.push(`(s.proforma_status = $${idx} OR s.status = $${idx})`);
+      } else if (query.documentType === 'salesOrder') {
+        conditions.push(`(s.sales_order_status = $${idx} OR s.status = $${idx})`);
+      } else if (query.documentType === 'delivery') {
+        conditions.push(`(s.delivery_status = $${idx} OR s.status = $${idx})`);
+      } else if (query.documentType === 'salesReturn') {
+        conditions.push(`(s.sales_return_status = $${idx} OR s.status = $${idx})`);
+      } else {
+        conditions.push(`s.status = $${idx}`);
+      }
       params.push(query.status);
+      idx++;
     }
 
     if (query.partyId) {
@@ -1368,7 +1470,7 @@ export class SalesService {
     }
 
     if (query.search) {
-      conditions.push(`(s.invoice_number ILIKE $${idx} OR s.party_name ILIKE $${idx})`);
+      conditions.push(`(s.invoice_number ILIKE $${idx} OR s.party_name ILIKE $${idx} OR COALESCE(s.parent_quotation_number, '') ILIKE $${idx} OR COALESCE(s.project_name, '') ILIKE $${idx})`);
       params.push(`%${query.search}%`);
       idx++;
     }
@@ -1548,6 +1650,8 @@ export class SalesService {
     return {
       id: row.id,
       saleId: row.sale_id,
+      itemType: row.item_type || (row.raw_material_id ? 'raw_material' : 'finished_product'),
+      rawMaterialId: row.raw_material_id,
       finishedProductId: row.finished_product_id,
       finishedProductName: row.finished_product_name,
       finishedProductCode: row.finished_product_code,

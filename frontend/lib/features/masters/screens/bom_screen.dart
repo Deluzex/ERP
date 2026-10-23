@@ -7,10 +7,13 @@ import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/bom_model.dart';
+import '../../../core/models/raw_material_model.dart';
+import '../../../core/models/finished_product_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -735,9 +738,9 @@ class _BomScreenState extends ConsumerState<BomScreen> {
 
   Future<void> _showAddRawMaterialDialog() async {
     final db = ref.read(databaseServiceProvider);
-    final rawList = db.rawMaterials as List;
+    final List<RawMaterial> rawList = db.rawMaterials;
     final seenRmIds = <String>{};
-    final uniqueRms = rawList.where((rm) => rm.id != null && seenRmIds.add(rm.id.toString())).toList();
+    final List<RawMaterial> uniqueRms = rawList.where((rm) => rm.id.isNotEmpty && seenRmIds.add(rm.id)).toList();
 
     if (uniqueRms.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -765,7 +768,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) {
           final isNarrow = MediaQuery.of(ctx).size.width < 550;
-          final selectedRm = uniqueRms.firstWhere(
+          final RawMaterial selectedRm = uniqueRms.firstWhere(
             (r) => r.id == selectedRmId,
             orElse: () => uniqueRms.first,
           );
@@ -837,7 +840,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                         }).toList(),
                         onChanged: (val) {
                           if (val != null) {
-                            final chosen = uniqueRms.firstWhere((r) => r.id == val);
+                            final chosen = uniqueRms.firstWhere((r) => r.id == val, orElse: () => uniqueRms.first);
                             setDlgState(() {
                               selectedRmId = chosen.id;
                               unitCostCtrl.text = chosen.defaultPurchasePrice % 1 == 0
@@ -1093,7 +1096,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                 onPressed: () {
                   if (!dialogFormKey.currentState!.validate()) return;
                   FocusScope.of(ctx).unfocus();
-                  final chosenRm = db.rawMaterials.firstWhere((r) => r.id == selectedRmId);
+                  final chosenRm = uniqueRms.firstWhere((r) => r.id == selectedRmId, orElse: () => selectedRm);
                   final enteredQty = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
                   final enteredWastage = double.tryParse(wastageCtrl.text.trim()) ?? 0.0;
                   final enteredCost = double.tryParse(unitCostCtrl.text.trim()) ?? chosenRm.defaultPurchasePrice;
@@ -1183,33 +1186,15 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (Matching Figma Master Design)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 650;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('BOM Master', style: AppTextStyles.h1),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: _startCreate,
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Create BOM'),
-                  ),
-                ],
-              );
-            },
+          ErpSectionHeaderCard(
+            icon: Icons.precision_manufacturing_rounded,
+            title: 'Bill of Materials (BOM) Master',
+            badgeText: 'PRODUCTION RECIPES',
+            action: ErpButton(
+              text: 'Create BOM',
+              icon: Icons.add,
+              onPressed: _startCreate,
+            ),
           ),
           const SizedBox(height: 18),
 
@@ -2556,9 +2541,9 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   }
 
   Widget _buildFinishedProductPicker(dynamic db) {
-    final list = db.finishedProducts as List;
+    final List<FinishedProduct> list = (db.finishedProducts as Iterable).whereType<FinishedProduct>().toList();
     final seenProductIds = <String>{};
-    final uniqueProducts = list.where((p) => p.id != null && seenProductIds.add(p.id.toString())).toList();
+    final List<FinishedProduct> uniqueProducts = list.where((p) => p.id.isNotEmpty && seenProductIds.add(p.id)).toList();
     final hasSelected = uniqueProducts.any((p) => p.id == _selectedProductId);
     final effectiveValue = hasSelected
         ? _selectedProductId
@@ -2602,7 +2587,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
           ? null // Locked on edit
           : (val) {
               if (val != null) {
-                final chosen = uniqueProducts.firstWhere((p) => p.id == val);
+                final chosen = uniqueProducts.firstWhere((p) => p.id == val, orElse: () => uniqueProducts.first);
                 setState(() {
                   _selectedProductId = chosen.id;
                   _productCodeCtrl.text = chosen.itemCode;
@@ -2619,11 +2604,11 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     required _BomItemDraft item,
     required bool isMobile,
   }) {
-    final rawList = db.rawMaterials as List;
+    final List<RawMaterial> rawList = (db.rawMaterials as Iterable).whereType<RawMaterial>().toList();
     final seenIds = <String>{};
-    final uniqueList = <dynamic>[];
+    final List<RawMaterial> uniqueList = <RawMaterial>[];
     for (final rm in rawList) {
-      final rmId = rm.id?.toString() ?? '';
+      final rmId = rm.id;
       if (rmId.isNotEmpty && seenIds.add(rmId)) {
         uniqueList.add(rm);
       }

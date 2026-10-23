@@ -90,21 +90,286 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
     }
   }
 
-  void _addNewLineItem() {
+  Future<void> _showAddProductDialog() async {
     final db = ref.read(databaseServiceProvider);
-    if (db.finishedProducts.isEmpty) return;
-    final fp = db.finishedProducts.first;
-    setState(() {
-      _items.add(_SaleLineItemDraft(
-        finishedProductId: fp.id,
-        finishedProductName: fp.name,
-        finishedProductCode: fp.itemCode,
-        unit: fp.unit,
-        quantity: 1.0,
-        rate: _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice,
-        gstPercent: fp.gstPercent,
-      ));
-    });
+    if (db.finishedProducts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No finished products found in catalog.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    final dialogFormKey = GlobalKey<FormState>();
+    String? selectedProductId = db.finishedProducts.first.id;
+    final firstFp = db.finishedProducts.first;
+    final initialRate = _partyType == PartyType.customer ? firstFp.customerSellingPrice : firstFp.dealerSellingPrice;
+
+    final qtyCtrl = TextEditingController(text: '1');
+    final rateCtrl = TextEditingController(text: initialRate.toStringAsFixed(0));
+    final discountCtrl = TextEditingController(text: '0');
+    final gstCtrl = TextEditingController(text: firstFp.gstPercent.toString());
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) {
+          final selectedFp = db.finishedProducts.firstWhere(
+            (p) => p.id == selectedProductId,
+            orElse: () => db.finishedProducts.first,
+          );
+          final qty = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
+          final rate = double.tryParse(rateCtrl.text.trim()) ?? 0.0;
+          final discount = double.tryParse(discountCtrl.text.trim()) ?? 0.0;
+          final gstPercent = double.tryParse(gstCtrl.text.trim()) ?? selectedFp.gstPercent;
+
+          final taxable = ((qty * rate) - discount).clamp(0.0, double.infinity);
+          final gstAmount = taxable * (gstPercent / 100.0);
+          final lineTotal = taxable + gstAmount;
+          final isStockShort = selectedFp.currentStock < qty;
+
+          return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.mdBorderRadius),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: AppRadius.smBorderRadius,
+                  ),
+                  child: const Icon(Icons.inventory_2_outlined, color: AppColors.primaryDark, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Add Product', style: AppTextStyles.h3),
+                      Text(
+                        'Select product item and specify dispatch quantity & pricing',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: Container(
+              constraints: const BoxConstraints(maxWidth: 520),
+              width: double.infinity,
+              child: Form(
+                key: dialogFormKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Product Dropdown
+                      DropdownButtonFormField<String>(
+                        value: selectedProductId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Select Product *',
+                          prefixIcon: Icon(Icons.category_outlined, size: 20),
+                        ),
+                        items: db.finishedProducts.map((fp) {
+                          return DropdownMenuItem(
+                            value: fp.id,
+                            child: Text(
+                              '${fp.itemCode} - ${fp.name} (Stock: ${Formatters.formatNumber(fp.currentStock)} ${fp.unit})',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            final chosen = db.finishedProducts.firstWhere((p) => p.id == val);
+                            setDlgState(() {
+                              selectedProductId = chosen.id;
+                              final newRate = _partyType == PartyType.customer
+                                  ? chosen.customerSellingPrice
+                                  : chosen.dealerSellingPrice;
+                              rateCtrl.text = newRate.toStringAsFixed(0);
+                              gstCtrl.text = chosen.gstPercent.toString();
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Current Stock Status Pill
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isStockShort ? AppColors.dangerLight : AppColors.successLight,
+                          borderRadius: AppRadius.smBorderRadius,
+                          border: Border.all(
+                            color: isStockShort ? AppColors.danger : AppColors.success,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isStockShort ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                              size: 18,
+                              color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                isStockShort
+                                    ? 'Low Stock: Available ${Formatters.formatNumber(selectedFp.currentStock)} ${selectedFp.unit} (Short by ${Formatters.formatNumber(qty - selectedFp.currentStock)} ${selectedFp.unit})'
+                                    : 'Available in Stock: ${Formatters.formatNumber(selectedFp.currentStock)} ${selectedFp.unit}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Quantity and Rate
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: qtyCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              validator: Validators.positiveNumber,
+                              decoration: InputDecoration(
+                                labelText: 'Quantity (${selectedFp.unit}) *',
+                                prefixIcon: const Icon(Icons.numbers, size: 20),
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: TextFormField(
+                              controller: rateCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              validator: Validators.positiveNumber,
+                              decoration: const InputDecoration(
+                                labelText: 'Rate (₹) *',
+                                prefixIcon: Icon(Icons.currency_rupee, size: 20),
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Discount and GST%
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: discountCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(
+                                labelText: 'Discount (₹)',
+                                prefixIcon: Icon(Icons.discount_outlined, size: 20),
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: TextFormField(
+                              controller: gstCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              validator: Validators.positiveNumber,
+                              decoration: const InputDecoration(
+                                labelText: 'GST (%) *',
+                                prefixIcon: Icon(Icons.percent, size: 20),
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Cost / Line Total Preview Card
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceMuted,
+                          borderRadius: AppRadius.smBorderRadius,
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Line Total (inc. Tax):', style: AppTextStyles.bodySmall),
+                                Text(
+                                  Formatters.formatCurrency(lineTotal),
+                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 16),
+                                ),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text('Taxable: ${Formatters.formatCurrency(taxable)}', style: AppTextStyles.bodySmall),
+                                Text('GST (${gstPercent.toStringAsFixed(0)}%): ${Formatters.formatCurrency(gstAmount)}', style: AppTextStyles.bodySmall),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            actions: [
+              ErpButton(
+                text: 'Cancel',
+                isOutlined: true,
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+              ErpButton(
+                text: 'Add to Order',
+                icon: Icons.add,
+                onPressed: () {
+                  if (!dialogFormKey.currentState!.validate()) return;
+                  setState(() {
+                    _items.add(_SaleLineItemDraft(
+                      finishedProductId: selectedFp.id,
+                      finishedProductName: selectedFp.name,
+                      finishedProductCode: selectedFp.itemCode,
+                      unit: selectedFp.unit,
+                      quantity: qty,
+                      rate: rate,
+                      discount: discount,
+                      gstPercent: gstPercent,
+                    ));
+                  });
+                  Navigator.of(ctx).pop();
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   void _removeLineItem(int index) {
@@ -1005,7 +1270,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                               text: 'Add Product',
                               icon: Icons.add,
                               isOutlined: true,
-                              onPressed: _addNewLineItem,
+                              onPressed: _showAddProductDialog,
                             ),
                           ],
                         );
@@ -1019,7 +1284,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                             text: 'Add Product',
                             icon: Icons.add,
                             isOutlined: true,
-                            onPressed: _addNewLineItem,
+                            onPressed: _showAddProductDialog,
                           ),
                         ],
                       );

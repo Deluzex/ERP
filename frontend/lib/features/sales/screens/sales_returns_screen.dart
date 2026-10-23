@@ -12,6 +12,8 @@ import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
@@ -29,6 +31,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
   String _searchQuery = '';
   String? _selectedCustomerFilter;
   ReturnType? _selectedReturnTypeFilter;
+  DateTime? _startDate;
+  DateTime? _endDate;
   RefundStatus? _selectedRefundStatusFilter;
 
   @override
@@ -1401,24 +1405,20 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
           ),
           const SizedBox(height: 16),
 
-          // 4. Search and Dropdown Filter Row (Responsive: 100% vertical on mobile)
+          // 4. Search and Dropdown Filter Row
           LayoutBuilder(
             builder: (context, filterBox) {
               final isMobile = filterBox.maxWidth < 650;
-              final isTablet = filterBox.maxWidth < 900;
+              final isTablet = filterBox.maxWidth < 950;
 
-              final searchField = TextField(
+              final searchField = ErpSearchInput(
+                hintText: 'Search return no, customer, reason...',
+                initialValue: _searchQuery,
                 onChanged: (val) => setState(() => _searchQuery = val),
-                decoration: const InputDecoration(
-                  hintText: 'Search by return number, customer, invoice ref, or reason...',
-                  prefixIcon: Icon(Icons.search, size: 18),
-                ),
               );
 
-              final customerDropdown = DropdownButtonFormField<String?>(
+              final customerDropdown = ErpFilterDropdown<String?>(
                 value: (_selectedCustomerFilter != null && db.customers.any((c) => c.id == _selectedCustomerFilter)) ? _selectedCustomerFilter : null,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Filter Customer', isDense: true),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('All Customers')),
                   ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
@@ -1426,16 +1426,25 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                 onChanged: (val) => setState(() => _selectedCustomerFilter = val),
               );
 
-              final typeDropdown = DropdownButtonFormField<ReturnType?>(
+              final typeDropdown = ErpFilterDropdown<ReturnType?>(
                 value: _selectedReturnTypeFilter,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Return Type', isDense: true),
                 items: const [
                   DropdownMenuItem(value: null, child: Text('All Return Types')),
                   DropdownMenuItem(value: ReturnType.fullReturn, child: Text('Full Return')),
                   DropdownMenuItem(value: ReturnType.partialReturn, child: Text('Partial Return')),
                 ],
                 onChanged: (val) => setState(() => _selectedReturnTypeFilter = val),
+              );
+
+              final dateBox = ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                  });
+                },
               );
 
               if (isMobile) {
@@ -1447,6 +1456,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     customerDropdown,
                     const SizedBox(height: 10),
                     typeDropdown,
+                    const SizedBox(height: 10),
+                    dateBox,
                   ],
                 );
               }
@@ -1454,8 +1465,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
               if (isTablet) {
                 return Column(
                   children: [
-                    searchField,
-                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: searchField),
+                        const SizedBox(width: 12),
+                        dateBox,
+                      ],
+                    ),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(child: customerDropdown),
@@ -1474,6 +1491,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                   Expanded(flex: 2, child: customerDropdown),
                   const SizedBox(width: 12),
                   Expanded(flex: 2, child: typeDropdown),
+                  const SizedBox(width: 12),
+                  dateBox,
                 ],
               );
             },

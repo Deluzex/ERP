@@ -8,8 +8,10 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/architect_model.dart';
 import '../../../core/models/customer_model.dart';
 import '../../../core/models/dealer_model.dart';
+import '../../../core/models/finished_product_model.dart';
 import '../../../core/models/project_model.dart';
 import '../../../core/models/purchase_model.dart';
+import '../../../core/models/raw_material_model.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
@@ -21,9 +23,10 @@ import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 
 class _QuotationItemDraft {
-  String finishedProductId;
-  String finishedProductName;
-  String finishedProductCode;
+  PurchaseItemType itemType;
+  String itemId;
+  String itemName;
+  String itemCode;
   String productDescription;
   String unit;
   double quantity;
@@ -33,9 +36,10 @@ class _QuotationItemDraft {
   double availableStockSnapshot;
 
   _QuotationItemDraft({
-    required this.finishedProductId,
-    required this.finishedProductName,
-    required this.finishedProductCode,
+    this.itemType = PurchaseItemType.finishedProduct,
+    required this.itemId,
+    required this.itemName,
+    required this.itemCode,
     this.productDescription = '',
     required this.unit,
     this.quantity = 1.0,
@@ -45,15 +49,35 @@ class _QuotationItemDraft {
     this.availableStockSnapshot = 0.0,
   });
 
+  String get finishedProductId => itemType == PurchaseItemType.finishedProduct ? itemId : '';
+  set finishedProductId(String val) {
+    if (itemType == PurchaseItemType.finishedProduct) itemId = val;
+  }
+
+  String get finishedProductName => itemType == PurchaseItemType.finishedProduct ? itemName : '';
+  set finishedProductName(String val) {
+    if (itemType == PurchaseItemType.finishedProduct) itemName = val;
+  }
+
+  String get finishedProductCode => itemType == PurchaseItemType.finishedProduct ? itemCode : '';
+  set finishedProductCode(String val) {
+    if (itemType == PurchaseItemType.finishedProduct) itemCode = val;
+  }
+
+  String? get rawMaterialId => itemType == PurchaseItemType.rawMaterial ? itemId : null;
+  String? get rawMaterialName => itemType == PurchaseItemType.rawMaterial ? itemName : null;
+  String? get rawMaterialCode => itemType == PurchaseItemType.rawMaterial ? itemCode : null;
+
   double get taxableAmount => ((quantity * rate) - discount).clamp(0.0, double.infinity);
   double get gstAmount => taxableAmount * (gstPercent / 100.0);
   double get lineTotal => taxableAmount + gstAmount;
 
   _QuotationItemDraft copy() {
     return _QuotationItemDraft(
-      finishedProductId: finishedProductId,
-      finishedProductName: finishedProductName,
-      finishedProductCode: finishedProductCode,
+      itemType: itemType,
+      itemId: itemId,
+      itemName: itemName,
+      itemCode: itemCode,
       productDescription: productDescription,
       unit: unit,
       quantity: quantity,
@@ -63,6 +87,24 @@ class _QuotationItemDraft {
       availableStockSnapshot: availableStockSnapshot,
     );
   }
+}
+
+String _generateFpDescription(FinishedProduct fp) {
+  final buffer = StringBuffer(fp.name);
+  if (fp.itemCode.isNotEmpty) buffer.write(' (${fp.itemCode})');
+  if (fp.categoryName.isNotEmpty) buffer.write(' — Category: ${fp.categoryName}');
+  if (fp.hsnSacCode != null && fp.hsnSacCode!.isNotEmpty) buffer.write(' | HSN: ${fp.hsnSacCode}');
+  buffer.write(' | Unit: ${fp.unit}');
+  return buffer.toString();
+}
+
+String _generateRmDescription(RawMaterial rm) {
+  final buffer = StringBuffer(rm.name);
+  if (rm.itemCode.isNotEmpty) buffer.write(' (${rm.itemCode})');
+  if (rm.categoryName.isNotEmpty) buffer.write(' — Category: ${rm.categoryName}');
+  if (rm.hsnSacCode != null && rm.hsnSacCode!.isNotEmpty) buffer.write(' | HSN: ${rm.hsnSacCode}');
+  buffer.write(' | Unit: ${rm.unit}');
+  return buffer.toString();
 }
 
 class CreateQuotationScreen extends ConsumerStatefulWidget {
@@ -109,6 +151,15 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     final db = ref.read(databaseServiceProvider);
     final sourceId = ref.read(salesCreateSourceDocIdProvider);
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      db.loadRawMaterials();
+      db.loadFinishedProducts();
+      db.loadCustomers();
+      db.loadDealers();
+      db.loadArchitects();
+      db.loadProjects();
+    });
+
     if (sourceId != null) {
       _sourceQuotation = db.sales.where((s) => s.id == sourceId).firstOrNull;
       if (_sourceQuotation != null) {
@@ -129,18 +180,31 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         }
 
         for (final item in _sourceQuotation!.items) {
-          final fp = db.finishedProducts.where((p) => p.id == item.finishedProductId).firstOrNull;
+          final isRm = item.itemType == PurchaseItemType.rawMaterial;
+          final id = isRm ? (item.rawMaterialId ?? item.finishedProductId) : item.finishedProductId;
+          final name = isRm ? (item.rawMaterialName ?? item.finishedProductName) : item.finishedProductName;
+          final code = isRm ? (item.rawMaterialCode ?? item.finishedProductCode) : item.finishedProductCode;
+          double stock = 0.0;
+          if (isRm) {
+            final rm = db.rawMaterials.where((m) => m.id == id).firstOrNull;
+            stock = rm?.currentStock ?? 0.0;
+          } else {
+            final fp = db.finishedProducts.where((p) => p.id == id).firstOrNull;
+            stock = fp?.availableStock ?? 0.0;
+          }
+
           _items.add(_QuotationItemDraft(
-            finishedProductId: item.finishedProductId,
-            finishedProductName: item.finishedProductName,
-            finishedProductCode: item.finishedProductCode,
+            itemType: item.itemType,
+            itemId: id,
+            itemName: name,
+            itemCode: code,
             productDescription: item.productDescription,
             unit: item.unit,
             quantity: item.quantity,
             rate: item.rate,
             discount: item.discountAmount,
             gstPercent: item.gstPercent,
-            availableStockSnapshot: fp?.availableStock ?? 0.0,
+            availableStockSnapshot: stock,
           ));
         }
       }
@@ -154,16 +218,32 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       if (db.finishedProducts.isNotEmpty) {
         final fp = db.finishedProducts.first;
         _items.add(_QuotationItemDraft(
-          finishedProductId: fp.id,
-          finishedProductName: fp.name,
-          finishedProductCode: fp.itemCode,
-          productDescription: 'Architectural luminaire with high-efficiency driver',
+          itemType: PurchaseItemType.finishedProduct,
+          itemId: fp.id,
+          itemName: fp.name,
+          itemCode: fp.itemCode,
+          productDescription: _generateFpDescription(fp),
           unit: fp.unit,
           quantity: 10.0,
           rate: fp.customerSellingPrice,
           discount: 0.0,
           gstPercent: fp.gstPercent,
           availableStockSnapshot: fp.availableStock,
+        ));
+      } else if (db.rawMaterials.isNotEmpty) {
+        final rm = db.rawMaterials.first;
+        _items.add(_QuotationItemDraft(
+          itemType: PurchaseItemType.rawMaterial,
+          itemId: rm.id,
+          itemName: rm.name,
+          itemCode: rm.itemCode,
+          productDescription: _generateRmDescription(rm),
+          unit: rm.unit,
+          quantity: 10.0,
+          rate: rm.defaultPurchasePrice,
+          discount: 0.0,
+          gstPercent: rm.gstPercent,
+          availableStockSnapshot: rm.currentStock,
         ));
       }
     }
@@ -613,14 +693,20 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
 
   void _addNewProductRow() {
     final db = ref.read(databaseServiceProvider);
-    if (db.finishedProducts.isEmpty) return;
+    if (db.finishedProducts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No Finished Products available in master.'), backgroundColor: AppColors.warning),
+      );
+      return;
+    }
     final fp = db.finishedProducts.first;
     setState(() {
       _items.add(_QuotationItemDraft(
-        finishedProductId: fp.id,
-        finishedProductName: fp.name,
-        finishedProductCode: fp.itemCode,
-        productDescription: 'Standard specification luminaire',
+        itemType: PurchaseItemType.finishedProduct,
+        itemId: fp.id,
+        itemName: fp.name,
+        itemCode: fp.itemCode,
+        productDescription: _generateFpDescription(fp),
         unit: fp.unit,
         quantity: 1.0,
         rate: _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice,
@@ -631,10 +717,38 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     });
   }
 
-  void _duplicateRow(int index) {
+  void _addNewRawMaterialRow() {
+    final db = ref.read(databaseServiceProvider);
+    if (db.rawMaterials.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No Raw Materials available in master.'), backgroundColor: AppColors.warning),
+      );
+      return;
+    }
+    final rm = db.rawMaterials.first;
     setState(() {
-      _items.insert(index + 1, _items[index].copy());
+      _items.add(_QuotationItemDraft(
+        itemType: PurchaseItemType.rawMaterial,
+        itemId: rm.id,
+        itemName: rm.name,
+        itemCode: rm.itemCode,
+        productDescription: _generateRmDescription(rm),
+        unit: rm.unit,
+        quantity: 1.0,
+        rate: rm.defaultPurchasePrice,
+        discount: 0.0,
+        gstPercent: rm.gstPercent,
+        availableStockSnapshot: rm.currentStock,
+      ));
     });
+  }
+
+  void _duplicateRow(int index) {
+    if (index >= 0 && index < _items.length) {
+      setState(() {
+        _items.insert(index + 1, _items[index].copy());
+      });
+    }
   }
 
   void _removeRow(int index) {
@@ -645,11 +759,11 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
 
   Widget _buildItemActionButton({
     required IconData icon,
-    required VoidCallback onTap,
+    required String label,
     required Color iconColor,
     required Color backgroundColor,
     required Color borderColor,
-    String? label,
+    required VoidCallback onTap,
   }) {
     return Material(
       color: Colors.transparent,
@@ -657,29 +771,21 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(6),
         child: Container(
-          height: 30,
-          padding: EdgeInsets.symmetric(horizontal: label != null ? 8 : 7, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: borderColor),
           ),
-          alignment: Alignment.center,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 14, color: iconColor),
-              if (label != null) ...[
-                const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: iconColor,
-                  ),
-                ),
-              ],
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: iconColor),
+              ),
             ],
           ),
         ),
@@ -689,7 +795,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
 
   double get _subtotalAmount => _items.fold(0.0, (sum, i) => sum + (i.quantity * i.rate));
   double get _totalDiscount => _items.fold(0.0, (sum, i) => sum + i.discount);
-  double get _totalTaxable => (_subtotalAmount - _totalDiscount).clamp(0.0, double.infinity);
+  double get _totalTaxable => _items.fold(0.0, (sum, i) => sum + i.taxableAmount);
   double get _totalGst => _items.fold(0.0, (sum, i) => sum + i.gstAmount);
   double get _grandTotal => _totalTaxable + _totalGst;
 
@@ -697,7 +803,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one product row.'), backgroundColor: AppColors.danger),
+        const SnackBar(content: Text('Please add at least one line item row.'), backgroundColor: AppColors.danger),
       );
       return;
     }
@@ -747,9 +853,13 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       final igst = _isInterStateTax ? i.gstAmount : 0.0;
 
       return SaleLineItem(
-        finishedProductId: i.finishedProductId,
-        finishedProductName: i.finishedProductName,
-        finishedProductCode: i.finishedProductCode,
+        itemType: i.itemType,
+        rawMaterialId: i.itemType == PurchaseItemType.rawMaterial ? i.itemId : null,
+        rawMaterialName: i.itemType == PurchaseItemType.rawMaterial ? i.itemName : null,
+        rawMaterialCode: i.itemType == PurchaseItemType.rawMaterial ? i.itemCode : null,
+        finishedProductId: i.itemType == PurchaseItemType.finishedProduct ? i.itemId : '',
+        finishedProductName: i.itemType == PurchaseItemType.finishedProduct ? i.itemName : '',
+        finishedProductCode: i.itemType == PurchaseItemType.finishedProduct ? i.itemCode : '',
         productDescription: i.productDescription,
         quantity: i.quantity,
         unit: i.unit,
@@ -856,14 +966,14 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Header & Actions
+            // Responsive Page Header Card
             ErpSectionHeaderCard(
               icon: Icons.request_quote_outlined,
               title: _isRevision ? 'Create Quotation Revision (Rev $_revisionNumber)' : 'Create New Quotation',
               badgeText: _isRevision ? 'REVISION' : 'NEW QUOTATION',
               subtitle: _isRevision
                   ? 'Creating revision for ${_sourceQuotation?.invoiceNumber}. Old version will be superseded.'
-                  : 'Commercial estimate with finished product lines (Zero stock impact until confirmed)',
+                  : 'Commercial estimate with finished goods or raw materials (Zero stock impact until confirmed)',
               action: LayoutBuilder(
                 builder: (context, actionBox) {
                   final isMobile = actionBox.maxWidth < 600;
@@ -900,21 +1010,21 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                       ],
                     );
                   }
-
-                  return Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       ErpButton(
                         text: 'Cancel',
                         isOutlined: true,
                         onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
                       ),
+                      const SizedBox(width: 8),
                       ErpButton(
                         text: 'Save as Draft',
                         isOutlined: true,
                         onPressed: () => _saveQuotation(true),
                       ),
+                      const SizedBox(width: 8),
                       ErpButton(
                         text: 'Save & Mark Sent',
                         icon: Icons.send_outlined,
@@ -925,9 +1035,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                 },
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-            // 2. Customer & Project Selection Card
+            // 1. Client / Party Selection Card
             Container(
               padding: AppSpacing.cardPadding,
               decoration: BoxDecoration(
@@ -935,453 +1045,361 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                 borderRadius: AppRadius.lgBorderRadius,
                 border: Border.all(color: AppColors.border),
               ),
-              child: LayoutBuilder(
-                builder: (context, cardConstraints) {
-                  final isMobile = cardConstraints.maxWidth < 650;
-                  final isNarrowHeader = cardConstraints.maxWidth < 750;
-
-                  final radioGroup = isMobile
-                      ? Wrap(
-                          spacing: 16,
-                          runSpacing: 4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.person_pin_outlined, color: AppColors.primary, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Radio<PartyType>(
-                                  value: PartyType.customer,
-                                  groupValue: _partyType,
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      setState(() {
-                                        _partyType = val;
-                                        _selectedProjectId = null;
-                                        _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
-                                        if (_selectedPartyId != null) {
-                                          _autoFillPartyDetails(_selectedPartyId!, PartyType.customer, db);
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                                const Text('Direct Customer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                              ],
-                            ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Radio<PartyType>(
-                                  value: PartyType.dealer,
-                                  groupValue: _partyType,
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      setState(() {
-                                        _partyType = val;
-                                        _selectedProjectId = null;
-                                        _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
-                                        if (_selectedPartyId != null) {
-                                          _autoFillPartyDetails(_selectedPartyId!, PartyType.dealer, db);
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                                const Text('Dealer Channel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                              ],
-                            ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Radio<PartyType>(
-                                  value: PartyType.architect,
-                                  groupValue: _partyType,
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      setState(() {
-                                        _partyType = val;
-                                        _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
-                                        if (_selectedPartyId != null) {
-                                          _autoFillPartyDetails(_selectedPartyId!, PartyType.architect, db);
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                                const Text('Architect', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                              ],
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Expanded(
-                              child: Material(
-                                color: Colors.transparent,
-                                child: RadioListTile<PartyType>(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Direct Customer'),
-                                  value: PartyType.customer,
-                                  groupValue: _partyType,
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      setState(() {
-                                        _partyType = val;
-                                        _selectedProjectId = null;
-                                        _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
-                                        if (_selectedPartyId != null) {
-                                          _autoFillPartyDetails(_selectedPartyId!, PartyType.customer, db);
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Material(
-                                color: Colors.transparent,
-                                child: RadioListTile<PartyType>(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Dealer Channel'),
-                                  value: PartyType.dealer,
-                                  groupValue: _partyType,
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      setState(() {
-                                        _partyType = val;
-                                        _selectedProjectId = null;
-                                        _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
-                                        if (_selectedPartyId != null) {
-                                          _autoFillPartyDetails(_selectedPartyId!, PartyType.dealer, db);
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Material(
-                                color: Colors.transparent,
-                                child: RadioListTile<PartyType>(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Architect'),
-                                  value: PartyType.architect,
-                                  groupValue: _partyType,
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      setState(() {
-                                        _partyType = val;
-                                        _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
-                                        if (_selectedPartyId != null) {
-                                          _autoFillPartyDetails(_selectedPartyId!, PartyType.architect, db);
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-
-                  final dropdownField = DropdownButtonFormField<String>(
-                    value: ((_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId)) ||
-                            (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId)) ||
-                            (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId)))
-                        ? _selectedPartyId
-                        : null,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: _partyType == PartyType.customer
-                          ? 'Select Customer *'
-                          : _partyType == PartyType.dealer
-                              ? 'Select Dealer *'
-                              : 'Select Architect *',
-                    ),
-                    items: [
-                      DropdownMenuItem<String>(
-                        value: '__ADD_NEW__',
-                        child: Row(
-                          children: [
-                            const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
-                            const SizedBox(width: 8),
+                            Text('Customer & Party Information', style: AppTextStyles.h3),
+                            const SizedBox(height: 2),
                             Text(
-                              _partyType == PartyType.customer
-                                  ? '+ Add New Customer'
-                                  : _partyType == PartyType.dealer
-                                      ? '+ Add New Dealer'
-                                      : '+ Add New Architect',
-                              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                              'Select target client or dealer to auto-fill commercial terms & GST parameters',
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
                             ),
                           ],
                         ),
                       ),
-                      const DropdownMenuItem<String>(
-                        enabled: false,
-                        value: '__DIVIDER__',
-                        child: Divider(height: 1),
-                      ),
-                      if (_partyType == PartyType.customer)
-                        ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
-                      else if (_partyType == PartyType.dealer)
-                        ...db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
-                      else
-                        ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
                     ],
-                    onChanged: (val) {
-                      if (val == '__ADD_NEW__') {
-                        _openQuickAddPartyDialog(_partyType);
-                        return;
-                      }
-                      if (val == '__DIVIDER__') return;
-                      setState(() {
-                        _selectedPartyId = val;
-                        if (val != null) {
-                          _autoFillPartyDetails(val, _partyType, db);
-                        }
-                      });
-                    },
-                  );
+                  ),
+                  const SizedBox(height: 20),
 
-                  Widget partySelectionArea = isNarrowHeader
-                      ? Column(
+                  LayoutBuilder(
+                    builder: (context, partyConstraints) {
+                      final isNarrow = partyConstraints.maxWidth < 650;
+                      final partyTypeField = DropdownButtonFormField<PartyType>(
+                        value: _partyType,
+                        decoration: const InputDecoration(labelText: 'Party Category *'),
+                        items: const [
+                          DropdownMenuItem(value: PartyType.customer, child: Text('End Customer / Client')),
+                          DropdownMenuItem(value: PartyType.dealer, child: Text('Authorized Dealer / Distributor')),
+                          DropdownMenuItem(value: PartyType.architect, child: Text('Architect / Specifier')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _partyType = val;
+                              _selectedPartyId = null;
+                            });
+                          }
+                        },
+                      );
+
+                      final partyPicker = Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedPartyId,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText: _partyType == PartyType.customer
+                                    ? 'Select Customer *'
+                                    : (_partyType == PartyType.dealer ? 'Select Dealer *' : 'Select Architect *'),
+                              ),
+                              items: _partyType == PartyType.customer
+                                  ? db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text('${c.name} (${c.mobile})', maxLines: 1, overflow: TextOverflow.ellipsis))).toList()
+                                  : (_partyType == PartyType.dealer
+                                      ? db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text('${d.name} (${d.mobile})', maxLines: 1, overflow: TextOverflow.ellipsis))).toList()
+                                      : db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} - ${a.companyName}', maxLines: 1, overflow: TextOverflow.ellipsis))).toList()),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    _selectedPartyId = val;
+                                    _autoFillPartyDetails(val, _partyType, db);
+                                  });
+                                }
+                              },
+                              validator: (val) => val == null ? 'Please select a party' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Tooltip(
+                            message: 'Quick Add ${_partyType.name.toUpperCase()}',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => _openQuickAddPartyDialog(_partyType),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primarySoft,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                                ),
+                                child: const Icon(Icons.person_add_alt_1, size: 20, color: AppColors.primary),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            partyTypeField,
+                            const SizedBox(height: 12),
+                            partyPicker,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(flex: 2, child: partyTypeField),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 3, child: partyPicker),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Auto-filled details in 3 responsive columns
+                  LayoutBuilder(
+                    builder: (context, fieldBox) {
+                      final isNarrow = fieldBox.maxWidth < 700;
+                      final contactField = TextFormField(
+                        controller: _contactPersonCtrl,
+                        decoration: const InputDecoration(labelText: 'Contact Person Name'),
+                      );
+                      final mobileField = TextFormField(
+                        controller: _mobileCtrl,
+                        decoration: const InputDecoration(labelText: 'Mobile / Phone Number'),
+                      );
+                      final emailField = TextFormField(
+                        controller: _emailCtrl,
+                        decoration: const InputDecoration(labelText: 'Email Address'),
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            contactField,
+                            const SizedBox(height: 12),
+                            mobileField,
+                            const SizedBox(height: 12),
+                            emailField,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: contactField),
+                          const SizedBox(width: 12),
+                          Expanded(child: mobileField),
+                          const SizedBox(width: 12),
+                          Expanded(child: emailField),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  LayoutBuilder(
+                    builder: (context, addrBox) {
+                      final isNarrow = addrBox.maxWidth < 700;
+                      final gstField = TextFormField(
+                        controller: _gstNumberCtrl,
+                        decoration: const InputDecoration(labelText: 'GSTIN Number (Auto-verified)'),
+                      );
+                      final billingField = TextFormField(
+                        controller: _billingAddressCtrl,
+                        decoration: const InputDecoration(labelText: 'Billing Address'),
+                      );
+                      final shippingField = TextFormField(
+                        controller: _shippingAddressCtrl,
+                        decoration: const InputDecoration(labelText: 'Shipping / Site Delivery Address'),
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            gstField,
+                            const SizedBox(height: 12),
+                            billingField,
+                            const SizedBox(height: 12),
+                            shippingField,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(flex: 1, child: gstField),
+                          const SizedBox(width: 12),
+                          Expanded(flex: 2, child: billingField),
+                          const SizedBox(width: 12),
+                          Expanded(flex: 2, child: shippingField),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // 2. Project Linking & Quotation Header Details Card
+            Container(
+              padding: AppSpacing.cardPadding,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: AppRadius.lgBorderRadius,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.assignment_outlined, color: AppColors.primary, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            radioGroup,
-                            const SizedBox(height: 12),
-                            dropdownField,
+                            Text('Project Association & Quotation Terms', style: AppTextStyles.h3),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Tag to ongoing project or site, assign owner, and set proposal validity',
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                            ),
                           ],
-                        )
-                      : Row(
-                          children: [
-                            Expanded(flex: 3, child: radioGroup),
-                            const SizedBox(width: 16),
-                            Expanded(flex: 2, child: dropdownField),
-                          ],
-                        );
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-                  Widget contactFieldsArea = isMobile
-                      ? Column(
-                          children: [
-                            TextFormField(
-                              controller: _contactPersonCtrl,
-                              decoration: const InputDecoration(labelText: 'Contact Person'),
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _mobileCtrl,
-                              decoration: const InputDecoration(labelText: 'Mobile Number'),
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _emailCtrl,
-                              decoration: const InputDecoration(labelText: 'Email Address'),
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _gstNumberCtrl,
-                              decoration: const InputDecoration(labelText: 'Client GST Number'),
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _contactPersonCtrl,
-                                decoration: const InputDecoration(labelText: 'Contact Person'),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _mobileCtrl,
-                                decoration: const InputDecoration(labelText: 'Mobile Number'),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _emailCtrl,
-                                decoration: const InputDecoration(labelText: 'Email Address'),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _gstNumberCtrl,
-                                decoration: const InputDecoration(labelText: 'Client GST Number'),
-                              ),
-                            ),
-                          ],
-                        );
-
-                  Widget addressFieldsArea = isMobile
-                      ? Column(
-                          children: [
-                            TextFormField(
-                              controller: _billingAddressCtrl,
-                              decoration: const InputDecoration(labelText: 'Billing Address'),
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _shippingAddressCtrl,
-                              decoration: const InputDecoration(labelText: 'Shipping / Site Address'),
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _billingAddressCtrl,
-                                decoration: const InputDecoration(labelText: 'Billing Address'),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _shippingAddressCtrl,
-                                decoration: const InputDecoration(labelText: 'Shipping / Site Address'),
-                              ),
-                            ),
-                          ],
-                        );
-
-                  final validTillField = TextFormField(
-                    readOnly: true,
-                    decoration: InputDecoration(
-                      labelText: 'Valid Till',
-                      suffixIcon: const Icon(Icons.calendar_today, size: 18),
-                      hintText: Formatters.formatDate(_validTill),
-                    ),
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _validTill,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 180)),
-                      );
-                      if (picked != null) setState(() => _validTill = picked);
-                    },
-                  );
-
-                  Widget projectAndValidityArea = (_partyType == PartyType.architect && isMobile)
-                      ? Column(
-                          children: [
-                            DropdownButtonFormField<String?>(
-                              value: (_selectedProjectId != null && db.projects.any((p) => p.id == _selectedProjectId))
-                                  ? _selectedProjectId
-                                  : null,
+                  LayoutBuilder(
+                    builder: (context, projBox) {
+                      final isNarrow = projBox.maxWidth < 650;
+                      final projectPicker = Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedProjectId,
                               isExpanded: true,
                               decoration: const InputDecoration(labelText: 'Linked Project (Optional)'),
                               items: [
-                                DropdownMenuItem<String?>(
-                                  value: '__ADD_PROJECT__',
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '+ Add New Project',
-                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const DropdownMenuItem<String?>(
-                                  enabled: false,
-                                  value: '__DIVIDER_PROJECT__',
-                                  child: Divider(height: 1),
-                                ),
-                                const DropdownMenuItem<String?>(value: null, child: Text('None (Direct Site)')),
-                                ...db.projects.map((p) => DropdownMenuItem<String?>(value: p.id, child: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                                const DropdownMenuItem(value: null, child: Text('No Project / Direct Quotation')),
+                                ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (${p.projectCode})', maxLines: 1, overflow: TextOverflow.ellipsis))),
                               ],
-                              onChanged: (val) {
-                                if (val == '__ADD_PROJECT__') {
-                                  _openQuickAddProjectDialog();
-                                  return;
-                                }
-                                if (val == '__DIVIDER_PROJECT__') return;
-                                setState(() => _selectedProjectId = val);
-                              },
+                              onChanged: (val) => setState(() => _selectedProjectId = val),
                             ),
-                            const SizedBox(height: 12),
-                            validTillField,
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            if (_partyType == PartyType.architect) ...[
-                              Expanded(
-                                child: DropdownButtonFormField<String?>(
-                                  value: (_selectedProjectId != null && db.projects.any((p) => p.id == _selectedProjectId))
-                                      ? _selectedProjectId
-                                      : null,
-                                  isExpanded: true,
-                                  decoration: const InputDecoration(labelText: 'Linked Project (Optional)'),
-                                  items: [
-                                    DropdownMenuItem<String?>(
-                                      value: '__ADD_PROJECT__',
-                                      child: Row(
-                                        children: [
-                                          const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            '+ Add New Project',
-                                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const DropdownMenuItem<String?>(
-                                      enabled: false,
-                                      value: '__DIVIDER_PROJECT__',
-                                      child: Divider(height: 1),
-                                    ),
-                                    const DropdownMenuItem<String?>(value: null, child: Text('None (Direct Site)')),
-                                    ...db.projects.map((p) => DropdownMenuItem<String?>(value: p.id, child: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
-                                  ],
-                                  onChanged: (val) {
-                                    if (val == '__ADD_PROJECT__') {
-                                      _openQuickAddProjectDialog();
-                                      return;
-                                    }
-                                    if (val == '__DIVIDER_PROJECT__') return;
-                                    setState(() => _selectedProjectId = val);
-                                  },
+                          ),
+                          const SizedBox(width: 8),
+                          Tooltip(
+                            message: 'Quick Add Project',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: _openQuickAddProjectDialog,
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primarySoft,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                                 ),
+                                child: const Icon(Icons.create_new_folder_outlined, size: 20, color: AppColors.primary),
                               ),
-                              const SizedBox(width: 16),
-                            ],
-                            Expanded(child: validTillField),
+                            ),
+                          ),
+                        ],
+                      );
+
+                      final salesExecField = TextFormField(
+                        initialValue: _salesExecutive,
+                        decoration: const InputDecoration(labelText: 'Assigned Sales Executive *'),
+                        onChanged: (v) => _salesExecutive = v,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            projectPicker,
+                            const SizedBox(height: 12),
+                            salesExecField,
                           ],
                         );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(flex: 3, child: projectPicker),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 2, child: salesExecField),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
                     children: [
-                      Text('Customer & Commercial Details', style: AppTextStyles.h3),
-                      const SizedBox(height: 16),
-                      partySelectionArea,
-                      const SizedBox(height: 16),
-                      contactFieldsArea,
-                      const SizedBox(height: 16),
-                      addressFieldsArea,
-                      const SizedBox(height: 16),
-                      projectAndValidityArea,
+                      Expanded(
+                        child: TextFormField(
+                          readOnly: true,
+                          decoration: InputDecoration(
+                            labelText: 'Quotation Date',
+                            suffixIcon: const Icon(Icons.calendar_month, size: 18),
+                            hintText: Formatters.formatDate(_quotationDate),
+                          ),
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _quotationDate,
+                              firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                              lastDate: DateTime.now().add(const Duration(days: 90)),
+                            );
+                            if (picked != null) setState(() => _quotationDate = picked);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          readOnly: true,
+                          decoration: InputDecoration(
+                            labelText: 'Valid Till',
+                            suffixIcon: const Icon(Icons.calendar_today, size: 18),
+                            hintText: Formatters.formatDate(_validTill),
+                          ),
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _validTill,
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(const Duration(days: 180)),
+                            );
+                            if (picked != null) setState(() => _validTill = picked);
+                          },
+                        ),
+                      ),
                     ],
-                  );
-                },
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 24),
 
-            // 3. Product Line Items Card
+            // 3. Product & Raw Material Line Items Card
             Container(
               padding: AppSpacing.cardPadding,
               decoration: BoxDecoration(
@@ -1394,35 +1412,64 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                 children: [
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final isNarrow = constraints.maxWidth < 650;
+                      final isNarrow = constraints.maxWidth < 750;
                       final headerText = Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Product Line Items', style: AppTextStyles.h3),
-                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text('Quotation Line Items', style: AppTextStyles.h3),
+                              const SizedBox(width: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${_items.length} ${_items.length == 1 ? 'Item' : 'Items'}',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
                           Text(
-                            'Product data is loaded from Finished Product Masters. Stock is NOT reduced at quotation.',
+                            'Add Finished Goods or Raw Materials. Zero physical or reserved stock impact until order confirmation.',
                             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
                           ),
                         ],
                       );
-                      final button = ErpButton(
-                        text: 'Add Product Row',
-                        icon: Icons.add,
-                        isOutlined: true,
-                        onPressed: _addNewProductRow,
+
+                      final buttons = Wrap(
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: [
+                          ErpButton(
+                            text: 'Add Finished Good',
+                            icon: Icons.inventory_2_outlined,
+                            isOutlined: true,
+                            onPressed: _addNewProductRow,
+                          ),
+                          ErpButton(
+                            text: 'Add Raw Material',
+                            icon: Icons.grain,
+                            isOutlined: true,
+                            onPressed: _addNewRawMaterialRow,
+                          ),
+                        ],
                       );
 
                       if (isNarrow) {
                         return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             headerText,
                             const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: button,
-                            ),
+                            buttons,
                           ],
                         );
                       }
@@ -1431,12 +1478,12 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                         children: [
                           Expanded(child: headerText),
                           const SizedBox(width: 12),
-                          button,
+                          buttons,
                         ],
                       );
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
 
                   // Line Items List
                   ListView.builder(
@@ -1445,7 +1492,12 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                     itemCount: _items.length,
                     itemBuilder: (ctx, idx) {
                       final item = _items[idx];
+                      final isRm = item.itemType == PurchaseItemType.rawMaterial;
+                      final typeColor = isRm ? Colors.amber.shade800 : Colors.teal.shade700;
+                      final typeBgColor = isRm ? Colors.amber.withValues(alpha: 0.1) : Colors.teal.withValues(alpha: 0.1);
+
                       return Container(
+                        key: ValueKey('item_card_${idx}_${item.itemId}_${item.itemType.name}'),
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
@@ -1464,41 +1516,160 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                           builder: (context, itemConstraints) {
                             final isItemNarrow = itemConstraints.maxWidth < 800;
 
-                            final productPicker = DropdownButtonFormField<String>(
-                              value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
-                                  ? item.finishedProductId
-                                  : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
-                              isExpanded: true,
-                              decoration: const InputDecoration(
-                                labelText: 'Finished Product *',
-                                filled: true,
-                                fillColor: Colors.white,
+                            // Item Type Dropdown Selector
+                            final typeSelector = Container(
+                              height: 32,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: typeBgColor,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: typeColor.withValues(alpha: 0.4)),
                               ),
-                              items: db.finishedProducts.map((fp) {
-                                return DropdownMenuItem(
-                                  value: fp.id,
-                                  child: Text(
-                                    '${fp.name} (${fp.itemCode}) - Avail: ${fp.availableStock} ${fp.unit}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  final fp = db.finishedProducts.firstWhere((p) => p.id == val);
-                                  setState(() {
-                                    item.finishedProductId = fp.id;
-                                    item.finishedProductName = fp.name;
-                                    item.finishedProductCode = fp.itemCode;
-                                    item.unit = fp.unit;
-                                    item.rate = _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice;
-                                    item.gstPercent = fp.gstPercent;
-                                    item.availableStockSnapshot = fp.availableStock;
-                                  });
-                                }
-                              },
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<PurchaseItemType>(
+                                  value: item.itemType,
+                                  isDense: true,
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: typeColor),
+                                  icon: Icon(Icons.arrow_drop_down, size: 16, color: typeColor),
+                                  items: [
+                                    DropdownMenuItem(
+                                      value: PurchaseItemType.finishedProduct,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.inventory_2_outlined, size: 14, color: Colors.teal.shade700),
+                                          const SizedBox(width: 4),
+                                          Text('Fin Good', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal.shade700)),
+                                        ],
+                                      ),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: PurchaseItemType.rawMaterial,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.grain, size: 14, color: Colors.amber.shade800),
+                                          const SizedBox(width: 4),
+                                          Text('Raw Mat', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade800)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (newType) {
+                                    if (newType == null || newType == item.itemType) return;
+                                    if (newType == PurchaseItemType.rawMaterial) {
+                                      if (db.rawMaterials.isNotEmpty) {
+                                        final rm = db.rawMaterials.first;
+                                        setState(() {
+                                          item.itemType = newType;
+                                          item.itemId = rm.id;
+                                          item.itemName = rm.name;
+                                          item.itemCode = rm.itemCode;
+                                          item.unit = rm.unit;
+                                          item.rate = rm.defaultPurchasePrice;
+                                          item.discount = 0.0;
+                                          item.gstPercent = rm.gstPercent;
+                                          item.availableStockSnapshot = rm.currentStock;
+                                          item.productDescription = _generateRmDescription(rm);
+                                        });
+                                      }
+                                    } else {
+                                      if (db.finishedProducts.isNotEmpty) {
+                                        final fp = db.finishedProducts.first;
+                                        setState(() {
+                                          item.itemType = newType;
+                                          item.itemId = fp.id;
+                                          item.itemName = fp.name;
+                                          item.itemCode = fp.itemCode;
+                                          item.unit = fp.unit;
+                                          item.rate = _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice;
+                                          item.discount = 0.0;
+                                          item.gstPercent = fp.gstPercent;
+                                          item.availableStockSnapshot = fp.availableStock;
+                                          item.productDescription = _generateFpDescription(fp);
+                                        });
+                                      }
+                                    }
+                                  },
+                                ),
+                              ),
                             );
+
+                            final itemPicker = isRm
+                                ? DropdownButtonFormField<String>(
+                                    key: ValueKey('rm_picker_${item.itemId}_${item.itemType.name}'),
+                                    value: db.rawMaterials.any((m) => m.id == item.itemId)
+                                        ? item.itemId
+                                        : (db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : null),
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Raw Material *',
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                    ),
+                                    items: db.rawMaterials.map((rm) {
+                                      return DropdownMenuItem(
+                                        value: rm.id,
+                                        child: Text(
+                                          '${rm.name} (${rm.itemCode}) - Stock: ${rm.currentStock} ${rm.unit}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        final rm = db.rawMaterials.firstWhere((m) => m.id == val);
+                                        setState(() {
+                                          item.itemId = rm.id;
+                                          item.itemName = rm.name;
+                                          item.itemCode = rm.itemCode;
+                                          item.unit = rm.unit;
+                                          item.rate = rm.defaultPurchasePrice;
+                                          item.gstPercent = rm.gstPercent;
+                                          item.availableStockSnapshot = rm.currentStock;
+                                          item.productDescription = _generateRmDescription(rm);
+                                        });
+                                      }
+                                    },
+                                  )
+                                : DropdownButtonFormField<String>(
+                                    key: ValueKey('fp_picker_${item.itemId}_${item.itemType.name}'),
+                                    value: db.finishedProducts.any((p) => p.id == item.itemId)
+                                        ? item.itemId
+                                        : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Finished Product *',
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                    ),
+                                    items: db.finishedProducts.map((fp) {
+                                      return DropdownMenuItem(
+                                        value: fp.id,
+                                        child: Text(
+                                          '${fp.name} (${fp.itemCode}) - Avail: ${fp.availableStock} ${fp.unit}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        final fp = db.finishedProducts.firstWhere((p) => p.id == val);
+                                        setState(() {
+                                          item.itemId = fp.id;
+                                          item.itemName = fp.name;
+                                          item.itemCode = fp.itemCode;
+                                          item.unit = fp.unit;
+                                          item.rate = _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice;
+                                          item.gstPercent = fp.gstPercent;
+                                          item.availableStockSnapshot = fp.availableStock;
+                                          item.productDescription = _generateFpDescription(fp);
+                                        });
+                                      }
+                                    },
+                                  );
 
                             final qtyField = TextFormField(
                               initialValue: item.quantity.toString(),
@@ -1544,8 +1715,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               onChanged: (val) => setState(() => item.gstPercent = double.tryParse(val) ?? 18.0),
                             );
 
-                            final isMobileItemHeader = itemConstraints.maxWidth < 550;
-                            final isExtraSmall = itemConstraints.maxWidth < 390;
+                            final isMobileItemHeader = itemConstraints.maxWidth < 580;
+                            final isExtraSmall = itemConstraints.maxWidth < 420;
+
                             final itemHeader = isMobileItemHeader
                                 ? Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1553,7 +1725,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       Row(
                                         children: [
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                             decoration: BoxDecoration(
                                               color: AppColors.primarySoft,
                                               borderRadius: BorderRadius.circular(6),
@@ -1569,18 +1741,20 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                               ),
                                             ),
                                           ),
-                                          if (item.finishedProductCode.isNotEmpty) ...[
+                                          const SizedBox(width: 6),
+                                          typeSelector,
+                                          if (item.itemCode.isNotEmpty && !isExtraSmall) ...[
                                             const SizedBox(width: 6),
                                             Flexible(
                                               child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                                 decoration: BoxDecoration(
                                                   color: const Color(0xFFF1F5F9),
                                                   borderRadius: BorderRadius.circular(4),
                                                 ),
                                                 child: Text(
-                                                  item.finishedProductCode,
-                                                  style: const TextStyle(fontSize: 11, color: Color(0xFF475569), fontWeight: FontWeight.w600),
+                                                  item.itemCode,
+                                                  style: const TextStyle(fontSize: 10, color: Color(0xFF475569), fontWeight: FontWeight.w600),
                                                   maxLines: 1,
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
@@ -1588,22 +1762,27 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                             ),
                                           ],
                                           const Spacer(),
-                                          _buildItemActionButton(
-                                            icon: Icons.copy_outlined,
-                                            label: isExtraSmall ? null : 'Copy',
-                                            iconColor: const Color(0xFF475569),
-                                            backgroundColor: const Color(0xFFF1F5F9),
-                                            borderColor: const Color(0xFFCBD5E1),
-                                            onTap: () => _duplicateRow(idx),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          _buildItemActionButton(
-                                            icon: Icons.delete_outline,
-                                            label: isExtraSmall ? null : 'Delete',
-                                            iconColor: AppColors.danger,
-                                            backgroundColor: const Color(0xFFFEF2F2),
-                                            borderColor: const Color(0xFFFECACA),
-                                            onTap: () => _removeRow(idx),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              _buildItemActionButton(
+                                                icon: Icons.copy_outlined,
+                                                label: isExtraSmall ? '' : 'Copy',
+                                                iconColor: const Color(0xFF475569),
+                                                backgroundColor: const Color(0xFFF1F5F9),
+                                                borderColor: const Color(0xFFCBD5E1),
+                                                onTap: () => _duplicateRow(idx),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              _buildItemActionButton(
+                                                icon: Icons.delete_outline,
+                                                label: isExtraSmall ? '' : 'Delete',
+                                                iconColor: AppColors.danger,
+                                                backgroundColor: const Color(0xFFFEF2F2),
+                                                borderColor: const Color(0xFFFECACA),
+                                                onTap: () => _removeRow(idx),
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),
@@ -1650,8 +1829,10 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(width: 10),
-                                      if (item.finishedProductCode.isNotEmpty)
+                                      const SizedBox(width: 8),
+                                      typeSelector,
+                                      if (item.itemCode.isNotEmpty) ...[
+                                        const SizedBox(width: 8),
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                           decoration: BoxDecoration(
@@ -1659,10 +1840,11 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                             borderRadius: BorderRadius.circular(4),
                                           ),
                                           child: Text(
-                                            item.finishedProductCode,
+                                            item.itemCode,
                                             style: const TextStyle(fontSize: 11, color: Color(0xFF475569), fontWeight: FontWeight.w600),
                                           ),
                                         ),
+                                      ],
                                       const Spacer(),
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -1719,7 +1901,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       const SizedBox(width: 6),
                                       const Expanded(
                                         child: Text(
-                                          'Product Description & Custom Specifications',
+                                          'Item Description & Custom Specifications',
                                           style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w700,
@@ -1779,7 +1961,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                   ? Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        productPicker,
+                                        itemPicker,
                                         const SizedBox(height: 10),
                                         Row(
                                           children: [
@@ -1800,7 +1982,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                     )
                                   : Row(
                                       children: [
-                                        Expanded(flex: 3, child: productPicker),
+                                        Expanded(flex: 3, child: itemPicker),
                                         const SizedBox(width: 10),
                                         Expanded(flex: 1, child: qtyField),
                                         const SizedBox(width: 10),
@@ -1832,225 +2014,261 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
             const SizedBox(height: 24),
 
             // 4. Totals & Terms Card
-            LayoutBuilder(
-              builder: (context, totalsConstraints) {
-                final isNarrowTotals = totalsConstraints.maxWidth < 850;
+            Container(
+              padding: AppSpacing.cardPadding,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: AppRadius.lgBorderRadius,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LayoutBuilder(
+                    builder: (context, termsBox) {
+                      final isNarrow = termsBox.maxWidth < 800;
 
-                final termsCard = Container(
-                  padding: AppSpacing.cardPadding,
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.lgBorderRadius,
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Terms & Conditions & Commercial Notes', style: AppTextStyles.h3),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _termsCtrl,
-                        maxLines: 4,
-                        decoration: const InputDecoration(labelText: 'Terms & Conditions (Printed on PDF)'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _notesCtrl,
-                        maxLines: 2,
-                        decoration: const InputDecoration(labelText: 'Internal Sales Notes'),
-                      ),
-                    ],
-                  ),
-                );
+                      final termsAndNotesArea = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Terms & Conditions & Commercial Notes', style: AppTextStyles.h3),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _termsCtrl,
+                            maxLines: 4,
+                            minLines: 3,
+                            decoration: const InputDecoration(labelText: 'Terms & Conditions (Printed on PDF)'),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _notesCtrl,
+                            maxLines: 2,
+                            minLines: 2,
+                            decoration: const InputDecoration(labelText: 'Internal Sales Notes'),
+                          ),
+                        ],
+                      );
 
-                final summaryCard = Container(
-                  padding: AppSpacing.cardPadding,
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.lgBorderRadius,
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      LayoutBuilder(
-                        builder: (context, headerConstraints) {
-                          final isNarrowHeader = headerConstraints.maxWidth < 360;
-                          final title = Text(
-                            'Quotation Totals',
-                            style: AppTextStyles.h3,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          );
-                          final taxToggle = Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () => setState(() => _isInterStateTax = !_isInterStateTax),
-                              borderRadius: BorderRadius.circular(20),
-                              splashColor: Colors.transparent,
-                              highlightColor: Colors.transparent,
-                              hoverColor: AppColors.primarySoft.withValues(alpha: 0.4),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeInOut,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: _isInterStateTax ? AppColors.primarySoft : Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: _isInterStateTax ? AppColors.primary : AppColors.border,
-                                    width: 1.0,
-                                  ),
-                                  boxShadow: _isInterStateTax
-                                      ? [
-                                          BoxShadow(
-                                            color: AppColors.primary.withValues(alpha: 0.12),
-                                            blurRadius: 4,
-                                            offset: const Offset(0, 1),
-                                          ),
-                                        ]
-                                      : null,
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    AnimatedContainer(
-                                      duration: const Duration(milliseconds: 250),
-                                      curve: Curves.easeInOut,
-                                      width: 16,
-                                      height: 16,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: _isInterStateTax ? AppColors.primary : Colors.transparent,
-                                        border: Border.all(
-                                          color: _isInterStateTax ? AppColors.primary : AppColors.border,
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      child: AnimatedOpacity(
-                                        opacity: _isInterStateTax ? 1.0 : 0.0,
-                                        duration: const Duration(milliseconds: 200),
-                                        child: const Icon(
-                                          Icons.check,
-                                          size: 11,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 7),
-                                    AnimatedDefaultTextStyle(
-                                      duration: const Duration(milliseconds: 250),
-                                      curve: Curves.easeInOut,
-                                      style: TextStyle(
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.bold,
-                                        color: _isInterStateTax ? AppColors.primaryDark : AppColors.textSecondary,
-                                      ),
-                                      child: Text(
-                                        _isInterStateTax ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST+SGST)',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-
-                          if (isNarrowHeader) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                title,
-                                const SizedBox(height: 8),
-                                taxToggle,
-                              ],
-                            );
-                          }
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(child: title),
-                              const SizedBox(width: 8),
-                              taxToggle,
-                            ],
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSummaryRow('Subtotal Amount', Formatters.formatCurrency(_subtotalAmount)),
-                      if (_totalDiscount > 0)
-                        _buildSummaryRow('Total Discount', '- ${Formatters.formatCurrency(_totalDiscount)}', color: AppColors.dangerText),
-                      _buildSummaryRow('Taxable Amount', Formatters.formatCurrency(_totalTaxable)),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeInOut,
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          switchInCurve: Curves.easeIn,
-                          switchOutCurve: Curves.easeOut,
-                          child: _isInterStateTax
-                              ? KeyedSubtree(
-                                  key: const ValueKey('tax_igst'),
-                                  child: _buildSummaryRow('IGST (18%)', Formatters.formatCurrency(_totalGst), color: AppColors.primaryDark),
-                                )
-                              : KeyedSubtree(
-                                  key: const ValueKey('tax_intra'),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _buildSummaryRow('CGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
-                                      _buildSummaryRow('SGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
-                                    ],
-                                  ),
-                                ),
-                        ),
-                      ),
-                      const Divider(height: 20),
-                      _buildSummaryRow('Grand Total', Formatters.formatCurrency(_grandTotal), isBold: true, fontSize: 16, color: AppColors.primary),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(10),
+                      final financialSummary = Container(
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.info.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.info_outline, color: AppColors.info, size: 16),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Quotation rule active: Physical & reserved inventory remain untouched until order confirmation.',
-                                style: AppTextStyles.bodySmall.copyWith(fontSize: 11, color: AppColors.info),
-                              ),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x06000000),
+                              blurRadius: 8,
+                              offset: Offset(0, 2),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                );
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            LayoutBuilder(
+                              builder: (context, headerBox) {
+                                final isHeaderNarrow = headerBox.maxWidth < 360;
+                                final title = Text(
+                                  'Financial Summary',
+                                  style: AppTextStyles.bodyBold.copyWith(fontSize: 15),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                                final taxToggle = Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => setState(() => _isInterStateTax = !_isInterStateTax),
+                                    borderRadius: BorderRadius.circular(20),
+                                    splashColor: Colors.transparent,
+                                    highlightColor: Colors.transparent,
+                                    hoverColor: AppColors.primarySoft.withValues(alpha: 0.4),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 250),
+                                      curve: Curves.easeInOut,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: _isInterStateTax ? AppColors.primarySoft : Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: _isInterStateTax ? AppColors.primary : AppColors.border,
+                                          width: 1.0,
+                                        ),
+                                        boxShadow: _isInterStateTax
+                                            ? [
+                                                BoxShadow(
+                                                  color: AppColors.primary.withValues(alpha: 0.15),
+                                                  blurRadius: 6,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            _isInterStateTax ? Icons.swap_horiz_rounded : Icons.location_on_outlined,
+                                            size: 13,
+                                            color: _isInterStateTax ? AppColors.primary : AppColors.textMuted,
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            _isInterStateTax ? 'Inter-State (IGST)' : 'Intra-State (CGST+SGST)',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: _isInterStateTax ? FontWeight.w700 : FontWeight.w600,
+                                              color: _isInterStateTax ? AppColors.primaryDark : AppColors.textSecondary,
+                                              letterSpacing: 0.2,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
 
-                if (isNarrowTotals) {
+                                if (isHeaderNarrow) {
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      title,
+                                      const SizedBox(height: 8),
+                                      taxToggle,
+                                    ],
+                                  );
+                                }
+                                return Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(child: title),
+                                    const SizedBox(width: 8),
+                                    taxToggle,
+                                  ],
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            _buildSummaryRow('Subtotal Amount', Formatters.formatCurrency(_subtotalAmount)),
+                            const SizedBox(height: 8),
+                            _buildSummaryRow('Total Discount', '- ${Formatters.formatCurrency(_totalDiscount)}', color: AppColors.dangerText),
+                            const SizedBox(height: 8),
+                            _buildSummaryRow('Taxable Amount', Formatters.formatCurrency(_totalTaxable)),
+                            const SizedBox(height: 8),
+                            if (_isInterStateTax)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primarySoft,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                                ),
+                                child: _buildSummaryRow('IGST (18%)', Formatters.formatCurrency(_totalGst), color: AppColors.primaryDark),
+                              )
+                            else ...[
+                              _buildSummaryRow('CGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
+                              const SizedBox(height: 8),
+                              _buildSummaryRow('SGST (9%)', Formatters.formatCurrency(_totalGst / 2)),
+                            ],
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Divider(height: 1),
+                            ),
+                            _buildSummaryRow('Grand Total', Formatters.formatCurrency(_grandTotal), isBold: true, fontSize: 16, color: AppColors.primary),
+                          ],
+                        ),
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          children: [
+                            termsAndNotesArea,
+                            const SizedBox(height: 20),
+                            financialSummary,
+                          ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 3, child: termsAndNotesArea),
+                          const SizedBox(width: 24),
+                          Expanded(flex: 2, child: financialSummary),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Bottom Actions Card
+            LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobile = actionBox.maxWidth < 600;
+                if (isMobile) {
                   return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      termsCard,
-                      const SizedBox(height: 20),
-                      summaryCard,
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: _isRevision ? 'Publish Revision' : 'Save & Mark Sent',
+                          icon: Icons.send_outlined,
+                          isLoading: _isSubmitting,
+                          onPressed: () => _saveQuotation(false),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Save as Draft',
+                          isOutlined: true,
+                          isLoading: _isSubmitting,
+                          onPressed: () => _saveQuotation(true),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Cancel',
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
+                        ),
+                      ),
                     ],
                   );
                 }
-
                 return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Expanded(flex: 3, child: termsCard),
-                    const SizedBox(width: 20),
-                    Expanded(flex: 2, child: summaryCard),
+                    ErpButton(
+                      text: 'Cancel',
+                      isOutlined: true,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
+                    ),
+                    const SizedBox(width: 12),
+                    ErpButton(
+                      text: 'Save as Draft',
+                      isOutlined: true,
+                      isLoading: _isSubmitting,
+                      onPressed: () => _saveQuotation(true),
+                    ),
+                    const SizedBox(width: 12),
+                    ErpButton(
+                      text: _isRevision ? 'Publish Revision' : 'Save & Mark Sent',
+                      icon: Icons.send_outlined,
+                      isLoading: _isSubmitting,
+                      onPressed: () => _saveQuotation(false),
+                    ),
                   ],
                 );
               },
             ),
+            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -2058,34 +2276,26 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   }
 
   Widget _buildSummaryRow(String label, String value, {bool isBold = false, double fontSize = 13, Color? color}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: fontSize,
-                fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-                color: Colors.grey.shade700,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            color: color ?? AppColors.textPrimary,
           ),
-          const SizedBox(width: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: color ?? Colors.black87,
-            ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            color: color ?? AppColors.textPrimary,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

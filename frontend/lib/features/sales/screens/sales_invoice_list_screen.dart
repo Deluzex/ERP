@@ -11,8 +11,10 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
@@ -27,6 +29,8 @@ class SalesInvoiceListScreen extends ConsumerStatefulWidget {
 class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -164,15 +168,11 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
                 icon: Icons.check,
                 onPressed: () async {
                   if (enteredAmount <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter a valid receipt amount.'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showWarning(context, 'Please enter a valid receipt amount.');
                     return;
                   }
                   if (enteredAmount > invoice.pendingAmount) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Receipt amount cannot exceed pending due.'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showWarning(context, 'Receipt amount cannot exceed pending due.');
                     return;
                   }
 
@@ -186,15 +186,14 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
                     );
 
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Payment of ${Formatters.formatCurrency(enteredAmount)} recorded! Customer outstanding balance reduced.'),
-                        backgroundColor: AppColors.success,
-                      ),
+                    ErpToast.showSuccess(
+                      context,
+                      'Payment of ${Formatters.formatCurrency(enteredAmount)} recorded successfully!',
                     );
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to record payment: $e'), backgroundColor: AppColors.danger),
+                    ErpToast.showError(
+                      context,
+                      'Failed to record payment: $e',
                     );
                   }
                 },
@@ -326,13 +325,28 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
           ),
           const SizedBox(height: 16),
 
-          // 3. Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search sales invoices by invoice number, customer/dealer, or project...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // 3. Global Filters
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search invoices, customer, project...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() => _searchQuery = val),
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -372,6 +386,14 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
             i.partyName.toLowerCase().contains(qLower) ||
             (i.projectName != null && i.projectName!.toLowerCase().contains(qLower));
       }).toList();
+    }
+
+    // Filter by date range
+    if (_startDate != null) {
+      filtered = filtered.where((i) => !i.date.isBefore(_startDate!)).toList();
+    }
+    if (_endDate != null) {
+      filtered = filtered.where((i) => !i.date.isAfter(_endDate!.add(const Duration(days: 1)))).toList();
     }
 
     if (filtered.isEmpty) {

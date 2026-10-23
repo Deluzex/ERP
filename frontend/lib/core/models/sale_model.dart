@@ -136,6 +136,10 @@ class DocumentActivityLog {
 }
 
 class SaleLineItem {
+  final PurchaseItemType itemType;
+  final String? rawMaterialId;
+  final String? rawMaterialName;
+  final String? rawMaterialCode;
   final String finishedProductId;
   final String finishedProductName;
   final String finishedProductCode;
@@ -159,9 +163,13 @@ class SaleLineItem {
   final ReturnCondition? returnCondition;
 
   SaleLineItem({
-    required this.finishedProductId,
-    required this.finishedProductName,
-    required this.finishedProductCode,
+    this.itemType = PurchaseItemType.finishedProduct,
+    this.rawMaterialId,
+    this.rawMaterialName,
+    this.rawMaterialCode,
+    this.finishedProductId = '',
+    this.finishedProductName = '',
+    this.finishedProductCode = '',
     this.productDescription = '',
     required this.quantity,
     this.reservedQuantity = 0.0,
@@ -188,6 +196,18 @@ class SaleLineItem {
   double get pendingQuantity => (quantity - deliveredQuantity).clamp(0.0, double.infinity);
   double get shortageQuantity => (quantity - reservedQuantity).clamp(0.0, double.infinity);
 
+  String get displayName => itemType == PurchaseItemType.rawMaterial
+      ? (rawMaterialName ?? finishedProductName)
+      : finishedProductName;
+
+  String get displayCode => itemType == PurchaseItemType.rawMaterial
+      ? (rawMaterialCode ?? finishedProductCode)
+      : finishedProductCode;
+
+  String get itemId => itemType == PurchaseItemType.rawMaterial
+      ? (rawMaterialId ?? finishedProductId)
+      : finishedProductId;
+
   static double calculateLineTotal({
     required double quantity,
     required double rate,
@@ -200,46 +220,65 @@ class SaleLineItem {
   }
 
   factory SaleLineItem.fromJson(Map<String, dynamic> json) {
+    final rawItemType = json['itemType']?.toString() ?? json['item_type']?.toString();
+    final itemType = (rawItemType == 'raw_material' || json['rawMaterialId'] != null || json['raw_material_id'] != null)
+        ? PurchaseItemType.rawMaterial
+        : PurchaseItemType.finishedProduct;
+
     return SaleLineItem(
-      finishedProductId: json['finishedProductId']?.toString() ?? '',
-      finishedProductName: json['finishedProductName']?.toString() ?? '',
-      finishedProductCode: json['finishedProductCode']?.toString() ?? '',
-      productDescription: json['productDescription']?.toString() ?? '',
+      itemType: itemType,
+      rawMaterialId: json['rawMaterialId']?.toString() ?? json['raw_material_id']?.toString(),
+      rawMaterialName: json['rawMaterialName']?.toString() ?? json['raw_material_name']?.toString(),
+      rawMaterialCode: json['rawMaterialCode']?.toString() ?? json['raw_material_code']?.toString(),
+      finishedProductId: json['finishedProductId']?.toString() ?? json['finished_product_id']?.toString() ?? '',
+      finishedProductName: json['finishedProductName']?.toString() ?? json['finished_product_name']?.toString() ?? '',
+      finishedProductCode: json['finishedProductCode']?.toString() ?? json['finished_product_code']?.toString() ?? '',
+      productDescription: json['productDescription']?.toString() ?? json['product_description']?.toString() ?? '',
       quantity: double.tryParse(json['quantity']?.toString() ?? '0') ?? 0.0,
-      reservedQuantity: double.tryParse(json['reservedQuantity']?.toString() ?? '0') ?? 0.0,
-      producedQuantity: double.tryParse(json['producedQuantity']?.toString() ?? '0') ?? 0.0,
-      deliveredQuantity: double.tryParse(json['deliveredQuantity']?.toString() ?? '0') ?? 0.0,
-      invoicedQuantity: double.tryParse(json['invoicedQuantity']?.toString() ?? '0') ?? 0.0,
-      returnedQuantity: double.tryParse(json['returnedQuantity']?.toString() ?? '0') ?? 0.0,
+      reservedQuantity: double.tryParse(json['reservedQuantity']?.toString() ?? json['reserved_quantity']?.toString() ?? '0') ?? 0.0,
+      producedQuantity: double.tryParse(json['producedQuantity']?.toString() ?? json['produced_quantity']?.toString() ?? '0') ?? 0.0,
+      deliveredQuantity: double.tryParse(json['deliveredQuantity']?.toString() ?? json['delivered_quantity']?.toString() ?? '0') ?? 0.0,
+      invoicedQuantity: double.tryParse(json['invoicedQuantity']?.toString() ?? json['invoiced_quantity']?.toString() ?? '0') ?? 0.0,
+      returnedQuantity: double.tryParse(json['returnedQuantity']?.toString() ?? json['returned_quantity']?.toString() ?? '0') ?? 0.0,
       unit: json['unit']?.toString() ?? 'pcs',
       rate: double.tryParse(json['rate']?.toString() ?? '0') ?? 0.0,
-      discountAmount: double.tryParse(json['discountAmount']?.toString() ?? '0') ?? 0.0,
-      gstPercent: double.tryParse(json['gstPercent']?.toString() ?? '18') ?? 18.0,
-      taxableAmount: double.tryParse(json['taxableAmount']?.toString() ?? '0'),
-      cgstAmount: double.tryParse(json['cgstAmount']?.toString() ?? '0'),
-      sgstAmount: double.tryParse(json['sgstAmount']?.toString() ?? '0'),
-      igstAmount: double.tryParse(json['igstAmount']?.toString() ?? '0'),
-      lineTotal: double.tryParse(json['lineTotal']?.toString() ?? '0') ?? 0.0,
-      productCondition: json['productCondition']?.toString(),
-      returnCondition: _enumFromName<ReturnCondition>(json['returnCondition'], ReturnCondition.values),
+      discountAmount: double.tryParse(json['discountAmount']?.toString() ?? json['discount_amount']?.toString() ?? '0') ?? 0.0,
+      gstPercent: double.tryParse(json['gstPercent']?.toString() ?? json['gst_percent']?.toString() ?? '18') ?? 18.0,
+      taxableAmount: double.tryParse(json['taxableAmount']?.toString() ?? json['taxable_amount']?.toString() ?? '0'),
+      cgstAmount: double.tryParse(json['cgstAmount']?.toString() ?? json['cgst_amount']?.toString() ?? '0'),
+      sgstAmount: double.tryParse(json['sgstAmount']?.toString() ?? json['sgst_amount']?.toString() ?? '0'),
+      igstAmount: double.tryParse(json['igstAmount']?.toString() ?? json['igst_amount']?.toString() ?? '0'),
+      lineTotal: double.tryParse(json['lineTotal']?.toString() ?? json['line_total']?.toString() ?? '0') ?? 0.0,
+      productCondition: json['productCondition']?.toString() ?? json['product_condition']?.toString(),
+      returnCondition: _enumFromName<ReturnCondition>(json['returnCondition'] ?? json['return_condition'], ReturnCondition.values),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'finishedProductId': finishedProductId,
+      'itemType': itemType == PurchaseItemType.rawMaterial ? 'raw_material' : 'finished_product',
+      if (rawMaterialId != null) 'rawMaterialId': rawMaterialId,
+      if (rawMaterialName != null && rawMaterialName!.isNotEmpty) 'rawMaterialName': rawMaterialName,
+      if (rawMaterialCode != null && rawMaterialCode!.isNotEmpty) 'rawMaterialCode': rawMaterialCode,
+      if (finishedProductId.isNotEmpty) 'finishedProductId': finishedProductId,
       if (finishedProductName.isNotEmpty) 'finishedProductName': finishedProductName,
       if (finishedProductCode.isNotEmpty) 'finishedProductCode': finishedProductCode,
       if (productDescription.isNotEmpty) 'productDescription': productDescription,
       'quantity': quantity,
+      'unit': unit,
       'rate': rate,
       'discountAmount': discountAmount,
       'gstPercent': gstPercent,
+      'lineTotal': lineTotal,
       if (returnCondition != null) 'returnCondition': returnCondition!.name,
     };
   }
 
   SaleLineItem copyWith({
+    PurchaseItemType? itemType,
+    String? rawMaterialId,
+    String? rawMaterialName,
+    String? rawMaterialCode,
     String? finishedProductId,
     String? finishedProductName,
     String? finishedProductCode,
@@ -263,6 +302,10 @@ class SaleLineItem {
     ReturnCondition? returnCondition,
   }) {
     return SaleLineItem(
+      itemType: itemType ?? this.itemType,
+      rawMaterialId: rawMaterialId ?? this.rawMaterialId,
+      rawMaterialName: rawMaterialName ?? this.rawMaterialName,
+      rawMaterialCode: rawMaterialCode ?? this.rawMaterialCode,
       finishedProductId: finishedProductId ?? this.finishedProductId,
       finishedProductName: finishedProductName ?? this.finishedProductName,
       finishedProductCode: finishedProductCode ?? this.finishedProductCode,
@@ -327,6 +370,9 @@ class Sale {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final DateTime? validUntil;
+
+  /// Convenience alias for [saleDate] used by filters across sales screens
+  DateTime get date => saleDate;
   
   // Lineage and Revision Tracking
   final int revisionNumber;

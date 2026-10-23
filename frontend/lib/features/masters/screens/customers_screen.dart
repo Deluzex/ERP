@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -435,33 +436,15 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (Matching Figma Master Design)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 650;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Customers', style: AppTextStyles.h1),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () => _openAddEditCustomerDialog(),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add Customer'),
-                  ),
-                ],
-              );
-            },
+          ErpSectionHeaderCard(
+            icon: Icons.people_outline,
+            title: 'Customers Master',
+            badgeText: 'CLIENT DIRECTORY',
+            action: ErpButton(
+              text: 'Add Customer',
+              icon: Icons.add,
+              onPressed: () => _openAddEditCustomerDialog(),
+            ),
           ),
           const SizedBox(height: 18),
 
@@ -481,7 +464,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       icon: Icons.people_outline,
                       iconColor: AppColors.primary,
                       title: 'Total Customers',
-                      value: '$totalCustomersCount',
+                      value: '${totalCustomersCount}',
                       subtext: 'All Clients',
                     ),
                   ),
@@ -491,7 +474,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       icon: Icons.person_outline,
                       iconColor: AppColors.success,
                       title: 'Direct Clients',
-                      value: '$directClientsCount',
+                      value: '${directClientsCount}',
                       subtext: 'Direct Accounts',
                     ),
                   ),
@@ -501,7 +484,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       icon: Icons.architecture_outlined,
                       iconColor: AppColors.categoryPurple,
                       title: 'Architect-Linked',
-                      value: '$archLinkedCount',
+                      value: '${archLinkedCount}',
                       subtext: 'Partner Accounts',
                     ),
                   ),
@@ -511,7 +494,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       icon: Icons.account_balance_wallet_outlined,
                       iconColor: AppColors.danger,
                       title: 'With Balance',
-                      value: '$withBalanceCount',
+                      value: '${withBalanceCount}',
                       subtext: 'Pending Balance',
                       subtextColor: AppColors.danger,
                     ),

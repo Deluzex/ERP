@@ -581,12 +581,12 @@ class AccountsPaymentRoleDashboard extends ConsumerWidget {
               runSpacing: 8,
               children: [
                 ErpButton(
-                  text: 'Customer Collections',
+                  text: 'Customer Payments',
                   icon: Icons.receipt_long_outlined,
                   onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments,
                 ),
                 ErpButton(
-                  text: 'Vendor Disbursements',
+                  text: 'Vendor Payments',
                   icon: Icons.payments_outlined,
                   isOutlined: true,
                   onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,

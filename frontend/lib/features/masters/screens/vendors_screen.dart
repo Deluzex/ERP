@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
@@ -57,6 +58,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
     final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     final termsCtrl = TextEditingController(text: existing?.paymentTerms ?? 'Net 30 Days');
     final creditCtrl = TextEditingController(text: existing?.creditLimit.toString() ?? '500000');
+    final transportCtrl = TextEditingController(text: existing?.defaultTransportationCharges.toString() ?? '0');
     final formKey = GlobalKey<FormState>();
 
     bool isSubmitting = false;
@@ -226,6 +228,16 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
+                          controller: transportCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Default Transportation / Freight (₹)',
+                            prefixIcon: Icon(Icons.local_shipping_outlined, size: 20),
+                            hintText: 'E.g., 500',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
                           controller: addressCtrl,
                           validator: (v) => Validators.requiredField(v, 'Registered factory address required'),
                           maxLines: 2,
@@ -282,6 +294,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                           });
 
                           final creditVal = double.tryParse(creditCtrl.text.trim()) ?? 0.0;
+                          final transportVal = double.tryParse(transportCtrl.text.trim()) ?? 0.0;
                           try {
                             if (isEdit) {
                               await db.updateVendorAsync(existing.copyWith(
@@ -296,6 +309,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                 pincode: pincodeCtrl.text.trim(),
                                 paymentTerms: termsCtrl.text.trim(),
                                 creditLimit: creditVal,
+                                defaultTransportationCharges: transportVal,
                               ));
                             } else {
                               final newVendor = Vendor(
@@ -311,6 +325,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                 pincode: pincodeCtrl.text.trim(),
                                 paymentTerms: termsCtrl.text.trim(),
                                 creditLimit: creditVal,
+                                defaultTransportationCharges: transportVal,
                                 outstandingBalance: 0.0,
                                 createdAt: DateTime.now(),
                               );
@@ -430,33 +445,15 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (Matching Figma Master Design)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 650;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Vendors', style: AppTextStyles.h1),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () => _openAddEditVendorDialog(),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add Vendor'),
-                  ),
-                ],
-              );
-            },
+          ErpSectionHeaderCard(
+            icon: Icons.storefront_outlined,
+            title: 'Vendors Master',
+            badgeText: 'SUPPLIER DIRECTORY',
+            action: ErpButton(
+              text: 'Add Vendor',
+              icon: Icons.add,
+              onPressed: () => _openAddEditVendorDialog(),
+            ),
           ),
           const SizedBox(height: 18),
 

@@ -245,7 +245,7 @@ class SalesDashboardScreen extends ConsumerWidget {
     ];
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      padding: EdgeInsets.symmetric(horizontal: MediaQuery.of(context).size.width < 500 ? 12 : 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.lgBorderRadius,
@@ -263,7 +263,7 @@ class SalesDashboardScreen extends ConsumerWidget {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 600;
+              final isNarrow = constraints.maxWidth < 800;
               final titleGroup = Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: 8,
@@ -285,9 +285,13 @@ class SalesDashboardScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Text(
-                        'Sales Workflow Stages',
-                        style: AppTextStyles.h3.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
+                      Flexible(
+                        child: Text(
+                          'Sales Workflow Stages',
+                          style: AppTextStyles.h3.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
@@ -311,10 +315,11 @@ class SalesDashboardScreen extends ConsumerWidget {
               );
 
               final subtitleText = Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.sync_alt_rounded, size: 14, color: AppColors.textMuted),
                   const SizedBox(width: 5),
-                  Expanded(
+                  Flexible(
                     child: Text(
                       'Seamless End-to-End Enterprise Flow',
                       style: AppTextStyles.bodySmall.copyWith(
@@ -343,6 +348,7 @@ class SalesDashboardScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   titleGroup,
+                  const SizedBox(width: 12),
                   subtitleText,
                 ],
               );

@@ -22,6 +22,15 @@ class ErpLineChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    double minSpotY = 0;
+    double maxSpotY = 10;
+    if (spots.isNotEmpty) {
+      minSpotY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+      maxSpotY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    }
+    final minY = (minSpotY - 2).floorToDouble().clamp(0.0, double.infinity);
+    final maxY = (maxSpotY + 3.0).ceilToDouble();
+
     return Container(
       padding: AppSpacing.cardPadding,
       decoration: BoxDecoration(
@@ -101,6 +110,8 @@ class ErpLineChartCard extends StatelessWidget {
             height: 220,
             child: LineChart(
               LineChartData(
+                minY: minY,
+                maxY: maxY,
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
@@ -115,11 +126,17 @@ class ErpLineChartCard extends StatelessWidget {
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 45,
+                      reservedSize: 46,
+                      interval: 2,
                       getTitlesWidget: (val, meta) {
-                        return Text(
-                          '₹${val.toInt()}L',
-                          style: AppTextStyles.bodySmall.copyWith(fontSize: 10),
+                        if (val < minY + 0.5 || val > maxY - 0.5) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 4.0),
+                          child: Text(
+                            '₹${val.toInt()}L',
+                            style: AppTextStyles.bodySmall.copyWith(fontSize: 10),
+                            textAlign: TextAlign.right,
+                          ),
                         );
                       },
                     ),
@@ -195,12 +212,13 @@ class ErpDualBarChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    double maxY = 20;
+    double maxRawY = 20;
     for (int i = 0; i < labels.length; i++) {
-      if (i < stockInValues.length && stockInValues[i] > maxY) maxY = stockInValues[i];
-      if (i < stockOutValues.length && stockOutValues[i] > maxY) maxY = stockOutValues[i];
+      if (i < stockInValues.length && stockInValues[i] > maxRawY) maxRawY = stockInValues[i];
+      if (i < stockOutValues.length && stockOutValues[i] > maxRawY) maxRawY = stockOutValues[i];
     }
-    maxY = maxY * 1.25;
+    final interval = maxRawY > 50 ? 20.0 : 10.0;
+    final maxY = ((maxRawY * 1.15) / interval).ceil() * interval;
 
     return Container(
       padding: AppSpacing.cardPadding,
@@ -289,11 +307,16 @@ class ErpDualBarChartCard extends StatelessWidget {
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 36,
+                      reservedSize: 40,
+                      interval: interval,
                       getTitlesWidget: (val, meta) {
-                        return Text(
-                          '${val.toInt()}u',
-                          style: AppTextStyles.bodySmall.copyWith(fontSize: 10),
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 4.0),
+                          child: Text(
+                            '${val.toInt()}u',
+                            style: AppTextStyles.bodySmall.copyWith(fontSize: 10),
+                            textAlign: TextAlign.right,
+                          ),
                         );
                       },
                     ),

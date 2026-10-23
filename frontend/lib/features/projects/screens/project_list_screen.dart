@@ -10,6 +10,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
@@ -809,32 +810,15 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 180),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Project Master', style: AppTextStyles.h1),
-                      ],
-                    ),
-                  ),
-                  ErpButton(
-                    text: 'New Project',
-                    icon: Icons.add,
-                    onPressed: () => _openAddEditProjectDialog(),
-                  ),
-                ],
-              );
-            },
+          ErpSectionHeaderCard(
+            icon: Icons.assignment_rounded,
+            title: 'Project Master',
+            badgeText: 'PROJECT REGISTRY',
+            action: ErpButton(
+              text: 'New Project',
+              icon: Icons.add,
+              onPressed: () => _openAddEditProjectDialog(),
+            ),
           ),
           const SizedBox(height: 20),
 

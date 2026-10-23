@@ -160,6 +160,7 @@ class RecordDetailsView extends ConsumerWidget {
                 tooltip: 'Go Back',
               ),
               const SizedBox(width: 8),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -818,207 +819,128 @@ class RecordDetailsView extends ConsumerWidget {
   // -----------------------------------------------------------------
   Widget _buildPurchaseDetails(BuildContext context, WidgetRef ref, Purchase p, MockDatabaseService db) {
     final isMobile = MediaQuery.of(context).size.width < 850;
-
-    final poHeaderCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgBorderRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('PO Header info', style: AppTextStyles.h3),
-          const Divider(height: 24),
-          _buildInfoRow('Purchase Order No', p.purchaseNumber),
-          _buildInfoRow('PO Created Date', Formatters.formatDate(p.purchaseDate)),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Text('Vendor Company:', style: AppTextStyles.bodyMedium)),
-                const SizedBox(width: 8),
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.vendorId, 'vendor', details.parentSection),
-                  child: Text(
-                    p.vendorName,
-                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
-                    textAlign: TextAlign.end,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _buildInfoRow('Vendor Invoice Number', p.vendorInvoiceNumber),
-          _buildInfoRow('Vendor Invoice Date', Formatters.formatDate(p.invoiceDate)),
-        ],
-      ),
-    );
-
-    final paymentSummaryCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgBorderRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Payment Summary', style: AppTextStyles.h3),
-          const Divider(height: 24),
-          _buildInfoRow('Grand Total Amount', Formatters.formatCurrency(p.totalAmount)),
-          _buildInfoRow('Amount Paid to Date', Formatters.formatCurrency(p.paidAmount)),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Text('Outstanding Balance:', style: AppTextStyles.bodyBold)),
-                const SizedBox(width: 8),
-                Text(
-                  Formatters.formatCurrency(p.pendingAmount),
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
-                    fontSize: 16,
-                  ),
-                  textAlign: TextAlign.end,
-                ),
-              ],
-            ),
-          ),
-          _buildInfoRow('Preferred Payment Mode', p.paymentMode.toString().split('.').last.toUpperCase()),
-          const Divider(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: Text('Order Status:', style: AppTextStyles.bodyBold)),
-              const SizedBox(width: 8),
-              Text(p.statusLabel, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary), textAlign: TextAlign.end),
-            ],
-          ),
-        ],
-      ),
-    );
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isMobile) ...[
-          poHeaderCard,
-          const SizedBox(height: 16),
-          paymentSummaryCard,
-        ] else ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: poHeaderCard),
-              const SizedBox(width: 16),
-              Expanded(flex: 2, child: paymentSummaryCard),
-            ],
-          ),
-        ],
-        const SizedBox(height: 24),
-        Text('Purchase Line Items', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-        const SizedBox(height: 12),
-        if (p.items.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Text('No items in this purchase order.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else if (isMobile)
-          Column(
-            children: p.items.map((item) {
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: Container(
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.lgBorderRadius,
                   border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text('PO Header info', style: AppTextStyles.h3),
+                    const Divider(height: 24),
+                    _buildInfoRow('Purchase Order No', p.purchaseNumber),
+                    _buildInfoRow('PO Created Date', Formatters.formatDate(p.purchaseDate)),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              final targetType = item.itemType == PurchaseItemType.finishedProduct ? 'finishedProduct' : 'rawMaterial';
-                              ref.read(activeRecordDetailsStackProvider.notifier).push(item.itemId, targetType, details.parentSection);
-                            },
-                            child: Text(
-                              item.displayName,
-                              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
+                        Text('Vendor Company:', style: AppTextStyles.bodyMedium),
+                        InkWell(
+                          onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.vendorId, 'vendor', details.parentSection),
+                          child: Text(p.vendorName, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
                         ),
-                        const SizedBox(width: 8),
-                        Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodyBold),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Code: ${item.displayCode}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                        Text('${item.quantity} ${item.unit} @ ${Formatters.formatCurrency(item.rate)}', style: AppTextStyles.bodySmall),
-                      ],
-                    ),
-                    if (item.discountAmount > 0 || item.gstPercent > 0) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(item.discountAmount > 0 ? 'Disc: ${Formatters.formatCurrency(item.discountAmount)}' : '', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                          Text('GST: ${item.gstPercent}%', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                        ],
-                      ),
-                    ],
+                    const SizedBox(height: 8),
+                    _buildInfoRow('Vendor Invoice Number', p.vendorInvoiceNumber),
+                    _buildInfoRow('Vendor Invoice Date', Formatters.formatDate(p.invoiceDate)),
                   ],
                 ),
-              );
-            }).toList(),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Item Code'),
-              ErpColumn(title: 'Material Name'),
-              ErpColumn(title: 'Purchase Qty'),
-              ErpColumn(title: 'Rate per Unit', isNumeric: true),
-              ErpColumn(title: 'Discount Amount', isNumeric: true),
-              ErpColumn(title: 'GST Tax', isNumeric: true),
-              ErpColumn(title: 'Line Total', isNumeric: true),
-            ],
-            rows: p.items.map((item) {
-              return [
-                InkWell(
-                  onTap: () {
-                    final targetType = item.itemType == PurchaseItemType.finishedProduct ? 'finishedProduct' : 'rawMaterial';
-                    ref.read(activeRecordDetailsStackProvider.notifier).push(item.itemId, targetType, details.parentSection);
-                  },
-                  child: Text(item.displayCode, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: AppRadius.lgBorderRadius,
+                  border: Border.all(color: AppColors.border),
                 ),
-                Text(item.displayName, style: AppTextStyles.bodyMedium),
-                Text('${item.quantity} ${item.unit}', style: AppTextStyles.bodyMedium),
-                Text(Formatters.formatCurrency(item.rate), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(item.discountAmount), style: AppTextStyles.bodySmall),
-                Text('${item.gstPercent}%', style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodyBold),
-              ];
-            }).toList(),
-          ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Payment Summary', style: AppTextStyles.h3),
+                    const Divider(height: 24),
+                    _buildInfoRow('Grand Total Amount', Formatters.formatCurrency(p.totalAmount)),
+                    if (p.transportationCharges > 0)
+                      _buildInfoRow('Transportation / Freight', Formatters.formatCurrency(p.transportationCharges)),
+                    _buildInfoRow('Amount Paid to Date', Formatters.formatCurrency(p.paidAmount)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Outstanding Balance:', style: AppTextStyles.bodyBold),
+                        Text(
+                          Formatters.formatCurrency(p.pendingAmount),
+                          style: AppTextStyles.bodyBold.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                    _buildInfoRow('Preferred Payment Mode', p.paymentMode.toString().split('.').last.toUpperCase()),
+                    const Divider(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Order Status:', style: AppTextStyles.bodyBold),
+                        Text(p.statusLabel, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Text('Purchase Line Items', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+        const SizedBox(height: 12),
+        ErpDataTable(
+          columns: const [
+            ErpColumn(title: 'Item Code'),
+            ErpColumn(title: 'Material Name'),
+            ErpColumn(title: 'Purchase Qty'),
+            ErpColumn(title: 'Rate per Unit', isNumeric: true),
+            ErpColumn(title: 'Landed Rate', isNumeric: true),
+            ErpColumn(title: 'Discount Amount', isNumeric: true),
+            ErpColumn(title: 'GST Tax', isNumeric: true),
+            ErpColumn(title: 'Line Total', isNumeric: true),
+          ],
+          rows: p.items.map((item) {
+            return [
+              InkWell(
+                onTap: () {
+                  final targetType = item.itemType == PurchaseItemType.finishedProduct ? 'finishedProduct' : 'rawMaterial';
+                  ref.read(activeRecordDetailsStackProvider.notifier).push(item.itemId, targetType, details.parentSection);
+                },
+                child: Text(item.displayCode, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+              ),
+              Text(item.displayName, style: AppTextStyles.bodyMedium),
+              Text('${item.quantity} ${item.unit}', style: AppTextStyles.bodyMedium),
+              Text(Formatters.formatCurrency(item.rate), style: AppTextStyles.bodySmall),
+              Text(
+                item.landedRate > 0 ? Formatters.formatCurrency(item.landedRate) : Formatters.formatCurrency(item.rate),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: item.landedRate > item.rate ? AppColors.successText : AppColors.textPrimary,
+                  fontWeight: item.landedRate > item.rate ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+              Text(Formatters.formatCurrency(item.discountAmount), style: AppTextStyles.bodySmall),
+              Text('${item.gstPercent}%', style: AppTextStyles.bodySmall),
+              Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodyBold),
+            ];
+          }).toList(),
+        ),
       ],
     );
   }

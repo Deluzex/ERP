@@ -8,6 +8,7 @@ class ErpSearchInput extends StatefulWidget {
   final String hintText;
   final ValueChanged<String> onChanged;
   final String? initialValue;
+  final String? value;
   final TextEditingController? controller;
 
   const ErpSearchInput({
@@ -15,6 +16,7 @@ class ErpSearchInput extends StatefulWidget {
     required this.hintText,
     required this.onChanged,
     this.initialValue,
+    this.value,
     this.controller,
   });
 
@@ -32,7 +34,7 @@ class _ErpSearchInputState extends State<ErpSearchInput> {
     if (widget.controller != null) {
       _controller = widget.controller!;
     } else {
-      _controller = TextEditingController(text: widget.initialValue ?? '');
+      _controller = TextEditingController(text: widget.value ?? widget.initialValue ?? '');
       _ownsController = true;
     }
   }
@@ -94,6 +96,7 @@ class _ErpSearchInputState extends State<ErpSearchInput> {
 
 /// Standard filter dropdown for ERP modules
 class ErpFilterDropdown<T> extends StatelessWidget {
+  final String? label;
   final T value;
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?> onChanged;
@@ -102,6 +105,7 @@ class ErpFilterDropdown<T> extends StatelessWidget {
 
   const ErpFilterDropdown({
     super.key,
+    this.label,
     required this.value,
     required this.items,
     required this.onChanged,

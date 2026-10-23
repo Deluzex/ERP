@@ -21,6 +21,7 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     PaymentsModule,
     ExpensesModule,
     ReportsModule,
+    NotificationsModule,
   ],
   providers: [
     AppLogger,

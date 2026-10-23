@@ -23,6 +23,10 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
     final isDesktop = MediaQuery.of(context).size.width >= 1100;
+    final isTablet = MediaQuery.of(context).size.width >= 700;
+
+    // Current user context
+    final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
 
     // Computed values
     final totalSalesVal = db.totalSalesAmount > 0 ? db.totalSalesAmount : 1248750.0;
@@ -33,7 +37,7 @@ class DashboardScreen extends ConsumerWidget {
     final customerDueVal = db.pendingCustomerPayments > 0 ? db.pendingCustomerPayments : 245000.0;
     final vendorDueVal = db.pendingVendorPayments > 0 ? db.pendingVendorPayments : 120000.0;
     final pendingCommissionVal = db.pendingCommissionAmount > 0 ? db.pendingCommissionAmount : 35000.0;
-    final lowStockItemsCount = db.totalLowStockCount > 0 ? db.totalLowStockCount : 18;
+    final lowStockItemsCount = db.getLowStockCountForUser(currentUser);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -93,7 +97,7 @@ class DashboardScreen extends ConsumerWidget {
               },
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // 1. Top Section: Total Sales | Total Purchase | Raw Material Stock (Combined Card)
           Container(

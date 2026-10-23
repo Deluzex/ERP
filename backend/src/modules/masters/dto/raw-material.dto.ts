@@ -51,6 +51,11 @@ export class CreateRawMaterialDto {
   @IsNumber()
   @Min(0)
   @IsOptional()
+  transportationCharge?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
   gstPercent?: number;
 
   @IsArray()
@@ -112,6 +117,11 @@ export class UpdateRawMaterialDto {
   @Min(0)
   @IsOptional()
   defaultPurchasePrice?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  transportationCharge?: number;
 
   @IsNumber()
   @Min(0)

@@ -12,6 +12,7 @@ class Vendor {
   final String paymentTerms;
   final double creditLimit;
   final double outstandingBalance;
+  final double defaultTransportationCharges;
   final bool isDeleted;
   final String? deleteReason;
   final DateTime? deletedAt;
@@ -28,9 +29,10 @@ class Vendor {
     required this.address,
     this.state = '',
     this.pincode = '',
-    required this.paymentTerms,
+    this.paymentTerms = 'Net 30 Days',
     required this.creditLimit,
     this.outstandingBalance = 0.0,
+    this.defaultTransportationCharges = 0.0,
     this.isDeleted = false,
     this.deleteReason,
     this.deletedAt,
@@ -51,6 +53,7 @@ class Vendor {
     String? paymentTerms,
     double? creditLimit,
     double? outstandingBalance,
+    double? defaultTransportationCharges,
     bool? isDeleted,
     String? deleteReason,
     DateTime? deletedAt,
@@ -70,6 +73,7 @@ class Vendor {
       paymentTerms: paymentTerms ?? this.paymentTerms,
       creditLimit: creditLimit ?? this.creditLimit,
       outstandingBalance: outstandingBalance ?? this.outstandingBalance,
+      defaultTransportationCharges: defaultTransportationCharges ?? this.defaultTransportationCharges,
       isDeleted: isDeleted ?? this.isDeleted,
       deleteReason: deleteReason ?? this.deleteReason,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -92,6 +96,7 @@ class Vendor {
       paymentTerms: json['paymentTerms']?.toString() ?? json['payment_terms']?.toString() ?? 'Net 30 Days',
       creditLimit: double.tryParse(json['creditLimit']?.toString() ?? json['credit_limit']?.toString() ?? '0') ?? 0.0,
       outstandingBalance: double.tryParse(json['outstandingBalance']?.toString() ?? json['outstanding_balance']?.toString() ?? '0') ?? 0.0,
+      defaultTransportationCharges: double.tryParse(json['defaultTransportationCharges']?.toString() ?? json['default_transportation_charges']?.toString() ?? '0') ?? 0.0,
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
       deleteReason: json['deleteReason']?.toString() ?? json['delete_reason']?.toString(),
       deletedAt: json['deletedAt'] != null
@@ -116,6 +121,7 @@ class Vendor {
       'pincode': pincode,
       'paymentTerms': paymentTerms,
       'creditLimit': creditLimit,
+      'defaultTransportationCharges': defaultTransportationCharges,
     };
   }
 }

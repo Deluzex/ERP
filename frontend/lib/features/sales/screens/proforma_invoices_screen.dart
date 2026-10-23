@@ -13,9 +13,12 @@ import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
+import '../widgets/convert_proforma_dialog.dart';
 import '../widgets/sales_pdf_generator.dart';
 
 class ProformaInvoicesScreen extends ConsumerStatefulWidget {
@@ -32,6 +35,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(databaseServiceProvider).loadProforma(forceRefresh: true));
     _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(databaseServiceProvider).loadProforma());
   }
@@ -198,9 +202,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
                       ),
                     );
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to record payment: $e'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showError(context, 'Failed to record payment: $e');
                   }
                 },
               ),
@@ -225,10 +227,23 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
             icon: Icons.receipt_long_outlined,
             title: 'Proforma Invoices',
             badgeText: 'COMMERCIAL BILLING',
-            action: ErpButton(
-              text: 'Create Proforma from Quote',
-              icon: Icons.receipt_long_outlined,
-              onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
+            action: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: db.isLoadingProforma
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.refresh, color: AppColors.primary, size: 20),
+                  tooltip: 'Refresh from Database',
+                  onPressed: db.isLoadingProforma ? null : () => ref.read(databaseServiceProvider).loadProforma(forceRefresh: true),
+                ),
+                const SizedBox(width: 8),
+                ErpButton(
+                  text: 'Create Proforma from Quote',
+                  icon: Icons.receipt_long_outlined,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 18),
@@ -467,6 +482,23 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
                         ? await db.getProformaDetailAsync(proforma.id)
                         : proforma;
                     if (!context.mounted) return;
+
+                    // 1. Check stock for each line item against finished product available stock
+                    final hasShortage = hydratedProforma.items.any((item) {
+                      final fp = db.finishedProducts
+                          .where((p) => p.id == item.finishedProductId || p.itemCode == item.finishedProductCode)
+                          .firstOrNull;
+                      final available = fp?.availableStock ?? 0.0;
+                      return item.quantity > available;
+                    });
+
+                    // 2. If insufficient stock: prompt Sales person with Purchase/Production decision
+                    if (hasShortage) {
+                      await ConvertProformaDialog.show(context, hydratedProforma);
+                      return;
+                    }
+
+                    // 3. If sufficient stock: continue existing Sales Order workflow without interruption
                     final soNumber = 'DLZ/SO/2026/${(db.nextSalesOrderNumber).toString().padLeft(4, '0')}';
                     final so = Sale(
                       id: IdGenerator.generateId('SO'),

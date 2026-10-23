@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -55,6 +56,9 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
     );
     final priceCtrl = TextEditingController(
       text: existing?.defaultPurchasePrice.toString() ?? '100',
+    );
+    final transportCtrl = TextEditingController(
+      text: existing?.transportationCharge.toString() ?? '0',
     );
     final minCtrl = TextEditingController(
       text: existing?.minimumStock.toString() ?? '10',
@@ -166,8 +170,19 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                     keyboardType: TextInputType.number,
                                     validator: Validators.positiveNumber,
                                     decoration: const InputDecoration(
-                                      labelText: 'Unit Price (₹) *',
-                                      hintText: 'Purchase price per unit',
+                                      labelText: 'Purchase Cost (₹) *',
+                                      hintText: 'Purchase / landed cost per unit',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: transportCtrl,
+                                    keyboardType: TextInputType.number,
+                                    validator: Validators.nonNegativeNumber,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Transportation Charge (₹)',
+                                      hintText: 'Freight per unit',
+                                      prefixIcon: Icon(Icons.local_shipping_outlined, size: 18),
                                     ),
                                   ),
                                   const SizedBox(height: 12),
@@ -263,8 +278,21 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                         keyboardType: TextInputType.number,
                                         validator: Validators.positiveNumber,
                                         decoration: const InputDecoration(
-                                          labelText: 'Unit Price (₹) *',
-                                          hintText: 'Purchase price per unit',
+                                          labelText: 'Purchase Cost (₹) *',
+                                          hintText: 'Base cost per unit',
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: transportCtrl,
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Trans. Charge (₹)',
+                                          hintText: 'Freight per unit',
+                                          prefixIcon: Icon(Icons.local_shipping_outlined, size: 18),
                                         ),
                                       ),
                                     ),
@@ -342,6 +370,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                           final stockVal = double.tryParse(stockCtrl.text.trim()) ?? 0.0;
                           final minVal = double.tryParse(minCtrl.text.trim()) ?? 0.0;
                           final priceVal = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
+                          final transportVal = double.tryParse(transportCtrl.text.trim()) ?? 0.0;
                           final catObj = db.categories.firstWhere(
                             (c) => c.id == selectedCategory,
                             orElse: () => db.categories.first,
@@ -368,6 +397,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                 currentStock: stockVal,
                                 minimumStock: minVal,
                                 defaultPurchasePrice: priceVal,
+                                transportationCharge: transportVal,
                                 preferredVendorIds: prefVendorIds,
                                 preferredVendorNames: prefVendorNames,
                                 updatedAt: DateTime.now(),
@@ -386,6 +416,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                                 minimumStock: minVal,
                                 reorderLevel: minVal * 1.5,
                                 defaultPurchasePrice: priceVal,
+                                transportationCharge: transportVal,
                                 gstPercent: 18.0,
                                 preferredVendorIds: prefVendorIds,
                                 preferredVendorNames: prefVendorNames,
@@ -531,33 +562,15 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (Matching Figma Products/Materials Screen)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 650;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 280),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Raw Materials', style: AppTextStyles.h1),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () => _openAddEditDialog(),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add Material'),
-                  ),
-                ],
-              );
-            },
+          ErpSectionHeaderCard(
+            icon: Icons.grain_rounded,
+            title: 'Raw Materials Master',
+            badgeText: 'COMPONENTS & INGREDIENTS',
+            action: ErpButton(
+              text: 'Add Material',
+              icon: Icons.add,
+              onPressed: () => _openAddEditDialog(),
+            ),
           ),
           const SizedBox(height: 18),
 

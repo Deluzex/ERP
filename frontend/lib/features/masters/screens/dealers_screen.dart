@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -384,33 +385,15 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (Matching Figma Master Design)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 650;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Dealers', style: AppTextStyles.h1),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () => _openAddEditDealerDialog(),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add Dealer'),
-                  ),
-                ],
-              );
-            },
+          ErpSectionHeaderCard(
+            icon: Icons.store_mall_directory_outlined,
+            title: 'Dealers & Franchise Network',
+            badgeText: 'DISTRIBUTION NETWORK',
+            action: ErpButton(
+              text: 'Add Dealer',
+              icon: Icons.add,
+              onPressed: () => _openAddEditDealerDialog(),
+            ),
           ),
           const SizedBox(height: 18),
 
@@ -430,7 +413,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                       icon: Icons.store_outlined,
                       iconColor: AppColors.primary,
                       title: 'Total Dealers',
-                      value: '$totalDealersCount',
+                      value: '${totalDealersCount}',
                       subtext: 'Network Partners',
                     ),
                   ),
@@ -440,7 +423,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                       icon: Icons.storefront_outlined,
                       iconColor: AppColors.success,
                       title: 'Showrooms',
-                      value: '$totalDealersCount',
+                      value: '${totalDealersCount}',
                       subtext: 'Operational',
                     ),
                   ),
@@ -450,7 +433,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                       icon: Icons.account_balance_wallet_outlined,
                       iconColor: AppColors.danger,
                       title: 'With Balance',
-                      value: '$withBalanceCount',
+                      value: '${withBalanceCount}',
                       subtext: 'Pending Collection',
                       subtextColor: AppColors.danger,
                     ),
@@ -461,7 +444,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                       icon: Icons.verified_outlined,
                       iconColor: AppColors.categoryTeal,
                       title: 'Zero Balance',
-                      value: '$zeroBalanceCount',
+                      value: '${zeroBalanceCount}',
                       subtext: 'Fully Cleared',
                     ),
                   ),

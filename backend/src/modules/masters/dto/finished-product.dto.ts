@@ -45,6 +45,11 @@ export class CreateFinishedProductDto {
   @IsNumber()
   @Min(0)
   @IsOptional()
+  transportationCharge?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
   dealerSellingPrice?: number;
 
   @IsNumber()
@@ -106,6 +111,11 @@ export class UpdateFinishedProductDto {
   @Min(0)
   @IsOptional()
   costPrice?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  transportationCharge?: number;
 
   @IsNumber()
   @Min(0)

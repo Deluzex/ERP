@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/figma_metric_card.dart';
@@ -500,34 +501,15 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 200),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Expense Management', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Track operational, project site, labour, utility, and maintenance overheads', style: AppTextStyles.subtitle),
-                      ],
-                    ),
-                  ),
-                  ErpButton(
-                    text: 'Record Expense',
-                    icon: Icons.add,
-                    onPressed: () => _openAddEditExpenseDialog(),
-                  ),
-                ],
-              );
-            },
+          ErpSectionHeaderCard(
+            icon: Icons.account_balance_wallet_rounded,
+            title: 'Expense Management',
+            badgeText: 'OVERHEADS & DISBURSEMENTS',
+            action: ErpButton(
+              text: 'Record Expense',
+              icon: Icons.add,
+              onPressed: () => _openAddEditExpenseDialog(),
+            ),
           ),
           const SizedBox(height: 20),
 

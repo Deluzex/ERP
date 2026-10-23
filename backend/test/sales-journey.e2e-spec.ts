@@ -113,6 +113,10 @@ describe('Sales & Commercial Lifecycle Domain (E2E with Auto-Cleanup)', () => {
       if (createdProductionOrderIds.length > 0) {
         await db.query(`DELETE FROM production_orders WHERE id = ANY($1::uuid[])`, [createdProductionOrderIds]);
       }
+      if (testFpId1 || testFpId2) {
+        const fpIds = [testFpId1, testFpId2].filter(Boolean);
+        await db.query(`DELETE FROM sale_items WHERE finished_product_id = ANY($1::uuid[])`, [fpIds]);
+      }
       if (testFpId1) {
         await db.query(`DELETE FROM stock_adjustments WHERE item_id = $1`, [testFpId1]);
         await db.query(`DELETE FROM stock_movements WHERE item_id = $1`, [testFpId1]);
@@ -294,6 +298,41 @@ describe('Sales & Commercial Lifecycle Domain (E2E with Auto-Cleanup)', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.paidAmount).toBe(40000.0);
       expect(res.body.data.proformaStatus).toBe('partialPaid');
+    });
+
+    it('Positive: Should list proforma invoices from database and filter by status', async () => {
+      // 1. List all proformas
+      const resAll = await request(app.getHttpServer())
+        .get('/api/v1/sales/proforma')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid);
+
+      expect(resAll.status).toBe(200);
+      expect(Array.isArray(resAll.body.data.items)).toBe(true);
+      const found = resAll.body.data.items.find((p: any) => p.id === proformaId);
+      expect(found).toBeDefined();
+      expect(found.documentType).toBe('proformaInvoice');
+      expect(found.proformaStatus).toBe('partialPaid');
+      expect(found.parentQuotationNumber).toBe(`${quotationNumber}-R1`);
+
+      // 2. Filter by partialPaid status
+      const resFiltered = await request(app.getHttpServer())
+        .get('/api/v1/sales/proforma?status=partialPaid')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid);
+
+      expect(resFiltered.status).toBe(200);
+      expect(resFiltered.body.data.items.some((p: any) => p.id === proformaId)).toBe(true);
+
+      // 3. Fetch details by ID
+      const resDetail = await request(app.getHttpServer())
+        .get(`/api/v1/sales/proforma/${proformaId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid);
+
+      expect(resDetail.status).toBe(200);
+      expect(resDetail.body.data.id).toBe(proformaId);
+      expect(resDetail.body.data.items.length).toBeGreaterThan(0);
     });
   });
 

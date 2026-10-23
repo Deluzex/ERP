@@ -9,9 +9,11 @@ import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class RawMaterialStockScreen extends ConsumerStatefulWidget {
@@ -23,6 +25,7 @@ class RawMaterialStockScreen extends ConsumerStatefulWidget {
 
 class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen> {
   String _searchQuery = '';
+  String? _selectedCategory;
   bool _showOnlyLowStock = false;
 
   @override
@@ -278,6 +281,10 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                       db.addRawMaterialAsync(newRm);
                     }
                     Navigator.of(ctx).pop();
+                    ErpToast.showSuccess(
+                      context,
+                      isEdit ? 'Raw material updated successfully!' : 'Raw material created successfully!',
+                    );
                   },
                 ),
               ],
@@ -299,8 +306,9 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
           rm.categoryName.toLowerCase().contains(query) ||
           rm.unit.toLowerCase().contains(query) ||
           rm.preferredVendorNames.any((v) => v.toLowerCase().contains(query));
+      final matchesCategory = _selectedCategory == null || rm.categoryId == _selectedCategory;
       final matchesLow = !_showOnlyLowStock || rm.isLowStock;
-      return matchesSearch && matchesLow;
+      return matchesSearch && matchesCategory && matchesLow;
     }).toList();
 
     return SingleChildScrollView(
@@ -399,9 +407,9 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                     child: FigmaMetricCard(
                       icon: Icons.warning_amber_rounded,
                       iconColor: db.lowStockRawMaterials.isNotEmpty ? AppColors.danger : AppColors.success,
-                      title: 'Low Stock Items',
+                      title: 'Low Stock Alert',
                       value: '${db.lowStockRawMaterials.length}',
-                      subtext: db.lowStockRawMaterials.isNotEmpty ? 'Below minimum buffer' : 'Adequate buffer',
+                      subtext: db.lowStockRawMaterials.isNotEmpty ? 'Critical restocking required' : 'Adequate buffer level',
                       subtextColor: db.lowStockRawMaterials.isNotEmpty ? AppColors.danger : AppColors.success,
                     ),
                   ),
@@ -421,54 +429,34 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
           ),
           const SizedBox(height: 20),
 
-          // Filter bar
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-              if (isSmall) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search raw material by name, code, category, or vendor...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilterChip(
-                      label: Text('Low Stock Only (${db.lowStockRawMaterials.length})'),
-                      selected: _showOnlyLowStock,
-                      onSelected: (val) => setState(() => _showOnlyLowStock = val),
-                      selectedColor: AppColors.dangerLight,
-                      checkmarkColor: AppColors.dangerText,
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search raw material by name, code, category, or vendor...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  FilterChip(
-                    label: Text('Low Stock Only (${db.lowStockRawMaterials.length})'),
-                    selected: _showOnlyLowStock,
-                    onSelected: (val) => setState(() => _showOnlyLowStock = val),
-                    selectedColor: AppColors.dangerLight,
-                    checkmarkColor: AppColors.dangerText,
-                  ),
+          // Global Filter bar
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search raw material by name, code, category...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() => _searchQuery = val),
+              ),
+              ErpFilterDropdown<String?>(
+                label: 'Category',
+                value: _selectedCategory,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('All Categories')),
+                  ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                 ],
-              );
-            },
+                onChanged: (val) => setState(() => _selectedCategory = val),
+              ),
+              FilterChip(
+                label: Text('Low Stock Only (${db.lowStockRawMaterials.length})'),
+                selected: _showOnlyLowStock,
+                onSelected: (val) => setState(() => _showOnlyLowStock = val),
+                selectedColor: AppColors.dangerLight,
+                checkmarkColor: AppColors.dangerText,
+              ),
+            ],
           ),
           const SizedBox(height: 20),
 

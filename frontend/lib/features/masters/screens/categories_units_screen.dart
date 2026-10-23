@@ -6,6 +6,7 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/category_unit_model.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
@@ -789,8 +790,11 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Text('Category Master', style: AppTextStyles.h1),
+          ErpSectionHeaderCard(
+            icon: Icons.category_rounded,
+            title: 'Category & Unit Masters',
+            badgeText: 'TAXONOMY & ATTRIBUTES',
+          ),
           const SizedBox(height: 20),
 
           // Top Modern Segmented Tab Bar

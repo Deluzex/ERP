@@ -13,6 +13,7 @@ import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import 'create_purchase_screen.dart';
 
 class PurchaseListScreen extends ConsumerStatefulWidget {
   const PurchaseListScreen({super.key});
@@ -171,6 +172,20 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                 Expanded(
                   child: Text('PO Details: ${p.purchaseNumber}', style: AppTextStyles.h3),
                 ),
+                if (p.status != PurchaseStatus.cancelled)
+                  IconButton(
+                    tooltip: 'Edit / Reopen Purchase',
+                    icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CreatePurchaseScreen(existingPurchase: p),
+                        ),
+                      );
+                    },
+                  ),
                 IconButton(
                   icon: const Icon(Icons.close),
                   onPressed: () => Navigator.pop(ctx),
@@ -411,6 +426,9 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                         children: [
                           Text('Subtotal: ${Formatters.formatCurrency(p.subtotalAmount)}', style: AppTextStyles.bodySmall),
                           Text('GST Tax: ${Formatters.formatCurrency(p.gstAmount)}', style: AppTextStyles.bodySmall),
+                          if (p.transportationCharges > 0)
+                            Text('Transportation Charges: ${Formatters.formatCurrency(p.transportationCharges)}',
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
                           Text('Total Amount: ${Formatters.formatCurrency(p.totalAmount)}', style: AppTextStyles.bodyBold),
                           Text('Paid Amount: ${Formatters.formatCurrency(p.paidAmount)}',
                               style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),

@@ -22,6 +22,7 @@ export interface FinishedProductRecord {
   openingStock: string;
   minimumStock: string;
   costPrice: string;
+  transportationCharge: string;
   dealerSellingPrice: string;
   customerSellingPrice: string;
   gstPercent: number;
@@ -153,15 +154,16 @@ export class FinishedProductsService {
     const openingStock = Money.formatQuantity(dto.openingStock ?? 0);
     const minimumStock = Money.formatQuantity(dto.minimumStock ?? 0);
     const costPrice = Money.format(dto.costPrice ?? 0);
+    const transCharge = Money.format(dto.transportationCharge ?? 0);
     const dealerPrice = Money.format(dto.dealerSellingPrice ?? 0);
     const customerPrice = Money.format(dto.customerSellingPrice ?? 0);
 
     const res = await this.db.query<{ id: string }>(
       `INSERT INTO finished_products (
         name, item_code, category_id, unit_id, hsn_sac_code,
-        opening_stock, current_stock, minimum_stock, cost_price, dealer_selling_price,
+        opening_stock, current_stock, minimum_stock, cost_price, transportation_charge, dealer_selling_price,
         customer_selling_price, gst_percent
-      ) VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11, $12)
       RETURNING id`,
       [
         dto.name.trim(),
@@ -172,6 +174,7 @@ export class FinishedProductsService {
         openingStock,
         minimumStock,
         costPrice,
+        transCharge,
         dealerPrice,
         customerPrice,
         dto.gstPercent ?? 18.0,
@@ -232,6 +235,10 @@ export class FinishedProductsService {
     if (dto.costPrice !== undefined) {
       updates.push(`cost_price = $${idx++}`);
       values.push(Money.format(dto.costPrice));
+    }
+    if (dto.transportationCharge !== undefined) {
+      updates.push(`transportation_charge = $${idx++}`);
+      values.push(Money.format(dto.transportationCharge));
     }
     if (dto.dealerSellingPrice !== undefined) {
       updates.push(`dealer_selling_price = $${idx++}`);
@@ -315,6 +322,7 @@ export class FinishedProductsService {
       openingStock: Money.formatQuantity(r.opening_stock),
       minimumStock: Money.formatQuantity(r.minimum_stock),
       costPrice: Money.format(r.cost_price),
+      transportationCharge: Money.format(r.transportation_charge || 0),
       dealerSellingPrice: Money.format(r.dealer_selling_price),
       customerSellingPrice: Money.format(r.customer_selling_price),
       gstPercent: parseFloat(r.gst_percent) || 18.0,

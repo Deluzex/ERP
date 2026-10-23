@@ -42,10 +42,23 @@ class _MaxAmountTextInputFormatter extends TextInputFormatter {
 }
 
 class CreatePurchaseScreen extends ConsumerStatefulWidget {
-  const CreatePurchaseScreen({super.key});
+  final Purchase? existingPurchase;
+
+  const CreatePurchaseScreen({
+    super.key,
+    this.existingPurchase,
+  });
 
   @override
   ConsumerState<CreatePurchaseScreen> createState() => _CreatePurchaseScreenState();
+}
+
+/// System-wide transportation / freight configuration for procurement.
+/// If an item (product/raw material) does not specify an explicit per-unit transportationCharge (> 0),
+/// and the vendor does not specify defaultTransportationCharges (> 0), this configurable default applies.
+class PurchaseTransportationConfig {
+  /// Clearly defined configurable default transportation rate in ₹ per unit (default: ₹50.0 / unit).
+  static double defaultRatePerUnit = 50.0;
 }
 
 class _LineItemDraft {
@@ -58,6 +71,7 @@ class _LineItemDraft {
   double rate;
   double discount;
   double gstPercent;
+  double transportationCharge;
 
   _LineItemDraft({
     this.itemType = PurchaseItemType.rawMaterial,
@@ -69,6 +83,7 @@ class _LineItemDraft {
     this.rate = 100.0,
     this.discount = 0.0,
     this.gstPercent = 18.0,
+    this.transportationCharge = 0.0,
   });
 
   double get subtotal => ((quantity * rate) - discount).clamp(0.0, double.infinity);
@@ -85,7 +100,11 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _vendorInvoiceCtrl = TextEditingController();
   final _paidAmountCtrl = TextEditingController(text: '0');
+  final _transportationChargesCtrl = TextEditingController(text: '0');
   final _notesCtrl = TextEditingController();
+
+  double _validTransportationCharges = 0.0;
+  bool _isManualTransportation = false;
 
   String? _selectedVendorId;
   String? _selectedProjectId;
@@ -120,14 +139,92 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     }
   }
 
+  double _resolveItemTransportationRate({
+    required PurchaseItemType type,
+    required String itemId,
+  }) {
+    final db = ref.read(databaseServiceProvider);
+    // 1. Existing ERP configuration: Item master explicit transportation rate
+    if (type == PurchaseItemType.rawMaterial) {
+      final rm = db.rawMaterials.where((r) => r.id == itemId).firstOrNull;
+      if (rm != null && rm.transportationCharge > 0) {
+        return rm.transportationCharge;
+      }
+    } else {
+      final fp = db.finishedProducts.where((f) => f.id == itemId).firstOrNull;
+      if (fp != null && fp.transportationCharge > 0) {
+        return fp.transportationCharge;
+      }
+    }
+
+    // 2. Existing ERP configuration: Supplier / Vendor default transportation rate
+    if (_selectedVendorId != null) {
+      final vendor = db.vendors.where((v) => v.id == _selectedVendorId).firstOrNull;
+      if (vendor != null && vendor.defaultTransportationCharges > 0) {
+        return vendor.defaultTransportationCharges;
+      }
+    }
+
+    // 3. Fallback to clearly defined configurable default rate
+    return PurchaseTransportationConfig.defaultRatePerUnit;
+  }
+
   @override
   void initState() {
     super.initState();
     final db = ref.read(databaseServiceProvider);
-    final activeVendors = db.vendors.where((v) => !v.isDeleted).toList();
-    if (activeVendors.isNotEmpty) {
-      _selectedVendorId = activeVendors.first.id;
+
+    if (widget.existingPurchase != null) {
+      final p = widget.existingPurchase!;
+      _selectedVendorId = p.vendorId;
+      _selectedProjectId = p.projectId;
+      _vendorInvoiceCtrl.text = p.vendorInvoiceNumber;
+      _purchaseDate = p.purchaseDate;
+      _invoiceDate = p.invoiceDate;
+      _paymentMode = p.paymentMode;
+      _notesCtrl.text = p.notes ?? '';
+      _isInterStateTax = p.isInterStateTax;
+
+      _validTransportationCharges = p.transportationCharges;
+      _isManualTransportation = true;
+      final formattedTrans = p.transportationCharges % 1 == 0
+          ? p.transportationCharges.toInt().toString()
+          : p.transportationCharges.toStringAsFixed(2);
+      _transportationChargesCtrl.text = formattedTrans;
+
+      final formattedPaid = p.paidAmount % 1 == 0
+          ? p.paidAmount.toInt().toString()
+          : p.paidAmount.toStringAsFixed(2);
+      _paidAmountCtrl.text = formattedPaid;
+
+      _items.clear();
+      for (final it in p.items) {
+        final unitTransRate = (it.transportationCost > 0 && it.quantity > 0)
+            ? (it.transportationCost / it.quantity)
+            : (p.transportationCharges > 0 && p.items.length == 1 && it.quantity > 0)
+                ? (p.transportationCharges / it.quantity)
+                : _resolveItemTransportationRate(type: it.itemType, itemId: it.itemId);
+
+        _items.add(_LineItemDraft(
+          itemType: it.itemType,
+          itemId: it.itemId,
+          itemName: it.displayName,
+          itemCode: it.displayCode,
+          unit: it.unit,
+          quantity: it.quantity,
+          rate: it.rate,
+          discount: it.discountAmount,
+          gstPercent: it.gstPercent,
+          transportationCharge: unitTransRate,
+        ));
+      }
+    } else {
+      final activeVendors = db.vendors.where((v) => !v.isDeleted).toList();
+      if (activeVendors.isNotEmpty) {
+        _selectedVendorId = activeVendors.first.id;
+      }
     }
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final database = ref.read(databaseServiceProvider);
       await Future.wait([
@@ -138,7 +235,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       ]);
       if (mounted) {
         setState(() {
-          if (_selectedVendorId == null) {
+          if (widget.existingPurchase == null && _selectedVendorId == null) {
             final freshVendors = database.vendors.where((v) => !v.isDeleted).toList();
             if (freshVendors.isNotEmpty) {
               _selectedVendorId = freshVendors.first.id;
@@ -147,6 +244,30 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         });
       }
     });
+  }
+
+  void _onVendorSelected(String? val) {
+    setState(() {
+      _selectedVendorId = val;
+      if (!_isManualTransportation) {
+        for (final item in _items) {
+          item.transportationCharge = _resolveItemTransportationRate(
+            type: item.itemType,
+            itemId: item.itemId,
+          );
+        }
+        _recalculateTransportation(force: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _vendorInvoiceCtrl.dispose();
+    _paidAmountCtrl.dispose();
+    _transportationChargesCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
   }
 
   void _openAddItemDialog({PurchaseItemType initialType = PurchaseItemType.rawMaterial}) {
@@ -159,6 +280,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     String selectedUnit = 'PCS';
     double defaultRate = 0.0;
     double defaultGst = 18.0;
+    double itemTransportation = 0.0;
 
     double currentStock = 0.0;
 
@@ -173,6 +295,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         defaultRate = rm.defaultPurchasePrice;
         defaultGst = rm.gstPercent;
         currentStock = rm.currentStock;
+        itemTransportation = _resolveItemTransportationRate(
+          type: PurchaseItemType.rawMaterial,
+          itemId: rm.id,
+        );
       } else if (type == PurchaseItemType.finishedProduct && db.finishedProducts.isNotEmpty) {
         final fpList = db.finishedProducts.where((f) => !f.isDeleted).toList();
         final fp = fpList.isNotEmpty ? fpList.first : db.finishedProducts.first;
@@ -183,6 +309,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         defaultRate = fp.costPrice;
         defaultGst = fp.gstPercent;
         currentStock = fp.currentStock;
+        itemTransportation = _resolveItemTransportationRate(
+          type: PurchaseItemType.finishedProduct,
+          itemId: fp.id,
+        );
       } else {
         selectedItemId = null;
         selectedItemName = '';
@@ -314,6 +444,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 currentStock = rm.currentStock;
                                 rateCtrl.text = rm.defaultPurchasePrice.toString();
                                 gstCtrl.text = rm.gstPercent.toString();
+                                itemTransportation = _resolveItemTransportationRate(
+                                  type: PurchaseItemType.rawMaterial,
+                                  itemId: rm.id,
+                                );
                               });
                             }
                           },
@@ -345,6 +479,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                 currentStock = fp.currentStock;
                                 rateCtrl.text = fp.costPrice.toString();
                                 gstCtrl.text = fp.gstPercent.toString();
+                                itemTransportation = _resolveItemTransportationRate(
+                                  type: PurchaseItemType.finishedProduct,
+                                  itemId: fp.id,
+                                );
                               });
                             }
                           },
@@ -536,7 +674,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       rate: enteredRate,
                       discount: enteredDisc,
                       gstPercent: enteredGst,
+                      transportationCharge: itemTransportation,
                     ));
+                    _isManualTransportation = false;
+                    _recalculateTransportation(force: true);
                   });
 
                   Navigator.of(ctx).pop();
@@ -549,18 +690,49 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     );
   }
 
-  void _removeLineItem(int index) {
-    setState(() => _items.removeAt(index));
+  void _recalculateTransportation({bool force = false}) {
+    if (_isManualTransportation && !force) return;
+    if (_items.isEmpty) {
+      _validTransportationCharges = 0.0;
+      _transportationChargesCtrl.value = const TextEditingValue(
+        text: '0',
+        selection: TextSelection.collapsed(offset: 1),
+      );
+      return;
+    }
+    final itemTransSum = _items.fold<double>(0.0, (sum, i) => sum + (i.quantity * i.transportationCharge));
+    _validTransportationCharges = itemTransSum;
+    final formatted = itemTransSum % 1 == 0
+        ? itemTransSum.toInt().toString()
+        : itemTransSum.toStringAsFixed(2);
+    _transportationChargesCtrl.value = TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
   }
 
+  void _removeLineItem(int index) {
+    setState(() {
+      _items.removeAt(index);
+      if (_items.isEmpty) {
+        _validTransportationCharges = 0.0;
+        _transportationChargesCtrl.text = '0';
+      } else {
+        _recalculateTransportation(force: true);
+      }
+    });
+  }
+
+  double get _transportationCharges => _validTransportationCharges;
   double get _subtotalAmount => _items.fold(0.0, (sum, i) => sum + i.subtotal);
   double get _cgstAmount => _isInterStateTax ? 0.0 : _items.fold(0.0, (sum, i) => sum + ((i.subtotal * (i.gstPercent / 2.0)) / 100.0));
   double get _sgstAmount => _isInterStateTax ? 0.0 : _items.fold(0.0, (sum, i) => sum + ((i.subtotal * (i.gstPercent / 2.0)) / 100.0));
   double get _igstAmount => _isInterStateTax ? _items.fold(0.0, (sum, i) => sum + ((i.subtotal * i.gstPercent) / 100.0)) : 0.0;
   double get _gstTotal => _cgstAmount + _sgstAmount + _igstAmount;
-  double get _totalAmount => (_subtotalAmount + _gstTotal).clamp(0.0, double.infinity);
+  double get _totalAmount => (_subtotalAmount + _gstTotal + _transportationCharges).clamp(0.0, double.infinity);
   double get _paidAmount => double.tryParse(_paidAmountCtrl.text.trim()) ?? 0.0;
   double get _pendingAmount => (_totalAmount - _paidAmount).clamp(0.0, double.infinity);
+  double get _totalUnits => _items.fold(0.0, (sum, i) => sum + i.quantity);
 
   Future<void> _savePurchase(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
@@ -617,6 +789,11 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       );
     }).toList();
 
+    final allocatedPurchaseItems = PurchaseLineItem.allocateTransportation(
+      items: purchaseItems,
+      transportationCharges: _transportationCharges,
+    );
+
     PurchaseStatus status;
     if (isDraft) {
       status = PurchaseStatus.draft;
@@ -629,8 +806,9 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     }
 
     final purchase = Purchase(
-      id: IdGenerator.generateId('PUR'),
-      purchaseNumber: IdGenerator.generateDocNumber('PO', db.nextPurchaseNumber),
+      id: widget.existingPurchase?.id ?? IdGenerator.generateId('PUR'),
+      purchaseNumber: widget.existingPurchase?.purchaseNumber ??
+          IdGenerator.generateDocNumber('PO', db.nextPurchaseNumber),
       purchaseDate: _purchaseDate,
       vendorId: vendor.id,
       vendorName: vendor.name,
@@ -641,9 +819,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       purchaseType: purchaseItems.any((i) => i.itemType == PurchaseItemType.finishedProduct)
           ? PurchaseItemType.finishedProduct
           : PurchaseItemType.rawMaterial,
-      items: purchaseItems,
+      items: allocatedPurchaseItems,
       subtotalAmount: _subtotalAmount,
       gstAmount: _gstTotal,
+      transportationCharges: _transportationCharges,
       totalAmount: _totalAmount,
       paidAmount: _paidAmount,
       pendingAmount: _pendingAmount,
@@ -1015,7 +1194,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                   ),
                                 );
                               }).toList(),
-                              onChanged: (val) => setState(() => _selectedVendorId = val),
+                              onChanged: _onVendorSelected,
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
@@ -1113,7 +1292,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                       ),
                                     );
                                   }).toList(),
-                                  onChanged: (val) => setState(() => _selectedVendorId = val),
+                                  onChanged: _onVendorSelected,
                                 ),
                               ),
                               const SizedBox(width: 16),
@@ -1428,6 +1607,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                           item.unit = rm.unit;
                                           item.rate = rm.defaultPurchasePrice;
                                           item.gstPercent = rm.gstPercent;
+                                          item.transportationCharge = _resolveItemTransportationRate(
+                                            type: PurchaseItemType.rawMaterial,
+                                            itemId: rm.id,
+                                          );
+                                          _isManualTransportation = false;
+                                          _recalculateTransportation(force: true);
                                         });
                                       } else if (newType == PurchaseItemType.finishedProduct && db.finishedProducts.isNotEmpty) {
                                         final fp = db.finishedProducts.first;
@@ -1439,6 +1624,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                           item.unit = fp.unit;
                                           item.rate = fp.costPrice;
                                           item.gstPercent = fp.gstPercent;
+                                          item.transportationCharge = _resolveItemTransportationRate(
+                                            type: PurchaseItemType.finishedProduct,
+                                            itemId: fp.id,
+                                          );
+                                          _isManualTransportation = false;
+                                          _recalculateTransportation(force: true);
                                         });
                                       }
                                     },
@@ -1474,6 +1665,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                                 item.unit = fp.unit;
                                                 item.rate = fp.costPrice;
                                                 item.gstPercent = fp.gstPercent;
+                                                item.transportationCharge = _resolveItemTransportationRate(
+                                                  type: PurchaseItemType.finishedProduct,
+                                                  itemId: fp.id,
+                                                );
+                                                _isManualTransportation = false;
+                                                _recalculateTransportation(force: true);
                                               });
                                             }
                                           },
@@ -1502,6 +1699,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                                 item.unit = rm.unit;
                                                 item.rate = rm.defaultPurchasePrice;
                                                 item.gstPercent = rm.gstPercent;
+                                                item.transportationCharge = _resolveItemTransportationRate(
+                                                  type: PurchaseItemType.rawMaterial,
+                                                  itemId: rm.id,
+                                                );
+                                                _isManualTransportation = false;
+                                                _recalculateTransportation(force: true);
                                               });
                                             }
                                           },
@@ -1520,7 +1723,11 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                     decoration: InputDecoration(labelText: 'Qty (${item.unit})'),
                                     onChanged: (v) {
                                       final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.quantity = num);
+                                      setState(() {
+                                        item.quantity = num;
+                                        _isManualTransportation = false;
+                                        _recalculateTransportation(force: true);
+                                      });
                                     },
                                   ),
                                 ),
@@ -1537,7 +1744,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                     decoration: const InputDecoration(labelText: 'Rate (₹)'),
                                     onChanged: (v) {
                                       final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.rate = num);
+                                      setState(() {
+                                        item.rate = num;
+                                        _recalculateTransportation(force: true);
+                                      });
                                     },
                                   ),
                                 ),
@@ -1582,7 +1792,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
 
                                 // Line Total
                                 SizedBox(
-                                  width: 120,
+                                  width: 130,
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
@@ -1591,6 +1801,13 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                         Formatters.formatCurrency(item.lineTotal),
                                         style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
                                       ),
+                                      if (_transportationCharges > 0 && _subtotalAmount > 0 && item.quantity > 0) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Landed: ₹${(((item.subtotal + ((item.subtotal / _subtotalAmount) * _transportationCharges)) / item.quantity * 100).round() / 100).toStringAsFixed(2)}/${item.unit}',
+                                          style: const TextStyle(fontSize: 10, color: AppColors.success, fontWeight: FontWeight.w600),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -1753,7 +1970,20 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(child: Text('Taxable Subtotal:', style: AppTextStyles.bodyMedium)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Taxable Subtotal:', style: AppTextStyles.bodyMedium),
+                                if (_totalUnits > 0)
+                                  Text(
+                                    '(${Formatters.formatCurrency(_subtotalAmount / _totalUnits)} / unit)',
+                                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           Text(Formatters.formatCurrency(_subtotalAmount), style: AppTextStyles.bodyBold),
                         ],
                       ),
@@ -1811,7 +2041,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(child: Text('Grand Total:', style: AppTextStyles.h3)),
+                          Expanded(
+                            child: Text('Grand Total:', style: AppTextStyles.h3),
+                          ),
+                          const SizedBox(width: 8),
                           Text(Formatters.formatCurrency(_totalAmount),
                                 style: AppTextStyles.h2.copyWith(color: AppColors.primary)),
                         ],

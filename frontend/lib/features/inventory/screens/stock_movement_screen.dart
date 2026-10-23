@@ -7,6 +7,7 @@ import '../../../core/models/stock_movement_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/stock_movement_icons.dart';
@@ -29,6 +30,8 @@ class StockMovementScreen extends ConsumerStatefulWidget {
 class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
   String _searchQuery = '';
   StockLedgerCategory _selectedCategory = StockLedgerCategory.all;
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -73,7 +76,10 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
           break;
       }
 
-      return matchesSearch && matchesCategory;
+      final matchesDate = (_startDate == null || !m.date.isBefore(_startDate!)) &&
+          (_endDate == null || !m.date.isAfter(_endDate!.add(const Duration(days: 1))));
+
+      return matchesSearch && matchesCategory && matchesDate;
     }).toList();
 
     return SingleChildScrollView(
@@ -157,7 +163,7 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Primary Filter Tabs (Responsive: vertical stack on mobile, horizontal wrap on desktop)
           LayoutBuilder(
@@ -268,13 +274,28 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search by item code, name, reference number, notes, or user...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // Global Filters
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search by item code, name, ref no...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() => _searchQuery = val),
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 20),
 
