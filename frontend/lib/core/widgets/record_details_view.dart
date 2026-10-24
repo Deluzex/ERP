@@ -3443,8 +3443,16 @@ class RecordDetailsView extends ConsumerWidget {
                     Text('Financials & Actions', style: AppTextStyles.h3),
                     const Divider(height: 24),
                     _buildInfoRow('Subtotal Amount', Formatters.formatCurrency(s.subtotalAmount)),
-                    _buildInfoRow('Discounts Amount', Formatters.formatCurrency(s.discountAmount)),
-                    _buildInfoRow('GST Output Tax', Formatters.formatCurrency(s.gstAmount)),
+                    if (s.discountAmount > 0)
+                      _buildInfoRow('Discounts Amount', '- ${Formatters.formatCurrency(s.discountAmount)}'),
+                    _buildInfoRow('Taxable Amount', Formatters.formatCurrency(s.taxableAmount)),
+                    if (!s.isInterStateTax && s.igstAmount == 0) ...[
+                      _buildInfoRow('CGST Output Tax (9%)', Formatters.formatCurrency(s.cgstAmount)),
+                      _buildInfoRow('SGST Output Tax (9%)', Formatters.formatCurrency(s.sgstAmount)),
+                    ] else ...[
+                      _buildInfoRow('IGST Output Tax (18%)', Formatters.formatCurrency(s.igstAmount > 0 ? s.igstAmount : s.gstAmount)),
+                    ],
+                    _buildInfoRow('Total GST Tax', Formatters.formatCurrency(s.gstAmount)),
                     const Divider(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,

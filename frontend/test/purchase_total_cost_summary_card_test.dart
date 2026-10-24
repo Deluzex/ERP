@@ -3,11 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:frontend/core/models/purchase_model.dart';
 import 'package:frontend/core/models/raw_material_model.dart';
-import 'package:frontend/core/models/finished_product_model.dart';
 import 'package:frontend/core/models/vendor_model.dart';
 import 'package:frontend/core/utils/formatters.dart';
 import 'package:frontend/features/purchase/screens/create_purchase_screen.dart';
-import 'package:frontend/features/purchase/screens/purchase_list_screen.dart';
 import 'package:frontend/features/purchase/widgets/total_purchase_cost_card.dart';
 import 'package:frontend/shared/providers/app_state_providers.dart';
 import 'package:frontend/shared/services/mock_database_service.dart';
@@ -87,15 +85,10 @@ void main() {
       expect(find.text(Formatters.formatCurrency(11800.0)), findsWidgets);
 
       // Step 1: Enter transportation charges of ₹2,000
-      final textFields = find.byType(TextFormField);
-      for (int i = 0; i < textFields.evaluate().length; i++) {
-        final field = tester.widget<TextFormField>(textFields.at(i));
-        if (field.controller?.text == '0' || field.controller?.text == '0.00') {
-          await tester.enterText(textFields.at(i), '2000');
-          await tester.pumpAndSettle();
-          break;
-        }
-      }
+      final transFieldFinder = find.byKey(const ValueKey('purchase_transportation_input'));
+      expect(transFieldFinder, findsOneWidget);
+      await tester.enterText(transFieldFinder, '2000');
+      await tester.pumpAndSettle();
 
       // Step 2: Confirm Transportation / Freight displays ₹2,000
       expect(find.text('2000'), findsOneWidget);

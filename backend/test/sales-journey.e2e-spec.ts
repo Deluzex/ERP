@@ -18,7 +18,7 @@ describe('Sales & Commercial Lifecycle Domain (E2E with Auto-Cleanup)', () => {
   let testFpId2: string;
 
   const testCustomerMobile = `+91 98${Math.floor(10000000 + Math.random() * 90000000)}`;
-  const testCustomerGst = `27AABCO${Math.floor(1000 + Math.random() * 9000)}K1Z9`;
+  const testCustomerGst = `24AABCO${Math.floor(1000 + Math.random() * 9000)}K1Z9`;
   const testFpCode1 = `FP-SL1-${Date.now().toString().slice(-4)}`;
   const testFpCode2 = `FP-SL2-${Date.now().toString().slice(-4)}`;
 
@@ -62,10 +62,10 @@ describe('Sales & Commercial Lifecycle Domain (E2E with Auto-Cleanup)', () => {
     const unitRes = await db.query<{ id: string }>('SELECT id FROM measurement_units LIMIT 1');
     testUnitId = unitRes.rows[0].id;
 
-    // 3. Create Test Customer
+    // 3. Create Test Customer (Registered in Gujarat)
     const custRes = await db.query<{ id: string }>(
-      `INSERT INTO customers (name, mobile, email, gst_number, address, outstanding_amount)
-       VALUES ($1, $2, 'sales-test@oberoi.com', $3, 'Oberoi Sky City, Mumbai', 0.00)
+      `INSERT INTO customers (name, mobile, email, gst_number, address, state, state_code, pincode, outstanding_amount)
+       VALUES ($1, $2, 'sales-test@oberoi.com', $3, 'SG Highway, Ahmedabad, Gujarat', 'Gujarat', '24', '380054', 0.00)
        RETURNING id`,
       ['Oberoi Sky City Residences', testCustomerMobile, testCustomerGst],
     );
@@ -912,6 +912,180 @@ describe('Sales & Commercial Lifecycle Domain (E2E with Auto-Cleanup)', () => {
       expect(res.body.data).toHaveProperty('totalSalesReturnsAmount');
       expect(res.body.data).toHaveProperty('netSalesRevenue');
       expect(res.body.data).toHaveProperty('pendingRefundsCount');
+    });
+  });
+
+  // ==========================================================================
+  // MILESTONE 5G: STATUTORY GST PLACE OF SUPPLY & COMPLIANCE (SECTION 10)
+  // ==========================================================================
+  describe('Milestone 5G: Statutory GST Place of Supply & Tax Compliance (Section 10)', () => {
+    let interstateCustId: string;
+    let gujaratArchId: string;
+    let maharashtraProjId: string;
+    let unresolvedProjId: string;
+
+    beforeAll(async () => {
+      // Create Interstate Customer (Maharashtra GSTIN 27)
+      const icRes = await db.query<{ id: string }>(
+        `INSERT INTO customers (name, mobile, email, gst_number, address, state, state_code, pincode, outstanding_amount)
+         VALUES ('Mumbai Corporate Towers', '+91 9988776655', 'mumbai@tower.com', '27AAACM1234F1Z5', 'Bandra Kurla Complex, Mumbai', 'Maharashtra', '27', '400051', 0.00)
+         RETURNING id`,
+      );
+      interstateCustId = icRes.rows[0].id;
+
+      // Create Gujarat Architect
+      const gaRes = await db.query<{ id: string }>(
+        `INSERT INTO architects (name, company_name, mobile, email, gst_number, address, state, state_code, pincode, default_commission_rate)
+         VALUES ('Ar. Bhavesh Patel', 'Patel Associates', '+91 9876543210', 'patel@arch.com', '24AAACP5566G1Z8', 'Ashram Road, Ahmedabad', 'Gujarat', '24', '380009', 5.00)
+         RETURNING id`,
+      );
+      gujaratArchId = gaRes.rows[0].id;
+
+      // Create Maharashtra Project (Site in Maharashtra)
+      const mpRes = await db.query<{ id: string }>(
+        `INSERT INTO projects (project_code, name, architect_id, start_date, status, site_state, site_state_code, site_pincode, pos_verified)
+         VALUES ('PRJ-MH-01', 'Pune IT Park Tower B', $1, NOW(), 'active', 'Maharashtra', '27', '411001', true)
+         RETURNING id`,
+        [gujaratArchId],
+      );
+      maharashtraProjId = mpRes.rows[0].id;
+
+      // Create Project with Unresolved Site Location
+      const upRes = await db.query<{ id: string }>(
+        `INSERT INTO projects (project_code, name, start_date, status, site_state, site_state_code, pos_verified)
+         VALUES ('PRJ-UNRESOLVED', 'Unknown Location Complex', NOW(), 'active', NULL, NULL, false)
+         RETURNING id`,
+      );
+      unresolvedProjId = upRes.rows[0].id;
+    });
+
+    afterAll(async () => {
+      try {
+        if (maharashtraProjId || unresolvedProjId) {
+          await db.query(`DELETE FROM projects WHERE id IN ($1, $2)`, [maharashtraProjId, unresolvedProjId]);
+        }
+        if (gujaratArchId) {
+          await db.query(`DELETE FROM architects WHERE id = $1`, [gujaratArchId]);
+        }
+        if (interstateCustId) {
+          await db.query(`DELETE FROM customers WHERE id = $1`, [interstateCustId]);
+        }
+      } catch {
+        // cleanup best-effort
+      }
+    });
+
+    it('Positive: Interstate customer (Maharashtra 27) automatically calculates IGST (18%) with zero CGST/SGST', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/sales/quotations')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          partyType: 'customer',
+          partyId: interstateCustId,
+          salesExecutive: 'Alex Sterling',
+          validDays: 30,
+          isInterStateTax: true,
+          items: [
+            {
+              finishedProductId: testFpId1,
+              quantity: 10.0,
+              rate: 4000.0,
+              discountAmount: 0.0,
+              gstPercent: 18.0,
+            },
+          ],
+        });
+
+      expect(res.status).toBe(201);
+      createdSaleIds.push(res.body.data.id);
+      expect(res.body.data.isInterStateTax).toBe(true);
+      expect(Number(res.body.data.igstAmount)).toBe(7200.0);
+      expect(Number(res.body.data.cgstAmount)).toBe(0.0);
+      expect(Number(res.body.data.sgstAmount)).toBe(0.0);
+    });
+
+    it('Negative: Rejects tampered client classification (Intra-state flag for Interstate supply)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/sales/quotations')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          partyType: 'customer',
+          partyId: interstateCustId,
+          salesExecutive: 'Alex Sterling',
+          validDays: 30,
+          isInterStateTax: false, // Tampered: Customer is Maharashtra, but client claims intra-state!
+          items: [
+            {
+              finishedProductId: testFpId1,
+              quantity: 5.0,
+              rate: 4000.0,
+              discountAmount: 0.0,
+              gstPercent: 18.0,
+            },
+          ],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TAX_CLASSIFICATION');
+    });
+
+    it('Positive (Section 10): Gujarat Architect with Maharashtra Project site dictates Inter-State IGST', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/sales/quotations')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          partyType: 'architect',
+          partyId: gujaratArchId,
+          projectId: maharashtraProjId,
+          salesExecutive: 'Alex Sterling',
+          validDays: 30,
+          isInterStateTax: true,
+          items: [
+            {
+              finishedProductId: testFpId1,
+              quantity: 10.0,
+              rate: 4000.0,
+              discountAmount: 0.0,
+              gstPercent: 18.0,
+            },
+          ],
+        });
+
+      expect(res.status).toBe(201);
+      createdSaleIds.push(res.body.data.id);
+      expect(res.body.data.isInterStateTax).toBe(true);
+      expect(Number(res.body.data.igstAmount)).toBe(7200.0);
+      expect(Number(res.body.data.cgstAmount)).toBe(0.0);
+      expect(Number(res.body.data.sgstAmount)).toBe(0.0);
+    });
+
+    it('Negative: Blocks quotation creation when linked Project Place of Supply is unresolved', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/sales/quotations')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          partyType: 'customer',
+          partyId: testCustomerId,
+          projectId: unresolvedProjId,
+          salesExecutive: 'Alex Sterling',
+          validDays: 30,
+          items: [
+            {
+              finishedProductId: testFpId1,
+              quantity: 5.0,
+              rate: 4000.0,
+              discountAmount: 0.0,
+              gstPercent: 18.0,
+            },
+          ],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('UNRESOLVED_PLACE_OF_SUPPLY');
     });
   });
 });

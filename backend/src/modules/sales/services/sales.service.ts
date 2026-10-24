@@ -71,24 +71,200 @@ export class SalesService {
     return candidate;
   }
 
+  private normalizeStateCode(stateNameOrCode?: string | null): string | null {
+    if (!stateNameOrCode) return null;
+    const cleaned = stateNameOrCode.trim();
+    if (/^\d{2}$/.test(cleaned)) return cleaned;
+    const lower = cleaned.toLowerCase();
+    const stateMap: Record<string, string> = {
+      gujarat: '24',
+      maharashtra: '27',
+      rajasthan: '08',
+      'madhya pradesh': '23',
+      delhi: '07',
+      karnataka: '29',
+      'tamil nadu': '33',
+      telangana: '36',
+      'andhra pradesh': '37',
+      'uttar pradesh': '09',
+      haryana: '06',
+      punjab: '03',
+      kerala: '32',
+      'west bengal': '19',
+      goa: '30',
+      bihar: '10',
+      assam: '18',
+      odisha: '21',
+      jharkhand: '20',
+      chhattisgarh: '22',
+      uttarakhand: '05',
+      'himachal pradesh': '02',
+      'jammu and kashmir': '01',
+      chandigarh: '04',
+      puducherry: '34',
+      // Common city mappings
+      pune: '27',
+      mumbai: '27',
+      nagpur: '27',
+      nashik: '27',
+      thane: '27',
+      ahmedabad: '24',
+      surat: '24',
+      vadodara: '24',
+      baroda: '24',
+      rajkot: '24',
+      gandhinagar: '24',
+      jaipur: '08',
+      indore: '23',
+      bhopal: '23',
+      bengaluru: '29',
+      bangalore: '29',
+      chennai: '33',
+      hyderabad: '36',
+      kolkata: '19',
+    };
+    if (stateMap[lower]) return stateMap[lower];
+    for (const [key, code] of Object.entries(stateMap)) {
+      if (lower.includes(key)) return code;
+    }
+    return null;
+  }
+
+  private async getSellerState(): Promise<{ stateCode: string; stateName: string }> {
+    try {
+      const res = await this.db.query<{ state_code: string; state_name: string }>(
+        `SELECT state_code, state_name FROM companies LIMIT 1`,
+      );
+      if (res.rows.length > 0 && res.rows[0].state_code) {
+        return {
+          stateCode: res.rows[0].state_code.trim(),
+          stateName: res.rows[0].state_name ? res.rows[0].state_name.trim() : 'Gujarat',
+        };
+      }
+    } catch {
+      // fallback to Gujarat
+    }
+    return { stateCode: '24', stateName: 'Gujarat' };
+  }
+
+  private async resolvePlaceOfSupply(
+    partyType: string,
+    party: { gst_number?: string | null; state?: string | null; state_code?: string | null },
+    projectId?: string | null,
+    dtoIsInterStateTax?: boolean,
+    explicitState?: string | null,
+    explicitStateCode?: string | null,
+  ): Promise<boolean> {
+    const seller = await this.getSellerState();
+    let placeOfSupplyStateCode: string | null = null;
+
+    if (explicitStateCode || explicitState) {
+      placeOfSupplyStateCode = explicitStateCode || this.normalizeStateCode(explicitState);
+    }
+
+    if (!placeOfSupplyStateCode && projectId) {
+      const projRes = await this.db.query<{ site_state: string | null; site_state_code: string | null }>(
+        `SELECT site_state, site_state_code FROM projects WHERE id = $1`,
+        [projectId],
+      );
+      if (projRes.rows.length === 0) {
+        throw new NotFoundException(`Project ${projectId} not found`);
+      }
+      const proj = projRes.rows[0];
+      if (!proj.site_state && !proj.site_state_code) {
+        throw new BadRequestException({
+          code: 'UNRESOLVED_PLACE_OF_SUPPLY',
+          message: 'Project site state is required for tax determination',
+        });
+      }
+      placeOfSupplyStateCode = proj.site_state_code || this.normalizeStateCode(proj.site_state);
+      if (!placeOfSupplyStateCode) {
+        throw new BadRequestException({
+          code: 'UNRESOLVED_PLACE_OF_SUPPLY',
+          message: 'Valid state code could not be resolved for project site',
+        });
+      }
+    } else if (!placeOfSupplyStateCode) {
+      let code: string | null = null;
+      if (party.gst_number && /^\d{2}/.test(party.gst_number.trim())) {
+        code = party.gst_number.trim().slice(0, 2);
+      }
+      if (!code && party.state_code) {
+        code = this.normalizeStateCode(party.state_code);
+      }
+      if (!code && party.state) {
+        code = this.normalizeStateCode(party.state);
+      }
+
+      if (!code) {
+        throw new BadRequestException({
+          code: 'MISSING_PLACE_OF_SUPPLY',
+          message: 'Party state or GST number is required for tax determination',
+        });
+      }
+      placeOfSupplyStateCode = code;
+    }
+
+    const isInterState = placeOfSupplyStateCode !== seller.stateCode;
+
+    if (dtoIsInterStateTax !== undefined && dtoIsInterStateTax !== isInterState) {
+      throw new BadRequestException({
+        code: 'INVALID_TAX_CLASSIFICATION',
+        message: 'Client tax classification does not match statutory Place of Supply rules',
+      });
+    }
+
+    return isInterState;
+  }
+
   private async getPartyDetails(partyType: string, partyId: string) {
     if (partyType === 'customer') {
-      const res = await this.db.query<{ name: string; mobile: string; email: string; gst_number: string; address: string }>(
-        `SELECT name, mobile, email, gst_number, address FROM customers WHERE id = $1`,
+      const res = await this.db.query<{
+        name: string;
+        mobile: string;
+        email: string;
+        gst_number: string;
+        address: string;
+        state: string | null;
+        state_code: string | null;
+        pincode: string | null;
+      }>(
+        `SELECT name, mobile, email, gst_number, address, state, state_code, pincode FROM customers WHERE id = $1`,
         [partyId],
       );
       if (res.rows.length === 0) throw new NotFoundException(`Customer ${partyId} not found`);
       return res.rows[0];
     } else if (partyType === 'dealer') {
-      const res = await this.db.query<{ name: string; contact_person: string; mobile: string; email: string; gst_number: string; address: string }>(
-        `SELECT name, contact_person, mobile, email, gst_number, address FROM dealers WHERE id = $1`,
+      const res = await this.db.query<{
+        name: string;
+        contact_person: string;
+        mobile: string;
+        email: string;
+        gst_number: string;
+        address: string;
+        state: string | null;
+        state_code: string | null;
+        pincode: string | null;
+      }>(
+        `SELECT name, contact_person, mobile, email, gst_number, address, state, state_code, pincode FROM dealers WHERE id = $1`,
         [partyId],
       );
       if (res.rows.length === 0) throw new NotFoundException(`Dealer ${partyId} not found`);
       return res.rows[0];
     } else {
-      const res = await this.db.query<{ name: string; company_name: string; mobile: string; email: string; gst_number: string; address: string; default_commission_rate: string }>(
-        `SELECT name, company_name, mobile, email, gst_number, address, default_commission_rate FROM architects WHERE id = $1`,
+      const res = await this.db.query<{
+        name: string;
+        company_name: string;
+        mobile: string;
+        email: string;
+        gst_number: string;
+        address: string;
+        state: string | null;
+        state_code: string | null;
+        pincode: string | null;
+        default_commission_rate: string;
+      }>(
+        `SELECT name, company_name, mobile, email, gst_number, address, state, state_code, pincode, default_commission_rate FROM architects WHERE id = $1`,
         [partyId],
       );
       if (res.rows.length === 0) throw new NotFoundException(`Architect ${partyId} not found`);
@@ -106,6 +282,15 @@ export class SalesService {
       const archRes = await this.db.query<{ name: string }>(`SELECT name FROM architects WHERE id = $1`, [dto.architectId]);
       if (archRes.rows.length > 0) archName = archRes.rows[0].name;
     }
+
+    const isInterState = await this.resolvePlaceOfSupply(
+      dto.partyType,
+      party,
+      dto.projectId,
+      dto.isInterStateTax,
+      dto.placeOfSupplyState,
+      dto.placeOfSupplyStateCode,
+    );
 
     const invoiceNumber = await this.getNextSequenceNumber('QT');
     const validUntil = new Date(Date.now() + (dto.validDays ?? 30) * 86400000);
@@ -184,14 +369,14 @@ export class SalesService {
         finishedProductCode: code,
         productDescription: item.productDescription ?? '',
         quantity: item.quantity,
-        unit,
+        unit: item.unit || unit,
         rate,
         discountAmount: discount,
         gstPercent,
         taxableAmount: taxable,
-        cgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        sgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        igstAmount: dto.isInterStateTax ? gst : 0,
+        cgstAmount: isInterState ? 0 : gst / 2,
+        sgstAmount: isInterState ? 0 : gst / 2,
+        igstAmount: isInterState ? gst : 0,
         lineTotal,
       });
     }
@@ -226,8 +411,8 @@ export class SalesService {
         (party as any).contact_person ?? null, party.mobile, party.email, party.gst_number,
         party.address, party.address, dto.projectId ?? null, projName, dto.architectId ?? null, archName,
         dto.salesExecutive ?? null, validUntil, subtotal, totalDiscount, taxableAmount,
-        dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? totalGst : 0, totalGst, grandTotal, grandTotal,
-        dto.isInterStateTax ?? false, dto.isDraft ? 'draft' : 'sent', dto.notes ?? null, dto.termsAndConditions ?? null, userId ?? null,
+        isInterState ? 0 : totalGst / 2, isInterState ? 0 : totalGst / 2, isInterState ? totalGst : 0, totalGst, grandTotal, grandTotal,
+        isInterState, dto.isDraft ? 'draft' : 'sent', dto.notes ?? null, dto.termsAndConditions ?? null, userId ?? null,
       ],
     );
     const saleId = saleRes.rows[0].id;
@@ -474,6 +659,8 @@ export class SalesService {
       if (archRes.rows.length > 0) archName = archRes.rows[0].name;
     }
 
+    const isInterState = await this.resolvePlaceOfSupply(dto.partyType, party, null, dto.isInterStateTax);
+
     const soNumber = await this.getNextSequenceNumber('SO');
 
     let hasShortage = false;
@@ -560,9 +747,9 @@ export class SalesService {
         discountAmount: discount,
         gstPercent,
         taxableAmount: taxable,
-        cgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        sgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        igstAmount: dto.isInterStateTax ? gst : 0,
+        cgstAmount: isInterState ? 0 : gst / 2,
+        sgstAmount: isInterState ? 0 : gst / 2,
+        igstAmount: isInterState ? gst : 0,
         lineTotal,
       });
     }
@@ -593,8 +780,8 @@ export class SalesService {
         party.address, party.address, dto.architectId ?? null, archName,
         finalStatus, dto.deliveryDate ? new Date(dto.deliveryDate) : null,
         subtotal, totalDiscount, taxableAmount,
-        dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? totalGst : 0,
-        totalGst, grandTotal, grandTotal, dto.isInterStateTax ?? false, dto.paymentMode ?? 'bankTransfer', dto.notes ?? null, userId ?? null,
+        isInterState ? 0 : totalGst / 2, isInterState ? 0 : totalGst / 2, isInterState ? totalGst : 0,
+        totalGst, grandTotal, grandTotal, isInterState, dto.paymentMode ?? 'bankTransfer', dto.notes ?? null, userId ?? null,
       ],
     );
     const soId = soRes.rows[0].id;
@@ -997,6 +1184,14 @@ export class SalesService {
       }
     }
 
+    let projName: string | null = null;
+    if (dto.projectId) {
+      const pRes = await this.db.query<{ name: string }>(`SELECT name FROM projects WHERE id = $1`, [dto.projectId]);
+      if (pRes.rows.length > 0) projName = pRes.rows[0].name;
+    }
+
+    const isInterState = await this.resolvePlaceOfSupply(dto.partyType, party, dto.projectId ?? null, dto.isInterStateTax);
+
     const invNumber = await this.getNextSequenceNumber('INV');
 
     // Deduct stock immediately
@@ -1054,9 +1249,9 @@ export class SalesService {
         discountAmount: discount,
         gstPercent,
         taxableAmount: taxable,
-        cgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        sgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        igstAmount: dto.isInterStateTax ? gst : 0,
+        cgstAmount: isInterState ? 0 : gst / 2,
+        sgstAmount: isInterState ? 0 : gst / 2,
+        igstAmount: isInterState ? gst : 0,
         lineTotal,
       });
     }
@@ -1072,25 +1267,25 @@ export class SalesService {
       `INSERT INTO sales (
         invoice_number, document_type, party_type, party_id, party_name,
         customer_contact_person, customer_mobile, customer_email, customer_gst_number,
-        billing_address, shipping_address, architect_id, architect_name,
+        billing_address, shipping_address, project_id, project_name, architect_id, architect_name,
         subtotal_amount, discount_amount, taxable_amount, cgst_amount, sgst_amount, igst_amount,
         gst_amount, total_amount, paid_amount, pending_amount, is_inter_state_tax, payment_mode, status,
         architect_commission_amount, notes, created_by
       ) VALUES (
         $1, 'invoice', $2, $3, $4,
         $5, $6, $7, $8,
-        $9, $10, $11, $12,
-        $13, $14, $15, $16, $17, $18,
-        $19, $20, $21, $22, $23, $24, $25,
-        $26, $27, $28
+        $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18, $19, $20,
+        $21, $22, $23, $24, $25, $26, $27,
+        $28, $29, $30
       ) RETURNING id`,
       [
         invNumber, dto.partyType, dto.partyId, party.name,
         (party as any).contact_person ?? null, party.mobile, party.email, party.gst_number,
-        party.address, party.address, dto.architectId ?? null, archName,
+        party.address, party.address, dto.projectId ?? null, projName, dto.architectId ?? null, archName,
         subtotal, totalDiscount, taxableAmount,
-        dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? totalGst : 0,
-        totalGst, grandTotal, paidAmount, pendingAmount, dto.isInterStateTax ?? false, dto.paymentMode ?? 'upi', status,
+        isInterState ? 0 : totalGst / 2, isInterState ? 0 : totalGst / 2, isInterState ? totalGst : 0,
+        totalGst, grandTotal, paidAmount, pendingAmount, isInterState, dto.paymentMode ?? 'upi', status,
         commissionAmount, dto.notes ?? 'Direct Counter POS Sale', userId ?? null,
       ],
     );

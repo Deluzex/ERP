@@ -1847,6 +1847,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                           SizedBox(
                             width: 140,
                             child: TextFormField(
+                              key: const ValueKey('purchase_transportation_input'),
                               controller: _transportationChargesCtrl,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
                               inputFormatters: [

@@ -1,11 +1,16 @@
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
 } from 'class-validator';
+
+const emptyToUndefined = ({ value }: { value: unknown }) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
 
 export class CreateVendorDto {
   @IsString()
@@ -24,18 +29,39 @@ export class CreateVendorDto {
   @IsNotEmpty()
   email!: string;
 
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
-  gstNumber!: string;
+  gstNumber?: string;
 
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
-  panNumber!: string;
+  panNumber?: string;
 
   @IsString()
   @IsNotEmpty()
   address!: string;
 
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  @Matches(/^[1-9][0-9]{5}$/, {
+    message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
+  })
+  pincode?: string;
+
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
   paymentTerms?: string;
@@ -63,10 +89,12 @@ export class UpdateVendorDto {
   @IsOptional()
   email?: string;
 
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
   gstNumber?: string;
 
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
   panNumber?: string;
@@ -75,6 +103,25 @@ export class UpdateVendorDto {
   @IsOptional()
   address?: string;
 
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  @Matches(/^[1-9][0-9]{5}$/, {
+    message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
+  })
+  pincode?: string;
+
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
   paymentTerms?: string;

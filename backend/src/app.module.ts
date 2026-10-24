@@ -22,6 +22,9 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { BomsModule } from './modules/boms/boms.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
+import { SubscriptionGuard } from './core/auth/subscription.guard';
 
 @Module({
   imports: [
@@ -38,18 +41,24 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     InventoryModule,
     PurchasesModule,
     ProductionModule,
+    BomsModule,
     SalesModule,
     ProjectsModule,
     PaymentsModule,
     ExpensesModule,
     ReportsModule,
     NotificationsModule,
+    SubscriptionModule,
   ],
   providers: [
     AppLogger,
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: SubscriptionGuard,
     },
     {
       provide: APP_GUARD,

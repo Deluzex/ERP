@@ -120,4 +120,18 @@ class Validators {
     }
     return null;
   }
+
+  /// Mandatory 6-digit Indian Postal PIN code validator (e.g. 380054, 400001)
+  static String? pincode(String? value, [bool isRequired = true]) {
+    if (value == null || value.trim().isEmpty) {
+      return isRequired ? 'PIN code is required' : null;
+    }
+    final cleaned = value.trim();
+    final pinRegex = RegExp(r'^[1-9][0-9]{5}$');
+    if (!pinRegex.hasMatch(cleaned)) {
+      return 'Enter valid 6-digit PIN code (e.g., 380054)';
+    }
+    return null;
+  }
 }
+

@@ -90,6 +90,8 @@ class SalesApiService {
     required List<SaleLineItem> items,
     String? notes,
     String? termsAndConditions,
+    String? placeOfSupplyState,
+    String? placeOfSupplyStateCode,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -104,6 +106,8 @@ class SalesApiService {
         'items': items.map(_lineItemDto).toList(),
         if (notes != null) 'notes': notes,
         if (termsAndConditions != null) 'termsAndConditions': termsAndConditions,
+        if (placeOfSupplyState != null) 'placeOfSupplyState': placeOfSupplyState,
+        if (placeOfSupplyStateCode != null) 'placeOfSupplyStateCode': placeOfSupplyStateCode,
       };
       final response = await _client.dio.post('/sales/quotations', data: body);
       final data = _client.unwrap<Map<String, dynamic>>(response);

@@ -42,6 +42,20 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     });
   }
 
+  /// GST state code derived the same way the backend derives it when the
+  /// customer master does not send an explicit code: prefer the GSTIN's
+  /// leading state code, then the well-known state name. Prevents the
+  /// model's Gujarat ('24') default from overriding an explicitly selected
+  /// other state.
+  String _deriveCustomerStateCode(String state, String gstNumber) {
+    final gst = gstNumber.trim().toUpperCase();
+    if (gst.length >= 2) return gst.substring(0, 2);
+    final lower = state.trim().toLowerCase();
+    if (lower == 'maharashtra') return '27';
+    if (lower == 'gujarat') return '24';
+    return '';
+  }
+
   void _openAddEditCustomerDialog([Customer? existing]) {
     final db = ref.read(databaseServiceProvider);
     final isEdit = existing != null;
@@ -50,7 +64,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     final emailCtrl = TextEditingController(text: existing?.email ?? '');
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final addressCtrl = TextEditingController(text: existing?.address ?? '');
-    final stateCtrl = TextEditingController(text: existing?.state ?? '');
+    final stateCtrl = TextEditingController(text: existing?.state.isNotEmpty ?? false ? existing!.state : 'Gujarat');
     final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     String? linkedArchitectId = (existing?.linkedArchitectId != null &&
             db.architects.any((a) => a.id == existing!.linkedArchitectId))
@@ -195,7 +209,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                               child: TextFormField(
                                 controller: stateCtrl,
                                 decoration: const InputDecoration(
-                                  labelText: 'State',
+                                  labelText: 'State *',
                                   hintText: 'E.g., Gujarat',
                                 ),
                               ),
@@ -206,8 +220,9 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                               child: TextFormField(
                                 controller: pincodeCtrl,
                                 keyboardType: TextInputType.number,
+                                validator: (v) => Validators.pincode(v),
                                 decoration: const InputDecoration(
-                                  labelText: 'PIN Code',
+                                  labelText: 'PIN Code *',
                                   hintText: 'E.g., 382481',
                                 ),
                               ),
@@ -308,6 +323,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                             address: addressCtrl.text.trim(),
                             state: stateCtrl.text.trim(),
                             pincode: pincodeCtrl.text.trim(),
+                            stateCode: _deriveCustomerStateCode(stateCtrl.text.trim(), gstCtrl.text.trim()),
                             outstandingAmount: existing?.outstandingAmount ?? 0.0,
                             isAlsoArchitect: isAlsoArchitect,
                             linkedArchitectId: linkedArchitectId,

@@ -66,6 +66,8 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
   PaymentMode _paymentMode = PaymentMode.bankTransfer;
   final List<_SaleLineItemDraft> _items = [];
 
+  bool _isInterStateTax = false;
+
   @override
   void initState() {
     super.initState();
@@ -86,6 +88,78 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
         gstPercent: fp.gstPercent,
       ));
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _resolveTaxClassification();
+        });
+      }
+    });
+  }
+
+  void _resolveTaxClassification() {
+    final db = ref.read(databaseServiceProvider);
+
+    // 1. If project is selected, project site location authoritatively governs Place of Supply
+    if (_selectedProjectId != null) {
+      final project = db.projects.where((p) => p.id == _selectedProjectId).firstOrNull;
+      if (project != null) {
+        final siteState = project.siteState?.trim().toLowerCase();
+        final siteCode = project.siteStateCode?.trim();
+
+        if ((siteState != null && siteState.isNotEmpty) || (siteCode != null && siteCode.isNotEmpty)) {
+          final isGujarat = siteCode == '24' || siteState == 'gujarat';
+          _isInterStateTax = !isGujarat;
+          return;
+        }
+      }
+    }
+
+    // 2. Fall back to party location
+    String? partyGst;
+    String? partyState;
+    String? partyStateCode;
+
+    if (_partyType == PartyType.customer) {
+      final c = db.customers.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (c != null) {
+        partyGst = c.gstNumber.trim();
+        partyState = c.state.trim().toLowerCase();
+        partyStateCode = c.stateCode.trim();
+      }
+    } else if (_partyType == PartyType.dealer) {
+      final d = db.dealers.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (d != null) {
+        partyGst = d.gstNumber.trim();
+        partyState = d.state.trim().toLowerCase();
+      }
+    } else if (_partyType == PartyType.architect) {
+      final a = db.architects.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (a != null) {
+        partyGst = a.gstNumber.trim();
+        partyState = a.state.trim().toLowerCase();
+      }
+    }
+
+    if (partyGst != null && partyGst.length >= 2) {
+      final prefix = partyGst.substring(0, 2);
+      if (RegExp(r'^\d{2}$').hasMatch(prefix)) {
+        _isInterStateTax = (prefix != '24');
+        return;
+      }
+    }
+
+    if (partyStateCode != null && partyStateCode.isNotEmpty) {
+      _isInterStateTax = (partyStateCode != '24');
+      return;
+    }
+
+    if (partyState != null && partyState.isNotEmpty) {
+      _isInterStateTax = (partyState != 'gujarat');
+      return;
+    }
+
+    _isInterStateTax = false;
   }
 
   Future<void> _showAddProductDialog() async {
@@ -666,6 +740,9 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
   void _openQuickAddProjectDialog() {
     final db = ref.read(databaseServiceProvider);
     final nameCtrl = TextEditingController();
+    final siteStateCtrl = TextEditingController(text: 'Gujarat');
+    final sitePincodeCtrl = TextEditingController();
+    final siteAddressCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
     String? selectedCustId;
@@ -734,6 +811,32 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
+                          controller: siteStateCtrl,
+                          validator: (v) => Validators.requiredField(v, 'Site state is required for GST determination'),
+                          decoration: const InputDecoration(
+                            labelText: 'Site State (Place of Supply) *',
+                            hintText: 'e.g. Gujarat, Maharashtra',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: sitePincodeCtrl,
+                          validator: (v) => v != null && v.trim().isNotEmpty ? Validators.pincode(v) : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Site PIN Code (Optional)',
+                            hintText: 'e.g. 380001',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: siteAddressCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Site Address (Optional)',
+                            hintText: 'Full project construction address',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
                           controller: notesCtrl,
                           maxLines: 2,
                           decoration: const InputDecoration(labelText: 'Project Notes / Scope (Optional)'),
@@ -761,6 +864,8 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                       custName = db.customers.where((c) => c.id == selectedCustId).firstOrNull?.name;
                     }
 
+                    final stateName = siteStateCtrl.text.trim();
+                    final isGujarat = stateName.toLowerCase() == 'gujarat' || stateName == '24';
                     final newProj = Project(
                       id: IdGenerator.generateId('PRJ'),
                       name: nameCtrl.text.trim(),
@@ -771,6 +876,11 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                       startDate: DateTime.now(),
                       expectedCompletionDate: DateTime.now().add(const Duration(days: 90)),
                       status: status,
+                      siteState: stateName.isNotEmpty ? stateName : null,
+                      siteStateCode: isGujarat ? '24' : (stateName.toLowerCase() == 'maharashtra' ? '27' : null),
+                      sitePincode: sitePincodeCtrl.text.trim().isNotEmpty ? sitePincodeCtrl.text.trim() : null,
+                      siteAddress: siteAddressCtrl.text.trim().isNotEmpty ? siteAddressCtrl.text.trim() : null,
+                      posVerified: stateName.isNotEmpty,
                       notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
                       createdAt: DateTime.now(),
                     );
@@ -778,6 +888,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                     db.addProject(newProj);
                     setState(() {
                       _selectedProjectId = newProj.id;
+                      _resolveTaxClassification();
                     });
 
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -799,6 +910,25 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
   Future<void> _createInvoice(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
     final db = ref.read(databaseServiceProvider);
+
+    if (_selectedProjectId != null) {
+      final p = db.projects.where((prj) => prj.id == _selectedProjectId).firstOrNull;
+      if (p != null) {
+        final siteState = p.siteState?.trim();
+        final siteCode = p.siteStateCode?.trim();
+        if ((siteState == null || siteState.isEmpty) && (siteCode == null || siteCode.isEmpty)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot finalize sale: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+          return;
+        }
+      }
+    }
+
+    _resolveTaxClassification();
 
     // Validate finished product inventory
     if (!isDraft) {
@@ -843,6 +973,12 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
     }
 
     final saleItems = _items.map((i) {
+      final taxable = ((i.quantity * i.rate) - i.discount).clamp(0.0, double.infinity);
+      final gst = taxable * (i.gstPercent / 100.0);
+      final cgst = _isInterStateTax ? 0.0 : (gst / 2);
+      final sgst = _isInterStateTax ? 0.0 : (gst / 2);
+      final igst = _isInterStateTax ? gst : 0.0;
+
       return SaleLineItem(
         finishedProductId: i.finishedProductId,
         finishedProductName: i.finishedProductName,
@@ -852,6 +988,10 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
         rate: i.rate,
         discountAmount: i.discount,
         gstPercent: i.gstPercent,
+        taxableAmount: taxable,
+        cgstAmount: cgst,
+        sgstAmount: sgst,
+        igstAmount: igst,
         lineTotal: i.lineTotal,
       );
     }).toList();
@@ -882,6 +1022,11 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
       items: saleItems,
       subtotalAmount: _subtotalAmount,
       discountAmount: _totalDiscount,
+      taxableAmount: _subtotalAmount - _totalDiscount,
+      cgstAmount: _isInterStateTax ? 0.0 : (_totalGst / 2),
+      sgstAmount: _isInterStateTax ? 0.0 : (_totalGst / 2),
+      igstAmount: _isInterStateTax ? _totalGst : 0.0,
+      isInterStateTax: _isInterStateTax,
       gstAmount: _totalGst,
       totalAmount: _totalAmount,
       paidAmount: _paidAmount,
@@ -1019,6 +1164,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                           _partyType = val;
                                           _selectedProjectId = null;
                                           _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
+                                          _resolveTaxClassification();
                                         });
                                       }
                                     },
@@ -1038,6 +1184,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                           _partyType = val;
                                           _selectedProjectId = null;
                                           _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
+                                          _resolveTaxClassification();
                                         });
                                       }
                                     },
@@ -1056,6 +1203,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                         setState(() {
                                           _partyType = val;
                                           _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
+                                          _resolveTaxClassification();
                                         });
                                       }
                                     },
@@ -1080,6 +1228,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                             _partyType = val;
                                             _selectedProjectId = null;
                                             _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
+                                            _resolveTaxClassification();
                                           });
                                         }
                                       },
@@ -1101,6 +1250,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                             _partyType = val;
                                             _selectedProjectId = null;
                                             _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
+                                            _resolveTaxClassification();
                                           });
                                         }
                                       },
@@ -1121,6 +1271,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                           setState(() {
                                             _partyType = val;
                                             _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
+                                            _resolveTaxClassification();
                                           });
                                         }
                                       },
@@ -1180,7 +1331,10 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                             return;
                           }
                           if (val == '__DIVIDER__') return;
-                          setState(() => _selectedPartyId = val);
+                          setState(() {
+                            _selectedPartyId = val;
+                            _resolveTaxClassification();
+                          });
                         },
                       );
 
@@ -1242,7 +1396,10 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                 return;
                               }
                               if (val == '__DIVIDER_PROJECT__') return;
-                              setState(() => _selectedProjectId = val);
+                              setState(() {
+                                _selectedProjectId = val;
+                                _resolveTaxClassification();
+                              });
                             },
                           ),
                         ),
@@ -1546,14 +1703,34 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(child: Text('GST Tax (18%):', style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          const SizedBox(width: 8),
-                          Text(Formatters.formatCurrency(_totalGst), style: AppTextStyles.bodySmall),
-                        ],
-                      ),
+                      if (!_isInterStateTax) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(child: Text('CGST (9%):', style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: 8),
+                            Text(Formatters.formatCurrency(_totalGst / 2), style: AppTextStyles.bodySmall),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(child: Text('SGST (9%):', style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: 8),
+                            Text(Formatters.formatCurrency(_totalGst / 2), style: AppTextStyles.bodySmall),
+                          ],
+                        ),
+                      ] else ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(child: Text('IGST (18%):', style: AppTextStyles.bodyMedium.copyWith(color: Colors.purple), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: 8),
+                            Text(Formatters.formatCurrency(_totalGst), style: AppTextStyles.bodySmall.copyWith(color: Colors.purple, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
                       const Divider(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

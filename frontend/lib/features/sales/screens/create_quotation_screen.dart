@@ -106,6 +106,68 @@ String _generateRmDescription(RawMaterial rm) {
   return buffer.toString();
 }
 
+/// Official GST state codes for statutory Place of Supply selection.
+/// The delivery destination is a structured selection, never derived from
+/// free-text address strings.
+const Map<String, String> _gstStateCodes = {
+  'Jammu and Kashmir': '01',
+  'Himachal Pradesh': '02',
+  'Punjab': '03',
+  'Chandigarh': '04',
+  'Uttarakhand': '05',
+  'Haryana': '06',
+  'Delhi': '07',
+  'Rajasthan': '08',
+  'Uttar Pradesh': '09',
+  'Bihar': '10',
+  'Sikkim': '11',
+  'Arunachal Pradesh': '12',
+  'Nagaland': '13',
+  'Manipur': '14',
+  'Mizoram': '15',
+  'Tripura': '16',
+  'Meghalaya': '17',
+  'Assam': '18',
+  'West Bengal': '19',
+  'Jharkhand': '20',
+  'Odisha': '21',
+  'Chhattisgarh': '22',
+  'Madhya Pradesh': '23',
+  'Gujarat': '24',
+  'Dadra and Nagar Haveli and Daman and Diu': '26',
+  'Maharashtra': '27',
+  'Karnataka': '29',
+  'Goa': '30',
+  'Lakshadweep': '31',
+  'Kerala': '32',
+  'Tamil Nadu': '33',
+  'Puducherry': '34',
+  'Andaman and Nicobar Islands': '35',
+  'Telangana': '36',
+  'Andhra Pradesh': '37',
+  'Ladakh': '38',
+};
+
+/// Official state code for a known state name, or null when unverifiable.
+String? _gstCodeForStateName(String stateName) {
+  final want = stateName.trim().toLowerCase();
+  if (want.isEmpty) return null;
+  for (final entry in _gstStateCodes.entries) {
+    if (entry.key.toLowerCase() == want) return entry.value;
+  }
+  return null;
+}
+
+/// Canonical display name of a known state name, or null when unverifiable.
+String? _canonicalStateName(String stateName) {
+  final want = stateName.trim().toLowerCase();
+  if (want.isEmpty) return null;
+  for (final entry in _gstStateCodes.entries) {
+    if (entry.key.toLowerCase() == want) return entry.key;
+  }
+  return null;
+}
+
 class CreateQuotationScreen extends ConsumerStatefulWidget {
   const CreateQuotationScreen({super.key});
 
@@ -121,6 +183,10 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   String? _selectedProjectId;
   String _salesExecutive = 'Alex Sterling';
   bool _isInterStateTax = false; // Intra-State (CGST+SGST) vs Inter-State (IGST)
+  bool _isTaxManuallySelected = false;
+  // Statutory Place of Supply destination for direct-dispatch quotations
+  // without a linked project (null = party registered location default).
+  String? _deliveryPosState;
 
   // Customer autofill controllers
   final _contactPersonCtrl = TextEditingController();
@@ -150,13 +216,22 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     final db = ref.read(databaseServiceProvider);
     final sourceId = ref.read(salesCreateSourceDocIdProvider);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      db.loadRawMaterials();
-      db.loadFinishedProducts();
-      db.loadCustomers();
-      db.loadDealers();
-      db.loadArchitects();
-      db.loadProjects();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Await party / product / project loads so the initial statutory GST
+      // classification resolves against Place of Supply data, not empty masters.
+      await Future.wait([
+        db.loadRawMaterials(),
+        db.loadFinishedProducts(),
+        db.loadCustomers(),
+        db.loadDealers(),
+        db.loadArchitects(),
+        db.loadProjects(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _resolveTaxClassification();
+        });
+      }
     });
 
     if (sourceId != null) {
@@ -214,6 +289,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         _selectedPartyId = db.customers.first.id;
         _autoFillPartyDetails(db.customers.first.id, PartyType.customer, db);
       }
+      _resolveTaxClassification();
       if (db.finishedProducts.isNotEmpty) {
         final fp = db.finishedProducts.first;
         _items.add(_QuotationItemDraft(
@@ -248,7 +324,131 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     }
   }
 
+  void _resolveTaxClassification() {
+
+    if (_isTaxManuallySelected) return;
+
+    final db = ref.read(databaseServiceProvider);
+
+    // Revisions inherit the parent quotation's statutory regime (backend rule:
+    // createQuotationRevision saves with parent.isInterStateTax without re-resolving).
+    if (_isRevision && _sourceQuotation != null) {
+      _isInterStateTax = _sourceQuotation!.isInterStateTax;
+      return;
+    }
+
+    // 1. If project is selected, project site location authoritatively governs Place of Supply (Section 10 IGST Act)
+    if (_selectedProjectId != null) {
+      final project = db.projects.where((p) => p.id == _selectedProjectId).firstOrNull;
+      if (project != null) {
+        final siteState = project.siteState?.trim().toLowerCase();
+        final siteCode = project.siteStateCode?.trim();
+
+        if ((siteState != null && siteState.isNotEmpty) || (siteCode != null && siteCode.isNotEmpty)) {
+          final isGujarat = siteCode == '24' || siteState == 'gujarat';
+          _isInterStateTax = !isGujarat;
+          return;
+        }
+      }
+    }
+
+    // 1b. Explicit delivery destination for direct-dispatch quotations without a
+    // linked project (Section 10(1) IGST Act: goods movement terminates here).
+    // Mirrors backend resolvePlaceOfSupply priority: explicit POS > project > party.
+    if (_selectedProjectId == null) {
+      final destinationName = _deliveryPosState?.trim();
+      final destinationCode =
+          destinationName != null && destinationName.isNotEmpty ? _gstCodeForStateName(destinationName) : null;
+      if (destinationCode != null) {
+        _isInterStateTax = (destinationCode != '24');
+        return;
+      }
+    }
+
+    // 2. Fall back to party registered location if no project
+    String? partyGst;
+    String? partyState;
+    String? partyStateCode;
+
+    if (_partyType == PartyType.customer) {
+      final c = db.customers.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (c != null) {
+        partyGst = c.gstNumber.trim();
+        partyState = c.state.trim().toLowerCase();
+        partyStateCode = c.stateCode.trim();
+      }
+    } else if (_partyType == PartyType.dealer) {
+      final d = db.dealers.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (d != null) {
+        partyGst = d.gstNumber.trim();
+        partyState = d.state.trim().toLowerCase();
+        partyStateCode = d.stateCode.trim();
+      }
+    } else if (_partyType == PartyType.architect) {
+      final a = db.architects.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (a != null) {
+        partyGst = a.gstNumber.trim();
+        partyState = a.state.trim().toLowerCase();
+        partyStateCode = a.stateCode.trim();
+      }
+    }
+
+    // GSTIN 2-digit prefix is highest fidelity indicator for registered entities
+    if (partyGst != null && partyGst.length >= 2) {
+      final prefix = partyGst.substring(0, 2);
+      if (RegExp(r'^\d{2}$').hasMatch(prefix)) {
+        _isInterStateTax = (prefix != '24');
+        return;
+      }
+    }
+
+    if (partyStateCode != null && partyStateCode.isNotEmpty) {
+      _isInterStateTax = (partyStateCode != '24');
+      return;
+    }
+
+    if (partyState != null && partyState.isNotEmpty) {
+      _isInterStateTax = (partyState != 'gujarat');
+      return;
+    }
+
+    // Default intra-state (seller registered in Gujarat 24)
+    _isInterStateTax = false;
+  }
+
+  String _getPlaceOfSupplyDescription(MockDatabaseService db) {
+    if (_selectedProjectId != null) {
+      final project = db.projects.where((p) => p.id == _selectedProjectId).firstOrNull;
+      if (project != null) {
+        final state = project.siteState ?? '';
+        final code = project.siteStateCode ?? '';
+        final stateDisp = state.isNotEmpty ? state : (code.isNotEmpty ? 'Code $code' : 'Unresolved');
+        return 'Project Site: ${project.name} ($stateDisp${code.isNotEmpty && state.isNotEmpty ? " - State Code $code" : ""})';
+      }
+    }
+    if (_selectedProjectId == null) {
+      final destinationName = _deliveryPosState?.trim();
+      if (destinationName != null && destinationName.isNotEmpty) {
+        final code = _gstCodeForStateName(destinationName);
+        return 'Delivery Destination: $destinationName${code != null ? " - Code $code" : " (Unverified)"}';
+      }
+    }
+    if (_partyType == PartyType.customer) {
+      final c = db.customers.where((x) => x.id == _selectedPartyId).firstOrNull;
+      return 'Customer: ${c?.name ?? "Client"} (${c?.state.isNotEmpty == true ? c!.state : "Gujarat"} - Code ${c?.stateCode ?? "24"})';
+    } else if (_partyType == PartyType.dealer) {
+      final d = db.dealers.where((x) => x.id == _selectedPartyId).firstOrNull;
+      return 'Dealer: ${d?.name ?? "Dealer"} (${d?.state.isNotEmpty == true ? d!.state : "Gujarat"})';
+    } else {
+      final a = db.architects.where((x) => x.id == _selectedPartyId).firstOrNull;
+      return 'Architect: ${a?.name ?? "Architect"} (${a?.state.isNotEmpty == true ? a!.state : "Gujarat"})';
+    }
+  }
+
   void _autoFillPartyDetails(String partyId, PartyType type, MockDatabaseService db) {
+    // Destination defaults to the party's GST-registered state so the
+    // classification is unchanged unless the delivery destination differs.
+    _deliveryPosState = null;
     if (type == PartyType.customer) {
       final c = db.customers.where((cust) => cust.id == partyId).firstOrNull;
       if (c != null) {
@@ -258,6 +458,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         _gstNumberCtrl.text = c.gstNumber;
         _billingAddressCtrl.text = c.address;
         _shippingAddressCtrl.text = c.address;
+        _deliveryPosState = _canonicalStateName(c.state);
       }
     } else if (type == PartyType.dealer) {
       final d = db.dealers.where((dlr) => dlr.id == partyId).firstOrNull;
@@ -268,6 +469,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         _gstNumberCtrl.text = d.gstNumber;
         _billingAddressCtrl.text = d.address;
         _shippingAddressCtrl.text = d.address;
+        _deliveryPosState = _canonicalStateName(d.state);
       }
     } else if (type == PartyType.architect) {
       final a = db.architects.where((arc) => arc.id == partyId).firstOrNull;
@@ -278,8 +480,10 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         _gstNumberCtrl.text = a.gstNumber;
         _billingAddressCtrl.text = a.address;
         _shippingAddressCtrl.text = a.address;
+        _deliveryPosState = _canonicalStateName(a.state);
       }
     }
+    _resolveTaxClassification();
   }
 
   void _openQuickAddPartyDialog(PartyType partyType) {
@@ -560,6 +764,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   void _openQuickAddProjectDialog() {
     final db = ref.read(databaseServiceProvider);
     final nameCtrl = TextEditingController();
+    final siteStateCtrl = TextEditingController(text: 'Gujarat');
+    final sitePincodeCtrl = TextEditingController();
+    final siteAddressCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
     String? selectedCustId;
@@ -628,6 +835,32 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
+                          controller: siteStateCtrl,
+                          validator: (v) => Validators.requiredField(v, 'Site state is required for GST determination'),
+                          decoration: const InputDecoration(
+                            labelText: 'Site State (Place of Supply) *',
+                            hintText: 'e.g. Gujarat, Maharashtra',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: sitePincodeCtrl,
+                          validator: (v) => v != null && v.trim().isNotEmpty ? Validators.pincode(v) : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Site PIN Code (Optional)',
+                            hintText: 'e.g. 380001',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: siteAddressCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Site Address (Optional)',
+                            hintText: 'Full project construction address',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
                           controller: notesCtrl,
                           maxLines: 2,
                           decoration: const InputDecoration(labelText: 'Project Notes / Scope (Optional)'),
@@ -655,6 +888,8 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                       custName = db.customers.where((c) => c.id == selectedCustId).firstOrNull?.name;
                     }
 
+                    final stateName = siteStateCtrl.text.trim();
+                    final isGujarat = stateName.toLowerCase() == 'gujarat' || stateName == '24';
                     final newProj = Project(
                       id: IdGenerator.generateId('PRJ'),
                       name: nameCtrl.text.trim(),
@@ -665,6 +900,11 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                       startDate: DateTime.now(),
                       expectedCompletionDate: DateTime.now().add(const Duration(days: 90)),
                       status: status,
+                      siteState: stateName.isNotEmpty ? stateName : null,
+                      siteStateCode: isGujarat ? '24' : (stateName.toLowerCase() == 'maharashtra' ? '27' : null),
+                      sitePincode: sitePincodeCtrl.text.trim().isNotEmpty ? sitePincodeCtrl.text.trim() : null,
+                      siteAddress: siteAddressCtrl.text.trim().isNotEmpty ? siteAddressCtrl.text.trim() : null,
+                      posVerified: stateName.isNotEmpty,
                       notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
                       createdAt: DateTime.now(),
                     );
@@ -672,6 +912,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                     db.addProject(newProj);
                     setState(() {
                       _selectedProjectId = newProj.id;
+                      _resolveTaxClassification();
                     });
 
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -772,6 +1013,26 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     setState(() => _isSubmitting = true);
 
     final db = ref.read(databaseServiceProvider);
+
+    if (_selectedProjectId != null) {
+      final p = db.projects.where((prj) => prj.id == _selectedProjectId).firstOrNull;
+      if (p != null) {
+        final siteState = p.siteState?.trim();
+        final siteCode = p.siteStateCode?.trim();
+        if ((siteState == null || siteState.isEmpty) && (siteCode == null || siteCode.isEmpty)) {
+          setState(() => _isSubmitting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot finalize quotation: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+          return;
+        }
+      }
+    }
+
+    _resolveTaxClassification();
 
     String partyName = '';
     if (_partyType == PartyType.customer) {
@@ -892,7 +1153,17 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       if (_isRevision && _sourceQuotation != null) {
         await db.createQuotationRevisionAsync(_sourceQuotation!.id, quotation);
       } else {
-        await db.createQuotationAsync(quotation);
+        // Explicit Place of Supply travels with the sale when a delivery
+        // destination governs the classification (no linked project). The
+        // backend validates isInterStateTax against this statutory input.
+        final destinationName = _selectedProjectId == null ? _deliveryPosState?.trim() : null;
+        final destinationCode =
+            destinationName != null && destinationName.isNotEmpty ? _gstCodeForStateName(destinationName) : null;
+        await db.createQuotationAsync(
+          quotation,
+          placeOfSupplyState: destinationCode != null ? destinationName : null,
+          placeOfSupplyStateCode: destinationCode,
+        );
       }
 
       if (!mounted) return;
@@ -1040,6 +1311,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       if (_selectedPartyId != null) {
                                         _autoFillPartyDetails(_selectedPartyId!, PartyType.customer, db);
                                       }
+                                      _resolveTaxClassification();
                                     });
                                   }
                                 },
@@ -1064,6 +1336,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       if (_selectedPartyId != null) {
                                         _autoFillPartyDetails(_selectedPartyId!, PartyType.dealer, db);
                                       }
+                                      _resolveTaxClassification();
                                     });
                                   }
                                 },
@@ -1087,6 +1360,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       if (_selectedPartyId != null) {
                                         _autoFillPartyDetails(_selectedPartyId!, PartyType.architect, db);
                                       }
+                                      _resolveTaxClassification();
                                     });
                                   }
                                 },
@@ -1268,12 +1542,47 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                 return;
                               }
                               if (val == '__DIVIDER_PROJECT__') return;
-                              setState(() => _selectedProjectId = val);
+                              setState(() {
+                                _selectedProjectId = val;
+                                _resolveTaxClassification();
+                              });
                             },
                           ),
                         ),
                         const SizedBox(width: 16),
                       ],
+                      Expanded(
+                        child: DropdownButtonFormField<String?>(
+                          value: _deliveryPosState,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            labelText: 'Place of Supply (Delivery Destination)',
+                            helperText: _selectedProjectId != null
+                                ? 'Linked project site governs Place of Supply'
+                                : (_isRevision
+                                    ? 'Revision inherits the original quotation tax regime'
+                                    : 'Defaults to party registered location'),
+                          ),
+                          items: [
+                            const DropdownMenuItem<String?>(value: null, child: Text('Party Registered Location (Default)')),
+                            ..._gstStateCodes.keys.map(
+                              (s) => DropdownMenuItem<String?>(
+                                value: s,
+                                child: Text('$s (${_gstStateCodes[s]})', maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                            ),
+                          ],
+                          onChanged: (_selectedProjectId != null || _isRevision)
+                              ? null
+                              : (val) {
+                                  setState(() {
+                                    _deliveryPosState = val;
+                                    _resolveTaxClassification();
+                                  });
+                                },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
                       Expanded(
                         child: TextFormField(
                           readOnly: true,
@@ -1428,9 +1737,11 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.inventory_2_outlined, size: 16, color: Colors.teal.shade700),
-                                        const SizedBox(width: 6),
-                                        Text('Fin Good', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal.shade700)),
+                                        Icon(Icons.inventory_2_outlined, size: 14, color: Colors.teal.shade700),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text('Fin Good', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal.shade700), overflow: TextOverflow.ellipsis),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -1439,9 +1750,11 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.grain, size: 16, color: Colors.amber.shade800),
-                                        const SizedBox(width: 6),
-                                        Text('Raw Mat', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber.shade800)),
+                                        Icon(Icons.grain, size: 14, color: Colors.amber.shade800),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text('Raw Mat', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade800), overflow: TextOverflow.ellipsis),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -1790,33 +2103,115 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           );
-                          final chip = ChoiceChip(
-                            label: Text(
-                              _isInterStateTax ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST+SGST)',
-                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                          final chip = InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: Row(
+                                    children: [
+                                      const Icon(Icons.lock_outline, color: AppColors.primary, size: 20),
+                                      const SizedBox(width: 8),
+                                      const Text('Statutory Tax Classification'),
+                                    ],
+                                  ),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Tax classification is automatically determined per GST Section 10 Place of Supply rules:',
+                                        style: AppTextStyles.bodyMedium,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        '• Seller Location: Gujarat (State Code 24)\n'
+                                        '• Place of Supply: ${_getPlaceOfSupplyDescription(db)}\n'
+                                        '• Tax Regime: ${_isInterStateTax ? "Inter-State (IGST 18%)" : "Intra-State (CGST 9% + SGST 9%)"}',
+                                        style: AppTextStyles.bodySmall.copyWith(fontFamily: 'monospace', height: 1.5),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.amber.shade300),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.info_outline, color: Colors.amber, size: 16),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'Manual switching is prohibited to prevent compliance violations.',
+                                                style: AppTextStyles.caption.copyWith(color: Colors.amber.shade900),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.of(ctx).pop(),
+                                      child: const Text('Close'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: _isInterStateTax ? Colors.purple.withValues(alpha: 0.12) : Colors.blue.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: _isInterStateTax ? Colors.purple.shade300 : Colors.blue.shade300,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.lock,
+                                    size: 12,
+                                    color: _isInterStateTax ? Colors.purple.shade700 : Colors.blue.shade700,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _isInterStateTax ? 'Inter-State (IGST 18%)' : 'Intra-State (CGST+SGST)',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: _isInterStateTax ? Colors.purple.shade900 : Colors.blue.shade900,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 12,
+                                    color: _isInterStateTax ? Colors.purple.shade600 : Colors.blue.shade600,
+                                  ),
+                                ],
+                              ),
                             ),
-                            selected: _isInterStateTax,
-                            selectedColor: Colors.purple.withOpacity(0.15),
-                            onSelected: (val) => setState(() => _isInterStateTax = val),
                           );
 
-                          if (isNarrowHeader) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          return SizedBox(
+                            width: double.infinity,
+                            child: Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              runSpacing: 8,
                               children: [
                                 title,
-                                const SizedBox(height: 8),
                                 chip,
                               ],
-                            );
-                          }
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(child: title),
-                              const SizedBox(width: 8),
-                              chip,
-                            ],
+                            ),
                           );
                         },
                       ),

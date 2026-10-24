@@ -21,6 +21,7 @@ import '../../core/models/user_model.dart';
 import '../../core/models/vendor_model.dart';
 import '../../core/models/whatsapp_models.dart';
 import '../../core/api/categories_units_api_service.dart';
+import '../../core/api/boms_api_service.dart';
 import '../../core/api/finished_products_api_service.dart';
 import '../../core/api/parties_api_service.dart';
 import '../../core/api/raw_materials_api_service.dart';
@@ -615,6 +616,8 @@ class MockDatabaseService extends ChangeNotifier {
     ];
 
     // Expense Categories Master
+    // linkedKey = canonical expense key (backend EXPENSE_CATEGORIES) used when
+    // saving expenses against this category master entry.
     expenseCategoryMasterList = [
       ExpenseCategoryMasterItem(
         id: 'EXP-CAT-1',
@@ -622,6 +625,7 @@ class MockDatabaseService extends ChangeNotifier {
         code: 'TRANSPORT',
         description: 'Freight, vehicle hire, and site material delivery charges',
         isActive: true,
+        linkedKey: ExpenseCategory.transportation.name,
       ),
       ExpenseCategoryMasterItem(
         id: 'EXP-CAT-2',
@@ -629,6 +633,7 @@ class MockDatabaseService extends ChangeNotifier {
         code: 'COURIER',
         description: 'Domestic express parcels, blueprints, and sample dispatches',
         isActive: true,
+        linkedKey: ExpenseCategory.courier.name,
       ),
       ExpenseCategoryMasterItem(
         id: 'EXP-CAT-3',
@@ -636,6 +641,7 @@ class MockDatabaseService extends ChangeNotifier {
         code: 'FUEL',
         description: 'Diesel, petrol, client site visits, and local travel allowance',
         isActive: true,
+        linkedKey: ExpenseCategory.fuel.name,
       ),
       ExpenseCategoryMasterItem(
         id: 'EXP-CAT-4',
@@ -643,6 +649,7 @@ class MockDatabaseService extends ChangeNotifier {
         code: 'LABOUR',
         description: 'Contract factory workers, loading/unloading, and site installation wages',
         isActive: true,
+        linkedKey: ExpenseCategory.labour.name,
       ),
       ExpenseCategoryMasterItem(
         id: 'EXP-CAT-5',
@@ -650,6 +657,7 @@ class MockDatabaseService extends ChangeNotifier {
         code: 'UTILITIES',
         description: 'Factory power bills, backup generator diesel, and water utility',
         isActive: true,
+        linkedKey: ExpenseCategory.electricity.name,
       ),
       ExpenseCategoryMasterItem(
         id: 'EXP-CAT-6',
@@ -657,6 +665,7 @@ class MockDatabaseService extends ChangeNotifier {
         code: 'MAINTENANCE',
         description: 'Machine servicing, tooling replacement, and workshop upkeep',
         isActive: true,
+        linkedKey: ExpenseCategory.maintenance.name,
       ),
       ExpenseCategoryMasterItem(
         id: 'EXP-CAT-7',
@@ -664,6 +673,7 @@ class MockDatabaseService extends ChangeNotifier {
         code: 'OFFICE',
         description: 'Stationery, pantry supplies, software subscriptions, and internet',
         isActive: true,
+        linkedKey: ExpenseCategory.officeExpense.name,
       ),
       ExpenseCategoryMasterItem(
         id: 'EXP-CAT-8',
@@ -671,6 +681,7 @@ class MockDatabaseService extends ChangeNotifier {
         code: 'PRODUCTION',
         description: 'Safety gear, cutting blades, adhesives, and workshop consumables',
         isActive: true,
+        linkedKey: ExpenseCategory.productionExpense.name,
       ),
       ExpenseCategoryMasterItem(
         id: 'EXP-CAT-9',
@@ -678,6 +689,7 @@ class MockDatabaseService extends ChangeNotifier {
         code: 'PROJECT',
         description: 'Architect sample mocks, scaffold hire, and site coordination fees',
         isActive: true,
+        linkedKey: ExpenseCategory.projectExpense.name,
       ),
       ExpenseCategoryMasterItem(
         id: 'EXP-CAT-10',
@@ -685,6 +697,7 @@ class MockDatabaseService extends ChangeNotifier {
         code: 'OTHER',
         description: 'Incidental business expenses and petty cash charges',
         isActive: true,
+        linkedKey: ExpenseCategory.other.name,
       ),
     ];
 
@@ -4395,7 +4408,7 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
-  // BILL OF MATERIALS (BOM) MANAGEMENT
+  // BILL OF MATERIALS (BOM) MANAGEMENT — Live API (`/api/v1/boms`)
   // -------------------------------------------------------------
   BillOfMaterial? getBomForProduct(String finishedProductId) {
     try {
@@ -4405,30 +4418,97 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
-  void addBom(BillOfMaterial bom) {
-    // Deactivate previous active BOMs for this product
-    for (var i = 0; i < boms.length; i++) {
-      if (boms[i].finishedProductId == bom.finishedProductId) {
-        boms[i] = boms[i].copyWith(isActive: false);
+  Future<void> loadBoms({bool forceRefresh = false}) async {
+    try {
+      final remote = await _bomsApi.getBoms();
+      boms = remote;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadBoms fallback: $e');
+    }
+  }
+
+  List<Map<String, dynamic>> _bomItemsPayload(List<BomItem> items) {
+    return items
+        .map((i) => {
+              'rawMaterialId': i.rawMaterialId,
+              'quantity': i.quantityPerUnit,
+              'unit': i.safeUnit,
+              'scrapPercentage': i.wastagePercent,
+            })
+        .toList();
+  }
+
+  Future<BillOfMaterial> addBomAsync(BillOfMaterial bom) async {
+    final saved = await _bomsApi.createBom(
+      finishedProductId: bom.finishedProductId,
+      yieldQuantity: bom.outputQuantity,
+      active: bom.isActive,
+      items: _bomItemsPayload(bom.items),
+    );
+    // Backend obsoletes the previous ACTIVE recipes of this product when the
+    // new one is created ACTIVE - mirror that on the local list.
+    if (saved.isActive) {
+      for (var i = 0; i < boms.length; i++) {
+        if (boms[i].id != saved.id &&
+            boms[i].finishedProductId == saved.finishedProductId &&
+            boms[i].isActive) {
+          boms[i] = boms[i].copyWith(isActive: false, status: 'Inactive');
+        }
       }
     }
-    boms.insert(0, bom);
+    boms.insert(0, saved);
     notifyListeners();
+    return saved;
   }
 
-  void updateBom(BillOfMaterial bom) {
-    final index = boms.indexWhere((b) => b.id == bom.id);
-    if (index != -1) {
-      boms[index] = bom;
+  Future<BillOfMaterial> updateBomAsync(BillOfMaterial bom) async {
+    final updated = await _bomsApi.updateBom(
+      bom.id,
+      yieldQuantity: bom.outputQuantity,
+      items: _bomItemsPayload(bom.items),
+    );
+    final idx = boms.indexWhere((b) => b.id == bom.id);
+    if (idx != -1) {
+      boms[idx] = updated;
       notifyListeners();
-    } else {
-      addBom(bom);
     }
+    return updated;
   }
 
-  void deleteBom(String id) {
-    boms.removeWhere((b) => b.id == id);
-    notifyListeners();
+  Future<BillOfMaterial> updateBomStatusAsync(String id, String status) async {
+    // Frontend lifecycle labels -> backend lifecycle statuses.
+    final backendStatus =
+        status == 'Draft' ? 'DRAFT' : (status == 'Inactive' ? 'OBSOLETE' : 'ACTIVE');
+    final updated = await _bomsApi.updateStatus(id, backendStatus);
+    // Activating a recipe obsoletes the other ACTIVE recipes of this product.
+    if (updated.isActive) {
+      for (var i = 0; i < boms.length; i++) {
+        if (boms[i].id != updated.id &&
+            boms[i].finishedProductId == updated.finishedProductId &&
+            boms[i].isActive) {
+          boms[i] = boms[i].copyWith(isActive: false, status: 'Inactive');
+        }
+      }
+    }
+    final idx = boms.indexWhere((b) => b.id == id);
+    if (idx != -1) {
+      boms[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<void> deleteBomAsync(String id) async {
+    // The backend BOM Master has no hard delete (versioned lifecycle):
+    // retire the recipe by marking it OBSOLETE, which removes it from active
+    // manufacturing use while preserving the historical record.
+    final updated = await _bomsApi.updateStatus(id, 'OBSOLETE');
+    final idx = boms.indexWhere((b) => b.id == id);
+    if (idx != -1) {
+      boms[idx] = updated;
+      notifyListeners();
+    }
   }
 
   // -------------------------------------------------------------
@@ -4860,6 +4940,7 @@ class MockDatabaseService extends ChangeNotifier {
 
   final VendorsApiService _vendorsApi = VendorsApiService();
   final CategoriesUnitsApiService _categoriesUnitsApi = CategoriesUnitsApiService();
+  final BomsApiService _bomsApi = BomsApiService();
   final RawMaterialsApiService _rawMaterialsApi = RawMaterialsApiService();
   final FinishedProductsApiService _finishedProductsApi = FinishedProductsApiService();
   final PartiesApiService _partiesApi = PartiesApiService();
@@ -4900,6 +4981,7 @@ class MockDatabaseService extends ChangeNotifier {
         loadVendors(forceRefresh: forceRefresh),
         loadRawMaterials(forceRefresh: forceRefresh),
         loadFinishedProducts(forceRefresh: forceRefresh),
+        loadBoms(forceRefresh: forceRefresh),
         loadCustomers(forceRefresh: forceRefresh),
         loadDealers(forceRefresh: forceRefresh),
         loadArchitects(forceRefresh: forceRefresh),
@@ -6535,7 +6617,7 @@ class MockDatabaseService extends ChangeNotifier {
   int? _quotationValidDays(Sale quotation) =>
       quotation.validUntil?.difference(DateTime.now()).inDays.clamp(1, 3650);
 
-  Future<Sale> createQuotationAsync(Sale quotation) async {
+  Future<Sale> createQuotationAsync(Sale quotation, {String? placeOfSupplyState, String? placeOfSupplyStateCode}) async {
     try {
       final created = await _salesApi.createQuotation(
         partyType: quotation.partyType,
@@ -6549,6 +6631,8 @@ class MockDatabaseService extends ChangeNotifier {
         items: quotation.items,
         notes: quotation.notes,
         termsAndConditions: quotation.termsAndConditions,
+        placeOfSupplyState: placeOfSupplyState,
+        placeOfSupplyStateCode: placeOfSupplyStateCode,
       );
       sales.insert(0, created);
       notifyListeners();

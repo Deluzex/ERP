@@ -197,14 +197,21 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                           decoration: const InputDecoration(labelText: 'Showroom / Business Address *'),
                         ),
                         const SizedBox(height: 12),
+                       
                         Row(
                           children: [
                             Expanded(
                               flex: 3,
                               child: TextFormField(
                                 controller: stateCtrl,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'State is required';
+                                  }
+                                  return null;
+                                },
                                 decoration: const InputDecoration(
-                                  labelText: 'State',
+                                  labelText: 'State *',
                                   hintText: 'E.g., Gujarat',
                                 ),
                               ),
@@ -215,19 +222,32 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                               child: TextFormField(
                                 controller: pincodeCtrl,
                                 keyboardType: TextInputType.number,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'PIN Code is required';
+                                  }
+
+                                  if (!RegExp(r'^[1-9][0-9]{5}$')
+                                      .hasMatch(value.trim())) {
+                                    return 'Enter a valid 6-digit PIN Code';
+                                  }
+
+                                  return null;
+                                },
                                 decoration: const InputDecoration(
-                                  labelText: 'PIN Code',
+                                  labelText: 'PIN Code *',
                                   hintText: 'E.g., 382481',
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ],
+
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
               actions: [
                 ErpButton(
                   text: 'Cancel',
