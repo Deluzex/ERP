@@ -117,6 +117,36 @@ export class SaleLineItemDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  unit?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  lineTotal?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  taxableAmount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  cgstAmount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  sgstAmount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  igstAmount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   returnCondition?: string;
 }
 
@@ -153,6 +183,16 @@ export class CreateQuotationDto {
   @IsOptional()
   @IsBoolean()
   isInterStateTax?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  placeOfSupplyState?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  placeOfSupplyStateCode?: string;
 
   @ApiPropertyOptional({ default: false, description: 'Save as draft instead of marking sent to client' })
   @IsOptional()

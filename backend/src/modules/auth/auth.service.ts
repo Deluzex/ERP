@@ -8,6 +8,9 @@ import { UnauthorizedError } from '../../core/errors/unauthorized.error';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 
+import { SubscriptionStatusResponse } from '../subscription/dto/subscription.dto';
+import { SubscriptionService } from '../subscription/subscription.service';
+
 export interface AuthUserData {
   id: string;
   name: string;
@@ -26,6 +29,7 @@ export interface AuthResponse {
   refreshToken: string;
   expiresIn: number;
   user: AuthUserData;
+  subscription?: SubscriptionStatusResponse;
 }
 
 @Injectable()
@@ -35,6 +39,7 @@ export class AuthService {
     private readonly argon2: Argon2Service,
     private readonly tokenService: TokenService,
     private readonly auditService: AuditService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   async login(
@@ -69,6 +74,9 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedError('Invalid email or password');
     }
+
+    // Verify instance subscription status (Hard lockout if expired)
+    const subscription = await this.subscriptionService.checkSubscriptionActive();
 
     // Load roles, permissions, scopes
     const userData = await this.getUserAuthData(user.id);
@@ -116,6 +124,7 @@ export class AuthService {
       refreshToken: tokens.refreshToken,
       expiresIn: tokens.expiresIn,
       user: userData,
+      subscription,
     };
   }
 

@@ -6,6 +6,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/api/api_exception.dart';
 import '../../../core/models/bom_model.dart';
 import '../../../core/models/raw_material_model.dart';
 import '../../../core/models/finished_product_model.dart';
@@ -95,6 +96,11 @@ class BomScreen extends ConsumerStatefulWidget {
 }
 
 class _BomScreenState extends ConsumerState<BomScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => ref.read(databaseServiceProvider).loadBoms());
+  }
   // Navigation / View state
   bool _isCreateMode = false;
   BillOfMaterial? _editingBom;
@@ -116,6 +122,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   String? _selectedProductId;
   String _selectedStatus = 'Active';
   final List<_BomItemDraft> _draftItems = [];
+  bool _isSavingBom = false;
 
   static String _normalizeStatus(String? s) {
     if (s == null) return 'Active';
@@ -177,6 +184,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     _draftItems.clear();
 
     final db = ref.read(databaseServiceProvider);
+    final rmPrices = _currentRmUnitPrices();
     for (final itm in bom.items) {
       // Intelligently match against database to resolve real ID/itemCode if seeded or legacy
       final match = db.rawMaterials.where((r) =>
@@ -195,11 +203,11 @@ class _BomScreenState extends ConsumerState<BomScreen> {
         unit: rawUnit,
         quantityPerUnit: itm.quantityPerUnit,
         wastagePercent: itm.wastagePercent,
-        unitCost: itm.unitCost,
+        unitCost: rmPrices[rawId] ?? rmPrices[itm.rawMaterialId] ?? itm.unitCost,
       ));
     }
 
-    _bomNumberCtrl.text = bom.id;
+    _bomNumberCtrl.text = bom.displayNumber;
     _bomNameCtrl.text = bom.safeName;
     _selectedProductId = bom.finishedProductId;
     _productCodeCtrl.text = bom.safeProductCode;
@@ -241,7 +249,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Change recipe status for "${bom.safeName}" (${bom.id}):',
+                  'Change recipe status for "${bom.safeName}" (${bom.displayNumber}):',
                   style: AppTextStyles.bodyMedium,
                 ),
                 const SizedBox(height: 16),
@@ -280,20 +288,30 @@ class _BomScreenState extends ConsumerState<BomScreen> {
             ),
             ErpButton(
               text: 'Update Status',
-              onPressed: () {
-                final db = ref.read(databaseServiceProvider);
-                db.updateBom(bom.copyWith(
-                  status: selected,
-                  isActive: selected == 'Active',
-                  updatedAt: DateTime.now(),
-                ));
+              onPressed: () async {
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('BOM "${bom.safeName}" status updated to $selected!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+                try {
+                  await ref.read(databaseServiceProvider).updateBomStatusAsync(bom.id, selected);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('BOM "${bom.safeName}" status updated to $selected!'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(e is ApiException
+                            ? 'Failed to update status: ${e.message}'
+                            : 'Failed to update status. Please try again.'),
+                        backgroundColor: AppColors.danger,
+                      ),
+                    );
+                  }
+                }
               },
             ),
           ],
@@ -303,6 +321,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   }
 
   void _openViewBomDialog(BillOfMaterial bom) {
+    final rmPrices = _currentRmUnitPrices();
     showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -320,7 +339,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'BOM Recipe: ${bom.id}',
+                        'BOM Recipe: ${bom.displayNumber}',
                         style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -433,12 +452,12 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Est. Cost / Unit: ${Formatters.formatCurrency(bom.totalMaterialCostPerUnit)}',
+                                'Est. Cost / Unit: ${Formatters.formatCurrency(_effectiveMaterialCostPerUnit(bom, rmPrices))}',
                                 style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Total Batch Cost: ${Formatters.formatCurrency(bom.totalBatchMaterialCost)}',
+                                'Total Batch Cost: ${Formatters.formatCurrency(_effectiveBatchMaterialCost(bom, rmPrices))}',
                                 style: AppTextStyles.bodyBold.copyWith(color: AppColors.primaryDark),
                               ),
                             ],
@@ -495,7 +514,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                 children: [
                                   Text('Code: ${itm.safeCode}', style: AppTextStyles.caption),
                                   Text(
-                                    '${Formatters.formatNumber(itm.quantityWithWastage)} ${itm.safeUnit} @ ${Formatters.formatCurrency(itm.unitCost)}',
+                                    '${Formatters.formatNumber(itm.quantityWithWastage)} ${itm.safeUnit} @ ${Formatters.formatCurrency(_effectiveUnitCost(itm, rmPrices))}',
                                     style: AppTextStyles.caption,
                                   ),
                                 ],
@@ -625,7 +644,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     );
   }
 
-  void _saveBom() {
+  Future<void> _saveBom() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedProductId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -639,9 +658,16 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       );
       return;
     }
+    if (_isSavingBom) return;
 
     final db = ref.read(databaseServiceProvider);
-    final prod = db.finishedProducts.firstWhere((p) => p.id == _selectedProductId);
+    final prod = db.finishedProducts.where((p) => p.id == _selectedProductId).firstOrNull;
+    if (prod == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Finished product not found. Please refresh and try again.')),
+      );
+      return;
+    }
     final outputQty = double.tryParse(_prodQtyCtrl.text.trim()) ?? 1.0;
     final isEdit = _editingBom != null;
     final statusToSave = isEdit ? _selectedStatus : 'Active';
@@ -659,44 +685,54 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       );
     }).toList();
 
-    if (isEdit) {
-      db.updateBom(_editingBom!.copyWith(
-        name: _bomNameCtrl.text.trim(),
-        outputQuantity: outputQty,
-        status: statusToSave,
-        isActive: statusToSave == 'Active',
-        items: bomItems,
-        updatedAt: DateTime.now(),
-      ));
-    } else {
-      db.addBom(BillOfMaterial(
-        id: _bomNumberCtrl.text.trim().isNotEmpty
-            ? _bomNumberCtrl.text.trim()
-            : IdGenerator.generateId('BOM'),
+    setState(() => _isSavingBom = true);
+    try {
+      final saved = BillOfMaterial(
+        id: _editingBom?.id ?? IdGenerator.generateId('BOM'),
         finishedProductId: prod.id,
         finishedProductName: prod.name,
         finishedProductCode: prod.itemCode,
         name: _bomNameCtrl.text.trim(),
         outputQuantity: outputQty,
         status: statusToSave,
-        isActive: true,
+        isActive: statusToSave == 'Active',
         items: bomItems,
-        createdAt: DateTime.now(),
+        createdAt: _editingBom?.createdAt ?? DateTime.now(),
         updatedAt: DateTime.now(),
-      ));
+      );
+
+      if (isEdit) {
+        await db.updateBomAsync(saved);
+      } else {
+        await db.addBomAsync(saved);
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _isCreateMode = false;
+        _editingBom = null;
+        _isSavingBom = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isEdit ? 'BOM updated successfully!' : 'BOM created successfully!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      setState(() => _isSavingBom = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e is ApiException
+              ? 'Failed to save BOM: ${e.message}'
+              : 'Failed to save BOM. Please try again.'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
     }
-
-    setState(() {
-      _isCreateMode = false;
-      _editingBom = null;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isEdit ? 'BOM updated successfully!' : 'BOM created successfully!'),
-        backgroundColor: AppColors.success,
-      ),
-    );
   }
 
   void _confirmDeleteBom(BillOfMaterial bom) {
@@ -706,8 +742,8 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       builder: (ctx) => AlertDialog(
         title: Text('Delete BOM Recipe', style: AppTextStyles.h2.copyWith(color: AppColors.danger)),
         content: Text(
-          'Are you sure you want to delete recipe "${bom.safeName}" (${bom.id}) for product "${bom.safeProductName}"?\n\n'
-          'This will remove the automated bill of materials linkage.',
+          'Are you sure you want to retire recipe "${bom.safeName}" (${bom.displayNumber}) for product "${bom.safeProductName}"?\n\n'
+          'The backend keeps versioned history, so the recipe will be marked Obsolete and removed from active manufacturing use.',
         ),
         actions: [
           ErpButton(
@@ -716,14 +752,29 @@ class _BomScreenState extends ConsumerState<BomScreen> {
             onPressed: () => Navigator.pop(ctx),
           ),
           ErpButton(
-            text: 'Delete',
+            text: 'Retire Recipe',
             isDanger: true,
-            onPressed: () {
-              db.deleteBom(bom.id);
+            onPressed: () async {
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('BOM recipe deleted successfully!'), backgroundColor: AppColors.danger),
-              );
+              try {
+                await db.deleteBomAsync(bom.id);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('BOM recipe retired successfully!'), backgroundColor: AppColors.danger),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(e is ApiException
+                          ? 'Failed to retire recipe: ${e.message}'
+                          : 'Failed to retire recipe. Please try again.'),
+                      backgroundColor: AppColors.danger,
+                    ),
+                  );
+                }
+              }
             },
           ),
         ],
@@ -1144,8 +1195,32 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   // ===========================================================================
   // VIEW 1: BOM LIST (MATCHING PROJECT ERP THEME)
   // ===========================================================================
+  /// Latest raw-material unit prices keyed by raw material id.
+  Map<String, double> _currentRmUnitPrices() {
+    final db = ref.read(databaseServiceProvider);
+    return {
+      for (final rm in db.rawMaterials)
+        if (rm.defaultPurchasePrice > 0) rm.id: rm.defaultPurchasePrice,
+    };
+  }
+
+  double _effectiveUnitCost(BomItem item, Map<String, double> prices) =>
+      prices[item.rawMaterialId] ?? item.unitCost;
+
+  double _effectiveMaterialCostPerUnit(BillOfMaterial bom, Map<String, double> prices) {
+    final batchCost = bom.items.fold(
+      0.0,
+      (sum, item) => sum + (item.quantityWithWastage * _effectiveUnitCost(item, prices)),
+    );
+    return bom.outputQuantity > 0 ? (batchCost / bom.outputQuantity) : batchCost;
+  }
+
+  double _effectiveBatchMaterialCost(BillOfMaterial bom, Map<String, double> prices) =>
+      _effectiveMaterialCostPerUnit(bom, prices) * bom.outputQuantity;
+
   Widget _buildListView() {
     final db = ref.watch(databaseServiceProvider);
+    final rmPrices = _currentRmUnitPrices();
 
     final filteredBoms = db.boms.where((b) {
       final q = _searchQuery.trim().toLowerCase();
@@ -1538,7 +1613,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                 return [
                   // BOM No.
                   Text(
-                    bom.id,
+                    bom.displayNumber,
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
                   ),
 
@@ -1562,13 +1637,13 @@ class _BomScreenState extends ConsumerState<BomScreen> {
 
                   // Total Material Cost
                   Text(
-                    Formatters.formatCurrency(bom.totalBatchMaterialCost),
+                    Formatters.formatCurrency(_effectiveBatchMaterialCost(bom, rmPrices)),
                     style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
                   ),
 
                   // Est. Cost / Unit
                   Text(
-                    Formatters.formatCurrency(bom.totalMaterialCostPerUnit),
+                    Formatters.formatCurrency(_effectiveMaterialCostPerUnit(bom, rmPrices)),
                     style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
                   ),
 
@@ -1730,7 +1805,8 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                             child: ErpButton(
                               text: isEdit ? 'Update BOM' : 'Save BOM',
                               icon: Icons.check,
-                              onPressed: _saveBom,
+                              isLoading: _isSavingBom,
+                              onPressed: _isSavingBom ? null : _saveBom,
                             ),
                           ),
                         ],
@@ -1748,7 +1824,8 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                           ErpButton(
                             text: isEdit ? 'Update BOM' : 'Save BOM',
                             icon: Icons.check,
-                            onPressed: _saveBom,
+                            isLoading: _isSavingBom,
+                            onPressed: _isSavingBom ? null : _saveBom,
                           ),
                         ],
                       );
@@ -2511,7 +2588,8 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                     child: ErpButton(
                       text: isEdit ? 'Update BOM' : 'Save BOM',
                       icon: Icons.check,
-                      onPressed: _saveBom,
+                      isLoading: _isSavingBom,
+                      onPressed: _isSavingBom ? null : _saveBom,
                     ),
                   ),
                 ],
@@ -2529,7 +2607,8 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                   ErpButton(
                     text: isEdit ? 'Update BOM' : 'Save BOM',
                     icon: Icons.check,
-                    onPressed: _saveBom,
+                    isLoading: _isSavingBom,
+                    onPressed: _isSavingBom ? null : _saveBom,
                   ),
                 ],
               ),

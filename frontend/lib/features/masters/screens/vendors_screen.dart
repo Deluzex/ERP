@@ -249,24 +249,39 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                             Expanded(
                               flex: 3,
                               child: TextFormField(
-                                controller: stateCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'State',
-                                  hintText: 'E.g., Gujarat',
-                                ),
-                              ),
+  controller: stateCtrl,
+  validator: (v) {
+    if (v == null || v.trim().isEmpty) {
+      return 'State is required';
+    }
+    return null;
+  },
+  decoration: const InputDecoration(
+    labelText: 'State *',
+    hintText: 'E.g., Gujarat',
+  ),
+),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               flex: 2,
                               child: TextFormField(
-                                controller: pincodeCtrl,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  labelText: 'PIN Code',
-                                  hintText: 'E.g., 382481',
-                                ),
-                              ),
+  controller: pincodeCtrl,
+  keyboardType: TextInputType.number,
+  validator: (v) {
+    if (v == null || v.trim().isEmpty) {
+      return 'PIN Code is required';
+    }
+    if (!RegExp(r'^[1-9][0-9]{5}$').hasMatch(v.trim())) {
+      return 'Enter a valid 6-digit PIN Code';
+    }
+    return null;
+  },
+  decoration: const InputDecoration(
+    labelText: 'PIN Code *',
+    hintText: 'E.g., 382481',
+  ),
+),
                             ),
                           ],
                         ),

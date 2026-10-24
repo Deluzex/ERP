@@ -37,6 +37,7 @@ class AppColors {
   static const Color dangerLight = Color(0xFFFEE2E2);
   static const Color dangerSoft = Color(0xFFFEF2F2);
   static const Color dangerText = Color(0xFFB91C1C);
+  static const Color error = danger;
 
   static const Color warning = Color(0xFFFF6D20); // Orange 500
   static const Color warningLight = Color(0xFFFFEDDD); // Orange 100

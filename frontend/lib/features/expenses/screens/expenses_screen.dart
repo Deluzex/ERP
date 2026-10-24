@@ -4,6 +4,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/models/category_unit_model.dart';
 import '../../../core/models/expense_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
@@ -34,6 +35,15 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     Future.microtask(() => ref.read(databaseServiceProvider).loadExpenses());
   }
 
+  /// Resolves a stored payment method value (a Category Master payment mode
+  /// code, or a legacy label from older records) to its display name.
+  String _paymentMethodDisplay(String stored, List<PaymentModeMasterItem> modes) {
+    for (final mode in modes) {
+      if (mode.code == stored) return mode.name;
+    }
+    return stored;
+  }
+
   void _openAddEditExpenseDialog([Expense? existing]) {
     final db = ref.read(databaseServiceProvider);
     final isEdit = existing != null;
@@ -49,7 +59,88 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     DateTime expenseDate = existing?.expenseDate ?? DateTime.now();
     ExpenseCategory category = existing?.category ?? ExpenseCategory.transportation;
     ExpensePaymentStatus paymentStatus = existing?.paymentStatus ?? ExpensePaymentStatus.paid;
-    String paymentMethod = existing?.paymentMethod ?? 'Bank Transfer';
+
+    // Payment Method options follow the Payment Modes tab of Category Master;
+    // new records default to the first active mode. Legacy labels ('Bank
+    // Transfer') on existing records stay selectable via a fallback entry.
+    final activePaymentModes = db.paymentModeMasterList.where((m) => m.isActive).toList();
+    String paymentMethod = existing?.paymentMethod ??
+        (activePaymentModes.isNotEmpty ? activePaymentModes.first.code : 'Bank Transfer');
+
+    // Expense Category options follow the Expense Categories tab of Category
+    // Master (every active entry, including user-added ones). Entries without
+    // a linked backend expense key save under the canonical 'other' key, so
+    // backend validation and stored categories stay valid. Items are keyed by
+    // master id, so several entries may map to the same expense key.
+    final activeCategoryMasters = db.expenseCategoryMasterList.where((m) => m.isActive).toList();
+    ExpenseCategory categoryForMaster(ExpenseCategoryMasterItem master) {
+      final key = master.linkedKey?.trim() ?? '';
+      if (key.isEmpty) return ExpenseCategory.other;
+      for (final c in ExpenseCategory.values) {
+        if (c.name == key) return c;
+      }
+      return ExpenseCategory.other;
+    }
+
+    String legacyCategoryId(ExpenseCategory c) => 'legacy:${c.name}';
+    final categoriesByItemId = <String, ExpenseCategory>{};
+    final categoryItems = <DropdownMenuItem<String>>[];
+    final seenMasterIds = <String>{};
+    for (final master in activeCategoryMasters) {
+      if (!seenMasterIds.add(master.id)) continue;
+      categoriesByItemId[master.id] = categoryForMaster(master);
+      categoryItems.add(DropdownMenuItem(
+        value: master.id,
+        child: Text(master.name, overflow: TextOverflow.ellipsis),
+      ));
+    }
+    if (categoryItems.isEmpty) {
+      for (final c in ExpenseCategory.values) {
+        categoriesByItemId[legacyCategoryId(c)] = c;
+        categoryItems.add(DropdownMenuItem(value: legacyCategoryId(c), child: Text(c.name.toUpperCase())));
+      }
+    }
+    // Preselect the master entry matching the current category: entries with
+    // an explicit linked key win, then any mapped entry, and finally a legacy
+    // label entry keeps the current selection valid.
+    String selectedCategoryId = legacyCategoryId(category);
+    bool matched = false;
+    for (final master in activeCategoryMasters) {
+      if ((master.linkedKey?.trim() ?? '').isNotEmpty && categoryForMaster(master) == category) {
+        selectedCategoryId = master.id;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      for (final item in categoryItems) {
+        if (categoriesByItemId[item.value!] == category) {
+          selectedCategoryId = item.value!;
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (!matched) {
+      categoriesByItemId[selectedCategoryId] = category;
+      categoryItems.add(DropdownMenuItem(value: selectedCategoryId, child: Text(category.name.toUpperCase())));
+    }
+
+    final paymentMethodItems = <DropdownMenuItem<String>>[
+      if (activePaymentModes.isNotEmpty)
+        for (final mode in activePaymentModes)
+          DropdownMenuItem(value: mode.code, child: Text(mode.name, overflow: TextOverflow.ellipsis))
+      else ...[
+        const DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+        const DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer (NEFT/RTGS)')),
+        const DropdownMenuItem(value: 'UPI', child: Text('UPI / QR')),
+        const DropdownMenuItem(value: 'Cheque', child: Text('Cheque')),
+        const DropdownMenuItem(value: 'Company Card', child: Text('Corporate Card')),
+      ],
+    ];
+    if (paymentMethodItems.every((item) => item.value != paymentMethod)) {
+      paymentMethodItems.add(DropdownMenuItem(value: paymentMethod, child: Text(paymentMethod)));
+    }
     String? selectedProjId = existing?.projectId;
     String? selectedProdId = existing?.productionId;
 
@@ -106,15 +197,18 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                   decoration: const InputDecoration(labelText: 'Amount (₹) *', prefixText: '₹ '),
                                 ),
                                 const SizedBox(height: 12),
-                                DropdownButtonFormField<ExpenseCategory>(
-                                  value: category,
+                                DropdownButtonFormField<String>(
+                                  value: selectedCategoryId,
                                   isExpanded: true,
                                   decoration: const InputDecoration(labelText: 'Expense Category *'),
-                                  items: ExpenseCategory.values.map((c) {
-                                    return DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()));
-                                  }).toList(),
+                                  items: categoryItems,
                                   onChanged: (val) {
-                                    if (val != null) setDlgState(() => category = val);
+                                    if (val != null) {
+                                      setDlgState(() {
+                                        selectedCategoryId = val;
+                                        category = categoriesByItemId[val] ?? category;
+                                      });
+                                    }
                                   },
                                 ),
                                 const SizedBox(height: 12),
@@ -140,13 +234,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                   isExpanded: true,
                                   value: paymentMethod,
                                   decoration: const InputDecoration(labelText: 'Payment Method'),
-                                  items: const [
-                                    DropdownMenuItem(value: 'Cash', child: Text('Cash', overflow: TextOverflow.ellipsis)),
-                                    DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer (NEFT/RTGS)', overflow: TextOverflow.ellipsis)),
-                                    DropdownMenuItem(value: 'UPI', child: Text('UPI / QR', overflow: TextOverflow.ellipsis)),
-                                    DropdownMenuItem(value: 'Cheque', child: Text('Cheque', overflow: TextOverflow.ellipsis)),
-                                    DropdownMenuItem(value: 'Company Card', child: Text('Corporate Card', overflow: TextOverflow.ellipsis)),
-                                  ],
+                                  items: paymentMethodItems,
                                   onChanged: (val) {
                                     if (val != null) setDlgState(() => paymentMethod = val);
                                   },
@@ -191,15 +279,18 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                               Row(
                                 children: [
                                   Expanded(
-                                    child: DropdownButtonFormField<ExpenseCategory>(
-                                      value: category,
+                                    child: DropdownButtonFormField<String>(
+                                      value: selectedCategoryId,
                                       isExpanded: true,
                                       decoration: const InputDecoration(labelText: 'Expense Category *'),
-                                      items: ExpenseCategory.values.map((c) {
-                                        return DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()));
-                                      }).toList(),
+                                      items: categoryItems,
                                       onChanged: (val) {
-                                        if (val != null) setDlgState(() => category = val);
+                                        if (val != null) {
+                                          setDlgState(() {
+                                            selectedCategoryId = val;
+                                            category = categoriesByItemId[val] ?? category;
+                                          });
+                                        }
                                       },
                                     ),
                                   ),
@@ -235,13 +326,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                       isExpanded: true,
                                       value: paymentMethod,
                                       decoration: const InputDecoration(labelText: 'Payment Method'),
-                                      items: const [
-                                        DropdownMenuItem(value: 'Cash', child: Text('Cash', overflow: TextOverflow.ellipsis)),
-                                        DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer (NEFT/RTGS)', overflow: TextOverflow.ellipsis)),
-                                        DropdownMenuItem(value: 'UPI', child: Text('UPI / QR', overflow: TextOverflow.ellipsis)),
-                                        DropdownMenuItem(value: 'Cheque', child: Text('Cheque', overflow: TextOverflow.ellipsis)),
-                                        DropdownMenuItem(value: 'Company Card', child: Text('Corporate Card', overflow: TextOverflow.ellipsis)),
-                                      ],
+                                      items: paymentMethodItems,
                                       onChanged: (val) {
                                         if (val != null) setDlgState(() => paymentMethod = val);
                                       },
@@ -723,7 +808,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                       children: [
                         Text(exp.paidBy, style: AppTextStyles.bodyMedium.copyWith(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 2),
-                        Text(exp.paymentMethod, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 10.5)),
+                        Text(_paymentMethodDisplay(exp.paymentMethod, db.paymentModeMasterList), style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 10.5)),
                       ],
                     ),
                   ),

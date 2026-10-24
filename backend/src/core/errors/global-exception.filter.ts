@@ -33,11 +33,23 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       } else if (typeof res === 'object' && res !== null) {
         const resObj = res as Record<string, unknown>;
         message = (resObj['message'] as string) || exception.message;
-        code = (resObj['error'] as string) || exception.name.toUpperCase();
+        code = (resObj['code'] as string) || (resObj['error'] as string) || exception.name.toUpperCase();
         if (Array.isArray(resObj['message'])) {
           message = 'Validation failed';
           code = 'VALIDATION_FAILED';
           details = { validationErrors: resObj['message'] };
+        }
+        const { message: _m, code: _c, error: _e, statusCode: _s, ...extra } = resObj;
+        if (Object.keys(extra).length > 0) {
+          details = { ...(details || {}), ...extra };
+        }
+      }
+
+      if (typeof message === 'string') {
+        const match = message.match(/^([A-Z][A-Z0-9_]{2,}):\s*(.*)$/);
+        if (match && (code === 'Bad Request' || code === 'BAD_REQUEST' || code === exception.name.toUpperCase())) {
+          code = match[1];
+          message = match[2];
         }
       }
     } else if (exception instanceof Error) {
@@ -50,7 +62,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error: {
         code,
         message,
-        ...(details ? { details } : {}),
+        ...(details ? { details, ...details } : {}),
         correlationId,
       },
     });

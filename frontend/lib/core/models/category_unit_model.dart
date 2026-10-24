@@ -83,12 +83,19 @@ class ExpenseCategoryMasterItem {
   final String description;
   final bool isActive;
 
+  /// Canonical backend expense key this master entry maps to for saving
+  /// expenses (must match the backend's EXPENSE_CATEGORIES list, e.g.
+  /// 'transportation', 'officeExpense'). Null for custom entries that have
+  /// no linked expense key yet.
+  final String? linkedKey;
+
   ExpenseCategoryMasterItem({
     required this.id,
     required this.name,
     required this.code,
     required this.description,
     this.isActive = true,
+    this.linkedKey,
   });
 
   ExpenseCategoryMasterItem copyWith({
@@ -97,6 +104,7 @@ class ExpenseCategoryMasterItem {
     String? code,
     String? description,
     bool? isActive,
+    String? linkedKey,
   }) {
     return ExpenseCategoryMasterItem(
       id: id ?? this.id,
@@ -104,6 +112,7 @@ class ExpenseCategoryMasterItem {
       code: code ?? this.code,
       description: description ?? this.description,
       isActive: isActive ?? this.isActive,
+      linkedKey: linkedKey ?? this.linkedKey,
     );
   }
 
@@ -114,6 +123,9 @@ class ExpenseCategoryMasterItem {
       code: json['code']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       isActive: json['isActive'] == null ? true : json['isActive'] == true,
+      linkedKey: (json['linkedKey']?.toString() ?? '').trim().isEmpty
+          ? null
+          : json['linkedKey'].toString().trim(),
     );
   }
 
@@ -123,6 +135,7 @@ class ExpenseCategoryMasterItem {
       'code': code,
       'description': description,
       'isActive': isActive,
+      if (linkedKey != null && linkedKey!.trim().isNotEmpty) 'linkedKey': linkedKey,
     };
   }
 }

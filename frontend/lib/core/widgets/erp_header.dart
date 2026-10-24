@@ -8,6 +8,7 @@ import '../../app/theme/app_text_styles.dart';
 import '../../shared/providers/app_state_providers.dart';
 import '../../shared/widgets/low_stock_whatsapp_alert_dialog.dart';
 import '../../shared/widgets/notifications_center_dialog.dart';
+import '../../shared/widgets/subscription_badge_pill.dart';
 
 class ErpHeader extends ConsumerWidget {
   final VoidCallback? onMenuToggle;
@@ -183,7 +184,7 @@ class ErpHeader extends ConsumerWidget {
         final isDesktop = MediaQuery.of(context).size.width >= 1024;
         final showLowStockPill = availableWidth >= 780 && canViewLowStock;
         final isMobile = availableWidth < 500;
-        final hideUserDetails = availableWidth < 620;
+        final hideUserDetails = availableWidth < 900;
 
         return Container(
           height: 64,
@@ -271,6 +272,10 @@ class ErpHeader extends ConsumerWidget {
                     );
                   },
                 ),
+
+              // Instance Subscription Status Pill
+              const SubscriptionBadgePill(),
+              SizedBox(width: isMobile ? 4 : 8),
 
               // Notification Bell with dynamic unread badge
               Builder(

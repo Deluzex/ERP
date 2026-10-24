@@ -62,6 +62,8 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
   final _notesCtrl = TextEditingController();
   final List<_SoItemDraft> _items = [];
 
+  bool _isInterStateTax = false;
+
   @override
   void initState() {
     super.initState();
@@ -83,6 +85,76 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
         availableStock: fp.availableStock,
       ));
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _resolveTaxClassification();
+        });
+      }
+    });
+  }
+
+  void _resolveTaxClassification() {
+    final db = ref.read(databaseServiceProvider);
+
+    if (_selectedProjectId != null) {
+      final project = db.projects.where((p) => p.id == _selectedProjectId).firstOrNull;
+      if (project != null) {
+        final siteState = project.siteState?.trim().toLowerCase();
+        final siteCode = project.siteStateCode?.trim();
+
+        if ((siteState != null && siteState.isNotEmpty) || (siteCode != null && siteCode.isNotEmpty)) {
+          final isGujarat = siteCode == '24' || siteState == 'gujarat';
+          _isInterStateTax = !isGujarat;
+          return;
+        }
+      }
+    }
+
+    String? partyGst;
+    String? partyState;
+    String? partyStateCode;
+
+    if (_partyType == PartyType.customer) {
+      final c = db.customers.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (c != null) {
+        partyGst = c.gstNumber.trim();
+        partyState = c.state.trim().toLowerCase();
+        partyStateCode = c.stateCode.trim();
+      }
+    } else if (_partyType == PartyType.dealer) {
+      final d = db.dealers.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (d != null) {
+        partyGst = d.gstNumber.trim();
+        partyState = d.state.trim().toLowerCase();
+      }
+    } else if (_partyType == PartyType.architect) {
+      final a = db.architects.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (a != null) {
+        partyGst = a.gstNumber.trim();
+        partyState = a.state.trim().toLowerCase();
+      }
+    }
+
+    if (partyGst != null && partyGst.length >= 2) {
+      final prefix = partyGst.substring(0, 2);
+      if (RegExp(r'^\d{2}$').hasMatch(prefix)) {
+        _isInterStateTax = (prefix != '24');
+        return;
+      }
+    }
+
+    if (partyStateCode != null && partyStateCode.isNotEmpty) {
+      _isInterStateTax = (partyStateCode != '24');
+      return;
+    }
+
+    if (partyState != null && partyState.isNotEmpty) {
+      _isInterStateTax = (partyState != 'gujarat');
+      return;
+    }
+
+    _isInterStateTax = false;
   }
 
   void _addNewRow() {
@@ -120,6 +192,25 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
     if (!_formKey.currentState!.validate()) return;
     final db = ref.read(databaseServiceProvider);
 
+    if (_selectedProjectId != null) {
+      final p = db.projects.where((prj) => prj.id == _selectedProjectId).firstOrNull;
+      if (p != null) {
+        final siteState = p.siteState?.trim();
+        final siteCode = p.siteStateCode?.trim();
+        if ((siteState == null || siteState.isEmpty) && (siteCode == null || siteCode.isEmpty)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot finalize sales order: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+          return;
+        }
+      }
+    }
+
+    _resolveTaxClassification();
+
     String partyName = '';
     if (_partyType == PartyType.customer) {
       final c = db.customers.where((cust) => cust.id == _selectedPartyId).firstOrNull;
@@ -147,6 +238,9 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
     final soNumber = 'DLZ/SO/2026/${db.nextSalesOrderNumber.toString().padLeft(4, '0')}';
 
     final lineItems = _items.map((i) {
+      final cgst = _isInterStateTax ? 0.0 : (i.gstAmount / 2);
+      final sgst = _isInterStateTax ? 0.0 : (i.gstAmount / 2);
+      final igst = _isInterStateTax ? i.gstAmount : 0.0;
       return SaleLineItem(
         finishedProductId: i.finishedProductId,
         finishedProductName: i.finishedProductName,
@@ -157,9 +251,9 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
         discountAmount: i.discount,
         gstPercent: i.gstPercent,
         taxableAmount: i.taxableAmount,
-        cgstAmount: i.gstAmount / 2,
-        sgstAmount: i.gstAmount / 2,
-        igstAmount: 0.0,
+        cgstAmount: cgst,
+        sgstAmount: sgst,
+        igstAmount: igst,
         lineTotal: i.lineTotal,
       );
     }).toList();
@@ -183,9 +277,10 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
       subtotalAmount: _subtotalAmount,
       discountAmount: _totalDiscount,
       taxableAmount: _totalTaxable,
-      cgstAmount: _totalGst / 2,
-      sgstAmount: _totalGst / 2,
-      igstAmount: 0.0,
+      cgstAmount: _isInterStateTax ? 0.0 : (_totalGst / 2),
+      sgstAmount: _isInterStateTax ? 0.0 : (_totalGst / 2),
+      igstAmount: _isInterStateTax ? _totalGst : 0.0,
+      isInterStateTax: _isInterStateTax,
       gstAmount: _totalGst,
       totalAmount: _grandTotal,
       paidAmount: 0.0,
@@ -286,7 +381,10 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
                             : _partyType == PartyType.dealer
                                 ? db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name))).toList()
                                 : db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})'))).toList(),
-                        onChanged: (val) => setState(() => _selectedPartyId = val),
+                        onChanged: (val) => setState(() {
+                          _selectedPartyId = val;
+                          _resolveTaxClassification();
+                        }),
                       );
 
                       final projectDropdown = DropdownButtonFormField<String?>(
@@ -299,7 +397,10 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
                           const DropdownMenuItem(value: null, child: Text('None (Direct Site)')),
                           ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
                         ],
-                        onChanged: (val) => setState(() => _selectedProjectId = val),
+                        onChanged: (val) => setState(() {
+                          _selectedProjectId = val;
+                          _resolveTaxClassification();
+                        }),
                       );
 
                       final dateField = TextFormField(
@@ -580,13 +681,31 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Expanded(child: Text('GST Taxes:')),
-                        Text(Formatters.formatCurrency(_totalGst)),
-                      ],
-                    ),
+                    if (!_isInterStateTax) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Expanded(child: Text('CGST (9%):')),
+                          Text(Formatters.formatCurrency(_totalGst / 2)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Expanded(child: Text('SGST (9%):')),
+                          Text(Formatters.formatCurrency(_totalGst / 2)),
+                        ],
+                      ),
+                    ] else ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Expanded(child: Text('IGST (18%):', style: TextStyle(color: Colors.purple, fontWeight: FontWeight.bold))),
+                          Text(Formatters.formatCurrency(_totalGst), style: const TextStyle(color: Colors.purple, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
                     const Divider(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,

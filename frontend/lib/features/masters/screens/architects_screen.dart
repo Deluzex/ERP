@@ -74,7 +74,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     final emailCtrl = TextEditingController(text: existing?.email ?? '');
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final addrCtrl = TextEditingController(text: existing?.address ?? '');
-    final stateCtrl = TextEditingController(text: existing?.state ?? '');
+    final stateCtrl = TextEditingController(text: (existing?.state.isNotEmpty ?? false) ? existing!.state : 'Gujarat');
     final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     final rateCtrl = TextEditingController(text: existing?.defaultCommissionRate.toString() ?? '5.0');
     String? linkedCustomerId = (existing?.linkedCustomerId != null &&
@@ -243,8 +243,14 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                               flex: 3,
                               child: TextFormField(
                                 controller: stateCtrl,
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) {
+                                    return 'State is required';
+                                  }
+                                  return null;
+                                },
                                 decoration: const InputDecoration(
-                                  labelText: 'State',
+                                  labelText: 'State *',
                                   hintText: 'E.g., Gujarat',
                                 ),
                               ),
@@ -255,8 +261,17 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                               child: TextFormField(
                                 controller: pincodeCtrl,
                                 keyboardType: TextInputType.number,
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) {
+                                    return 'PIN Code is required';
+                                  }
+                                  if (!RegExp(r'^[1-9][0-9]{5}$').hasMatch(v.trim())) {
+                                    return 'Enter a valid 6-digit PIN Code';
+                                  }
+                                  return null;
+                                },
                                 decoration: const InputDecoration(
-                                  labelText: 'PIN Code',
+                                  labelText: 'PIN Code *',
                                   hintText: 'E.g., 395006',
                                 ),
                               ),

@@ -5319,45 +5319,47 @@ class RecordDetailsView extends ConsumerWidget {
           Text('Financials & Actions', style: AppTextStyles.h3),
           const Divider(height: 24),
           _buildInfoRow('Subtotal Amount', Formatters.formatCurrency(s.subtotalAmount)),
-          _buildInfoRow('Discounts Amount', Formatters.formatCurrency(s.discountAmount)),
-          _buildInfoRow('GST Output Tax', Formatters.formatCurrency(s.gstAmount)),
-          const Divider(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: Text('Grand Total Invoiced:', style: AppTextStyles.bodyBold)),
-              const SizedBox(width: 8),
-              Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.h2.copyWith(color: AppColors.primary)),
-            ],
-          ),
-          if (approvedReturnsTotal > 0) ...[
-            const SizedBox(height: 6),
-            _buildInfoRow('Total Sales Returns', '- ${Formatters.formatCurrency(approvedReturnsTotal)}'),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: Text('Net Invoice Revenue:', style: AppTextStyles.bodyBold)),
-                const SizedBox(width: 8),
-                Text(Formatters.formatCurrency(netSaleAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-              ],
-            ),
+          if (s.discountAmount > 0)
+            _buildInfoRow('Discounts Amount', '- ${Formatters.formatCurrency(s.discountAmount)}'),
+          _buildInfoRow('Taxable Amount', Formatters.formatCurrency(s.taxableAmount)),
+          if (!s.isInterStateTax && s.igstAmount == 0) ...[
+            _buildInfoRow('CGST Output Tax (9%)', Formatters.formatCurrency(s.cgstAmount)),
+            _buildInfoRow('SGST Output Tax (9%)', Formatters.formatCurrency(s.sgstAmount)),
+          ] else ...[
+            _buildInfoRow('IGST Output Tax (18%)', Formatters.formatCurrency(s.igstAmount > 0 ? s.igstAmount : s.gstAmount)),
           ],
-          const SizedBox(height: 8),
-          _buildInfoRow('Amount Received / Paid', Formatters.formatCurrency(s.paidAmount)),
-          _buildInfoRow('Outstanding Balance', Formatters.formatCurrency(s.pendingAmount)),
-          const Divider(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: Text('Current Status:', style: AppTextStyles.bodyBold)),
-              const SizedBox(width: 8),
-              Text(s.statusLabel.toUpperCase(), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-            ],
-          ),
-          const SizedBox(height: 20),
+          _buildInfoRow('Total GST Tax', Formatters.formatCurrency(s.gstAmount)),
+                    const Divider(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Grand Total Invoiced:', style: AppTextStyles.bodyBold),
+                        Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.h2.copyWith(color: AppColors.primary)),
+                      ],
+                    ),
+                    if (approvedReturnsTotal > 0) ...[
+                      const SizedBox(height: 6),
+                      _buildInfoRow('Total Sales Returns', '- ${Formatters.formatCurrency(approvedReturnsTotal)}'),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Net Invoice Revenue:', style: AppTextStyles.bodyBold),
+                          Text(Formatters.formatCurrency(netSaleAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    _buildInfoRow('Amount Received / Paid', Formatters.formatCurrency(s.paidAmount)),
+                    _buildInfoRow('Outstanding Balance', Formatters.formatCurrency(s.pendingAmount)),
+                    const Divider(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Current Status:', style: AppTextStyles.bodyBold),
+                        Text(s.statusLabel.toUpperCase(), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
 
           // Quotation actions
           if (s.documentType == SalesDocumentType.quotation) ...[

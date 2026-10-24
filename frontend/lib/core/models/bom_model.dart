@@ -92,6 +92,10 @@ class BillOfMaterial {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  /// Backend-generated BOM number (e.g. BOM-FP-CODE-V1). Empty for locally
+  /// seeded demo recipes that only have the id.
+  final String bomNumber;
+
   const BillOfMaterial({
     required this.id,
     required this.finishedProductId,
@@ -105,7 +109,10 @@ class BillOfMaterial {
     required this.items,
     required this.createdAt,
     required this.updatedAt,
+    this.bomNumber = '',
   });
+
+  String get displayNumber => bomNumber.trim().isNotEmpty ? bomNumber.trim() : id;
 
   String get safeStatus {
     if (status != null && status!.trim().isNotEmpty) {
@@ -140,6 +147,7 @@ class BillOfMaterial {
     List<BomItem>? items,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? bomNumber,
   }) {
     return BillOfMaterial(
       id: id ?? this.id,
@@ -154,6 +162,7 @@ class BillOfMaterial {
       items: items ?? this.items,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      bomNumber: bomNumber ?? this.bomNumber,
     );
   }
 
@@ -178,6 +187,7 @@ class BillOfMaterial {
       updatedAt: json['updatedAt'] != null
           ? DateTime.tryParse(json['updatedAt'].toString()) ?? DateTime.now()
           : DateTime.now(),
+      bomNumber: json['bomNumber']?.toString() ?? json['bom_number']?.toString() ?? '',
     );
   }
 

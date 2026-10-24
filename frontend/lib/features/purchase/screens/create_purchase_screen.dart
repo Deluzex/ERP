@@ -2002,11 +2002,22 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Expanded(
-                                        child: Text('IGST (Inter-State Tax):',
-                                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.primaryDark)),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('IGST (Inter-State Tax):',
+                                                style: AppTextStyles.bodySmall.copyWith(color: Colors.purple)),
+                                            if (_totalUnits > 0)
+                                              Text(
+                                                '(${Formatters.formatCurrency(_igstAmount / _totalUnits)} / unit)',
+                                                style: AppTextStyles.bodySmall.copyWith(color: Colors.purple.withValues(alpha: 0.7), fontSize: 10),
+                                              ),
+                                          ],
+                                        ),
                                       ),
+                                      const SizedBox(width: 8),
                                       Text(Formatters.formatCurrency(_igstAmount),
-                                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
+                                          style: AppTextStyles.bodySmall.copyWith(color: Colors.purple, fontWeight: FontWeight.bold)),
                                     ],
                                   ),
                                 )
@@ -2018,7 +2029,20 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Expanded(child: Text('CGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text('CGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                                                if (_totalUnits > 0)
+                                                  Text(
+                                                    '(${Formatters.formatCurrency(_cgstAmount / _totalUnits)} / unit)',
+                                                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 10),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
                                           Text(Formatters.formatCurrency(_cgstAmount),
                                               style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
                                         ],
@@ -2027,7 +2051,20 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Expanded(child: Text('SGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text('SGST Amount:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                                                if (_totalUnits > 0)
+                                                  Text(
+                                                    '(${Formatters.formatCurrency(_sgstAmount / _totalUnits)} / unit)',
+                                                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 10),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
                                           Text(Formatters.formatCurrency(_sgstAmount),
                                               style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
                                         ],
@@ -2036,6 +2073,52 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                   ),
                                 ),
                         ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Transportation / Freight (₹):', style: AppTextStyles.bodyMedium),
+                                Text(
+                                  'Capitalized proportionally into product landed cost',
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 140,
+                            child: TextFormField(
+                              key: const ValueKey('purchase_transportation_input'),
+                              controller: _transportationChargesCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                              ],
+                              onChanged: (val) {
+                                _isManualTransportation = true;
+                                final trimmed = val.trim();
+                                if (trimmed.isNotEmpty) {
+                                  final parsed = double.tryParse(trimmed);
+                                  if (parsed != null && parsed >= 0) {
+                                    _validTransportationCharges = parsed;
+                                  }
+                                }
+                                setState(() {});
+                              },
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                prefixIcon: Icon(Icons.local_shipping_outlined, size: 16),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const Divider(height: 20),
                       Row(

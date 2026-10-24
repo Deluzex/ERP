@@ -55,6 +55,9 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
           ? existing.budgetAmount.toStringAsFixed(2)
           : '',
     );
+    final siteStateCtrl = TextEditingController(text: existing?.siteState ?? '');
+    final sitePincodeCtrl = TextEditingController(text: existing?.sitePincode ?? '');
+    final siteAddressCtrl = TextEditingController(text: existing?.siteAddress ?? '');
     String? selectedCustomerId = existing?.customerId ?? (db.customers.isNotEmpty ? db.customers.first.id : null);
     String? selectedArchitectId = existing?.architectId ?? (db.architects.isNotEmpty ? db.architects.first.id : null);
     ProjectStatus selectedStatus = existing?.status ?? ProjectStatus.active;
@@ -422,6 +425,43 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                           }),
                         ],
                         const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: siteStateCtrl,
+                                validator: (v) => Validators.requiredField(v, 'Site state is required for GST determination'),
+                                decoration: const InputDecoration(
+                                  labelText: 'Site State (Place of Supply) *',
+                                  hintText: 'e.g. Gujarat, Maharashtra',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: sitePincodeCtrl,
+                                validator: (v) => Validators.pincode(v, false),
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Site PIN Code',
+                                  hintText: 'e.g. 380054',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: siteAddressCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Site Delivery Address',
+                            hintText: 'Plot / Tower / Site street address',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         TextFormField(
                           controller: notesCtrl,
                           maxLines: 2,
@@ -466,6 +506,10 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                               ? double.tryParse(budgetCtrl.text.trim())
                               : null;
 
+                          final siteStateVal = siteStateCtrl.text.trim().isNotEmpty ? siteStateCtrl.text.trim() : null;
+                          final sitePincodeVal = sitePincodeCtrl.text.trim().isNotEmpty ? sitePincodeCtrl.text.trim() : null;
+                          final siteAddressVal = siteAddressCtrl.text.trim().isNotEmpty ? siteAddressCtrl.text.trim() : null;
+
                           try {
                             if (isEdit) {
                               final updatedProject = existing.copyWith(
@@ -478,6 +522,10 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                 startDate: startDate,
                                 expectedCompletionDate: expDate,
                                 status: selectedStatus,
+                                siteState: siteStateVal,
+                                sitePincode: sitePincodeVal,
+                                siteAddress: siteAddressVal,
+                                posVerified: siteStateVal != null,
                                 notes: notesCtrl.text.trim(),
                               );
                               await db.updateProjectAsync(updatedProject);
@@ -493,6 +541,10 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                 startDate: startDate,
                                 expectedCompletionDate: expDate,
                                 status: selectedStatus,
+                                siteState: siteStateVal,
+                                sitePincode: sitePincodeVal,
+                                siteAddress: siteAddressVal,
+                                posVerified: siteStateVal != null,
                                 notes: notesCtrl.text.trim(),
                                 createdAt: DateTime.now(),
                               );

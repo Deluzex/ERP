@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
 } from 'class-validator';
 
@@ -12,6 +13,9 @@ export const EMAIL_MAX_LENGTH = 254;
 
 const normalizeEmail = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
+
+const emptyToUndefined = ({ value }: { value: unknown }) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
 
 export class CreateCustomerDto {
   @IsString()
@@ -28,6 +32,7 @@ export class CreateCustomerDto {
   @IsEmail({}, { message: 'Please enter a valid email address.' })
   email!: string;
 
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
   gstNumber?: string;
@@ -36,10 +41,30 @@ export class CreateCustomerDto {
   @IsNotEmpty()
   address!: string;
 
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
   stateCode?: string;
 
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  @Matches(/^[1-9][0-9]{5}$/, {
+    message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
+  })
+  pincode?: string;
+
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
   linkedArchitectId?: string;
@@ -65,6 +90,7 @@ export class UpdateCustomerDto {
   @IsEmail({}, { message: 'Please enter a valid email address.' })
   email?: string;
 
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
   gstNumber?: string;
@@ -73,10 +99,30 @@ export class UpdateCustomerDto {
   @IsOptional()
   address?: string;
 
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
   stateCode?: string;
 
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  @Matches(/^[1-9][0-9]{5}$/, {
+    message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
+  })
+  pincode?: string;
+
+  @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()
   linkedArchitectId?: string;
