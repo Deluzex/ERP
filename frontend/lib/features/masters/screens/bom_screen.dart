@@ -202,7 +202,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
         rawMaterialCode: rawCode,
         unit: rawUnit,
         quantityPerUnit: itm.quantityPerUnit,
-        wastagePercent: itm.wastagePercent,
         unitCost: rmPrices[rawId] ?? rmPrices[itm.rawMaterialId] ?? itm.unitCost,
       ));
     }
@@ -514,18 +513,12 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                 children: [
                                   Text('Code: ${itm.safeCode}', style: AppTextStyles.caption),
                                   Text(
-                                    '${Formatters.formatNumber(itm.quantityWithWastage)} ${itm.safeUnit} @ ${Formatters.formatCurrency(_effectiveUnitCost(itm, rmPrices))}',
+                                    '${Formatters.formatNumber(itm.quantityPerUnit)} ${itm.safeUnit} @ ${Formatters.formatCurrency(_effectiveUnitCost(itm, rmPrices))}',
                                     style: AppTextStyles.caption,
                                   ),
                                 ],
                               ),
-                              if (itm.wastagePercent > 0) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Wastage: ${Formatters.formatNumber(itm.wastagePercent)}% (Base: ${Formatters.formatNumber(itm.quantityPerUnit)})',
-                                  style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
-                                ),
-                              ],
+                              
                             ],
                           ),
                         );
@@ -542,8 +535,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                           DataColumn(label: Text('Code', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('Qty/Unit', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('Unit', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Wastage %', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Qty w/ Wastage', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('Line Total', style: TextStyle(fontWeight: FontWeight.bold))),
                         ],
@@ -557,8 +548,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                               DataCell(Text(itm.safeCode, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600))),
                               DataCell(Text(Formatters.formatNumber(itm.quantityPerUnit))),
                               DataCell(Text(itm.safeUnit)),
-                              DataCell(Text('${Formatters.formatNumber(itm.wastagePercent)}%')),
-                              DataCell(Text(Formatters.formatNumber(itm.quantityWithWastage), style: AppTextStyles.bodyBold)),
                               DataCell(Text(Formatters.formatCurrency(itm.unitCost))),
                               DataCell(Text(Formatters.formatCurrency(itm.totalCostPerFinishedUnit), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary))),
                             ],
@@ -944,7 +933,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              flex: 3,
                               child: TextFormField(
                                 controller: qtyCtrl,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -952,25 +940,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                 decoration: InputDecoration(
                                   labelText: 'Req. Qty (${selectedRm.unit}) *',
                                   prefixIcon: const Icon(Icons.numbers, size: 20),
-                                ),
-                                onChanged: (_) => setDlgState(() {}),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              flex: 2,
-                              child: TextFormField(
-                                controller: wastageCtrl,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return null;
-                                  final num = double.tryParse(v.trim());
-                                  if (num == null || num < 0) return 'Invalid';
-                                  return null;
-                                },
-                                decoration: const InputDecoration(
-                                  labelText: 'Wastage %',
-                                  suffixText: '%',
                                 ),
                                 onChanged: (_) => setDlgState(() {}),
                               ),
@@ -993,7 +962,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              flex: 4,
                               child: TextFormField(
                                 controller: qtyCtrl,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1007,26 +975,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              flex: 3,
-                              child: TextFormField(
-                                controller: wastageCtrl,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return null;
-                                  final num = double.tryParse(v.trim());
-                                  if (num == null || num < 0) return 'Invalid';
-                                  return null;
-                                },
-                                decoration: const InputDecoration(
-                                  labelText: 'Wastage %',
-                                  suffixText: '%',
-                                ),
-                                onChanged: (_) => setDlgState(() {}),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              flex: 4,
                               child: TextFormField(
                                 controller: unitCostCtrl,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1057,7 +1005,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text('Qty Incl. Wastage:', style: AppTextStyles.bodySmall),
+                                      Text('Required Qty:', style: AppTextStyles.bodySmall),
                                       Text(
                                         '${Formatters.formatNumber(qtyWithWastage)} ${selectedRm.unit}',
                                         style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText, fontSize: 13),
@@ -1094,7 +1042,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Qty Incl. Wastage:', style: AppTextStyles.bodySmall),
+                                      Text('Required Qty:', style: AppTextStyles.bodySmall),
                                       Text(
                                         '${Formatters.formatNumber(qtyWithWastage)} ${selectedRm.unit}',
                                         style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText, fontSize: 13),
@@ -1149,7 +1097,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                   FocusScope.of(ctx).unfocus();
                   final chosenRm = uniqueRms.firstWhere((r) => r.id == selectedRmId, orElse: () => selectedRm);
                   final enteredQty = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
-                  final enteredWastage = double.tryParse(wastageCtrl.text.trim()) ?? 0.0;
+                  const enteredWastage = 0.0;
                   final enteredCost = double.tryParse(unitCostCtrl.text.trim()) ?? chosenRm.defaultPurchasePrice;
 
                   Navigator.of(ctx).pop(_BomItemDraft(
@@ -2190,7 +2138,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Expanded(
-                                    flex: 3,
                                     child: TextFormField(
                                       controller: item.qtyCtrl,
                                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -2204,24 +2151,8 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                       },
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 10),
                                   Expanded(
-                                    flex: 2,
-                                    child: TextFormField(
-                                      controller: item.wastageCtrl,
-                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      decoration: const InputDecoration(labelText: 'Wastage (%)', suffixText: '%'),
-                                      onChanged: (v) {
-                                        final num = double.tryParse(v.trim()) ?? 0.0;
-                                        setState(() {
-                                          item.wastagePercent = num;
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    flex: 3,
                                     child: TextFormField(
                                       controller: item.unitCostCtrl,
                                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -2262,7 +2193,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                   ] else ...[
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        const minTableWidth = 1270.0;
+                        const minTableWidth = 1160.0;
                         final effectiveWidth = math.max(constraints.maxWidth, minTableWidth);
 
                         return SingleChildScrollView(
@@ -2386,22 +2317,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                   ),
                                   const SizedBox(width: 10),
 
-                                  // Wastage % Input
-                                  SizedBox(
-                                    width: 100,
-                                    child: TextFormField(
-                                      controller: item.wastageCtrl,
-                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      decoration: const InputDecoration(labelText: 'Wastage (%)', suffixText: '%'),
-                                      onChanged: (v) {
-                                        final num = double.tryParse(v.trim()) ?? 0.0;
-                                        setState(() {
-                                          item.wastagePercent = num;
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
+                                  
 
                                   // Unit Cost Input
                                   SizedBox(
@@ -2438,13 +2354,13 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                           children: [
                                             Expanded(
                                               child: Text(
-                                                'Qty + Wastage:',
+                                                'Req. Qty:',
                                                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11),
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                             Text(
-                                              '${Formatters.formatNumber(item.quantityWithWastage)} ${item.unit}',
+                                              '${Formatters.formatNumber(item.quantityPerUnit)} ${item.unit}',
                                               style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText, fontSize: 12),
                                             ),
                                           ],

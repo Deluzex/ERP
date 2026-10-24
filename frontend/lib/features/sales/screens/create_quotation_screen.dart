@@ -420,8 +420,18 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     }
   }
 
-  void _autoFillPartyDetails(String partyId, PartyType type, MockDatabaseService db) {
+  void _autoFillPartyDetails(String? partyId, PartyType type, MockDatabaseService db) {
     _deliveryPosState = null;
+    if (partyId == null) {
+      _contactPersonCtrl.clear();
+      _mobileCtrl.clear();
+      _emailCtrl.clear();
+      _gstNumberCtrl.clear();
+      _billingAddressCtrl.clear();
+      _shippingAddressCtrl.clear();
+      _resolveTaxClassification();
+      return;
+    }
     if (type == PartyType.customer) {
       final c = db.customers.where((cust) => cust.id == partyId).firstOrNull;
       if (c != null) {
@@ -975,6 +985,30 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   double get _totalGst => _items.fold(0.0, (sum, i) => sum + i.gstAmount);
   double get _grandTotal => _totalTaxable + _totalGst;
 
+  void _resetForm() {
+    setState(() {
+      _partyType = PartyType.customer;
+      _selectedPartyId = null;
+      _selectedProjectId = null;
+      _isInterStateTax = false;
+      _isTaxManuallySelected = false;
+      _deliveryPosState = 'Gujarat';
+      _contactPersonCtrl.clear();
+      _mobileCtrl.clear();
+      _emailCtrl.clear();
+      _gstNumberCtrl.clear();
+      _billingAddressCtrl.clear();
+      _shippingAddressCtrl.clear();
+      _quotationDate = DateTime.now();
+      _validTill = DateTime.now().add(const Duration(days: 30));
+      _notesCtrl.clear();
+      _items.clear();
+      _sourceQuotation = null;
+      _isRevision = false;
+      _revisionNumber = 0;
+    });
+  }
+
   Future<void> _saveQuotation(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
     if (_items.isEmpty) {
@@ -1147,6 +1181,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         ),
       );
 
+      _resetForm();
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations;
     } catch (e) {
       if (!mounted) return;
@@ -1169,80 +1204,80 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Responsive Page Header Card
-            ErpSectionHeaderCard(
-              icon: Icons.request_quote_outlined,
-              title: _isRevision ? 'Create Quotation Revision (Rev $_revisionNumber)' : 'Create New Quotation',
-              badgeText: _isRevision ? 'REVISION' : 'NEW QUOTATION',
-              subtitle: _isRevision
-                  ? 'Creating revision for ${_sourceQuotation?.invoiceNumber}. Old version will be superseded.'
-                  : 'Commercial estimate with finished goods or raw materials (Zero stock impact until confirmed)',
-              action: LayoutBuilder(
-                builder: (context, actionBox) {
-                  final isMobile = actionBox.maxWidth < 600;
-                  if (isMobile) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          child: ErpButton(
-                            text: 'Save & Mark Sent',
-                            icon: Icons.send_outlined,
-                            onPressed: () => _saveQuotation(false),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ErpButton(
-                            text: 'Save as Draft',
-                            isOutlined: true,
-                            onPressed: () => _saveQuotation(true),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ErpButton(
-                            text: 'Cancel',
-                            isOutlined: true,
-                            onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
+            // 1. Page Header matching user design
+            LayoutBuilder(
+              builder: (context, headerConstraints) {
+                final isNarrow = headerConstraints.maxWidth < 650;
+                final titleWidget = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isRevision ? 'Create Quotation Revision (Rev $_revisionNumber)' : 'Create Quotation',
+                      style: AppTextStyles.h1.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isRevision
+                          ? 'Creating revision for ${_sourceQuotation?.invoiceNumber}. Old version will be superseded.'
+                          : 'Commercial estimate with finished product lines (Zero stock impact until confirmed)',
+                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+                    ),
+                  ],
+                );
+
+                final actionButtons = Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    ErpButton(
+                      text: 'Cancel',
+                      isOutlined: true,
+                      onPressed: () {
+                        _resetForm();
+                        ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations;
+                      },
+                    ),
+                    ErpButton(
+                      text: 'Save as Draft',
+                      isOutlined: true,
+                      onPressed: () => _saveQuotation(true),
+                    ),
+                    ErpButton(
+                      text: 'Save & Mark Sent',
+                      icon: Icons.send_rounded,
+                      onPressed: () => _saveQuotation(false),
+                    ),
+                  ],
+                );
+
+                if (isNarrow) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      ErpButton(
-                        text: 'Cancel',
-                        isOutlined: true,
-                        onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
-                      ),
-                      const SizedBox(width: 8),
-                      ErpButton(
-                        text: 'Save as Draft',
-                        isOutlined: true,
-                        onPressed: () => _saveQuotation(true),
-                      ),
-                      const SizedBox(width: 8),
-                      ErpButton(
-                        text: 'Save & Mark Sent',
-                        icon: Icons.send_outlined,
-                        onPressed: () => _saveQuotation(false),
-                      ),
+                      titleWidget,
+                      const SizedBox(height: 12),
+                      actionButtons,
                     ],
                   );
-                },
-              ),
+                }
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: titleWidget),
+                    const SizedBox(width: 16),
+                    actionButtons,
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 20),
 
-            // 1. Client / Party Selection Card
+            // 2. Customer & Commercial Details Card
             Container(
-              padding: AppSpacing.cardPadding,
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: AppRadius.lgBorderRadius,
@@ -1251,150 +1286,134 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.person_pin_outlined, color: AppColors.primary, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Customer & Party Information', style: AppTextStyles.h3),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Select target client or dealer to auto-fill commercial terms & GST parameters',
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
+                  Text('Customer & Commercial Details', style: AppTextStyles.h3),
+                  const SizedBox(height: 18),
 
+                  // Row 1: Party Type Dropdown (Left) + Party Picker Dropdown (Right)
                   LayoutBuilder(
-                    builder: (context, partyConstraints) {
-                      final isNarrow = partyConstraints.maxWidth < 650;
-                      final partyTypeField = DropdownButtonFormField<PartyType>(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 900;
+                      final partyTypeDropdown = DropdownButtonFormField<PartyType>(
                         value: _partyType,
-                        decoration: const InputDecoration(labelText: 'Party Category *'),
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Customer Type *',
+                        ),
                         items: const [
-                          DropdownMenuItem(value: PartyType.customer, child: Text('End Customer / Client')),
-                          DropdownMenuItem(value: PartyType.dealer, child: Text('Authorized Dealer / Distributor')),
-                          DropdownMenuItem(value: PartyType.architect, child: Text('Architect / Specifier')),
+                          DropdownMenuItem(
+                            value: PartyType.customer,
+                            child: Text('Direct Customer'),
+                          ),
+                          DropdownMenuItem(
+                            value: PartyType.dealer,
+                            child: Text('Dealer Channel'),
+                          ),
+                          DropdownMenuItem(
+                            value: PartyType.architect,
+                            child: Text('Architect'),
+                          ),
                         ],
-                        onChanged: (val) {
-                          if (val != null) {
+                        onChanged: (type) {
+                          if (type != null && type != _partyType) {
                             setState(() {
-                              _partyType = val;
+                              _partyType = type;
                               _selectedPartyId = null;
+                              final db = ref.read(databaseServiceProvider);
+                              _autoFillPartyDetails(null, type, db);
                             });
                           }
                         },
                       );
 
-                      final partyPicker = Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedPartyId,
-                              isExpanded: true,
-                              decoration: InputDecoration(
-                                labelText: _partyType == PartyType.customer
-                                    ? 'Select Customer *'
-                                    : (_partyType == PartyType.dealer ? 'Select Dealer *' : 'Select Architect *'),
-                              ),
-                              items: _partyType == PartyType.customer
-                                  ? db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text('${c.name} (${c.mobile})', maxLines: 1, overflow: TextOverflow.ellipsis))).toList()
-                                  : (_partyType == PartyType.dealer
-                                      ? db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text('${d.name} (${d.mobile})', maxLines: 1, overflow: TextOverflow.ellipsis))).toList()
-                                      : db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} - ${a.companyName}', maxLines: 1, overflow: TextOverflow.ellipsis))).toList()),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() {
-                                    _selectedPartyId = val;
-                                    _autoFillPartyDetails(val, _partyType, db);
-                                  });
-                                }
-                              },
-                              validator: (val) => val == null ? 'Please select a party' : null,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Tooltip(
-                            message: 'Quick Add ${_partyType.name.toUpperCase()}',
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(8),
-                              onTap: () => _openQuickAddPartyDialog(_partyType),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primarySoft,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                                ),
-                                child: const Icon(Icons.person_add_alt_1, size: 20, color: AppColors.primary),
-                              ),
-                            ),
-                          ),
-                        ],
+                      final partyPicker = DropdownButtonFormField<String>(
+                        value: _selectedPartyId,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: _partyType == PartyType.customer
+                              ? 'Select Customer *'
+                              : (_partyType == PartyType.dealer ? 'Select Dealer *' : 'Select Architect *'),
+                        ),
+                        items: _partyType == PartyType.customer
+                            ? db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))).toList()
+                            : (_partyType == PartyType.dealer
+                                ? db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis))).toList()
+                                : db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.companyName.isNotEmpty ? '${a.name} (${a.companyName})' : a.name, maxLines: 1, overflow: TextOverflow.ellipsis))).toList()),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _selectedPartyId = val;
+                              _autoFillPartyDetails(val, _partyType, db);
+                            });
+                          }
+                        },
+                        validator: (val) => val == null ? 'Please select a party' : null,
                       );
 
                       if (isNarrow) {
                         return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            partyTypeField,
-                            const SizedBox(height: 12),
+                            partyTypeDropdown,
+                            const SizedBox(height: 14),
                             partyPicker,
                           ],
                         );
                       }
+
                       return Row(
                         children: [
-                          Expanded(flex: 2, child: partyTypeField),
+                          Expanded(child: partyTypeDropdown),
                           const SizedBox(width: 16),
-                          Expanded(flex: 3, child: partyPicker),
+                          Expanded(child: partyPicker),
                         ],
                       );
                     },
                   ),
                   const SizedBox(height: 16),
 
-                  // Auto-filled details in 3 responsive columns
+                  // Row 2: 4 Columns -> Contact Person, Mobile Number, Email Address, Client GST Number
                   LayoutBuilder(
-                    builder: (context, fieldBox) {
-                      final isNarrow = fieldBox.maxWidth < 700;
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 900;
                       final contactField = TextFormField(
                         controller: _contactPersonCtrl,
-                        decoration: const InputDecoration(labelText: 'Contact Person Name'),
+                        decoration: const InputDecoration(labelText: 'Contact Person'),
                       );
                       final mobileField = TextFormField(
                         controller: _mobileCtrl,
-                        decoration: const InputDecoration(labelText: 'Mobile / Phone Number'),
+                        decoration: const InputDecoration(labelText: 'Mobile Number'),
                       );
                       final emailField = TextFormField(
                         controller: _emailCtrl,
                         decoration: const InputDecoration(labelText: 'Email Address'),
                       );
+                      final gstField = TextFormField(
+                        controller: _gstNumberCtrl,
+                        decoration: const InputDecoration(labelText: 'Client GST Number'),
+                      );
 
                       if (isNarrow) {
                         return Column(
                           children: [
-                            contactField,
+                            Row(
+                              children: [
+                                Expanded(child: contactField),
+                                const SizedBox(width: 12),
+                                Expanded(child: mobileField),
+                              ],
+                            ),
                             const SizedBox(height: 12),
-                            mobileField,
-                            const SizedBox(height: 12),
-                            emailField,
+                            Row(
+                              children: [
+                                Expanded(child: emailField),
+                                const SizedBox(width: 12),
+                                Expanded(child: gstField),
+                              ],
+                            ),
                           ],
                         );
                       }
+
                       return Row(
                         children: [
                           Expanded(child: contactField),
@@ -1402,136 +1421,52 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                           Expanded(child: mobileField),
                           const SizedBox(width: 12),
                           Expanded(child: emailField),
+                          const SizedBox(width: 12),
+                          Expanded(child: gstField),
                         ],
                       );
                     },
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
+                  // Row 3: 2 Columns -> Billing Address, Shipping / Site Address
                   LayoutBuilder(
-                    builder: (context, addrBox) {
-                      final isNarrow = addrBox.maxWidth < 700;
-                      final gstField = TextFormField(
-                        controller: _gstNumberCtrl,
-                        decoration: const InputDecoration(labelText: 'GSTIN Number (Auto-verified)'),
-                      );
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 700;
                       final billingField = TextFormField(
                         controller: _billingAddressCtrl,
                         decoration: const InputDecoration(labelText: 'Billing Address'),
                       );
                       final shippingField = TextFormField(
                         controller: _shippingAddressCtrl,
-                        decoration: const InputDecoration(labelText: 'Shipping / Site Delivery Address'),
+                        decoration: const InputDecoration(labelText: 'Shipping / Site Address'),
                       );
 
                       if (isNarrow) {
                         return Column(
                           children: [
-                            gstField,
-                            const SizedBox(height: 12),
                             billingField,
                             const SizedBox(height: 12),
                             shippingField,
                           ],
                         );
                       }
+
                       return Row(
                         children: [
-                          Expanded(flex: 1, child: gstField),
-                          const SizedBox(width: 12),
-                          Expanded(flex: 2, child: billingField),
-                          const SizedBox(width: 12),
-                          Expanded(flex: 2, child: shippingField),
+                          Expanded(child: billingField),
+                          const SizedBox(width: 16),
+                          Expanded(child: shippingField),
                         ],
                       );
                     },
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // 2. Project Linking & Quotation Header Details Card
-            Container(
-              padding: AppSpacing.cardPadding,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.lgBorderRadius,
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.assignment_outlined, color: AppColors.primary, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Project Association & Quotation Terms', style: AppTextStyles.h3),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Tag to ongoing project or site, assign owner, and set proposal validity',
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 16),
 
+                  // Row 4: 2 Columns -> Place of Supply (Delivery Destination), Valid Till
                   LayoutBuilder(
-                    builder: (context, projBox) {
-                      final isNarrow = projBox.maxWidth < 650;
-                      final projectPicker = Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedProjectId,
-                              isExpanded: true,
-                              decoration: const InputDecoration(labelText: 'Linked Project (Optional)'),
-                              items: [
-                                const DropdownMenuItem(value: null, child: Text('No Project / Direct Quotation')),
-                                ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (${p.projectCode})', maxLines: 1, overflow: TextOverflow.ellipsis))),
-                              ],
-                              onChanged: (val) {
-                                setState(() {
-                                  _selectedProjectId = val;
-                                  _resolveTaxClassification();
-                                });
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Tooltip(
-                            message: 'Quick Add Project',
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(8),
-                              onTap: _openQuickAddProjectDialog,
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primarySoft,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                                ),
-                                child: const Icon(Icons.create_new_folder_outlined, size: 20, color: AppColors.primary),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 700;
                       final posField = DropdownButtonFormField<String?>(
                         value: _deliveryPosState,
                         isExpanded: true,
@@ -1562,88 +1497,52 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               },
                       );
 
-                      final salesExecField = TextFormField(
-                        initialValue: _salesExecutive,
-                        decoration: const InputDecoration(labelText: 'Assigned Sales Executive *'),
-                        onChanged: (v) => _salesExecutive = v,
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      final validTillField = TextFormField(
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: 'Valid Till',
+                          suffixIcon: const Icon(Icons.calendar_month, size: 18),
+                          hintText: Formatters.formatDate(_validTill),
+                        ),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _validTill,
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (picked != null) setState(() => _validTill = picked);
+                        },
                       );
 
                       if (isNarrow) {
                         return Column(
                           children: [
-                            projectPicker,
-                            const SizedBox(height: 12),
                             posField,
                             const SizedBox(height: 12),
-                            salesExecField,
+                            validTillField,
                           ],
                         );
                       }
+
                       return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(flex: 3, child: projectPicker),
+                          Expanded(child: posField),
                           const SizedBox(width: 16),
-                          Expanded(flex: 3, child: posField),
-                          const SizedBox(width: 16),
-                          Expanded(flex: 2, child: salesExecField),
+                          Expanded(child: validTillField),
                         ],
                       );
                     },
-                  ),
-                  const SizedBox(height: 12),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          readOnly: true,
-                          decoration: InputDecoration(
-                            labelText: 'Quotation Date',
-                            suffixIcon: const Icon(Icons.calendar_month, size: 18),
-                            hintText: Formatters.formatDate(_quotationDate),
-                          ),
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _quotationDate,
-                              firstDate: DateTime.now().subtract(const Duration(days: 30)),
-                              lastDate: DateTime.now().add(const Duration(days: 90)),
-                            );
-                            if (picked != null) setState(() => _quotationDate = picked);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextFormField(
-                          readOnly: true,
-                          decoration: InputDecoration(
-                            labelText: 'Valid Till',
-                            suffixIcon: const Icon(Icons.calendar_today, size: 18),
-                            hintText: Formatters.formatDate(_validTill),
-                          ),
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _validTill,
-                              firstDate: DateTime.now(),
-                              lastDate: DateTime.now().add(const Duration(days: 180)),
-                            );
-                            if (picked != null) setState(() => _validTill = picked);
-                          },
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
 
-            // 3. Product & Raw Material Line Items Card
+            // 3. Quotation Line Items Card
             Container(
-              padding: AppSpacing.cardPadding,
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: AppRadius.lgBorderRadius,
@@ -1663,9 +1562,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               Text('Quotation Line Items', style: AppTextStyles.h3),
                               const SizedBox(width: 10),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  color: AppColors.primarySoft,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
@@ -1735,20 +1634,20 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                     itemBuilder: (ctx, idx) {
                       final item = _items[idx];
                       final isRm = item.itemType == PurchaseItemType.rawMaterial;
-                      final typeColor = isRm ? Colors.amber.shade800 : Colors.teal.shade700;
-                      final typeBgColor = isRm ? Colors.amber.withValues(alpha: 0.1) : Colors.teal.withValues(alpha: 0.1);
+                      final typeColor = isRm ? Colors.amber.shade800 : AppColors.primary;
+                      final typeBgColor = isRm ? Colors.amber.withValues(alpha: 0.1) : AppColors.primarySoft;
 
                       return Container(
                         key: ValueKey('item_card_${idx}_${item.itemId}_${item.itemType.name}'),
                         margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(color: AppColors.border),
                           boxShadow: const [
                             BoxShadow(
-                              color: Color(0x05000000),
+                              color: Color(0x04000000),
                               blurRadius: 6,
                               offset: Offset(0, 2),
                             ),
@@ -1760,28 +1659,28 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
 
                             // Item Type Dropdown Selector
                             final typeSelector = Container(
-                              height: 32,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              height: 38,
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
                               decoration: BoxDecoration(
                                 color: typeBgColor,
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(8),
                                 border: Border.all(color: typeColor.withValues(alpha: 0.4)),
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<PurchaseItemType>(
                                   value: item.itemType,
                                   isDense: true,
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: typeColor),
-                                  icon: Icon(Icons.arrow_drop_down, size: 16, color: typeColor),
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: typeColor),
+                                  icon: Icon(Icons.arrow_drop_down, size: 18, color: typeColor),
                                   items: [
                                     DropdownMenuItem(
                                       value: PurchaseItemType.finishedProduct,
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.inventory_2_outlined, size: 14, color: Colors.teal.shade700),
-                                          const SizedBox(width: 4),
-                                          Text('Fin Good', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal.shade700)),
+                                          Icon(Icons.inventory_2_outlined, size: 14, color: AppColors.primary),
+                                          const SizedBox(width: 6),
+                                          Text('Fin Good', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
                                         ],
                                       ),
                                     ),
@@ -1791,8 +1690,8 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Icon(Icons.grain, size: 14, color: Colors.amber.shade800),
-                                          const SizedBox(width: 4),
-                                          Text('Raw Mat', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade800)),
+                                          const SizedBox(width: 6),
+                                          Text('Raw Mat', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber.shade800)),
                                         ],
                                       ),
                                     ),
@@ -1844,8 +1743,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                         ? item.itemId
                                         : (db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : null),
                                     isExpanded: true,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Raw Material *',
+                                    decoration: InputDecoration(
+                                      labelText: 'Raw Material Master *',
+                                      prefixIcon: const Icon(Icons.grain, size: 18, color: AppColors.textMuted),
                                       filled: true,
                                       fillColor: Colors.white,
                                     ),
@@ -1853,7 +1753,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       return DropdownMenuItem(
                                         value: rm.id,
                                         child: Text(
-                                          '${rm.name} (${rm.itemCode}) - Stock: ${rm.currentStock} ${rm.unit}',
+                                          '${rm.name} (${rm.itemCode}) — Stock: ${rm.currentStock} ${rm.unit}',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -1881,8 +1781,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                         ? item.itemId
                                         : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
                                     isExpanded: true,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Finished Product *',
+                                    decoration: InputDecoration(
+                                      labelText: 'Finished Product Master *',
+                                      prefixIcon: const Icon(Icons.inventory_2_outlined, size: 18, color: AppColors.textMuted),
                                       filled: true,
                                       fillColor: Colors.white,
                                     ),
@@ -1890,7 +1791,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       return DropdownMenuItem(
                                         value: fp.id,
                                         child: Text(
-                                          '${fp.name} (${fp.itemCode}) - Avail: ${fp.availableStock} ${fp.unit}',
+                                          '${fp.name} (${fp.itemCode}) — Stock: ${fp.availableStock} ${fp.unit}',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -1918,6 +1819,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               keyboardType: TextInputType.number,
                               decoration: InputDecoration(
                                 labelText: 'Quantity (${item.unit})',
+                                prefixText: '# ',
                                 filled: true,
                                 fillColor: Colors.white,
                               ),
@@ -1929,6 +1831,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               keyboardType: TextInputType.number,
                               decoration: const InputDecoration(
                                 labelText: 'Unit Rate (₹)',
+                                prefixText: '₹ ',
                                 filled: true,
                                 fillColor: Colors.white,
                               ),
@@ -1940,6 +1843,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               keyboardType: TextInputType.number,
                               decoration: const InputDecoration(
                                 labelText: 'Discount (₹)',
+                                prefixIcon: Icon(Icons.local_offer_outlined, size: 16, color: AppColors.textMuted),
                                 filled: true,
                                 fillColor: Colors.white,
                               ),
@@ -1951,298 +1855,138 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               keyboardType: TextInputType.number,
                               decoration: const InputDecoration(
                                 labelText: 'GST %',
+                                prefixText: '% ',
                                 filled: true,
                                 fillColor: Colors.white,
                               ),
                               onChanged: (val) => setState(() => item.gstPercent = double.tryParse(val) ?? 18.0),
                             );
 
-                            final isMobileItemHeader = itemConstraints.maxWidth < 580;
-                            final isExtraSmall = itemConstraints.maxWidth < 420;
+                            final numberBadge = Container(
+                              width: 28,
+                              height: 28,
+                              decoration: const BoxDecoration(
+                                color: AppColors.primary,
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                '${idx + 1}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            );
 
-                            final itemHeader = isMobileItemHeader
+                            // Top Row: Item Type + Product Master Dropdown + Action Icons
+                            final topRow = Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                typeSelector,
+                                const SizedBox(width: 12),
+                                Expanded(child: itemPicker),
+                                const SizedBox(width: 12),
+                                IconButton(
+                                  icon: const Icon(Icons.copy_outlined, size: 20, color: Color(0xFF64748B)),
+                                  tooltip: 'Duplicate Item',
+                                  onPressed: () => _duplicateRow(idx),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.danger),
+                                  tooltip: 'Delete Item',
+                                  onPressed: () => _removeRow(idx),
+                                ),
+                              ],
+                            );
+
+                            // Middle Row: Inputs (Qty, Rate, Discount, GST) + Line Total
+                            final lineTotalWidget = Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('Line Total', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  Formatters.formatCurrency(item.lineTotal),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primaryDark,
+                                  ),
+                                ),
+                              ],
+                            );
+
+                            final middleRow = isItemNarrow
                                 ? Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.primarySoft,
-                                              borderRadius: BorderRadius.circular(6),
-                                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
-                                            ),
-                                            child: Text(
-                                              'ITEM #${idx + 1}',
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.primaryDark,
-                                                letterSpacing: 0.5,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          typeSelector,
-                                          if (item.itemCode.isNotEmpty && !isExtraSmall) ...[
-                                            const SizedBox(width: 6),
-                                            Flexible(
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFF1F5F9),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                ),
-                                                child: Text(
-                                                  item.itemCode,
-                                                  style: const TextStyle(fontSize: 10, color: Color(0xFF475569), fontWeight: FontWeight.w600),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                          const Spacer(),
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              _buildItemActionButton(
-                                                icon: Icons.copy_outlined,
-                                                label: isExtraSmall ? '' : 'Copy',
-                                                iconColor: const Color(0xFF475569),
-                                                backgroundColor: const Color(0xFFF1F5F9),
-                                                borderColor: const Color(0xFFCBD5E1),
-                                                onTap: () => _duplicateRow(idx),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              _buildItemActionButton(
-                                                icon: Icons.delete_outline,
-                                                label: isExtraSmall ? '' : 'Delete',
-                                                iconColor: AppColors.danger,
-                                                backgroundColor: const Color(0xFFFEF2F2),
-                                                borderColor: const Color(0xFFFECACA),
-                                                onTap: () => _removeRow(idx),
-                                              ),
-                                            ],
-                                          ),
+                                          Expanded(child: qtyField),
+                                          const SizedBox(width: 10),
+                                          Expanded(child: rateField),
                                         ],
                                       ),
-                                      const SizedBox(height: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF8FAFC),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              'Line Total: ',
-                                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontWeight: FontWeight.w500),
-                                            ),
-                                            Text(
-                                              Formatters.formatCurrency(item.lineTotal),
-                                              style: AppTextStyles.bodyBold.copyWith(fontSize: 14, color: AppColors.primaryDark),
-                                            ),
-                                          ],
-                                        ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Expanded(child: discountField),
+                                          const SizedBox(width: 10),
+                                          Expanded(child: gstField),
+                                          const SizedBox(width: 16),
+                                          lineTotalWidget,
+                                        ],
                                       ),
                                     ],
                                   )
                                 : Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.primarySoft,
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
-                                        ),
-                                        child: Text(
-                                          'ITEM #${idx + 1}',
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.primaryDark,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      typeSelector,
-                                      if (item.itemCode.isNotEmpty) ...[
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFF1F5F9),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            item.itemCode,
-                                            style: const TextStyle(fontSize: 11, color: Color(0xFF475569), fontWeight: FontWeight.w600),
-                                          ),
-                                        ),
-                                      ],
-                                      const Spacer(),
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text('Line Total: ', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                                          Text(
-                                            Formatters.formatCurrency(item.lineTotal),
-                                            style: AppTextStyles.bodyBold.copyWith(fontSize: 14, color: AppColors.primaryDark),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          _buildItemActionButton(
-                                            icon: Icons.copy_outlined,
-                                            label: 'Copy',
-                                            iconColor: const Color(0xFF475569),
-                                            backgroundColor: const Color(0xFFF1F5F9),
-                                            borderColor: const Color(0xFFCBD5E1),
-                                            onTap: () => _duplicateRow(idx),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          _buildItemActionButton(
-                                            icon: Icons.delete_outline,
-                                            label: 'Delete',
-                                            iconColor: AppColors.danger,
-                                            backgroundColor: const Color(0xFFFEF2F2),
-                                            borderColor: const Color(0xFFFECACA),
-                                            onTap: () => _removeRow(idx),
-                                          ),
-                                        ],
-                                      ),
+                                      Expanded(flex: 3, child: qtyField),
+                                      const SizedBox(width: 12),
+                                      Expanded(flex: 3, child: rateField),
+                                      const SizedBox(width: 12),
+                                      Expanded(flex: 3, child: discountField),
+                                      const SizedBox(width: 12),
+                                      Expanded(flex: 2, child: gstField),
+                                      const SizedBox(width: 20),
+                                      lineTotalWidget,
                                     ],
                                   );
 
-                            final productDescriptionBox = Container(
-                              margin: const EdgeInsets.only(top: 10),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFFCBD5E1)),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Color(0x04000000),
-                                    blurRadius: 4,
-                                    offset: Offset(0, 1),
-                                  ),
-                                ],
+                            // Bottom Row: Description / Specifications
+                            final descriptionRow = TextFormField(
+                              initialValue: item.productDescription,
+                              decoration: const InputDecoration(
+                                labelText: 'Item Description / Custom Specifications for Quote PDF',
+                                isDense: true,
+                                filled: true,
+                                fillColor: Colors.white,
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.description_outlined, size: 14, color: AppColors.primary),
-                                      const SizedBox(width: 6),
-                                      const Expanded(
-                                        child: Text(
-                                          'Item Description & Custom Specifications',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.primaryDark,
-                                            letterSpacing: 0.3,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.primarySoft,
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                                        ),
-                                        child: const Text(
-                                          'PRINTS ON PDF',
-                                          style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  TextFormField(
-                                    initialValue: item.productDescription,
-                                    maxLines: 2,
-                                    minLines: 1,
-                                    style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B)),
-                                    decoration: const InputDecoration(
-                                      isDense: true,
-                                      hintText: 'Enter custom product specifications, technical details, color temp, or client notes...',
-                                      hintStyle: TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontStyle: FontStyle.italic),
-                                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                                      border: InputBorder.none,
-                                      enabledBorder: InputBorder.none,
-                                      focusedBorder: InputBorder.none,
-                                      filled: false,
-                                    ),
-                                    onChanged: (val) => item.productDescription = val,
-                                  ),
-                                ],
-                              ),
+                              onChanged: (val) => item.productDescription = val,
                             );
 
-                            final boxesArea = Container(
-                              margin: const EdgeInsets.only(top: 10),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF1F5F9), // Single clean soft grey area
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: isItemNarrow
-                                  ? Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        itemPicker,
-                                        const SizedBox(height: 10),
-                                        Row(
-                                          children: [
-                                            Expanded(child: qtyField),
-                                            const SizedBox(width: 8),
-                                            Expanded(child: rateField),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Row(
-                                          children: [
-                                            Expanded(child: discountField),
-                                            const SizedBox(width: 8),
-                                            Expanded(child: gstField),
-                                          ],
-                                        ),
-                                      ],
-                                    )
-                                  : Row(
-                                      children: [
-                                        Expanded(flex: 3, child: itemPicker),
-                                        const SizedBox(width: 10),
-                                        Expanded(flex: 1, child: qtyField),
-                                        const SizedBox(width: 10),
-                                        Expanded(flex: 1, child: rateField),
-                                        const SizedBox(width: 10),
-                                        Expanded(flex: 1, child: discountField),
-                                        const SizedBox(width: 10),
-                                        Expanded(flex: 1, child: gstField),
-                                      ],
-                                    ),
-                            );
-
-                            return Column(
+                            return Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                itemHeader,
-                                boxesArea,
-                                productDescriptionBox,
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8, right: 14),
+                                  child: numberBadge,
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      topRow,
+                                      const SizedBox(height: 12),
+                                      middleRow,
+                                      const SizedBox(height: 12),
+                                      descriptionRow,
+                                    ],
+                                  ),
+                                ),
                               ],
                             );
                           },
@@ -2541,7 +2285,10 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                         child: ErpButton(
                           text: 'Cancel',
                           isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
+                          onPressed: () {
+                              _resetForm();
+                              ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations;
+                            },
                         ),
                       ),
                     ],
@@ -2553,7 +2300,10 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                     ErpButton(
                       text: 'Cancel',
                       isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
+                      onPressed: () {
+                              _resetForm();
+                              ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations;
+                            },
                     ),
                     const SizedBox(width: 12),
                     ErpButton(

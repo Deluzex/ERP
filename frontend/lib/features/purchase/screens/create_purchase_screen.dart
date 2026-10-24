@@ -734,6 +734,28 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   double get _pendingAmount => (_totalAmount - _paidAmount).clamp(0.0, double.infinity);
   double get _totalUnits => _items.fold(0.0, (sum, i) => sum + i.quantity);
 
+    void _resetForm() {
+    setState(() {
+      _vendorInvoiceCtrl.clear();
+      _paidAmountCtrl.text = '0';
+      _transportationChargesCtrl.text = '0';
+      _notesCtrl.clear();
+      _validTransportationCharges = 0.0;
+      _isManualTransportation = false;
+      _selectedProjectId = null;
+      _purchaseDate = DateTime.now();
+      _invoiceDate = DateTime.now();
+      _paymentMode = null;
+      _isInterStateTax = false;
+      _items.clear();
+      _attachmentName = null;
+      _attachmentSize = null;
+      final db = ref.read(databaseServiceProvider);
+      final activeVendors = db.vendors.where((v) => !v.isDeleted).toList();
+      _selectedVendorId = activeVendors.isNotEmpty ? activeVendors.first.id : null;
+    });
+  }
+
   Future<void> _savePurchase(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
     if (_items.isEmpty) {
@@ -860,6 +882,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
           ),
         );
 
+        _resetForm();
         ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
       }
     } catch (e) {
@@ -1002,7 +1025,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                             isOutlined: true,
                             onPressed: _isSubmitting
                                 ? null
-                                : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                                : () {
+                                _resetForm();
+                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
+                              },
                           ),
                         ),
                       ],
@@ -1019,7 +1045,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                         isOutlined: true,
                         onPressed: _isSubmitting
                             ? null
-                            : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                            : () {
+                                _resetForm();
+                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
+                              },
                       ),
                       ErpButton(
                         text: 'Save Draft',
@@ -2248,7 +2277,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                             isOutlined: true,
                             onPressed: _isSubmitting
                                 ? null
-                                : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                                : () {
+                                _resetForm();
+                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
+                              },
                           ),
                         ),
                       ],
@@ -2267,7 +2299,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                           isOutlined: true,
                           onPressed: _isSubmitting
                               ? null
-                              : () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+                              : () {
+                                _resetForm();
+                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
+                              },
                         ),
                         ErpButton(
                           text: 'Save Draft',

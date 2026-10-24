@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/api/token_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/routes/app_routes.dart';
 import '../../core/models/rbac_models.dart';
@@ -18,6 +22,71 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
 
   final AuthApiService _authApi = AuthApiService();
 
+  static const String _kSessionUserKey = 'erp_session_user';
+  static const String _kLastNavSectionKey = 'erp_last_nav_section';
+
+  Future<void> _persistSession(AppUser user, ErpNavSection? section) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kSessionUserKey, jsonEncode(user.toJson()));
+      if (section != null) {
+        await prefs.setString(_kLastNavSectionKey, section.name);
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> restoreSession() async {
+    try {
+      await TokenStorage.instance.init();
+      final prefs = await SharedPreferences.getInstance();
+      final userJsonStr = prefs.getString(_kSessionUserKey);
+      final lastSectionName = prefs.getString(_kLastNavSectionKey);
+
+      if (userJsonStr != null && userJsonStr.isNotEmpty) {
+        final Map<String, dynamic> userMap = jsonDecode(userJsonStr);
+        final user = AppUser.fromJson(userMap);
+        final db = ref.read(databaseServiceProvider);
+        db.setCurrentUser(user);
+        state = user;
+
+        // 1. Immediately restore all previous data from local browser cache
+        await db.loadFromCache();
+
+        // If auth token is present, attempt live token verification
+        if (TokenStorage.instance.hasToken) {
+          try {
+            final freshUser = await _authApi.getMe();
+            db.setCurrentUser(freshUser);
+            state = freshUser;
+            await _persistSession(freshUser, null);
+          } catch (_) {
+            if (!TokenStorage.instance.hasToken) {
+              await logout();
+              return false;
+            }
+          }
+        }
+
+        await db.loadRoles();
+        // Non-blocking background preload so UI renders instantly on reload
+        unawaited(db.loadAllMasters());
+
+        if (lastSectionName != null) {
+          final savedSection = ErpNavSection.values.where((s) => s.name == lastSectionName).firstOrNull;
+          if (savedSection != null && user.canAccessSection(savedSection, db.roles)) {
+            ref.read(currentNavSectionProvider.notifier).state = savedSection;
+          } else {
+            ref.read(currentNavSectionProvider.notifier).state = user.getAccessibleLandingSection(db.roles);
+          }
+        }
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> loginAsync(String identifier, String password, [String? roleId]) async {
     try {
       final authRes = await _authApi.login(identifier, password);
@@ -25,12 +94,15 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final db = ref.read(databaseServiceProvider);
       db.setCurrentUser(user);
       state = user;
+      await db.loadFromCache();
       await db.loadRoles(forceRefresh: true);
-      await db.loadAllMasters(forceRefresh: true);
+      // Non-blocking background preload
+      unawaited(db.loadAllMasters(forceRefresh: true));
 
       final landingSection = user.getAccessibleLandingSection(db.roles);
       ref.read(currentNavSectionProvider.notifier).state = landingSection;
       ref.read(activeRecordDetailsStackProvider.notifier).clear();
+      await _persistSession(user, landingSection);
       return true;
     } catch (e) {
       // Flutter test environment intercepts network requests with mock 400 or network errors
@@ -48,6 +120,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
           final landingSection = user.getAccessibleLandingSection(db.roles);
           ref.read(currentNavSectionProvider.notifier).state = landingSection;
           ref.read(activeRecordDetailsStackProvider.notifier).clear();
+          await _persistSession(user, landingSection);
           return true;
         }
       }
@@ -64,6 +137,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final landingSection = user.getAccessibleLandingSection(db.roles);
       ref.read(currentNavSectionProvider.notifier).state = landingSection;
       ref.read(activeRecordDetailsStackProvider.notifier).clear();
+      _persistSession(user, landingSection);
       return true;
     }
     return false;
@@ -83,6 +157,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     final landingSection = user.getAccessibleLandingSection(db.roles);
     ref.read(currentNavSectionProvider.notifier).state = landingSection;
     ref.read(activeRecordDetailsStackProvider.notifier).clear();
+    await _persistSession(user, landingSection);
   }
 
   void refreshUserPermissions(String roleId, Map<ErpModule, Set<ErpAction>> permissions) {
@@ -91,10 +166,17 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     }
   }
 
-  void logout() {
+  Future<void> logout() async {
     _authApi.logout();
     state = null;
     ref.read(activeRecordDetailsStackProvider.notifier).clear();
+    try {
+      final db = ref.read(databaseServiceProvider);
+      await db.clearCache();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kSessionUserKey);
+      await prefs.remove(_kLastNavSectionKey);
+    } catch (_) {}
   }
 }
 
@@ -119,6 +201,10 @@ final currentUserRoleProvider = Provider<Role?>((ref) {
   final db = ref.watch(databaseServiceProvider);
   return db.getUserRole(user);
 });
+
+
+// Session Bootstrap Loading Provider
+final isSessionBootstrapCompleteProvider = StateProvider<bool>((ref) => false);
 
 // Navigation State Provider
 final currentNavSectionProvider = StateProvider<ErpNavSection>((ref) {

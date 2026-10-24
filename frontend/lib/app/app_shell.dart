@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/models/payment_model.dart';
 import '../core/models/rbac_models.dart';
 import '../core/widgets/erp_button.dart';
@@ -57,6 +58,9 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final Map<ErpNavSection, Widget> _cachedScreens = {};
+  String? _lastUserId;
+  String? _lastRoleId;
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +71,21 @@ class _AppShellState extends ConsumerState<AppShell> {
     final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
     final isAuthorized = currentUser.canAccessSection(currentSection, db.roles);
 
+    // Persist active section on navigation change so reload stays on active screen
+    ref.listen<ErpNavSection>(currentNavSectionProvider, (previous, next) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('erp_last_nav_section', next.name);
+      } catch (_) {}
+    });
+
+    // Invalidate cached screens if user switched account or primary role
+    if (_lastUserId != currentUser.id || _lastRoleId != currentUser.primaryRoleId) {
+      _cachedScreens.clear();
+      _lastUserId = currentUser.id;
+      _lastRoleId = currentUser.primaryRoleId;
+    }
+
     Widget contentWidget;
 
     // Check if there is an active detail view in the drilldown stack
@@ -76,174 +95,25 @@ class _AppShellState extends ConsumerState<AppShell> {
       // 403 Forbidden Access Guard Barrier
       contentWidget = _buildAccessDeniedBarrier(context, currentUser, currentSection, db);
     } else {
-      switch (currentSection) {
-        case ErpNavSection.dashboard:
-          // Role-specific Landing Dashboard Selection
-          if (currentUser.primaryRoleId == 'admin') {
-            contentWidget = const DashboardScreen();
-          } else if (currentUser.primaryRoleId == 'inventory_manager') {
-            contentWidget = const InventoryRoleDashboard();
-          } else if (currentUser.primaryRoleId == 'purchase_manager') {
-            contentWidget = const PurchaseRoleDashboard();
-          } else if (currentUser.primaryRoleId == 'production_manager') {
-            contentWidget = const ProductionRoleDashboard();
-          } else if (currentUser.primaryRoleId == 'sales_manager') {
-            contentWidget = const SalesDashboardScreen();
-          } else if (currentUser.primaryRoleId == 'accounts_manager') {
-            contentWidget = const AccountsPaymentRoleDashboard();
-          } else if (currentUser.primaryRoleId == 'masters_manager') {
-            contentWidget = const MastersRoleDashboard();
-          } else if (currentUser.primaryRoleId == 'project_manager') {
-            contentWidget = const ProjectManagerRoleDashboard();
-          } else if (currentUser.primaryRoleId == 'report_viewer') {
-            contentWidget = const ReportViewerRoleDashboard();
-          } else if (currentUser.primaryRoleId == 'data_entry') {
-            contentWidget = const DataEntryRoleDashboard();
-          } else {
-            contentWidget = const DashboardScreen();
-          }
-          break;
-        case ErpNavSection.inventoryDashboard:
-          contentWidget = const InventoryRoleDashboard();
-          break;
-        case ErpNavSection.rawMaterialStock:
-          contentWidget = const RawMaterialStockScreen();
-          break;
-        case ErpNavSection.rawMaterials:
-          contentWidget = const RawMaterialMasterScreen();
-          break;
-        case ErpNavSection.finishedProductStock:
-          contentWidget = const FinishedProductStockScreen();
-          break;
-        case ErpNavSection.finishedProducts:
-          contentWidget = const ProductMasterScreen();
-          break;
-        case ErpNavSection.stockMovement:
-          contentWidget = const StockMovementScreen();
-          break;
-        case ErpNavSection.stockAdjustments:
-          contentWidget = const StockAdjustmentScreen();
-          break;
-        case ErpNavSection.purchaseDashboard:
-          contentWidget = const PurchaseRoleDashboard();
-          break;
-        case ErpNavSection.purchaseList:
-        case ErpNavSection.purchaseHistory:
-          contentWidget = const PurchaseListScreen();
-          break;
-        case ErpNavSection.createPurchase:
-          contentWidget = const CreatePurchaseScreen();
-          break;
-        case ErpNavSection.vendorPayments:
-        case ErpNavSection.vendorPaymentsSection:
-          contentWidget = const PaymentCenterScreen(initialTab: PaymentType.vendorPayment);
-          break;
-        case ErpNavSection.productionDashboard:
-          contentWidget = const ProductionRoleDashboard();
-          break;
-        case ErpNavSection.productionOrders:
-        case ErpNavSection.productionHistory:
-        case ErpNavSection.productionCosting:
-          contentWidget = const ProductionOrdersScreen();
-          break;
-        case ErpNavSection.createProduction:
-          contentWidget = const CreateProductionScreen();
-          break;
-        // Sales Workflow Suite
-        case ErpNavSection.salesDashboard:
-          contentWidget = const SalesDashboardScreen();
-          break;
-        case ErpNavSection.quotations:
-          contentWidget = const QuotationsScreen();
-          break;
-        case ErpNavSection.createQuotation:
-          contentWidget = const CreateQuotationScreen();
-          break;
-        case ErpNavSection.proformaInvoices:
-          contentWidget = const ProformaInvoicesScreen();
-          break;
-        case ErpNavSection.salesOrders:
-          contentWidget = const SalesOrdersScreen();
-          break;
-        case ErpNavSection.createSalesOrder:
-          contentWidget = const CreateSalesOrderScreen();
-          break;
-        case ErpNavSection.salesDeliveries:
-          contentWidget = const DeliveriesScreen();
-          break;
-        case ErpNavSection.salesInvoiceList:
-          contentWidget = const SalesInvoiceListScreen();
-          break;
-        case ErpNavSection.createSale:
-          contentWidget = const CreateSaleScreen();
-          break;
-        case ErpNavSection.salesReturns:
-        case ErpNavSection.createSalesReturn:
-          contentWidget = const SalesReturnsScreen();
-          break;
-        // Projects
-        case ErpNavSection.projectList:
-        case ErpNavSection.createProject:
-          contentWidget = const ProjectListScreen();
-          break;
-        // Payments & Expenses
-        case ErpNavSection.paymentsDashboard:
-          contentWidget = const AccountsPaymentRoleDashboard();
-          break;
-        case ErpNavSection.customerPayments:
-          contentWidget = const PaymentCenterScreen(initialTab: PaymentType.customerPayment);
-          break;
-        case ErpNavSection.dealerPayments:
-          contentWidget = const PaymentCenterScreen(initialTab: PaymentType.dealerPayment);
-          break;
-        case ErpNavSection.commissionPayments:
-          contentWidget = const PaymentCenterScreen(initialTab: PaymentType.commissionPayment);
-          break;
-        case ErpNavSection.expenseList:
-          contentWidget = const ExpensesScreen();
-          break;
-        // Masters
-        case ErpNavSection.mastersDashboard:
-          contentWidget = const MastersRoleDashboard();
-          break;
-        case ErpNavSection.categoriesUnits:
-          contentWidget = const CategoriesUnitsScreen();
-          break;
-        case ErpNavSection.vendors:
-          contentWidget = const VendorsScreen();
-          break;
-        case ErpNavSection.customers:
-          contentWidget = const CustomersScreen();
-          break;
-        case ErpNavSection.dealers:
-          contentWidget = const DealersScreen();
-          break;
-        case ErpNavSection.architects:
-          contentWidget = const ArchitectsScreen();
-          break;
-        case ErpNavSection.billOfMaterials:
-          contentWidget = const BomScreen();
-          break;
-        // Reports
-        case ErpNavSection.reportsDashboard:
-          contentWidget = const ReportViewerRoleDashboard();
-          break;
-        case ErpNavSection.inventoryReports:
-        case ErpNavSection.purchaseReports:
-        case ErpNavSection.productionReports:
-        case ErpNavSection.salesReports:
-        case ErpNavSection.projectReports:
-        case ErpNavSection.commissionReports:
-        case ErpNavSection.financialReports:
-          contentWidget = ReportsHubScreen(reportType: currentSection);
-          break;
-        case ErpNavSection.chatSupport:
-          contentWidget = const ChatSupportScreen();
-          break;
-        case ErpNavSection.settings:
-          contentWidget = const SettingsScreen();
-          break;
+      // Lazy load screen into cache if not present
+      if (!_cachedScreens.containsKey(currentSection)) {
+        _cachedScreens[currentSection] = _buildSectionWidget(currentSection, currentUser);
       }
+
+      contentWidget = Stack(
+        fit: StackFit.expand,
+        children: [
+          for (final entry in _cachedScreens.entries)
+            Offstage(
+              key: ValueKey(entry.key),
+              offstage: entry.key != currentSection,
+              child: TickerMode(
+                enabled: entry.key == currentSection,
+                child: entry.value,
+              ),
+            ),
+        ],
+      );
     }
 
     return Scaffold(
@@ -292,6 +162,135 @@ class _AppShellState extends ConsumerState<AppShell> {
         ],
       ),
     );
+  }
+
+  Widget _buildSectionWidget(ErpNavSection section, AppUser currentUser) {
+    switch (section) {
+      case ErpNavSection.dashboard:
+        // Role-specific Landing Dashboard Selection
+        if (currentUser.primaryRoleId == 'admin') {
+          return const DashboardScreen();
+        } else if (currentUser.primaryRoleId == 'inventory_manager') {
+          return const InventoryRoleDashboard();
+        } else if (currentUser.primaryRoleId == 'purchase_manager') {
+          return const PurchaseRoleDashboard();
+        } else if (currentUser.primaryRoleId == 'production_manager') {
+          return const ProductionRoleDashboard();
+        } else if (currentUser.primaryRoleId == 'sales_manager') {
+          return const SalesDashboardScreen();
+        } else if (currentUser.primaryRoleId == 'accounts_manager') {
+          return const AccountsPaymentRoleDashboard();
+        } else if (currentUser.primaryRoleId == 'masters_manager') {
+          return const MastersRoleDashboard();
+        } else if (currentUser.primaryRoleId == 'project_manager') {
+          return const ProjectManagerRoleDashboard();
+        } else if (currentUser.primaryRoleId == 'report_viewer') {
+          return const ReportViewerRoleDashboard();
+        } else if (currentUser.primaryRoleId == 'data_entry') {
+          return const DataEntryRoleDashboard();
+        } else {
+          return const DashboardScreen();
+        }
+      case ErpNavSection.inventoryDashboard:
+        return const InventoryRoleDashboard();
+      case ErpNavSection.rawMaterialStock:
+        return const RawMaterialStockScreen();
+      case ErpNavSection.rawMaterials:
+        return const RawMaterialMasterScreen();
+      case ErpNavSection.finishedProductStock:
+        return const FinishedProductStockScreen();
+      case ErpNavSection.finishedProducts:
+        return const ProductMasterScreen();
+      case ErpNavSection.stockMovement:
+        return const StockMovementScreen();
+      case ErpNavSection.stockAdjustments:
+        return const StockAdjustmentScreen();
+      case ErpNavSection.purchaseDashboard:
+        return const PurchaseRoleDashboard();
+      case ErpNavSection.purchaseList:
+      case ErpNavSection.purchaseHistory:
+        return const PurchaseListScreen();
+      case ErpNavSection.createPurchase:
+        return const CreatePurchaseScreen();
+      case ErpNavSection.vendorPayments:
+      case ErpNavSection.vendorPaymentsSection:
+        return const PaymentCenterScreen(initialTab: PaymentType.vendorPayment);
+      case ErpNavSection.productionDashboard:
+        return const ProductionRoleDashboard();
+      case ErpNavSection.productionOrders:
+      case ErpNavSection.productionHistory:
+      case ErpNavSection.productionCosting:
+        return const ProductionOrdersScreen();
+      case ErpNavSection.createProduction:
+        return const CreateProductionScreen();
+      // Sales Workflow Suite
+      case ErpNavSection.salesDashboard:
+        return const SalesDashboardScreen();
+      case ErpNavSection.quotations:
+        return const QuotationsScreen();
+      case ErpNavSection.createQuotation:
+        return const CreateQuotationScreen();
+      case ErpNavSection.proformaInvoices:
+        return const ProformaInvoicesScreen();
+      case ErpNavSection.salesOrders:
+        return const SalesOrdersScreen();
+      case ErpNavSection.createSalesOrder:
+        return const CreateSalesOrderScreen();
+      case ErpNavSection.salesDeliveries:
+        return const DeliveriesScreen();
+      case ErpNavSection.salesInvoiceList:
+        return const SalesInvoiceListScreen();
+      case ErpNavSection.createSale:
+        return const CreateSaleScreen();
+      case ErpNavSection.salesReturns:
+      case ErpNavSection.createSalesReturn:
+        return const SalesReturnsScreen();
+      // Projects
+      case ErpNavSection.projectList:
+      case ErpNavSection.createProject:
+        return const ProjectListScreen();
+      // Payments & Expenses
+      case ErpNavSection.paymentsDashboard:
+        return const AccountsPaymentRoleDashboard();
+      case ErpNavSection.customerPayments:
+        return const PaymentCenterScreen(initialTab: PaymentType.customerPayment);
+      case ErpNavSection.dealerPayments:
+        return const PaymentCenterScreen(initialTab: PaymentType.dealerPayment);
+      case ErpNavSection.commissionPayments:
+        return const PaymentCenterScreen(initialTab: PaymentType.commissionPayment);
+      case ErpNavSection.expenseList:
+        return const ExpensesScreen();
+      // Masters
+      case ErpNavSection.mastersDashboard:
+        return const MastersRoleDashboard();
+      case ErpNavSection.categoriesUnits:
+        return const CategoriesUnitsScreen();
+      case ErpNavSection.vendors:
+        return const VendorsScreen();
+      case ErpNavSection.customers:
+        return const CustomersScreen();
+      case ErpNavSection.dealers:
+        return const DealersScreen();
+      case ErpNavSection.architects:
+        return const ArchitectsScreen();
+      case ErpNavSection.billOfMaterials:
+        return const BomScreen();
+      // Reports
+      case ErpNavSection.reportsDashboard:
+        return const ReportViewerRoleDashboard();
+      case ErpNavSection.inventoryReports:
+      case ErpNavSection.purchaseReports:
+      case ErpNavSection.productionReports:
+      case ErpNavSection.salesReports:
+      case ErpNavSection.projectReports:
+      case ErpNavSection.commissionReports:
+      case ErpNavSection.financialReports:
+        return ReportsHubScreen(reportType: section);
+      case ErpNavSection.chatSupport:
+        return const ChatSupportScreen();
+      case ErpNavSection.settings:
+        return const SettingsScreen();
+    }
   }
 
   Widget _buildAccessDeniedBarrier(BuildContext context, AppUser user, ErpNavSection requestedSection, dynamic db) {

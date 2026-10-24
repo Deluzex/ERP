@@ -384,8 +384,8 @@ export class PurchasesService {
             const unitCost = Number(landedRate || item.landedRate || item.rate || 0);
             const updRm = await client.query<{ current_stock: string }>(
               `UPDATE raw_materials
-               SET current_stock = current_stock + $1,
-                   default_purchase_price = CASE WHEN $3 > 0 THEN $3 ELSE default_purchase_price END,
+               SET current_stock = current_stock + $1::numeric,
+                   default_purchase_price = CASE WHEN $3::numeric > 0 THEN $3::numeric ELSE default_purchase_price END,
                    updated_at = now()
                WHERE id = $2 AND is_deleted = false
                RETURNING current_stock`,
@@ -425,8 +425,8 @@ export class PurchasesService {
             const updFp = await client.query<{ current_stock: string }>(
               `UPDATE finished_products
                SET current_stock = current_stock + $1,
-                   purchased_stock = purchased_stock + $1,
-                   cost_price = CASE WHEN $3 > 0 THEN $3 ELSE cost_price END,
+                   purchased_stock = purchased_stock + $1::numeric,
+                   cost_price = CASE WHEN $3::numeric > 0 THEN $3::numeric ELSE cost_price END,
                    updated_at = now()
                WHERE id = $2 AND is_deleted = false
                RETURNING current_stock`,

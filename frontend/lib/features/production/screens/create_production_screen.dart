@@ -476,6 +476,21 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
   bool get _isCompleting => _submittingAction == 'complete';
   bool get _isSubmitting => _submittingAction != null;
 
+    void _resetForm() {
+    setState(() {
+      _actualQtyCtrl.text = '20';
+      _labourCostCtrl.text = '3000';
+      _otherExpensesCtrl.text = '1200';
+      _notesCtrl.clear();
+      _isAutoSyncedWithBom = true;
+      final db = ref.read(databaseServiceProvider);
+      if (db.finishedProducts.isNotEmpty) {
+        _selectedFinishedProductId = db.finishedProducts.first.id;
+      }
+      _loadBomForSelectedProduct();
+    });
+  }
+
   Future<void> _completeProduction() async {
     if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
@@ -597,6 +612,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
           backgroundColor: AppColors.success,
         ),
       );
+      _resetForm();
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders;
     } catch (e) {
       if (!mounted) return;
@@ -671,6 +687,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
           backgroundColor: AppColors.primary,
         ),
       );
+      _resetForm();
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders;
     } catch (e) {
       if (!mounted) return;
@@ -736,7 +753,10 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                           child: ErpButton(
                             text: 'Cancel',
                             isOutlined: true,
-                            onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                            onPressed: () {
+                              _resetForm();
+                              ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders;
+                            },
                           ),
                         ),
                       ],
@@ -751,7 +771,10 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                       ErpButton(
                         text: 'Cancel',
                         isOutlined: true,
-                        onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                        onPressed: () {
+                              _resetForm();
+                              ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders;
+                            },
                       ),
                       ErpButton(
                         text: 'Save as Waiting Approval',
@@ -1577,7 +1600,10 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                           child: ErpButton(
                             text: 'Cancel',
                             isOutlined: true,
-                            onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                            onPressed: () {
+                              _resetForm();
+                              ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders;
+                            },
                           ),
                         ),
                       ],
@@ -1594,7 +1620,10 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                         ErpButton(
                           text: 'Cancel',
                           isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+                          onPressed: () {
+                              _resetForm();
+                              ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders;
+                            },
                         ),
                         ErpButton(
                           text: 'Save as Waiting Approval',

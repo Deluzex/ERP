@@ -41,6 +41,7 @@ import '../../core/api/notifications_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
+import '../../core/storage/erp_cache_manager.dart';
 
 class MockDatabaseService extends ChangeNotifier {
   // Roles & RBAC System
@@ -4968,6 +4969,18 @@ class MockDatabaseService extends ChangeNotifier {
   bool _isLoadingProductionOrders = false;
   bool get isLoadingProductionOrders => _isLoadingProductionOrders;
 
+  Future<bool> loadFromCache() async {
+    return await ErpCacheManager.loadAll(this);
+  }
+
+  Future<void> saveToCache() async {
+    await ErpCacheManager.saveAll(this);
+  }
+
+  Future<void> clearCache() async {
+    await ErpCacheManager.clearAll();
+  }
+
   /// Loads all Phase 1 masters and Phase 2 inventory from NestJS live backend
   Future<void> loadAllMasters({bool forceRefresh = false}) async {
     if (_isLoadingMasters) return;
@@ -4996,6 +5009,7 @@ class MockDatabaseService extends ChangeNotifier {
         loadCommissions(forceRefresh: forceRefresh),
         loadExpenses(forceRefresh: forceRefresh),
       ]);
+      await ErpCacheManager.saveAll(this);
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[MockDatabaseService] Note: loadAllMasters error: $e');
