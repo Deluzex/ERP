@@ -1565,19 +1565,6 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ],
         );
 
-        final dateButton = ErpDateFilterBox(
-          startDate: _startDate,
-          endDate: _endDate,
-          width: isNarrow ? double.infinity : null,
-          onDateRangeSelected: (start, end) {
-            setState(() {
-              _startDate = start;
-              _endDate = end;
-              _currentPage = 0;
-            });
-          },
-        );
-
         final printButton = OutlinedButton.icon(
           onPressed: () => _printOrLayoutReport(activeIndex),
           icon: const Icon(Icons.print_outlined, size: 16, color: Color(0xFF374151)),
@@ -1624,11 +1611,6 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
                 children: [
                   SizedBox(
                     width: double.infinity,
-                    child: dateButton,
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
                     child: printButton,
                   ),
                   const SizedBox(height: 8),
@@ -1643,7 +1625,6 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
                 runSpacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  dateButton,
                   printButton,
                   exportButton,
                 ],
