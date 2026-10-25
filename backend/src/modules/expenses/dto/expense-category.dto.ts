@@ -29,6 +29,10 @@ export class CreateExpenseCategoryDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  linkedKey?: string;
 }
 
 export class UpdateExpenseCategoryDto {
@@ -51,6 +55,10 @@ export class UpdateExpenseCategoryDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  linkedKey?: string;
 }
 
 export class UpdateExpenseCategoryStatusDto {

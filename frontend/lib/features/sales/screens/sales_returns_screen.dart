@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -13,6 +14,7 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -34,6 +36,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
   DateTime? _startDate;
   DateTime? _endDate;
   RefundStatus? _selectedRefundStatusFilter;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -1273,6 +1277,16 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
       }).toList();
     }
 
+    // Date Range Filter
+    if (_startDate != null) {
+      final startDay = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+      filtered = filtered.where((r) => !r.saleDate.isBefore(startDay)).toList();
+    }
+    if (_endDate != null) {
+      final endDay = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+      filtered = filtered.where((r) => !r.saleDate.isAfter(endDay)).toList();
+    }
+
     final draftCount = db.salesReturns.where((r) => r.salesReturnStatus == SalesReturnStatus.draft || r.salesReturnStatus == SalesReturnStatus.submitted).length;
     final inspectionCount = db.salesReturns.where((r) => r.salesReturnStatus == SalesReturnStatus.itemsReceived || r.salesReturnStatus == SalesReturnStatus.inspection).length;
     final approvedCount = db.salesReturns.where((r) => r.salesReturnStatus == SalesReturnStatus.approved || r.salesReturnStatus == SalesReturnStatus.completed).length;
@@ -1388,7 +1402,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
             ),
             child: TabBar(
               controller: _tabController,
-              onTap: (_) => setState(() {}),
+              onTap: (_) => setState(() {
+                _currentPage = 0;
+              }),
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               labelColor: AppColors.primary,
@@ -1414,7 +1430,10 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
               final searchField = ErpSearchInput(
                 hintText: 'Search return no, customer, reason...',
                 initialValue: _searchQuery,
-                onChanged: (val) => setState(() => _searchQuery = val),
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
               );
 
               final customerDropdown = ErpFilterDropdown<String?>(
@@ -1423,7 +1442,10 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                   const DropdownMenuItem(value: null, child: Text('All Customers')),
                   ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                 ],
-                onChanged: (val) => setState(() => _selectedCustomerFilter = val),
+                onChanged: (val) => setState(() {
+                  _selectedCustomerFilter = val;
+                  _currentPage = 0;
+                }),
               );
 
               final typeDropdown = ErpFilterDropdown<ReturnType?>(
@@ -1433,7 +1455,10 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                   DropdownMenuItem(value: ReturnType.fullReturn, child: Text('Full Return')),
                   DropdownMenuItem(value: ReturnType.partialReturn, child: Text('Partial Return')),
                 ],
-                onChanged: (val) => setState(() => _selectedReturnTypeFilter = val),
+                onChanged: (val) => setState(() {
+                  _selectedReturnTypeFilter = val;
+                  _currentPage = 0;
+                }),
               );
 
               final dateBox = ErpDateFilterBox(
@@ -1443,6 +1468,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                   setState(() {
                     _startDate = start;
                     _endDate = end;
+                    _currentPage = 0;
                   });
                 },
               );
@@ -1520,18 +1546,30 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
               ),
             )
           else
-            LayoutBuilder(
-              builder: (context, tableConstraints) {
-                final isMobileView = tableConstraints.maxWidth < 750;
+            Builder(
+              builder: (context) {
+                final totalCount = filtered.length;
+                final maxPage = (totalCount / _pageSize).ceil();
+                final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+                final startIdx = effectivePage * _pageSize;
+                final endIdx = min(startIdx + _pageSize, totalCount);
+                final paginatedReturns = totalCount == 0 ? <Sale>[] : filtered.sublist(startIdx, endIdx);
 
-                if (isMobileView) {
-                  return ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (ctx, idx) {
-                      final ret = filtered[idx];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, tableConstraints) {
+                        final isMobileView = tableConstraints.maxWidth < 750;
+
+                        if (isMobileView) {
+                          return ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: paginatedReturns.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            itemBuilder: (ctx, idx) {
+                              final ret = paginatedReturns[idx];
                       final statusBadge = _getStatusBadge(ret.salesReturnStatus ?? SalesReturnStatus.draft);
                       final refundBadge = _getRefundBadge(ret.refundStatus ?? RefundStatus.notRequired);
 
@@ -1665,7 +1703,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     ErpColumn(title: 'Created By'),
                     ErpColumn(title: 'Actions'),
                   ],
-                  rows: filtered.map((ret) {
+                  rows: paginatedReturns.map((ret) {
                     final statusBadge = _getStatusBadge(ret.salesReturnStatus ?? SalesReturnStatus.draft);
                     final refundBadge = _getRefundBadge(ret.refundStatus ?? RefundStatus.notRequired);
 
@@ -1710,6 +1748,23 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                 );
               },
             ),
+            if (filtered.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ErpPaginationBar(
+                totalRecords: totalCount,
+                currentPage: effectivePage,
+                pageSize: _pageSize,
+                onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                onPageSizeChanged: (newSize) => setState(() {
+                  _pageSize = newSize;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ],
+        );
+      },
+    ),
         ],
       ),
     );

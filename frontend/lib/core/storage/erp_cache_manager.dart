@@ -155,6 +155,11 @@ class ErpCacheManager {
         db.stockMovements = cachedStockMovements;
       }
 
+      final cachedExpenseCategories = _readJsonList(prefs, 'expense_categories', ExpenseCategoryMasterItem.fromJson);
+      if (cachedExpenseCategories != null && cachedExpenseCategories.isNotEmpty) {
+        db.expenseCategoryMasterList = cachedExpenseCategories;
+      }
+
       _hasLoadedFromCache = true;
       db.notifyListeners();
       if (kDebugMode) {
@@ -191,6 +196,7 @@ class ErpCacheManager {
         _saveJsonList(prefs, 'payments', db.payments, (p) => p.toJson()),
         _saveJsonList(prefs, 'expenses', db.expenses, (e) => e.toJson()),
         _saveJsonList(prefs, 'stock_movements', db.stockMovements, (s) => s.toJson()),
+        _saveJsonList(prefs, 'expense_categories', db.expenseCategoryMasterList, (e) => e.toJson()),
       ]);
 
       if (kDebugMode) {
@@ -237,6 +243,11 @@ class ErpCacheManager {
   static Future<void> saveBoms(List<BillOfMaterial> list) async {
     final prefs = await SharedPreferences.getInstance();
     await _saveJsonList(prefs, 'boms', list, (b) => b.toJson());
+  }
+
+  static Future<void> saveExpenseCategories(List<ExpenseCategoryMasterItem> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _saveJsonList(prefs, 'expense_categories', list, (e) => e.toJson());
   }
 
   // ---------------------------------------------------------------------------

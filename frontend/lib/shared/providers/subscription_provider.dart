@@ -32,7 +32,9 @@ class SubscriptionReminderTracker {
 }
 
 class SubscriptionNotifier extends StateNotifier<SubscriptionStatus> {
-  SubscriptionNotifier() : super(SubscriptionStatus.healthyDefault());
+  SubscriptionNotifier() : super(SubscriptionStatus.healthyDefault()) {
+    Future.microtask(() => fetchStatus());
+  }
 
   final SubscriptionApiService _api = SubscriptionApiService();
   bool _isLoading = false;

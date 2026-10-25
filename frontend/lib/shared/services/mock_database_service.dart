@@ -12,6 +12,7 @@ import '../../core/models/payment_model.dart';
 import '../../core/models/production_model.dart';
 import '../../core/models/project_model.dart';
 import '../../core/models/purchase_model.dart';
+import '../../core/models/bulk_upload_history_model.dart';
 import '../../core/models/raw_material_model.dart';
 import '../../core/models/rbac_models.dart';
 import '../../core/models/sale_model.dart';
@@ -35,6 +36,7 @@ import '../../core/api/sales_api_service.dart';
 import '../../core/api/projects_api_service.dart';
 import '../../core/api/payments_api_service.dart';
 import '../../core/api/expenses_api_service.dart';
+import '../../core/api/expense_categories_api_service.dart';
 import '../../core/api/reports_api_service.dart';
 import '../../core/models/notification_model.dart';
 import '../../core/api/notifications_api_service.dart';
@@ -50,6 +52,7 @@ class MockDatabaseService extends ChangeNotifier {
   late AppUser currentUser;
   List<TemporaryAccessGrant> temporaryGrants = [];
   List<AuditLogEntry> auditLogs = [];
+  List<BulkUploadHistoryRecord> bulkUploadHistory = [];
 
   // Master Lists
   List<ItemCategory> categories = [];
@@ -596,6 +599,49 @@ class MockDatabaseService extends ChangeNotifier {
         authorizingUserName: 'Alex Sterling',
         durationMinutes: 60,
         notes: 'Temporary 60-min access authorized by Alex Sterling (System Administrator)',
+      ),
+    ];
+
+    // 0.3 BULK UPLOAD AUDIT & HISTORY LOGS
+    bulkUploadHistory = [
+      BulkUploadHistoryRecord(
+        id: 'UP-HIST-001',
+        fileName: 'raw_materials_q3_import.csv',
+        masterType: 'Raw Materials',
+        uploadedBy: 'Alex Sterling',
+        uploadedAt: DateTime.now().subtract(const Duration(days: 2, hours: 4)),
+        totalRows: 150,
+        importedRows: 120,
+        errorRows: 18,
+        duplicateRows: 12,
+        status: 'PARTIAL',
+        notes: '120 items imported. 18 schema errors (invalid category/unit) and 12 duplicates skipped.',
+      ),
+      BulkUploadHistoryRecord(
+        id: 'UP-HIST-002',
+        fileName: 'commercial_fixtures_master.csv',
+        masterType: 'Finished Products',
+        uploadedBy: 'Rohan Varma',
+        uploadedAt: DateTime.now().subtract(const Duration(days: 5, hours: 1)),
+        totalRows: 45,
+        importedRows: 45,
+        errorRows: 0,
+        duplicateRows: 0,
+        status: 'SUCCESS',
+        notes: 'All 45 products successfully imported with standard catalog pricing.',
+      ),
+      BulkUploadHistoryRecord(
+        id: 'UP-HIST-003',
+        fileName: 'vendor_batch_upload_nov.csv',
+        masterType: 'Raw Materials',
+        uploadedBy: 'Deepak Sharma',
+        uploadedAt: DateTime.now().subtract(const Duration(days: 9, hours: 6)),
+        totalRows: 80,
+        importedRows: 65,
+        errorRows: 5,
+        duplicateRows: 10,
+        status: 'PARTIAL',
+        notes: '65 raw materials added. 10 existing SKU duplicates skipped.',
       ),
     ];
 
@@ -4954,6 +5000,7 @@ class MockDatabaseService extends ChangeNotifier {
   final ProjectsApiService _projectsApi = ProjectsApiService();
   final PaymentsApiService _paymentsApi = PaymentsApiService();
   final ExpensesApiService _expensesApi = ExpensesApiService();
+  final ExpenseCategoriesApiService _expenseCategoriesApi = ExpenseCategoriesApiService();
   final ReportsApiService _reportsApi = ReportsApiService();
   final NotificationsApiService _notificationsApi = NotificationsApiService();
 
@@ -5008,6 +5055,7 @@ class MockDatabaseService extends ChangeNotifier {
         loadPayments(forceRefresh: forceRefresh),
         loadCommissions(forceRefresh: forceRefresh),
         loadExpenses(forceRefresh: forceRefresh),
+        loadExpenseCategories(forceRefresh: forceRefresh),
       ]);
       await ErpCacheManager.saveAll(this);
     } catch (e) {
@@ -5255,24 +5303,54 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
-  // Expense Categories Master CRUD
+  // Expense Categories Master CRUD (Live Backend + Offline Cache)
   // -------------------------------------------------------------
+  Future<void> loadExpenseCategories({bool forceRefresh = false}) async {
+    try {
+      final remote = await _expenseCategoriesApi.getExpenseCategories();
+      if (remote.isNotEmpty) {
+        expenseCategoryMasterList = remote;
+        await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadExpenseCategories fallback: $e');
+    }
+  }
+
   Future<ExpenseCategoryMasterItem> addExpenseCategoryAsync({
     required String name,
     required String code,
     required String description,
+    String? linkedKey,
   }) async {
-    final newId = 'EXP-CAT-${expenseCategoryMasterList.length + 1}';
-    final item = ExpenseCategoryMasterItem(
-      id: newId,
-      name: name,
-      code: code.trim().toUpperCase(),
-      description: description,
-      isActive: true,
-    );
-    expenseCategoryMasterList.insert(0, item);
-    notifyListeners();
-    return item;
+    try {
+      final saved = await _expenseCategoriesApi.createExpenseCategory(
+        name: name,
+        code: code,
+        description: description,
+        linkedKey: linkedKey,
+      );
+      expenseCategoryMasterList.insert(0, saved);
+      await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+      notifyListeners();
+      return saved;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] addExpenseCategoryAsync API error, using local fallback: $e');
+      final newId = 'EXP-CAT-${DateTime.now().millisecondsSinceEpoch}';
+      final item = ExpenseCategoryMasterItem(
+        id: newId,
+        name: name,
+        code: code.trim().toUpperCase(),
+        description: description,
+        isActive: true,
+        linkedKey: linkedKey,
+      );
+      expenseCategoryMasterList.insert(0, item);
+      await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+      notifyListeners();
+      return item;
+    }
   }
 
   Future<ExpenseCategoryMasterItem> updateExpenseCategoryAsync({
@@ -5280,32 +5358,66 @@ class MockDatabaseService extends ChangeNotifier {
     required String name,
     required String code,
     required String description,
+    String? linkedKey,
   }) async {
-    final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
-    if (idx != -1) {
-      expenseCategoryMasterList[idx] = expenseCategoryMasterList[idx].copyWith(
+    try {
+      final updated = await _expenseCategoriesApi.updateExpenseCategory(
+        id: id,
         name: name,
-        code: code.trim().toUpperCase(),
+        code: code,
         description: description,
+        linkedKey: linkedKey,
       );
+      final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
+      if (idx != -1) {
+        expenseCategoryMasterList[idx] = updated;
+      }
+      await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
       notifyListeners();
-      return expenseCategoryMasterList[idx];
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updateExpenseCategoryAsync fallback: $e');
+      final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
+      if (idx != -1) {
+        expenseCategoryMasterList[idx] = expenseCategoryMasterList[idx].copyWith(
+          name: name,
+          code: code.trim().toUpperCase(),
+          description: description,
+          linkedKey: linkedKey,
+        );
+        await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+        notifyListeners();
+        return expenseCategoryMasterList[idx];
+      }
+      throw Exception('Expense category not found');
     }
-    throw Exception('Expense category not found');
   }
 
   Future<void> toggleExpenseCategoryStatusAsync(String id) async {
     final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
     if (idx != -1) {
+      final newStatus = !expenseCategoryMasterList[idx].isActive;
+      try {
+        await _expenseCategoriesApi.toggleExpenseCategoryStatus(id, newStatus);
+      } catch (e) {
+        if (kDebugMode) debugPrint('[MockDatabaseService] toggleExpenseCategoryStatusAsync fallback: $e');
+      }
       expenseCategoryMasterList[idx] = expenseCategoryMasterList[idx].copyWith(
-        isActive: !expenseCategoryMasterList[idx].isActive,
+        isActive: newStatus,
       );
+      await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
       notifyListeners();
     }
   }
 
   Future<void> deleteExpenseCategoryAsync(String id) async {
+    try {
+      await _expenseCategoriesApi.deleteExpenseCategory(id);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] deleteExpenseCategoryAsync fallback: $e');
+    }
     expenseCategoryMasterList.removeWhere((c) => c.id == id);
+    await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
     notifyListeners();
   }
 
@@ -5413,6 +5525,92 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  void recordBulkUploadHistory({
+    required String fileName,
+    required String masterType,
+    required String uploadedBy,
+    required int totalRows,
+    required int importedRows,
+    required int errorRows,
+    required int duplicateRows,
+    required String status,
+    String? notes,
+  }) {
+    final rec = BulkUploadHistoryRecord(
+      id: 'UP-HIST-${DateTime.now().millisecondsSinceEpoch}',
+      fileName: fileName,
+      masterType: masterType,
+      uploadedBy: uploadedBy,
+      uploadedAt: DateTime.now(),
+      totalRows: totalRows,
+      importedRows: importedRows,
+      errorRows: errorRows,
+      duplicateRows: duplicateRows,
+      status: status,
+      notes: notes,
+    );
+    bulkUploadHistory.insert(0, rec);
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> bulkImportRawMaterialsAsync(
+    List<Map<String, dynamic>> items, {
+    String duplicatePolicy = 'SKIP',
+  }) async {
+    try {
+      final result = await _rawMaterialsApi.bulkImportRawMaterials(
+        items,
+        duplicatePolicy: duplicatePolicy,
+      );
+      await loadRawMaterials(forceRefresh: true);
+      notifyListeners();
+      return result;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] bulkImportRawMaterials API error, falling back to local memory: $e');
+      int imported = 0;
+      int duplicates = 0;
+      for (final it in items) {
+        final code = (it['itemCode'] as String? ?? '').toUpperCase();
+        if (rawMaterials.any((r) => !r.isDeleted && r.itemCode.toUpperCase() == code)) {
+          duplicates++;
+          continue;
+        }
+        final cat = categories.firstWhere((c) => c.id == it['categoryId'], orElse: () => categories.first);
+        final unit = units.firstWhere((u) => u.id == it['unitId'], orElse: () => units.first);
+        final newRm = RawMaterial(
+          id: 'RM-${DateTime.now().millisecondsSinceEpoch}-${imported + 1}',
+          name: it['name'] ?? '',
+          itemCode: code,
+          categoryId: cat.id,
+          categoryName: cat.name,
+          unit: unit.symbol,
+          hsnSacCode: it['hsnSacCode'],
+          openingStock: (it['openingStock'] as num?)?.toDouble() ?? 0.0,
+          currentStock: (it['openingStock'] as num?)?.toDouble() ?? 0.0,
+          minimumStock: (it['minimumStock'] as num?)?.toDouble() ?? 0.0,
+          reorderLevel: (it['reorderLevel'] as num?)?.toDouble() ?? 0.0,
+          defaultPurchasePrice: (it['defaultPurchasePrice'] as num?)?.toDouble() ?? 0.0,
+          gstPercent: (it['gstPercent'] as num?)?.toDouble() ?? 18.0,
+          preferredVendorIds: (it['preferredVendorIds'] as List?)?.cast<String>() ?? [],
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        rawMaterials.insert(0, newRm);
+        imported++;
+      }
+      notifyListeners();
+      return {
+        'totalRows': items.length,
+        'importedCount': imported,
+        'duplicateCount': duplicates,
+        'skippedCount': duplicates,
+        'failedCount': 0,
+        'importedIds': [],
+        'errors': [],
+      };
+    }
+  }
+
   // -------------------------------------------------------------
   // Finished Products Live API
   // -------------------------------------------------------------
@@ -5455,6 +5653,64 @@ class MockDatabaseService extends ChangeNotifier {
     if (idx != -1) {
       finishedProducts[idx] = finishedProducts[idx].copyWith(isDeleted: true, deletedAt: DateTime.now());
       notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> bulkImportFinishedProductsAsync(
+    List<Map<String, dynamic>> items, {
+    String duplicatePolicy = 'SKIP',
+  }) async {
+    try {
+      final result = await _finishedProductsApi.bulkImportFinishedProducts(
+        items,
+        duplicatePolicy: duplicatePolicy,
+      );
+      await loadFinishedProducts(forceRefresh: true);
+      notifyListeners();
+      return result;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] bulkImportFinishedProducts API error, falling back to local memory: $e');
+      int imported = 0;
+      int duplicates = 0;
+      for (final it in items) {
+        final code = (it['itemCode'] as String? ?? '').toUpperCase();
+        if (finishedProducts.any((p) => !p.isDeleted && p.itemCode.toUpperCase() == code)) {
+          duplicates++;
+          continue;
+        }
+        final cat = categories.firstWhere((c) => c.id == it['categoryId'], orElse: () => categories.first);
+        final unit = units.firstWhere((u) => u.id == it['unitId'], orElse: () => units.first);
+        final newFp = FinishedProduct(
+          id: 'FP-${DateTime.now().millisecondsSinceEpoch}-${imported + 1}',
+          name: it['name'] ?? '',
+          itemCode: code,
+          categoryId: cat.id,
+          categoryName: cat.name,
+          unit: unit.symbol,
+          hsnSacCode: it['hsnSacCode'],
+          openingStock: (it['openingStock'] as num?)?.toDouble() ?? 0.0,
+          currentStock: (it['openingStock'] as num?)?.toDouble() ?? 0.0,
+          minimumStock: (it['minimumStock'] as num?)?.toDouble() ?? 0.0,
+          costPrice: (it['costPrice'] as num?)?.toDouble() ?? 0.0,
+          dealerSellingPrice: (it['dealerSellingPrice'] as num?)?.toDouble() ?? 0.0,
+          customerSellingPrice: (it['customerSellingPrice'] as num?)?.toDouble() ?? 0.0,
+          gstPercent: (it['gstPercent'] as num?)?.toDouble() ?? 18.0,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        finishedProducts.insert(0, newFp);
+        imported++;
+      }
+      notifyListeners();
+      return {
+        'totalRows': items.length,
+        'importedCount': imported,
+        'duplicateCount': duplicates,
+        'skippedCount': duplicates,
+        'failedCount': 0,
+        'importedIds': [],
+        'errors': [],
+      };
     }
   }
 

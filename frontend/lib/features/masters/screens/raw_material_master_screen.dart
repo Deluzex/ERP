@@ -15,6 +15,8 @@ import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/bulk_upload_dialog.dart';
+import '../../../core/widgets/bulk_upload_history_dialog.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class RawMaterialMasterScreen extends ConsumerStatefulWidget {
@@ -566,10 +568,29 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
             icon: Icons.grain_rounded,
             title: 'Raw Materials Master',
             badgeText: 'COMPONENTS & INGREDIENTS',
-            action: ErpButton(
-              text: 'Add Material',
-              icon: Icons.add,
-              onPressed: () => _openAddEditDialog(),
+            action: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ErpButton(
+                  text: 'Upload History',
+                  icon: Icons.history,
+                  isOutlined: true,
+                  onPressed: () => BulkUploadHistoryDialog.show(context, masterFilter: 'Raw Materials'),
+                ),
+                const SizedBox(width: 10),
+                ErpButton(
+                  text: 'Bulk Upload',
+                  icon: Icons.upload_file,
+                  isOutlined: true,
+                  onPressed: () => BulkUploadDialog.show(context, BulkUploadMasterType.rawMaterial),
+                ),
+                const SizedBox(width: 10),
+                ErpButton(
+                  text: 'Add Material',
+                  icon: Icons.add,
+                  onPressed: () => _openAddEditDialog(),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 18),

@@ -10,6 +10,7 @@ import '../../../core/models/purchase_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -17,11 +18,19 @@ import '../../../shared/providers/app_state_providers.dart';
 // =====================================================================
 // 1. INVENTORY ROLE DASHBOARD
 // =====================================================================
-class InventoryRoleDashboard extends ConsumerWidget {
+class InventoryRoleDashboard extends ConsumerStatefulWidget {
   const InventoryRoleDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InventoryRoleDashboard> createState() => _InventoryRoleDashboardState();
+}
+
+class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard> {
+  DateTime? _movementsStartDate;
+  DateTime? _movementsEndDate;
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final lowStockRM = db.lowStockRawMaterials;
     final lowStockFP = db.lowStockFinishedProducts;
@@ -239,37 +248,88 @@ class InventoryRoleDashboard extends ConsumerWidget {
           ),
           const SizedBox(height: 28),
 
-          // Recent Stock Movements
-          Text('Recent Stock Movements (Ledger)', style: AppTextStyles.h2),
-          const SizedBox(height: 12),
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Date & Time'),
-              ErpColumn(title: 'Item / SKU'),
-              ErpColumn(title: 'Movement Type'),
-              ErpColumn(title: 'Quantity Changed', isNumeric: true),
-              ErpColumn(title: 'Balance After', isNumeric: true),
-              ErpColumn(title: 'Reference / Source'),
-            ],
-            rows: recentMovements.map((m) {
-              final isPositive = m.stockIn > 0;
+          // Recent Stock Movements (Transaction History: Date filter only)
+          Builder(
+            builder: (context) {
+              final filteredMovements = db.stockMovements.where((m) {
+                if (_movementsStartDate != null &&
+                    m.date.isBefore(DateTime(_movementsStartDate!.year, _movementsStartDate!.month, _movementsStartDate!.day))) {
+                  return false;
+                }
+                if (_movementsEndDate != null &&
+                    m.date.isAfter(DateTime(_movementsEndDate!.year, _movementsEndDate!.month, _movementsEndDate!.day, 23, 59, 59))) {
+                  return false;
+                }
+                return true;
+              }).toList();
 
-              return [
-                Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
-                Text(m.itemName, style: AppTextStyles.bodyBold),
-                ErpStatusBadge(
-                  label: m.transactionTypeLabel,
-                  backgroundColor: isPositive ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
-                  textColor: isPositive ? Colors.green.shade800 : Colors.orange.shade900,
-                ),
-                Text(
-                  '${isPositive ? "+" : "-"}${isPositive ? m.stockIn : m.stockOut} ${m.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(color: isPositive ? Colors.green : Colors.red),
-                ),
-                Text('${m.currentBalance} ${m.unit}', style: AppTextStyles.bodySmall),
-                Text(m.referenceNumber.isNotEmpty ? m.referenceNumber : (m.notes ?? '-'), style: AppTextStyles.bodySmall),
-              ];
-            }).toList(),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text('Recent Stock Movements (Ledger)', style: AppTextStyles.h2),
+                      ErpDateFilterBox(
+                        startDate: _movementsStartDate,
+                        endDate: _movementsEndDate,
+                        onDateRangeSelected: (start, end) {
+                          setState(() {
+                            _movementsStartDate = start;
+                            _movementsEndDate = end;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (filteredMovements.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(32),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Text('No movements recorded for the selected date range.', style: AppTextStyles.bodyMedium),
+                    )
+                  else
+                    ErpDataTable(
+                      columns: const [
+                        ErpColumn(title: 'Date & Time'),
+                        ErpColumn(title: 'Item / SKU'),
+                        ErpColumn(title: 'Movement Type'),
+                        ErpColumn(title: 'Quantity Changed', isNumeric: true),
+                        ErpColumn(title: 'Balance After', isNumeric: true),
+                        ErpColumn(title: 'Reference / Source'),
+                      ],
+                      rows: filteredMovements.take(10).map((m) {
+                        final isPositive = m.stockIn > 0;
+
+                        return [
+                          Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
+                          Text(m.itemName, style: AppTextStyles.bodyBold),
+                          ErpStatusBadge(
+                            label: m.transactionTypeLabel,
+                            backgroundColor: isPositive ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                            textColor: isPositive ? Colors.green.shade800 : Colors.orange.shade900,
+                          ),
+                          Text(
+                            '${isPositive ? "+" : "-"}${isPositive ? m.stockIn : m.stockOut} ${m.unit}',
+                            style: AppTextStyles.bodyBold.copyWith(color: isPositive ? Colors.green : Colors.red),
+                          ),
+                          Text('${m.currentBalance} ${m.unit}', style: AppTextStyles.bodySmall),
+                          Text(m.referenceNumber.isNotEmpty ? m.referenceNumber : (m.notes ?? '-'), style: AppTextStyles.bodySmall),
+                        ];
+                      }).toList(),
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -559,13 +619,20 @@ class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboar
 // =====================================================================
 // 4. ACCOUNTS / PAYMENT ROLE DASHBOARD
 // =====================================================================
-class AccountsPaymentRoleDashboard extends ConsumerWidget {
+class AccountsPaymentRoleDashboard extends ConsumerStatefulWidget {
   const AccountsPaymentRoleDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AccountsPaymentRoleDashboard> createState() => _AccountsPaymentRoleDashboardState();
+}
+
+class _AccountsPaymentRoleDashboardState extends ConsumerState<AccountsPaymentRoleDashboard> {
+  DateTime? _paymentStartDate;
+  DateTime? _paymentEndDate;
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
-    final recentPayments = db.payments.take(8).toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -641,33 +708,84 @@ class AccountsPaymentRoleDashboard extends ConsumerWidget {
           ]),
           const SizedBox(height: 28),
 
-          // Recent Payment Transactions Table
-          Text('Recent Payment & Disbursement Transactions', style: AppTextStyles.h2),
-          const SizedBox(height: 12),
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Voucher No'),
-              ErpColumn(title: 'Date'),
-              ErpColumn(title: 'Payment Type'),
-              ErpColumn(title: 'Party Name'),
-              ErpColumn(title: 'Reference / UTR'),
-              ErpColumn(title: 'Amount (₹)', isNumeric: true),
-              ErpColumn(title: 'Mode'),
-            ],
-            rows: recentPayments.map((p) {
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', ErpNavSection.customerPayments),
-                  child: Text(p.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                ),
-                Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
-                Text(p.typeLabel, style: AppTextStyles.bodyBold),
-                Text(p.partyName, style: AppTextStyles.bodyMedium),
-                Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: Colors.green.shade800)),
-                ErpStatusBadge.neutral(p.paymentMode.name.toUpperCase()),
-              ];
-            }).toList(),
+          // Recent Payment Transactions Table (Transaction History: Date filter only)
+          Builder(
+            builder: (context) {
+              final filteredPayments = db.payments.where((p) {
+                if (_paymentStartDate != null &&
+                    p.paymentDate.isBefore(DateTime(_paymentStartDate!.year, _paymentStartDate!.month, _paymentStartDate!.day))) {
+                  return false;
+                }
+                if (_paymentEndDate != null &&
+                    p.paymentDate.isAfter(DateTime(_paymentEndDate!.year, _paymentEndDate!.month, _paymentEndDate!.day, 23, 59, 59))) {
+                  return false;
+                }
+                return true;
+              }).toList();
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text('Recent Payment & Disbursement Transactions', style: AppTextStyles.h2),
+                      ErpDateFilterBox(
+                        startDate: _paymentStartDate,
+                        endDate: _paymentEndDate,
+                        onDateRangeSelected: (start, end) {
+                          setState(() {
+                            _paymentStartDate = start;
+                            _paymentEndDate = end;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (filteredPayments.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(32),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Text('No payment transactions recorded for the selected date range.', style: AppTextStyles.bodyMedium),
+                    )
+                  else
+                    ErpDataTable(
+                      columns: const [
+                        ErpColumn(title: 'Voucher No'),
+                        ErpColumn(title: 'Date'),
+                        ErpColumn(title: 'Payment Type'),
+                        ErpColumn(title: 'Party Name'),
+                        ErpColumn(title: 'Reference / UTR'),
+                        ErpColumn(title: 'Amount (₹)', isNumeric: true),
+                        ErpColumn(title: 'Mode'),
+                      ],
+                      rows: filteredPayments.take(10).map((p) {
+                        return [
+                          InkWell(
+                            onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', ErpNavSection.customerPayments),
+                            child: Text(p.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                          ),
+                          Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
+                          Text(p.typeLabel, style: AppTextStyles.bodyBold),
+                          Text(p.partyName, style: AppTextStyles.bodyMedium),
+                          Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
+                          Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: Colors.green.shade800)),
+                          ErpStatusBadge.neutral(p.paymentMode.name.toUpperCase()),
+                        ];
+                      }).toList(),
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),

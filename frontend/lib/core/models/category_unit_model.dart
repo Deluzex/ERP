@@ -122,15 +122,18 @@ class ExpenseCategoryMasterItem {
       name: json['name']?.toString() ?? '',
       code: json['code']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
-      isActive: json['isActive'] == null ? true : json['isActive'] == true,
-      linkedKey: (json['linkedKey']?.toString() ?? '').trim().isEmpty
+      isActive: json['isActive'] == null
+          ? (json['is_active'] == null ? true : json['is_active'] == true)
+          : json['isActive'] == true,
+      linkedKey: (json['linkedKey']?.toString() ?? json['linked_key']?.toString() ?? '').trim().isEmpty
           ? null
-          : json['linkedKey'].toString().trim(),
+          : (json['linkedKey']?.toString() ?? json['linked_key']?.toString() ?? '').trim(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'code': code,
       'description': description,

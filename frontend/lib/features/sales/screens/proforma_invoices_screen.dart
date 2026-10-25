@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -14,6 +15,7 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -31,6 +33,10 @@ class ProformaInvoicesScreen extends ConsumerStatefulWidget {
 class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -324,7 +330,9 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textMuted,
               indicatorColor: AppColors.primary,
-              onTap: (_) => setState(() {}),
+              onTap: (_) => setState(() {
+                _currentPage = 0;
+              }),
               tabs: [
                 Tab(text: 'All Proformas (${db.proformaInvoices.length})'),
                 Tab(text: 'Issued / Pending (${db.proformaInvoices.where((p) => p.proformaStatus == ProformaStatus.issued).length})'),
@@ -336,13 +344,32 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
           ),
           const SizedBox(height: 16),
 
-          // 3. Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search proforma invoice by number, customer, project or quotation reference...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // 3. Search and Date Filter Bar
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search proforma invoice by number, customer, project or quote...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -385,6 +412,16 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
       }).toList();
     }
 
+    // Filter by date range
+    if (_startDate != null) {
+      final startDay = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+      filtered = filtered.where((p) => !p.saleDate.isBefore(startDay)).toList();
+    }
+    if (_endDate != null) {
+      final endDay = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+      filtered = filtered.where((p) => !p.saleDate.isAfter(endDay)).toList();
+    }
+
     if (filtered.isEmpty) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -406,19 +443,29 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
       );
     }
 
-    return ErpDataTable(
-      columns: const [
-        ErpColumn(title: 'Proforma No'),
-        ErpColumn(title: 'Date'),
-        ErpColumn(title: 'Customer / Party'),
-        ErpColumn(title: 'Quote Ref'),
-        ErpColumn(title: 'Total Amount', isNumeric: true),
-        ErpColumn(title: 'Advance Paid', isNumeric: true),
-        ErpColumn(title: 'Balance Due', isNumeric: true),
-        ErpColumn(title: 'Status'),
-        ErpColumn(title: 'Actions'),
-      ],
-      rows: filtered.map((proforma) {
+    final totalCount = filtered.length;
+    final maxPage = (totalCount / _pageSize).ceil();
+    final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+    final startIdx = effectivePage * _pageSize;
+    final endIdx = min(startIdx + _pageSize, totalCount);
+    final paginatedProformas = totalCount == 0 ? <Sale>[] : filtered.sublist(startIdx, endIdx);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ErpDataTable(
+          columns: const [
+            ErpColumn(title: 'Proforma No'),
+            ErpColumn(title: 'Date'),
+            ErpColumn(title: 'Customer / Party'),
+            ErpColumn(title: 'Quote Ref'),
+            ErpColumn(title: 'Total Amount', isNumeric: true),
+            ErpColumn(title: 'Advance Paid', isNumeric: true),
+            ErpColumn(title: 'Balance Due', isNumeric: true),
+            ErpColumn(title: 'Status'),
+            ErpColumn(title: 'Actions'),
+          ],
+          rows: paginatedProformas.map((proforma) {
         ErpStatusBadge badge;
         switch (proforma.proformaStatus) {
           case ProformaStatus.paid:
@@ -560,6 +607,21 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
           ),
         ];
       }).toList(),
-    );
+    ),
+    if (filtered.isNotEmpty) ...[
+      const SizedBox(height: 12),
+      ErpPaginationBar(
+        totalRecords: totalCount,
+        currentPage: effectivePage,
+        pageSize: _pageSize,
+        onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+        onPageSizeChanged: (newSize) => setState(() {
+          _pageSize = newSize;
+          _currentPage = 0;
+        }),
+      ),
+    ],
+  ],
+);
   }
 }

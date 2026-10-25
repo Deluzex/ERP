@@ -42,6 +42,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(databaseServiceProvider).loadCategories();
       ref.read(databaseServiceProvider).loadUnits();
+      ref.read(databaseServiceProvider).loadExpenseCategories();
     });
   }
 
@@ -266,64 +267,109 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
     final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? serverError;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Add Expense Category', style: AppTextStyles.h2),
-        content: SizedBox(
-          width: 440,
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameCtrl,
-                  validator: (v) => Validators.requiredField(v, 'Category name required'),
-                  decoration: const InputDecoration(labelText: 'Expense Category Name *', hintText: 'E.g., Site Scaffolding & Rigging'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: descCtrl,
-                  maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Description', hintText: 'Operational scope and usage description'),
-                ),
-              ],
+      barrierDismissible: !isSubmitting,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dlgCtx, setDlgState) => AlertDialog(
+          title: Text('Add Expense Category', style: AppTextStyles.h2),
+          content: SizedBox(
+            width: 440,
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (serverError != null) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(serverError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  TextFormField(
+                    controller: nameCtrl,
+                    validator: (v) => Validators.requiredField(v, 'Category name required'),
+                    decoration: const InputDecoration(labelText: 'Expense Category Name *', hintText: 'E.g., Site Scaffolding & Rigging'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: descCtrl,
+                    maxLines: 2,
+                    decoration: const InputDecoration(labelText: 'Description', hintText: 'Operational scope and usage description'),
+                  ),
+                ],
+              ),
             ),
           ),
+          actions: [
+            ErpButton(
+              text: 'Cancel',
+              isOutlined: true,
+              onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+            ),
+            ErpButton(
+              text: 'Save Expense Category',
+              isLoading: isSubmitting,
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDlgState(() {
+                        isSubmitting = true;
+                        serverError = null;
+                      });
+                      final messenger = ScaffoldMessenger.of(context);
+                      final db = ref.read(databaseServiceProvider);
+                      final name = nameCtrl.text.trim();
+                      String cleanCode = name
+                          .replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_')
+                          .replaceAll(RegExp(r'^_+|_+$'), '')
+                          .toUpperCase();
+                      if (cleanCode.isEmpty) {
+                        cleanCode = 'EXP_${DateTime.now().millisecondsSinceEpoch}';
+                      }
+                      try {
+                        await db.addExpenseCategoryAsync(
+                          name: name,
+                          code: cleanCode,
+                          description: descCtrl.text.trim(),
+                        );
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                        if (mounted) {
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text('Expense category "$name" added successfully!'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDlgState(() {
+                          serverError = e.toString().replaceFirst('Exception: ', '');
+                          isSubmitting = false;
+                        });
+                      }
+                    },
+            ),
+          ],
         ),
-        actions: [
-          ErpButton(
-            text: 'Cancel',
-            isOutlined: true,
-            onPressed: () => Navigator.of(ctx).pop(),
-          ),
-          ErpButton(
-            text: 'Save Expense Category',
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              final messenger = ScaffoldMessenger.of(context);
-              final db = ref.read(databaseServiceProvider);
-              final name = nameCtrl.text.trim();
-              final code = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').toUpperCase();
-              await db.addExpenseCategoryAsync(
-                name: name,
-                code: code,
-                description: descCtrl.text.trim(),
-              );
-              if (ctx.mounted) Navigator.of(ctx).pop();
-              if (mounted) {
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text('Expense category "$name" added successfully!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
-              }
-            },
-          ),
-        ],
       ),
     );
   }
@@ -332,65 +378,112 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
     final nameCtrl = TextEditingController(text: item.name);
     final descCtrl = TextEditingController(text: item.description);
     final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? serverError;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Edit Expense Category', style: AppTextStyles.h2),
-        content: SizedBox(
-          width: 440,
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameCtrl,
-                  validator: (v) => Validators.requiredField(v, 'Category name required'),
-                  decoration: const InputDecoration(labelText: 'Expense Category Name *'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: descCtrl,
-                  maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                ),
-              ],
+      barrierDismissible: !isSubmitting,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dlgCtx, setDlgState) => AlertDialog(
+          title: Text('Edit Expense Category', style: AppTextStyles.h2),
+          content: SizedBox(
+            width: 440,
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (serverError != null) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(serverError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  TextFormField(
+                    controller: nameCtrl,
+                    validator: (v) => Validators.requiredField(v, 'Category name required'),
+                    decoration: const InputDecoration(labelText: 'Expense Category Name *'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: descCtrl,
+                    maxLines: 2,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                ],
+              ),
             ),
           ),
+          actions: [
+            ErpButton(
+              text: 'Cancel',
+              isOutlined: true,
+              onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+            ),
+            ErpButton(
+              text: 'Update Category',
+              isLoading: isSubmitting,
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDlgState(() {
+                        isSubmitting = true;
+                        serverError = null;
+                      });
+                      final messenger = ScaffoldMessenger.of(context);
+                      final db = ref.read(databaseServiceProvider);
+                      final name = nameCtrl.text.trim();
+                      String cleanCode = item.code.isNotEmpty
+                          ? item.code
+                          : name
+                              .replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_')
+                              .replaceAll(RegExp(r'^_+|_+$'), '')
+                              .toUpperCase();
+                      if (cleanCode.isEmpty) {
+                        cleanCode = 'EXP_${DateTime.now().millisecondsSinceEpoch}';
+                      }
+                      try {
+                        await db.updateExpenseCategoryAsync(
+                          id: item.id,
+                          name: name,
+                          code: cleanCode,
+                          description: descCtrl.text.trim(),
+                        );
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                        if (mounted) {
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text('Expense category "$name" updated successfully!'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDlgState(() {
+                          serverError = e.toString().replaceFirst('Exception: ', '');
+                          isSubmitting = false;
+                        });
+                      }
+                    },
+            ),
+          ],
         ),
-        actions: [
-          ErpButton(
-            text: 'Cancel',
-            isOutlined: true,
-            onPressed: () => Navigator.of(ctx).pop(),
-          ),
-          ErpButton(
-            text: 'Update Category',
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              final messenger = ScaffoldMessenger.of(context);
-              final db = ref.read(databaseServiceProvider);
-              final name = nameCtrl.text.trim();
-              final code = item.code.isNotEmpty ? item.code : name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').toUpperCase();
-              await db.updateExpenseCategoryAsync(
-                id: item.id,
-                name: name,
-                code: code,
-                description: descCtrl.text.trim(),
-              );
-              if (ctx.mounted) Navigator.of(ctx).pop();
-              if (mounted) {
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text('Expense category "$name" updated successfully!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
-              }
-            },
-          ),
-        ],
       ),
     );
   }

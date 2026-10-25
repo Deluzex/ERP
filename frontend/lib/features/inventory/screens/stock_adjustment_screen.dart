@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
@@ -11,6 +12,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/stock_movement_icons.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
@@ -28,6 +30,8 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
   String _searchQuery = '';
   DateTime? _startDate;
   DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -312,10 +316,16 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
           adj.performedBy.toLowerCase().contains(query) ||
           (adj.remarks != null && adj.remarks!.toLowerCase().contains(query));
 
-      final matchesDate = (_startDate == null || !adj.adjustmentDate.isBefore(_startDate!)) &&
-          (_endDate == null || !adj.adjustmentDate.isAfter(_endDate!.add(const Duration(days: 1))));
+      if (_startDate != null &&
+          adj.adjustmentDate.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) {
+        return false;
+      }
+      if (_endDate != null &&
+          adj.adjustmentDate.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) {
+        return false;
+      }
 
-      return matchesQuery && matchesDate;
+      return matchesQuery;
     }).toList();
 
     return SingleChildScrollView(
@@ -401,7 +411,10 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
               ErpSearchInput(
                 hintText: 'Search adjustments by number, item, reason...',
                 value: _searchQuery,
-                onChanged: (val) => setState(() => _searchQuery = val),
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
               ),
               ErpDateFilterBox(
                 startDate: _startDate,
@@ -410,6 +423,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                   setState(() {
                     _startDate = start;
                     _endDate = end;
+                    _currentPage = 0;
                   });
                 },
               ),
@@ -418,54 +432,82 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
           const SizedBox(height: 20),
 
           // Data Table of adjustments
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Date'),
-              ErpColumn(title: 'Adjustment No'),
-              ErpColumn(title: 'Item Details'),
-              ErpColumn(title: 'Item Type'),
-              ErpColumn(title: 'Before Stock', isNumeric: true),
-              ErpColumn(title: 'Adjustment', isNumeric: true),
-              ErpColumn(title: 'Final Stock', isNumeric: true),
-              ErpColumn(title: 'Reason'),
-              ErpColumn(title: 'Remarks'),
-              ErpColumn(title: 'Performed By'),
-            ],
-            rows: adjustments.map((adj) {
-              return [
-                Text(Formatters.formatDateTime(adj.adjustmentDate), style: AppTextStyles.bodySmall),
-                Text(adj.adjustmentNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(adj.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                    Text(adj.itemName, style: AppTextStyles.bodySmall),
-                  ],
-                ),
-                Text(adj.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product', style: AppTextStyles.bodySmall),
-                Text('${Formatters.formatNumber(adj.currentStockBefore)} ${adj.unit}', style: AppTextStyles.bodySmall),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    adj.adjustmentQuantity >= 0
-                        ? const StockInIcon(size: 13, color: Color(0xFF16A34A))
-                        : const StockOutIcon(size: 13, color: Color(0xFFEF4444)),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${adj.adjustmentQuantity >= 0 ? "+" : ""}${Formatters.formatNumber(adj.adjustmentQuantity)} ${adj.unit}',
-                      style: AppTextStyles.bodyBold.copyWith(
-                        color: adj.adjustmentQuantity >= 0 ? AppColors.successText : AppColors.dangerText,
-                      ),
+          Builder(
+            builder: (context) {
+              final totalRecords = adjustments.length;
+              final startIndex = _currentPage * _pageSize;
+              final pageAdjustments = (startIndex < totalRecords)
+                  ? adjustments.sublist(startIndex, min(startIndex + _pageSize, totalRecords))
+                  : <StockAdjustment>[];
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'Date'),
+                      ErpColumn(title: 'Adjustment No'),
+                      ErpColumn(title: 'Item Details'),
+                      ErpColumn(title: 'Item Type'),
+                      ErpColumn(title: 'Before Stock', isNumeric: true),
+                      ErpColumn(title: 'Adjustment', isNumeric: true),
+                      ErpColumn(title: 'Final Stock', isNumeric: true),
+                      ErpColumn(title: 'Reason'),
+                      ErpColumn(title: 'Remarks'),
+                      ErpColumn(title: 'Performed By'),
+                    ],
+                    rows: pageAdjustments.map((adj) {
+                      return [
+                        Text(Formatters.formatDateTime(adj.adjustmentDate), style: AppTextStyles.bodySmall),
+                        Text(adj.adjustmentNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(adj.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                            Text(adj.itemName, style: AppTextStyles.bodySmall),
+                          ],
+                        ),
+                        Text(adj.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product', style: AppTextStyles.bodySmall),
+                        Text('${Formatters.formatNumber(adj.currentStockBefore)} ${adj.unit}', style: AppTextStyles.bodySmall),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            adj.adjustmentQuantity >= 0
+                                ? const StockInIcon(size: 13, color: Color(0xFF16A34A))
+                                : const StockOutIcon(size: 13, color: Color(0xFFEF4444)),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${adj.adjustmentQuantity >= 0 ? "+" : ""}${Formatters.formatNumber(adj.adjustmentQuantity)} ${adj.unit}',
+                              style: AppTextStyles.bodyBold.copyWith(
+                                color: adj.adjustmentQuantity >= 0 ? AppColors.successText : AppColors.dangerText,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text('${Formatters.formatNumber(adj.adjustedStockAfter)} ${adj.unit}', style: AppTextStyles.bodyBold),
+                        Text(adj.reasonLabel, style: AppTextStyles.bodyMedium),
+                        Text(adj.remarks, style: AppTextStyles.bodySmall),
+                        Text(adj.performedBy, style: AppTextStyles.bodySmall),
+                      ];
+                    }).toList(),
+                  ),
+                  if (totalRecords > 0) ...[
+                    const SizedBox(height: 16),
+                    ErpPaginationBar(
+                      currentPage: _currentPage,
+                      pageSize: _pageSize,
+                      totalRecords: totalRecords,
+                      onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                      onPageSizeChanged: (newSize) => setState(() {
+                        _pageSize = newSize;
+                        _currentPage = 0;
+                      }),
                     ),
                   ],
-                ),
-                Text('${Formatters.formatNumber(adj.adjustedStockAfter)} ${adj.unit}', style: AppTextStyles.bodyBold),
-                Text(adj.reasonLabel, style: AppTextStyles.bodyMedium),
-                Text(adj.remarks, style: AppTextStyles.bodySmall),
-                Text(adj.performedBy, style: AppTextStyles.bodySmall),
-              ];
-            }).toList(),
+                ],
+              );
+            },
           ),
         ],
       ),

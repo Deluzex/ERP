@@ -22,11 +22,12 @@ import '../../features/sales/widgets/sales_pdf_generator.dart';
 import '../utils/formatters.dart';
 import 'erp_button.dart';
 import 'erp_data_table.dart';
+import 'erp_filter_controls.dart';
 import 'erp_status_badge.dart';
 import '../../shared/widgets/share_document_dialog.dart';
 import '../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 
-class RecordDetailsView extends ConsumerWidget {
+class RecordDetailsView extends ConsumerStatefulWidget {
   final ActiveRecordDetails details;
 
   const RecordDetailsView({
@@ -35,7 +36,34 @@ class RecordDetailsView extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RecordDetailsView> createState() => _RecordDetailsViewState();
+}
+
+class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
+  // 1. Date filter state for Customer Details (Sales & Invoices History)
+  DateTime? _customerSalesStartDate;
+  DateTime? _customerSalesEndDate;
+
+  // 2. Date filter state for Vendor Details (Purchase Orders History)
+  DateTime? _vendorPurchasesStartDate;
+  DateTime? _vendorPurchasesEndDate;
+
+  // 3. Date filter state for Dealer Details (Sales & Invoices History)
+  DateTime? _dealerSalesStartDate;
+  DateTime? _dealerSalesEndDate;
+
+  // 4. Date filter state for Project Details
+  DateTime? _projectSalesStartDate;
+  DateTime? _projectSalesEndDate;
+  DateTime? _projectPurchasesStartDate;
+  DateTime? _projectPurchasesEndDate;
+  DateTime? _projectPaymentsStartDate;
+  DateTime? _projectPaymentsEndDate;
+
+  ActiveRecordDetails get details => widget.details;
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final stack = ref.read(activeRecordDetailsStackProvider.notifier);
 
@@ -582,100 +610,145 @@ class RecordDetailsView extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 24),
-        Text('Purchase Orders History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+        Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Purchase Orders History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+            ErpDateFilterBox(
+              startDate: _vendorPurchasesStartDate,
+              endDate: _vendorPurchasesEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _vendorPurchasesStartDate = start;
+                _vendorPurchasesEndDate = end;
+              }),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
-        if (sortedPurchases.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No purchase orders recorded for this vendor yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else if (isMobile)
-          Column(
-            children: sortedPurchases.map((p) {
+        Builder(
+          builder: (context) {
+            final filteredPurchases = sortedPurchases.where((p) {
+              if (_vendorPurchasesStartDate != null &&
+                  p.purchaseDate.isBefore(DateTime(_vendorPurchasesStartDate!.year, _vendorPurchasesStartDate!.month, _vendorPurchasesStartDate!.day))) {
+                return false;
+              }
+              if (_vendorPurchasesEndDate != null &&
+                  p.purchaseDate.isAfter(DateTime(_vendorPurchasesEndDate!.year, _vendorPurchasesEndDate!.month, _vendorPurchasesEndDate!.day, 23, 59, 59))) {
+                return false;
+              }
+              return true;
+            }).toList();
+
+            if (filteredPurchases.isEmpty) {
               return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(24),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.mdBorderRadius,
                   border: Border.all(color: AppColors.border),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        InkWell(
-                          onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
-                          child: Text(
-                            p.purchaseNumber,
-                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
-                          ),
-                        ),
-                        Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
-                        if (p.vendorInvoiceNumber.isNotEmpty && p.vendorInvoiceNumber != '-')
-                          Text('Inv: ${p.vendorInvoiceNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Due: ${Formatters.formatCurrency(p.pendingAmount)}',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
-                      ],
-                    ),
-                  ],
+                child: Text(
+                  sortedPurchases.isEmpty
+                      ? 'No purchase orders recorded for this vendor yet.'
+                      : 'No purchase orders found for the selected date range.',
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
                 ),
               );
-            }).toList(),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'PO Number'),
-              ErpColumn(title: 'Purchase Date'),
-              ErpColumn(title: 'Vendor Invoice'),
-              ErpColumn(title: 'Items Count', isNumeric: true),
-              ErpColumn(title: 'Total Amount', isNumeric: true),
-              ErpColumn(title: 'Paid Amount', isNumeric: true),
-              ErpColumn(title: 'Pending Due', isNumeric: true),
-              ErpColumn(title: 'Status'),
-            ],
-            rows: sortedPurchases.map((p) {
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
-                  child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                ),
-                Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
-                Text(p.vendorInvoiceNumber.isNotEmpty ? p.vendorInvoiceNumber : '-', style: AppTextStyles.bodySmall),
-                Text('${p.items.length} items', style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
-                Text(Formatters.formatCurrency(p.paidAmount), style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
-                Text(
-                  Formatters.formatCurrency(p.pendingAmount),
-                  style: AppTextStyles.bodyBold.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
-                ),
-                ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
-              ];
-            }).toList(),
-          ),
+            }
+
+            if (isMobile) {
+              return Column(
+                children: filteredPurchases.map((p) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            InkWell(
+                              onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
+                              child: Text(
+                                p.purchaseNumber,
+                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
+                              ),
+                            ),
+                            Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
+                            if (p.vendorInvoiceNumber.isNotEmpty && p.vendorInvoiceNumber != '-')
+                              Text('Inv: ${p.vendorInvoiceNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Due: ${Formatters.formatCurrency(p.pendingAmount)}',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            }
+
+            return ErpDataTable(
+              columns: const [
+                ErpColumn(title: 'PO Number'),
+                ErpColumn(title: 'Purchase Date'),
+                ErpColumn(title: 'Vendor Invoice'),
+                ErpColumn(title: 'Items Count', isNumeric: true),
+                ErpColumn(title: 'Total Amount', isNumeric: true),
+                ErpColumn(title: 'Paid Amount', isNumeric: true),
+                ErpColumn(title: 'Pending Due', isNumeric: true),
+                ErpColumn(title: 'Status'),
+              ],
+              rows: filteredPurchases.map((p) {
+                return [
+                  InkWell(
+                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
+                    child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                  ),
+                  Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
+                  Text(p.vendorInvoiceNumber.isNotEmpty ? p.vendorInvoiceNumber : '-', style: AppTextStyles.bodySmall),
+                  Text('${p.items.length} items', style: AppTextStyles.bodySmall),
+                  Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
+                  Text(Formatters.formatCurrency(p.paidAmount), style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
+                  Text(
+                    Formatters.formatCurrency(p.pendingAmount),
+                    style: AppTextStyles.bodyBold.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
+                  ),
+                  ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
+                ];
+              }).toList(),
+            );
+          },
+        ),
 
         if (vendorPayments.isNotEmpty) ...[
           const SizedBox(height: 28),
@@ -1305,95 +1378,146 @@ class RecordDetailsView extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 24),
-        Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+        Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+            ErpDateFilterBox(
+              startDate: _customerSalesStartDate,
+              endDate: _customerSalesEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _customerSalesStartDate = start;
+                _customerSalesEndDate = end;
+              }),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
-        if (isMobile)
-          Column(
-            children: customerSales.map((s) {
+        Builder(
+          builder: (context) {
+            final filteredSales = customerSales.where((s) {
+              if (_customerSalesStartDate != null &&
+                  s.saleDate.isBefore(DateTime(_customerSalesStartDate!.year, _customerSalesStartDate!.month, _customerSalesStartDate!.day))) {
+                return false;
+              }
+              if (_customerSalesEndDate != null &&
+                  s.saleDate.isAfter(DateTime(_customerSalesEndDate!.year, _customerSalesEndDate!.month, _customerSalesEndDate!.day, 23, 59, 59))) {
+                return false;
+              }
+              return true;
+            }).toList();
+
+            if (filteredSales.isEmpty) {
               return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(24),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.mdBorderRadius,
                   border: Border.all(color: AppColors.border),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        InkWell(
-                          onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                          child: Text(
-                            s.invoiceNumber,
-                            style: AppTextStyles.bodyBold.copyWith(
-                              color: AppColors.primary,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          Formatters.formatCurrency(s.totalAmount),
-                          style: AppTextStyles.bodyBold,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                        ErpStatusBadge.neutral(s.documentType.toString().split('.').last.toUpperCase()),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Due: ${Formatters.formatCurrency(s.pendingAmount)}',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
-                      ],
-                    ),
-                  ],
+                child: Text(
+                  customerSales.isEmpty
+                      ? 'No sales or invoice documents linked to this customer yet.'
+                      : 'No sales documents found for the selected date range.',
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
                 ),
               );
-            }).toList(),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Invoice Number'),
-              ErpColumn(title: 'Date'),
-              ErpColumn(title: 'Document Type'),
-              ErpColumn(title: 'Total Invoiced', isNumeric: true),
-              ErpColumn(title: 'Outstanding Due', isNumeric: true),
-              ErpColumn(title: 'Status'),
-            ],
-            rows: customerSales.map((s) {
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                  child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                ),
-                Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
-                Text(
-                  Formatters.formatCurrency(s.pendingAmount),
-                  style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
-                ),
-                Text(s.statusLabel, style: AppTextStyles.bodySmall),
-              ];
-            }).toList(),
-          ),
+            }
+
+            if (isMobile) {
+              return Column(
+                children: filteredSales.map((s) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            InkWell(
+                              onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
+                              child: Text(
+                                s.invoiceNumber,
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  color: AppColors.primary,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              Formatters.formatCurrency(s.totalAmount),
+                              style: AppTextStyles.bodyBold,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
+                            ErpStatusBadge.neutral(s.documentType.toString().split('.').last.toUpperCase()),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Due: ${Formatters.formatCurrency(s.pendingAmount)}',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            }
+
+            return ErpDataTable(
+              columns: const [
+                ErpColumn(title: 'Invoice Number'),
+                ErpColumn(title: 'Date'),
+                ErpColumn(title: 'Document Type'),
+                ErpColumn(title: 'Total Invoiced', isNumeric: true),
+                ErpColumn(title: 'Outstanding Due', isNumeric: true),
+                ErpColumn(title: 'Status'),
+              ],
+              rows: filteredSales.map((s) {
+                return [
+                  InkWell(
+                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
+                    child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                  ),
+                  Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
+                  Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
+                  Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
+                  Text(
+                    Formatters.formatCurrency(s.pendingAmount),
+                    style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
+                  ),
+                  Text(s.statusLabel, style: AppTextStyles.bodySmall),
+                ];
+              }).toList(),
+            );
+          },
+        ),
 
         if (customerReturns.isNotEmpty) ...[
           const SizedBox(height: 28),
@@ -1639,125 +1763,170 @@ class RecordDetailsView extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 24),
-        Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+        Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+            ErpDateFilterBox(
+              startDate: _dealerSalesStartDate,
+              endDate: _dealerSalesEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _dealerSalesStartDate = start;
+                _dealerSalesEndDate = end;
+              }),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
-        if (sortedSales.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No sales documents linked to this dealer showroom yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else if (isMobile)
-          Column(
-            children: sortedSales.map((s) {
+        Builder(
+          builder: (context) {
+            final filteredDealerSales = sortedSales.where((s) {
+              if (_dealerSalesStartDate != null &&
+                  s.saleDate.isBefore(DateTime(_dealerSalesStartDate!.year, _dealerSalesStartDate!.month, _dealerSalesStartDate!.day))) {
+                return false;
+              }
+              if (_dealerSalesEndDate != null &&
+                  s.saleDate.isAfter(DateTime(_dealerSalesEndDate!.year, _dealerSalesEndDate!.month, _dealerSalesEndDate!.day, 23, 59, 59))) {
+                return false;
+              }
+              return true;
+            }).toList();
+
+            if (filteredDealerSales.isEmpty) {
               return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(24),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.mdBorderRadius,
                   border: Border.all(color: AppColors.border),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        InkWell(
-                          onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                          child: Text(
-                            s.invoiceNumber,
-                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
-                          ),
-                        ),
-                        Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
-                      ],
+                child: Text(
+                  sortedSales.isEmpty
+                      ? 'No sales documents linked to this dealer showroom yet.'
+                      : 'No sales documents found for the selected date range.',
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+                ),
+              );
+            }
+
+            if (isMobile) {
+              return Column(
+                children: filteredDealerSales.map((s) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
                     ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                        ErpStatusBadge.neutral(s.documentType.toString().split('.').last.toUpperCase()),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Due: ${Formatters.formatCurrency(s.pendingAmount)}',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
                         Row(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.share, color: Colors.teal, size: 16),
-                              tooltip: 'Share Document',
-                              onPressed: () => ShareDocumentDialog.show(context, s),
+                            InkWell(
+                              onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
+                              child: Text(
+                                s.invoiceNumber,
+                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
+                              ),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
-                              tooltip: 'View PDF',
-                              onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
+                            Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
+                            ErpStatusBadge.neutral(s.documentType.toString().split('.').last.toUpperCase()),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Due: ${Formatters.formatCurrency(s.pendingAmount)}',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.share, color: Colors.teal, size: 16),
+                                  tooltip: 'Share Document',
+                                  onPressed: () => ShareDocumentDialog.show(context, s),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
+                                  tooltip: 'View PDF',
+                                  onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  );
+                }).toList(),
               );
-            }).toList(),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Invoice Number'),
-              ErpColumn(title: 'Date'),
-              ErpColumn(title: 'Document Type'),
-              ErpColumn(title: 'Total Invoiced', isNumeric: true),
-              ErpColumn(title: 'Outstanding Due', isNumeric: true),
-              ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
-            ],
-            rows: sortedSales.map((s) {
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                  child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                ),
-                Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
-                Text(
-                  Formatters.formatCurrency(s.pendingAmount),
-                  style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
-                ),
-                ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.share, color: Colors.teal, size: 16),
-                      tooltip: 'Share Document',
-                      onPressed: () => ShareDocumentDialog.show(context, s),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
-                      tooltip: 'View PDF',
-                      onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
-                    ),
-                  ],
-                ),
-              ];
-            }).toList(),
-          ),
+            }
+
+            return ErpDataTable(
+              columns: const [
+                ErpColumn(title: 'Invoice Number'),
+                ErpColumn(title: 'Date'),
+                ErpColumn(title: 'Document Type'),
+                ErpColumn(title: 'Total Invoiced', isNumeric: true),
+                ErpColumn(title: 'Outstanding Due', isNumeric: true),
+                ErpColumn(title: 'Status'),
+                ErpColumn(title: 'Actions'),
+              ],
+              rows: filteredDealerSales.map((s) {
+                return [
+                  InkWell(
+                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
+                    child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                  ),
+                  Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
+                  Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
+                  Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
+                  Text(
+                    Formatters.formatCurrency(s.pendingAmount),
+                    style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
+                  ),
+                  ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.share, color: Colors.teal, size: 16),
+                        tooltip: 'Share Document',
+                        onPressed: () => ShareDocumentDialog.show(context, s),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
+                        tooltip: 'View PDF',
+                        onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
+                      ),
+                    ],
+                  ),
+                ];
+              }).toList(),
+            );
+          },
+        ),
 
         if (dealerReturns.isNotEmpty) ...[
           const SizedBox(height: 28),
@@ -3661,202 +3830,294 @@ class RecordDetailsView extends ConsumerWidget {
         const SizedBox(height: 24),
 
         // Sales & Invoices History
-        Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+        Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+            ErpDateFilterBox(
+              startDate: _projectSalesStartDate,
+              endDate: _projectSalesEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _projectSalesStartDate = start;
+                _projectSalesEndDate = end;
+              }),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
-        if (sortedSales.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No sales documents linked to this project yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else if (isMobile)
-          Column(
-            children: sortedSales.map((s) {
+        Builder(
+          builder: (context) {
+            final filteredSales = sortedSales.where((s) {
+              if (_projectSalesStartDate != null &&
+                  s.saleDate.isBefore(DateTime(_projectSalesStartDate!.year, _projectSalesStartDate!.month, _projectSalesStartDate!.day))) {
+                return false;
+              }
+              if (_projectSalesEndDate != null &&
+                  s.saleDate.isAfter(DateTime(_projectSalesEndDate!.year, _projectSalesEndDate!.month, _projectSalesEndDate!.day, 23, 59, 59))) {
+                return false;
+              }
+              return true;
+            }).toList();
+
+            if (filteredSales.isEmpty) {
               return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        InkWell(
-                          onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                          child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                        ),
-                        ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                        Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.caption.copyWith(color: AppColors.textMuted)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Total: ${Formatters.formatCurrency(s.totalAmount)}', style: AppTextStyles.bodyBold),
-                        Text(
-                          'Due: ${Formatters.formatCurrency(s.pendingAmount)}',
-                          style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.share, color: Colors.teal, size: 18),
-                          tooltip: 'Share Document',
-                          onPressed: () => ShareDocumentDialog.show(context, s),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 18),
-                          tooltip: 'View PDF',
-                          onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
-                        ),
-                      ],
-                    ),
-                  ],
+                padding: const EdgeInsets.all(24),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
+                child: Text(
+                  sortedSales.isEmpty
+                      ? 'No sales documents linked to this project yet.'
+                      : 'No sales documents found for the selected date range.',
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
                 ),
               );
-            }).toList(),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Invoice Number'),
-              ErpColumn(title: 'Date'),
-              ErpColumn(title: 'Document Type'),
-              ErpColumn(title: 'Total Invoiced', isNumeric: true),
-              ErpColumn(title: 'Outstanding Due', isNumeric: true),
-              ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
-            ],
-            rows: sortedSales.map((s) {
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                  child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                ),
-                Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
-                Text(
-                  Formatters.formatCurrency(s.pendingAmount),
-                  style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
-                ),
-                ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.share, color: Colors.teal, size: 16),
-                      tooltip: 'Share Document',
-                      onPressed: () => ShareDocumentDialog.show(context, s),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
-                      tooltip: 'View PDF',
-                      onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
-                    ),
-                  ],
-                ),
-              ];
-            }).toList(),
-          ),
+            }
 
-        // Direct Purchases Linked to Project
-        if (projectPurchases.isNotEmpty) ...[
-          const SizedBox(height: 28),
-          Text('Direct Purchases Linked to Project', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-          const SizedBox(height: 12),
-          if (isMobile)
-            Column(
-              children: projectPurchases.map((p) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
+            if (isMobile) {
+              return Column(
+                children: filteredSales.map((s) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            InkWell(
+                              onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
+                              child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                            ),
+                            ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
+                            Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.caption.copyWith(color: AppColors.textMuted)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Total: ${Formatters.formatCurrency(s.totalAmount)}', style: AppTextStyles.bodyBold),
+                            Text(
+                              'Due: ${Formatters.formatCurrency(s.pendingAmount)}',
+                              style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.share, color: Colors.teal, size: 18),
+                              tooltip: 'Share Document',
+                              onPressed: () => ShareDocumentDialog.show(context, s),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 18),
+                              tooltip: 'View PDF',
+                              onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            }
+
+            return ErpDataTable(
+              columns: const [
+                ErpColumn(title: 'Invoice Number'),
+                ErpColumn(title: 'Date'),
+                ErpColumn(title: 'Document Type'),
+                ErpColumn(title: 'Total Invoiced', isNumeric: true),
+                ErpColumn(title: 'Outstanding Due', isNumeric: true),
+                ErpColumn(title: 'Status'),
+                ErpColumn(title: 'Actions'),
+              ],
+              rows: filteredSales.map((s) {
+                return [
+                  InkWell(
+                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
+                    child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
+                  Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
+                  Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
+                  Text(
+                    Formatters.formatCurrency(s.pendingAmount),
+                    style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
+                  ),
+                  ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          InkWell(
-                            onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
-                            child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                          ),
-                          ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
-                        ],
+                      IconButton(
+                        icon: const Icon(Icons.share, color: Colors.teal, size: 16),
+                        tooltip: 'Share Document',
+                        onPressed: () => ShareDocumentDialog.show(context, s),
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(child: Text(p.vendorName, style: AppTextStyles.bodyMedium, overflow: TextOverflow.ellipsis)),
-                          const SizedBox(width: 8),
-                          Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Total: ${Formatters.formatCurrency(p.totalAmount)}', style: AppTextStyles.bodyBold),
-                          Text(
-                            'Pending: ${Formatters.formatCurrency(p.pendingAmount)}',
-                            style: AppTextStyles.bodySmall.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText),
-                          ),
-                        ],
+                      IconButton(
+                        icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
+                        tooltip: 'View PDF',
+                        onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
                       ),
                     ],
                   ),
-                );
-              }).toList(),
-            )
-          else
-            ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'PO Number'),
-                ErpColumn(title: 'Date'),
-                ErpColumn(title: 'Vendor'),
-                ErpColumn(title: 'Total (₹)', isNumeric: true),
-                ErpColumn(title: 'Paid (₹)', isNumeric: true),
-                ErpColumn(title: 'Pending (₹)', isNumeric: true),
-                ErpColumn(title: 'Status'),
-              ],
-              rows: projectPurchases.map((p) {
-                return [
-                  InkWell(
-                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
-                    child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                  ),
-                  Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
-                  Text(p.vendorName, style: AppTextStyles.bodyMedium),
-                  Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
-                  Text(Formatters.formatCurrency(p.paidAmount), style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
-                  Text(Formatters.formatCurrency(p.pendingAmount), style: AppTextStyles.bodySmall.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted)),
-                  ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
                 ];
               }).toList(),
-            ),
+            );
+          },
+        ),
+
+        // Direct Purchases Linked to Project
+        if (projectPurchases.isNotEmpty || _projectPurchasesStartDate != null || _projectPurchasesEndDate != null) ...[
+          const SizedBox(height: 28),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('Direct Purchases Linked to Project', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+              ErpDateFilterBox(
+                startDate: _projectPurchasesStartDate,
+                endDate: _projectPurchasesEndDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _projectPurchasesStartDate = start;
+                  _projectPurchasesEndDate = end;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Builder(
+            builder: (context) {
+              final filteredPurchases = projectPurchases.where((p) {
+                if (_projectPurchasesStartDate != null &&
+                    p.purchaseDate.isBefore(DateTime(_projectPurchasesStartDate!.year, _projectPurchasesStartDate!.month, _projectPurchasesStartDate!.day))) {
+                  return false;
+                }
+                if (_projectPurchasesEndDate != null &&
+                    p.purchaseDate.isAfter(DateTime(_projectPurchasesEndDate!.year, _projectPurchasesEndDate!.month, _projectPurchasesEndDate!.day, 23, 59, 59))) {
+                  return false;
+                }
+                return true;
+              }).toList();
+
+              if (filteredPurchases.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(24),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.mdBorderRadius,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Text(
+                    projectPurchases.isEmpty
+                        ? 'No direct purchases linked to this project yet.'
+                        : 'No direct purchases found for the selected date range.',
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+                  ),
+                );
+              }
+
+              if (isMobile) {
+                return Column(
+                  children: filteredPurchases.map((p) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              InkWell(
+                                onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
+                                child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                              ),
+                              ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(child: Text(p.vendorName, style: AppTextStyles.bodyMedium, overflow: TextOverflow.ellipsis)),
+                              const SizedBox(width: 8),
+                              Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Total: ${Formatters.formatCurrency(p.totalAmount)}', style: AppTextStyles.bodyBold),
+                              Text(
+                                'Pending: ${Formatters.formatCurrency(p.pendingAmount)}',
+                                style: AppTextStyles.bodySmall.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                );
+              }
+
+              return ErpDataTable(
+                columns: const [
+                  ErpColumn(title: 'PO Number'),
+                  ErpColumn(title: 'Date'),
+                  ErpColumn(title: 'Vendor'),
+                  ErpColumn(title: 'Total (₹)', isNumeric: true),
+                  ErpColumn(title: 'Paid (₹)', isNumeric: true),
+                  ErpColumn(title: 'Pending (₹)', isNumeric: true),
+                  ErpColumn(title: 'Status'),
+                ],
+                rows: filteredPurchases.map((p) {
+                  return [
+                    InkWell(
+                      onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
+                      child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                    ),
+                    Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
+                    Text(p.vendorName, style: AppTextStyles.bodyMedium),
+                    Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
+                    Text(Formatters.formatCurrency(p.paidAmount), style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
+                    Text(Formatters.formatCurrency(p.pendingAmount), style: AppTextStyles.bodySmall.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted)),
+                    ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
+                  ];
+                }).toList(),
+              );
+            },
+          ),
         ],
 
         // Production Orders Linked to Project
@@ -4013,82 +4274,133 @@ class RecordDetailsView extends ConsumerWidget {
         ],
 
         // Payments & Collections Linked to Project
-        if (projectPayments.isNotEmpty) ...[
+        if (projectPayments.isNotEmpty || _projectPaymentsStartDate != null || _projectPaymentsEndDate != null) ...[
           const SizedBox(height: 28),
-          Text('Payment Transactions & Receipts', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('Payment Transactions & Receipts', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+              ErpDateFilterBox(
+                startDate: _projectPaymentsStartDate,
+                endDate: _projectPaymentsEndDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _projectPaymentsStartDate = start;
+                  _projectPaymentsEndDate = end;
+                }),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
-          if (isMobile)
-            Column(
-              children: projectPayments.map((pay) {
+          Builder(
+            builder: (context) {
+              final filteredPayments = projectPayments.where((pay) {
+                if (_projectPaymentsStartDate != null &&
+                    pay.paymentDate.isBefore(DateTime(_projectPaymentsStartDate!.year, _projectPaymentsStartDate!.month, _projectPaymentsStartDate!.day))) {
+                  return false;
+                }
+                if (_projectPaymentsEndDate != null &&
+                    pay.paymentDate.isAfter(DateTime(_projectPaymentsEndDate!.year, _projectPaymentsEndDate!.month, _projectPaymentsEndDate!.day, 23, 59, 59))) {
+                  return false;
+                }
+                return true;
+              }).toList();
+
+              if (filteredPayments.isEmpty) {
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(24),
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: AppRadius.mdBorderRadius,
                     border: Border.all(color: AppColors.border),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(pay.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                          Text(Formatters.formatCurrency(pay.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(pay.partyName, style: AppTextStyles.bodyMedium, overflow: TextOverflow.ellipsis),
-                          ),
-                          const SizedBox(width: 8),
-                          pay.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL'),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(Formatters.formatDate(pay.paymentDate), style: AppTextStyles.bodySmall),
-                          ErpStatusBadge.neutral(pay.paymentMode.name.toUpperCase()),
-                        ],
-                      ),
-                      if (pay.referenceDocumentNumber != null && pay.referenceDocumentNumber!.isNotEmpty && pay.referenceDocumentNumber != '-') ...[
-                        const SizedBox(height: 4),
-                        Text('Doc: ${pay.referenceDocumentNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                      ],
-                    ],
+                  child: Text(
+                    projectPayments.isEmpty
+                        ? 'No payment transactions linked to this project yet.'
+                        : 'No payment transactions found for the selected date range.',
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
                   ),
                 );
-              }).toList(),
-            )
-          else
-            ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'Payment No'),
-                ErpColumn(title: 'Date'),
-                ErpColumn(title: 'Party'),
-                ErpColumn(title: 'Reference Doc'),
-                ErpColumn(title: 'Amount (₹)', isNumeric: true),
-                ErpColumn(title: 'Settlement'),
-                ErpColumn(title: 'Mode'),
-              ],
-              rows: projectPayments.map((pay) {
-                return [
-                  Text(pay.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                  Text(Formatters.formatDate(pay.paymentDate), style: AppTextStyles.bodySmall),
-                  Text(pay.partyName, style: AppTextStyles.bodyMedium),
-                  Text(pay.referenceDocumentNumber ?? '-', style: AppTextStyles.bodySmall),
-                  Text(Formatters.formatCurrency(pay.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                  pay.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL'),
-                  Text(pay.paymentMode.name.toUpperCase(), style: AppTextStyles.bodySmall),
-                ];
-              }).toList(),
-            ),
+              }
+
+              if (isMobile) {
+                return Column(
+                  children: filteredPayments.map((pay) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(pay.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                              Text(Formatters.formatCurrency(pay.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(pay.partyName, style: AppTextStyles.bodyMedium, overflow: TextOverflow.ellipsis),
+                              ),
+                              const SizedBox(width: 8),
+                              pay.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL'),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(Formatters.formatDate(pay.paymentDate), style: AppTextStyles.bodySmall),
+                              ErpStatusBadge.neutral(pay.paymentMode.name.toUpperCase()),
+                            ],
+                          ),
+                          if (pay.referenceDocumentNumber != null && pay.referenceDocumentNumber!.isNotEmpty && pay.referenceDocumentNumber != '-') ...[
+                            const SizedBox(height: 4),
+                            Text('Doc: ${pay.referenceDocumentNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                          ],
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                );
+              }
+
+              return ErpDataTable(
+                columns: const [
+                  ErpColumn(title: 'Payment No'),
+                  ErpColumn(title: 'Date'),
+                  ErpColumn(title: 'Party'),
+                  ErpColumn(title: 'Reference Doc'),
+                  ErpColumn(title: 'Amount (₹)', isNumeric: true),
+                  ErpColumn(title: 'Settlement'),
+                  ErpColumn(title: 'Mode'),
+                ],
+                rows: filteredPayments.map((pay) {
+                  return [
+                    Text(pay.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                    Text(Formatters.formatDate(pay.paymentDate), style: AppTextStyles.bodySmall),
+                    Text(pay.partyName, style: AppTextStyles.bodyMedium),
+                    Text(pay.referenceDocumentNumber ?? '-', style: AppTextStyles.bodySmall),
+                    Text(Formatters.formatCurrency(pay.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                    pay.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL'),
+                    Text(pay.paymentMode.name.toUpperCase(), style: AppTextStyles.bodySmall),
+                  ];
+                }).toList(),
+              );
+            },
+          ),
         ],
 
         // Raw Material Consumption Breakdown

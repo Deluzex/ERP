@@ -13,6 +13,7 @@ import { RequestContext } from '../../../core/auth/request-context';
 import { RequirePermission } from '../../../core/auth/require-permission.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
+  BulkImportFinishedProductsDto,
   CreateFinishedProductDto,
   UpdateFinishedProductDto,
 } from '../dto/finished-product.dto';
@@ -25,6 +26,19 @@ export class FinishedProductsController {
   constructor(
     private readonly finishedProductsService: FinishedProductsService,
   ) {}
+
+  @Post('bulk')
+  @RequirePermission('masters.create')
+  importBulk(
+    @Body() dto: BulkImportFinishedProductsDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.finishedProductsService.importBulk(
+      dto,
+      ctx.userId,
+      ctx.correlationId,
+    );
+  }
 
   @Get()
   @RequirePermission('masters.view')

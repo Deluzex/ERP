@@ -13,6 +13,7 @@ import { RequestContext } from '../../../core/auth/request-context';
 import { RequirePermission } from '../../../core/auth/require-permission.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
+  BulkImportRawMaterialsDto,
   CreateRawMaterialDto,
   UpdateRawMaterialDto,
 } from '../dto/raw-material.dto';
@@ -23,6 +24,19 @@ import { RawMaterialsService } from '../services/raw-materials.service';
 @Controller('masters/raw-materials')
 export class RawMaterialsController {
   constructor(private readonly rawMaterialsService: RawMaterialsService) {}
+
+  @Post('bulk')
+  @RequirePermission('masters.create')
+  importBulk(
+    @Body() dto: BulkImportRawMaterialsDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.rawMaterialsService.importBulk(
+      dto,
+      ctx.userId,
+      ctx.correlationId,
+    );
+  }
 
   @Get()
   @RequirePermission('masters.view')

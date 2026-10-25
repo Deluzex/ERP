@@ -12,15 +12,24 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
 
-class SalesDashboardScreen extends ConsumerWidget {
+class SalesDashboardScreen extends ConsumerStatefulWidget {
   const SalesDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SalesDashboardScreen> createState() => _SalesDashboardScreenState();
+}
+
+class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
+  DateTime? _invoiceStartDate;
+  DateTime? _invoiceEndDate;
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final isDesktop = MediaQuery.of(context).size.width >= 1100;
 
@@ -525,7 +534,12 @@ class SalesDashboardScreen extends ConsumerWidget {
   }
 
   Widget _buildRecentInvoicesCard(BuildContext context, WidgetRef ref, MockDatabaseService db) {
-    final recentInvoices = db.salesInvoices.take(5).toList();
+    final filteredInvoices = db.salesInvoices.where((inv) {
+      if (_invoiceStartDate != null && inv.saleDate.isBefore(DateTime(_invoiceStartDate!.year, _invoiceStartDate!.month, _invoiceStartDate!.day))) return false;
+      if (_invoiceEndDate != null && inv.saleDate.isAfter(DateTime(_invoiceEndDate!.year, _invoiceEndDate!.month, _invoiceEndDate!.day, 23, 59, 59))) return false;
+      return true;
+    }).toList();
+    final recentInvoices = filteredInvoices.take(5).toList();
 
     return Container(
       padding: AppSpacing.cardPadding,
@@ -537,21 +551,36 @@ class SalesDashboardScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Expanded(
-                child: Text(
-                  'Recent Sales Invoices',
-                  style: AppTextStyles.h3,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              Text(
+                'Recent Sales Invoices',
+                style: AppTextStyles.h3,
               ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
-                child: const Text('View All'),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ErpDateFilterBox(
+                    startDate: _invoiceStartDate,
+                    endDate: _invoiceEndDate,
+                    onDateRangeSelected: (start, end) {
+                      setState(() {
+                        _invoiceStartDate = start;
+                        _invoiceEndDate = end;
+                      });
+                    },
+                  ),
+                  TextButton(
+                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
+                    child: const Text('View All'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -559,7 +588,7 @@ class SalesDashboardScreen extends ConsumerWidget {
           if (recentInvoices.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('No sales invoices found.')),
+              child: Center(child: Text('No sales invoices found for selected range.')),
             )
           else
             ErpDataTable(

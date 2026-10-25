@@ -42,6 +42,7 @@ import '../features/expenses/screens/expenses_screen.dart';
 import '../features/chat/screens/chat_support_screen.dart';
 import '../features/settings/screens/settings_screen.dart';
 import '../shared/providers/app_state_providers.dart';
+import '../shared/providers/subscription_provider.dart';
 import '../shared/widgets/access_required_dialog.dart';
 // import '../shared/widgets/global_whatsapp_floating_button.dart';
 import 'routes/app_routes.dart';
@@ -58,9 +59,14 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final Map<ErpNavSection, Widget> _cachedScreens = {};
-  String? _lastUserId;
-  String? _lastRoleId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(subscriptionProvider.notifier).fetchStatus();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,13 +85,6 @@ class _AppShellState extends ConsumerState<AppShell> {
       } catch (_) {}
     });
 
-    // Invalidate cached screens if user switched account or primary role
-    if (_lastUserId != currentUser.id || _lastRoleId != currentUser.primaryRoleId) {
-      _cachedScreens.clear();
-      _lastUserId = currentUser.id;
-      _lastRoleId = currentUser.primaryRoleId;
-    }
-
     Widget contentWidget;
 
     // Check if there is an active detail view in the drilldown stack
@@ -95,25 +94,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       // 403 Forbidden Access Guard Barrier
       contentWidget = _buildAccessDeniedBarrier(context, currentUser, currentSection, db);
     } else {
-      // Lazy load screen into cache if not present
-      if (!_cachedScreens.containsKey(currentSection)) {
-        _cachedScreens[currentSection] = _buildSectionWidget(currentSection, currentUser);
-      }
-
-      contentWidget = Stack(
-        fit: StackFit.expand,
-        children: [
-          for (final entry in _cachedScreens.entries)
-            Offstage(
-              key: ValueKey(entry.key),
-              offstage: entry.key != currentSection,
-              child: TickerMode(
-                enabled: entry.key == currentSection,
-                child: entry.value,
-              ),
-            ),
-        ],
-      );
+      contentWidget = _buildSectionWidget(currentSection, currentUser);
     }
 
     return Scaffold(

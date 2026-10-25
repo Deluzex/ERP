@@ -84,4 +84,23 @@ class FinishedProductsApiService {
       throw _client.handleDioError(e);
     }
   }
+
+  Future<Map<String, dynamic>> bulkImportFinishedProducts(
+    List<Map<String, dynamic>> items, {
+    String duplicatePolicy = 'SKIP',
+  }) async {
+    try {
+      final response = await _client.dio.post(
+        '/masters/finished-products/bulk',
+        data: {
+          'items': items,
+          'duplicatePolicy': duplicatePolicy,
+        },
+      );
+      final data = _client.unwrap<Map<String, dynamic>>(response);
+      return data;
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
 }

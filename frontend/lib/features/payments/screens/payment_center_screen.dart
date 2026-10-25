@@ -19,6 +19,8 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
@@ -35,25 +37,25 @@ class PaymentCenterScreen extends ConsumerStatefulWidget {
 class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
-  TextEditingController? _customerSearchCtrl;
-  TextEditingController get _safeCustomerSearchCtrl => _customerSearchCtrl ??= TextEditingController();
+  DateTime? _payoutStartDate;
+  DateTime? _payoutEndDate;
+
   String _customerSearchQuery = '';
+  String _customerBalanceFilter = 'ALL';
   int _customerPageSize = 10;
   int _customerCurrentPage = 0;
   int get _safeCustomerPageSize => _safeInt(_customerPageSize, 10);
   int get _safeCustomerCurrentPage => _safeInt(_customerCurrentPage, 0);
 
-  TextEditingController? _dealerSearchCtrl;
-  TextEditingController get _safeDealerSearchCtrl => _dealerSearchCtrl ??= TextEditingController();
   String _dealerSearchQuery = '';
+  String _dealerBalanceFilter = 'ALL';
   int _dealerPageSize = 10;
   int _dealerCurrentPage = 0;
   int get _safeDealerPageSize => _safeInt(_dealerPageSize, 10);
   int get _safeDealerCurrentPage => _safeInt(_dealerCurrentPage, 0);
 
-  TextEditingController? _vendorSearchCtrl;
-  TextEditingController get _safeVendorSearchCtrl => _vendorSearchCtrl ??= TextEditingController();
   String _vendorSearchQuery = '';
+  String _vendorBalanceFilter = 'ALL';
   int _vendorPageSize = 10;
   int _vendorCurrentPage = 0;
   int get _safeVendorPageSize => _safeInt(_vendorPageSize, 10);
@@ -62,9 +64,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   @override
   void initState() {
     super.initState();
-    _customerSearchCtrl ??= TextEditingController();
-    _dealerSearchCtrl ??= TextEditingController();
-    _vendorSearchCtrl ??= TextEditingController();
     _tabController = TabController(length: 4, vsync: this);
     if (widget.initialTab != null) {
       _tabController.index = widget.initialTab!.index;
@@ -121,9 +120,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   void dispose() {
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
-    _customerSearchCtrl?.dispose();
-    _dealerSearchCtrl?.dispose();
-    _vendorSearchCtrl?.dispose();
     super.dispose();
   }
 
@@ -209,14 +205,51 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           const SizedBox(height: 16),
 
           if (_tabController.index > 2) ...[
-            TextField(
-              onChanged: (val) => setState(() => _searchQuery = val),
-              decoration: const InputDecoration(
-                hintText: 'Search payments by payment no, party name, ref doc, UTR, or notes...',
-                prefixIcon: Icon(Icons.search, size: 18),
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 650;
+                final searchInput = SizedBox(
+                  width: isMobile ? double.infinity : 320,
+                  child: ErpSearchInput(
+                    hintText: 'Search payments by no, party, ref, UTR...',
+                    value: _searchQuery,
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                  ),
+                );
+                final dateFilter = ErpDateFilterBox(
+                  startDate: _payoutStartDate,
+                  endDate: _payoutEndDate,
+                  onDateRangeSelected: (start, end) {
+                    setState(() {
+                      _payoutStartDate = start;
+                      _payoutEndDate = end;
+                    });
+                  },
+                );
+
+                if (isMobile) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      searchInput,
+                      const SizedBox(height: 10),
+                      dateFilter,
+                    ],
+                  );
+                }
+
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    searchInput,
+                    dateFilter,
+                  ],
+                );
+              },
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
           ],
 
           switch (_tabController.index) {
@@ -249,15 +282,19 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildCustomerCollectionsTab(MockDatabaseService db) {
     final allSummaries = _computeCustomerSummaries(db);
     final query = _safeLower(_customerSearchQuery);
-    final filtered = query.isEmpty
-        ? allSummaries
-        : allSummaries.where((s) {
-            final c = s.customer;
-            return _safeLower(c.name).contains(query) ||
-                _safeLower(c.mobile).contains(query) ||
-                _safeLower(c.gstNumber).contains(query) ||
-                _safeLower(c.address).contains(query);
-          }).toList();
+    final filtered = allSummaries.where((s) {
+      if (query.isNotEmpty) {
+        final c = s.customer;
+        final matches = _safeLower(c.name).contains(query) ||
+            _safeLower(c.mobile).contains(query) ||
+            _safeLower(c.gstNumber).contains(query) ||
+            _safeLower(c.address).contains(query);
+        if (!matches) return false;
+      }
+      if (_customerBalanceFilter == 'WITH_BALANCE' && s.pendingAmount <= 0) return false;
+      if (_customerBalanceFilter == 'ZERO_BALANCE' && s.pendingAmount > 0) return false;
+      return true;
+    }).toList();
 
     final totalCount = filtered.length;
     final pageSize = _safeCustomerPageSize;
@@ -277,6 +314,19 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         _buildCustomerControlsRow(totalCount, pageSummaries.length),
         const SizedBox(height: 16),
         _buildCustomerAccountsTable(pageSummaries),
+        if (totalCount > 0) ...[
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: currentPage,
+            pageSize: pageSize,
+            totalRecords: totalCount,
+            onPageChanged: (newPage) => setState(() => _customerCurrentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _customerPageSize = newSize;
+              _customerCurrentPage = 0;
+            }),
+          ),
+        ],
       ],
     );
   }
@@ -284,135 +334,55 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildCustomerControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 820;
-        final ctrl = _safeCustomerSearchCtrl;
-        final pageSize = _safeCustomerPageSize;
-        final currentPage = _safeCustomerCurrentPage;
-
-        final searchBox = SizedBox(
-          width: isNarrow ? double.infinity : 320,
-          height: 42,
-          child: TextField(
-            controller: ctrl,
+        final isMobile = constraints.maxWidth < 650;
+        final searchInput = SizedBox(
+          width: isMobile ? double.infinity : 320,
+          child: ErpSearchInput(
+            hintText: 'Search customer name, mobile, GST...',
+            value: _customerSearchQuery,
             onChanged: (val) {
               setState(() {
                 _customerSearchQuery = val;
                 _customerCurrentPage = 0;
               });
             },
-            decoration: InputDecoration(
-              hintText: 'Search customers...',
-              hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
-              prefixIcon: Icon(Icons.search, size: 18, color: Colors.grey.shade500),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.primary),
-              ),
-            ),
           ),
         );
-
-        final paginationControls = Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                const SizedBox(width: 8),
-                Container(
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
-                      style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
-                      items: const [
-                        DropdownMenuItem(value: 5, child: Text('5')),
-                        DropdownMenuItem(value: 10, child: Text('10')),
-                        DropdownMenuItem(value: 25, child: Text('25')),
-                        DropdownMenuItem(value: 50, child: Text('50')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _customerPageSize = val;
-                            _customerCurrentPage = 0;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Text(
-              'Showing $shownCount of $totalCount customers',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-            ),
-            if (totalCount > pageSize)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    onPressed: currentPage > 0
-                        ? () => setState(() => _customerCurrentPage = currentPage - 1)
-                        : null,
-                  ),
-                  Text(
-                    '${currentPage + 1}/${max(1, (totalCount / pageSize).ceil())}',
-                    style: AppTextStyles.bodySmall,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    onPressed: (currentPage + 1) * pageSize < totalCount
-                        ? () => setState(() => _customerCurrentPage = currentPage + 1)
-                        : null,
-                  ),
-                ],
-              ),
+        final balanceDropdown = ErpFilterDropdown<String>(
+          value: _customerBalanceFilter,
+          items: const [
+            DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+            DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Pending Balance')),
+            DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
           ],
+          onChanged: (val) {
+            if (val != null) {
+              setState(() {
+                _customerBalanceFilter = val;
+                _customerCurrentPage = 0;
+              });
+            }
+          },
         );
 
-        if (isNarrow) {
+        if (isMobile) {
           return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              searchBox,
+              searchInput,
               const SizedBox(height: 10),
-              paginationControls,
+              balanceDropdown,
             ],
           );
         }
 
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            searchBox,
-            paginationControls,
+            searchInput,
+            balanceDropdown,
           ],
         );
       },
@@ -665,11 +635,22 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   }
 
   void _openCustomerHistoryDialog(CustomerAccountSummary summary) {
+    DateTime? dialogStartDate;
+    DateTime? dialogEndDate;
+
     showDialog(
       context: context,
       builder: (ctx) {
-        final isMobile = MediaQuery.of(ctx).size.width < 750;
-        return Dialog(
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final isMobile = MediaQuery.of(ctx).size.width < 750;
+            final filteredEntries = summary.entries.where((entry) {
+              if (dialogStartDate != null && entry.date.isBefore(DateTime(dialogStartDate!.year, dialogStartDate!.month, dialogStartDate!.day))) return false;
+              if (dialogEndDate != null && entry.date.isAfter(DateTime(dialogEndDate!.year, dialogEndDate!.month, dialogEndDate!.day, 23, 59, 59))) return false;
+              return true;
+            }).toList();
+
+            return Dialog(
           insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: isMobile ? 16 : 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Container(
@@ -749,27 +730,48 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                   ],
                 ),
                 const SizedBox(height: 14),
+                // Transaction History: Apply only a date filter per requirements
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      isMobile ? 'Ledger (${filteredEntries.length})' : 'Transaction History (${filteredEntries.length} records)',
+                      style: AppTextStyles.h3.copyWith(fontSize: 13),
+                    ),
+                    ErpDateFilterBox(
+                      startDate: dialogStartDate,
+                      endDate: dialogEndDate,
+                      onDateRangeSelected: (start, end) {
+                        setDialogState(() {
+                          dialogStartDate = start;
+                          dialogEndDate = end;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
                 const Divider(height: 1),
                 const SizedBox(height: 12),
 
                 // 9-Column Ledger Table (Desktop) or Card List (Mobile)
                 Expanded(
-                  child: summary.entries.isEmpty
+                  child: filteredEntries.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
                               const SizedBox(height: 8),
-                              Text('No transactions recorded yet for this customer.', style: AppTextStyles.bodyMedium),
+                              Text('No transactions recorded for the selected date range.', style: AppTextStyles.bodyMedium),
                             ],
                           ),
                         )
                       : isMobile
                           ? ListView.separated(
-                              itemCount: summary.entries.length,
+                              itemCount: filteredEntries.length,
                               separatorBuilder: (c, i) => const SizedBox(height: 8),
-                              itemBuilder: (context, idx) => _buildMobileLedgerCard(summary.entries[idx]),
+                              itemBuilder: (context, idx) => _buildMobileLedgerCard(filteredEntries[idx]),
                             )
                           : ErpDataTable(
                               enableVerticalScroll: true,
@@ -787,7 +789,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                 ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
                                 ErpColumn(title: 'Remarks', width: 160),
                               ],
-                              rows: summary.entries.map((entry) {
+                              rows: filteredEntries.map((entry) {
                                 return [
                                   Text(entry.docNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
                                   Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
@@ -860,21 +862,27 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         );
       },
     );
+  },
+);
   }
 
   Widget _buildDealerReceiptsTab(MockDatabaseService db) {
     final allSummaries = _computeDealerSummaries(db);
     final query = _safeLower(_dealerSearchQuery);
-    final filtered = query.isEmpty
-        ? allSummaries
-        : allSummaries.where((s) {
-            final d = s.dealer;
-            return _safeLower(d.name).contains(query) ||
-                _safeLower(d.companyName).contains(query) ||
-                _safeLower(d.mobile).contains(query) ||
-                _safeLower(d.gstNumber).contains(query) ||
-                _safeLower(d.address).contains(query);
-          }).toList();
+    final filtered = allSummaries.where((s) {
+      if (query.isNotEmpty) {
+        final d = s.dealer;
+        final matches = _safeLower(d.name).contains(query) ||
+            _safeLower(d.companyName).contains(query) ||
+            _safeLower(d.mobile).contains(query) ||
+            _safeLower(d.gstNumber).contains(query) ||
+            _safeLower(d.address).contains(query);
+        if (!matches) return false;
+      }
+      if (_dealerBalanceFilter == 'WITH_BALANCE' && s.pendingAmount <= 0) return false;
+      if (_dealerBalanceFilter == 'ZERO_BALANCE' && s.pendingAmount > 0) return false;
+      return true;
+    }).toList();
 
     final totalCount = filtered.length;
     final pageSize = _safeDealerPageSize;
@@ -887,13 +895,26 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Manage dealer accounts and track balances (Sheet 2)',
+          'Manage dealer accounts and track balances',
           style: AppTextStyles.subtitle.copyWith(fontSize: 13, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 14),
         _buildDealerControlsRow(totalCount, pageSummaries.length),
         const SizedBox(height: 16),
         _buildDealerAccountsTable(pageSummaries),
+        if (totalCount > 0) ...[
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: currentPage,
+            pageSize: pageSize,
+            totalRecords: totalCount,
+            onPageChanged: (newPage) => setState(() => _dealerCurrentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _dealerPageSize = newSize;
+              _dealerCurrentPage = 0;
+            }),
+          ),
+        ],
       ],
     );
   }
@@ -901,135 +922,55 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildDealerControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 820;
-        final ctrl = _safeDealerSearchCtrl;
-        final pageSize = _safeDealerPageSize;
-        final currentPage = _safeDealerCurrentPage;
-
-        final searchBox = SizedBox(
-          width: isNarrow ? double.infinity : 320,
-          height: 42,
-          child: TextField(
-            controller: ctrl,
+        final isMobile = constraints.maxWidth < 650;
+        final searchInput = SizedBox(
+          width: isMobile ? double.infinity : 320,
+          child: ErpSearchInput(
+            hintText: 'Search dealer name, company, mobile...',
+            value: _dealerSearchQuery,
             onChanged: (val) {
               setState(() {
                 _dealerSearchQuery = val;
                 _dealerCurrentPage = 0;
               });
             },
-            decoration: InputDecoration(
-              hintText: 'Search dealers...',
-              hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
-              prefixIcon: Icon(Icons.search, size: 18, color: Colors.grey.shade500),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.primary),
-              ),
-            ),
           ),
         );
-
-        final paginationControls = Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                const SizedBox(width: 8),
-                Container(
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
-                      style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
-                      items: const [
-                        DropdownMenuItem(value: 5, child: Text('5')),
-                        DropdownMenuItem(value: 10, child: Text('10')),
-                        DropdownMenuItem(value: 25, child: Text('25')),
-                        DropdownMenuItem(value: 50, child: Text('50')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _dealerPageSize = val;
-                            _dealerCurrentPage = 0;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Text(
-              'Showing $shownCount of $totalCount dealers',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-            ),
-            if (totalCount > pageSize)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    onPressed: currentPage > 0
-                        ? () => setState(() => _dealerCurrentPage = currentPage - 1)
-                        : null,
-                  ),
-                  Text(
-                    '${currentPage + 1}/${max(1, (totalCount / pageSize).ceil())}',
-                    style: AppTextStyles.bodySmall,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    onPressed: (currentPage + 1) * pageSize < totalCount
-                        ? () => setState(() => _dealerCurrentPage = currentPage + 1)
-                        : null,
-                  ),
-                ],
-              ),
+        final balanceDropdown = ErpFilterDropdown<String>(
+          value: _dealerBalanceFilter,
+          items: const [
+            DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+            DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Pending Balance')),
+            DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
           ],
+          onChanged: (val) {
+            if (val != null) {
+              setState(() {
+                _dealerBalanceFilter = val;
+                _dealerCurrentPage = 0;
+              });
+            }
+          },
         );
 
-        if (isNarrow) {
+        if (isMobile) {
           return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              searchBox,
+              searchInput,
               const SizedBox(height: 10),
-              paginationControls,
+              balanceDropdown,
             ],
           );
         }
 
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            searchBox,
-            paginationControls,
+            searchInput,
+            balanceDropdown,
           ],
         );
       },
@@ -1284,198 +1225,238 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   }
 
   void _openDealerHistoryDialog(DealerAccountSummary summary) {
+    DateTime? dialogStartDate;
+    DateTime? dialogEndDate;
+
     showDialog(
       context: context,
       builder: (ctx) {
         final isMobile = MediaQuery.of(ctx).size.width < 750;
-        return Dialog(
-          insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: isMobile ? 16 : 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Container(
-            constraints: BoxConstraints(maxWidth: 1140, maxHeight: isMobile ? MediaQuery.of(ctx).size.height * 0.88 : 680),
-            padding: EdgeInsets.all(isMobile ? 14 : 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFDCFCE7),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.storefront_outlined, color: Color(0xFF16A34A), size: 20),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  summary.dealer.name.isNotEmpty ? summary.dealer.name : 'Unnamed Dealer',
-                                  style: AppTextStyles.h2.copyWith(fontSize: isMobile ? 15 : 18),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  isMobile
-                                      ? 'Dealer Ledger (${summary.entries.length} txns)'
-                                      : 'Dealer Ledger & Transaction Statement (${summary.entries.length} Transactions)',
-                                  style: AppTextStyles.subtitle.copyWith(fontSize: 11),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      constraints: const BoxConstraints(),
-                      padding: EdgeInsets.zero,
-                      onPressed: () {
-                        FocusScope.of(ctx).unfocus();
-                        Navigator.of(ctx).pop();
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            final filteredEntries = summary.entries.where((entry) {
+              if (dialogStartDate != null &&
+                  entry.date.isBefore(DateTime(dialogStartDate!.year, dialogStartDate!.month, dialogStartDate!.day))) {
+                return false;
+              }
+              if (dialogEndDate != null &&
+                  entry.date.isAfter(DateTime(dialogEndDate!.year, dialogEndDate!.month, dialogEndDate!.day, 23, 59, 59))) {
+                return false;
+              }
+              return true;
+            }).toList();
 
-                // Summary Cards
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+            return Dialog(
+              insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: isMobile ? 16 : 24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Container(
+                constraints: BoxConstraints(maxWidth: 1140, maxHeight: isMobile ? MediaQuery.of(ctx).size.height * 0.88 : 680),
+                padding: EdgeInsets.all(isMobile ? 14 : 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
-                    _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
-                    _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
-                    _buildHistoryStatCard(
-                      'Net Pending',
-                      Formatters.formatCurrency(summary.pendingAmount),
-                      summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                const Divider(height: 1),
-                const SizedBox(height: 12),
-
-                // 9-Column Ledger Table (Desktop) or Card List (Mobile)
-                Expanded(
-                  child: summary.entries.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
+                    // Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
                             children: [
-                              Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
-                              const SizedBox(height: 8),
-                              Text('No transactions recorded yet for this dealer.', style: AppTextStyles.bodyMedium),
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDCFCE7),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.storefront_outlined, color: Color(0xFF16A34A), size: 20),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      summary.dealer.name.isNotEmpty ? summary.dealer.name : 'Unnamed Dealer',
+                                      style: AppTextStyles.h2.copyWith(fontSize: isMobile ? 15 : 18),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      isMobile
+                                          ? 'Dealer Ledger (${summary.entries.length} txns)'
+                                          : 'Dealer Ledger & Transaction Statement (${summary.entries.length} Transactions)',
+                                      style: AppTextStyles.subtitle.copyWith(fontSize: 11),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                        )
-                      : isMobile
-                          ? ListView.separated(
-                              itemCount: summary.entries.length,
-                              separatorBuilder: (c, i) => const SizedBox(height: 8),
-                              itemBuilder: (context, idx) => _buildMobileLedgerCard(summary.entries[idx]),
-                            )
-                          : ErpDataTable(
-                              enableVerticalScroll: true,
-                              fixedHeader: true,
-                              columnSpacing: 14,
-                              horizontalMargin: 16,
-                              columns: const [
-                                ErpColumn(title: 'Doc / Name', width: 145),
-                                ErpColumn(title: 'Total Pending', isNumeric: true, width: 105),
-                                ErpColumn(title: 'Type', width: 85),
-                                ErpColumn(title: 'Date', width: 95),
-                                ErpColumn(title: 'Mode', width: 120),
-                                ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
-                                ErpColumn(title: 'Discount', isNumeric: true, width: 85),
-                                ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
-                                ErpColumn(title: 'Remarks', width: 160),
-                              ],
-                              rows: summary.entries.map((entry) {
-                                return [
-                                  Text(entry.docNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
-                                  Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
-                                  entry.type == 'Sale Invoice'
-                                      ? ErpStatusBadge.info('SALE')
-                                      : ErpStatusBadge.success('RECEIPT'),
-                                  Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
-                                  ErpStatusBadge.neutral(entry.paymentMode),
-                                  Text(
-                                    Formatters.formatCurrency(entry.amount),
-                                    style: AppTextStyles.bodyBold.copyWith(
-                                      fontSize: 12,
-                                      color: entry.type == 'Sale Invoice' ? Colors.black87 : const Color(0xFF16A34A),
-                                    ),
-                                  ),
-                                  Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
-                                  Text(
-                                    Formatters.formatCurrency(entry.closingPending),
-                                    style: AppTextStyles.bodyBold.copyWith(
-                                      fontSize: 12,
-                                      color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
-                                    ),
-                                  ),
-                                  ConstrainedBox(
-                                    constraints: const BoxConstraints(maxWidth: 160),
-                                    child: Tooltip(
-                                      message: entry.remarks,
-                                      child: Text(
-                                        entry.remarks.isNotEmpty ? entry.remarks : '—',
-                                        style: AppTextStyles.bodySmall,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                ];
-                              }).toList(),
-                            ),
-                ),
-                const SizedBox(height: 14),
-
-                // Action buttons footer
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Close',
-                      isOutlined: true,
-                      onPressed: () {
-                        FocusScope.of(ctx).unfocus();
-                        Navigator.of(ctx).pop();
-                      },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          constraints: const BoxConstraints(),
+                          padding: EdgeInsets.zero,
+                          onPressed: () {
+                            FocusScope.of(ctx).unfocus();
+                            Navigator.of(ctx).pop();
+                          },
+                        ),
+                      ],
                     ),
-                    ErpButton(
-                      text: 'Record Transaction',
-                      icon: Icons.edit_note_rounded,
-                      onPressed: () {
-                        FocusScope.of(ctx).unfocus();
-                        Navigator.of(ctx).pop();
-                        _openRecordPaymentDialog(PaymentType.dealerPayment, preselectedPartyId: summary.dealer.id);
-                      },
+                    const SizedBox(height: 14),
+
+                    // Summary Cards
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
+                        _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
+                        _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                        _buildHistoryStatCard(
+                          'Net Pending',
+                          Formatters.formatCurrency(summary.pendingAmount),
+                          summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    // Transaction History: Apply only a date filter per requirements
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isMobile ? 'Ledger (${filteredEntries.length})' : 'Transaction History (${filteredEntries.length} records)',
+                          style: AppTextStyles.h3.copyWith(fontSize: 13),
+                        ),
+                        ErpDateFilterBox(
+                          startDate: dialogStartDate,
+                          endDate: dialogEndDate,
+                          onDateRangeSelected: (start, end) {
+                            setDialogState(() {
+                              dialogStartDate = start;
+                              dialogEndDate = end;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+
+                    // 9-Column Ledger Table (Desktop) or Card List (Mobile)
+                    Expanded(
+                      child: filteredEntries.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
+                                  const SizedBox(height: 8),
+                                  Text('No transactions recorded for the selected date range.', style: AppTextStyles.bodyMedium),
+                                ],
+                              ),
+                            )
+                          : isMobile
+                              ? ListView.separated(
+                                  itemCount: filteredEntries.length,
+                                  separatorBuilder: (c, i) => const SizedBox(height: 8),
+                                  itemBuilder: (context, idx) => _buildMobileLedgerCard(filteredEntries[idx]),
+                                )
+                              : ErpDataTable(
+                                  enableVerticalScroll: true,
+                                  fixedHeader: true,
+                                  columnSpacing: 14,
+                                  horizontalMargin: 16,
+                                  columns: const [
+                                    ErpColumn(title: 'Doc / Name', width: 145),
+                                    ErpColumn(title: 'Total Pending', isNumeric: true, width: 105),
+                                    ErpColumn(title: 'Type', width: 85),
+                                    ErpColumn(title: 'Date', width: 95),
+                                    ErpColumn(title: 'Mode', width: 120),
+                                    ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                                    ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                                    ErpColumn(title: 'New Pending', isNumeric: true, width: 105),
+                                    ErpColumn(title: 'Remarks', width: 160),
+                                  ],
+                                  rows: filteredEntries.map((entry) {
+                                    return [
+                                      Text(entry.docNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
+                                      Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
+                                      entry.type == 'Sale Invoice'
+                                          ? ErpStatusBadge.info('SALE')
+                                          : ErpStatusBadge.success('RECEIPT'),
+                                      Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
+                                      ErpStatusBadge.neutral(entry.paymentMode),
+                                      Text(
+                                        Formatters.formatCurrency(entry.amount),
+                                        style: AppTextStyles.bodyBold.copyWith(
+                                          fontSize: 12,
+                                          color: entry.type == 'Sale Invoice' ? Colors.black87 : const Color(0xFF16A34A),
+                                        ),
+                                      ),
+                                      Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
+                                      Text(
+                                        Formatters.formatCurrency(entry.closingPending),
+                                        style: AppTextStyles.bodyBold.copyWith(
+                                          fontSize: 12,
+                                          color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                        ),
+                                      ),
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(maxWidth: 160),
+                                        child: Tooltip(
+                                          message: entry.remarks,
+                                          child: Text(
+                                            entry.remarks.isNotEmpty ? entry.remarks : '—',
+                                            style: AppTextStyles.bodySmall,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ];
+                                  }).toList(),
+                                ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Action buttons footer
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        ErpButton(
+                          text: 'Close',
+                          isOutlined: true,
+                          onPressed: () {
+                            FocusScope.of(ctx).unfocus();
+                            Navigator.of(ctx).pop();
+                          },
+                        ),
+                        ErpButton(
+                          text: 'Record Transaction',
+                          icon: Icons.edit_note_rounded,
+                          onPressed: () {
+                            FocusScope.of(ctx).unfocus();
+                            Navigator.of(ctx).pop();
+                            _openRecordPaymentDialog(PaymentType.dealerPayment, preselectedPartyId: summary.dealer.id);
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1604,18 +1585,22 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildVendorDisbursementsTab(MockDatabaseService db) {
     final allSummaries = _computeVendorSummaries(db);
     final query = _safeLower(_vendorSearchQuery);
-    final filtered = query.isEmpty
-        ? allSummaries
-        : allSummaries.where((s) {
-            final v = s.vendor;
-            return _safeLower(v.name).contains(query) ||
-                _safeLower(v.contactPerson).contains(query) ||
-                _safeLower(v.mobile).contains(query) ||
-                _safeLower(v.email).contains(query) ||
-                _safeLower(v.gstNumber).contains(query) ||
-                _safeLower(v.panNumber).contains(query) ||
-                _safeLower(v.address).contains(query);
-          }).toList();
+    final filtered = allSummaries.where((s) {
+      if (query.isNotEmpty) {
+        final v = s.vendor;
+        final matches = _safeLower(v.name).contains(query) ||
+            _safeLower(v.contactPerson).contains(query) ||
+            _safeLower(v.mobile).contains(query) ||
+            _safeLower(v.email).contains(query) ||
+            _safeLower(v.gstNumber).contains(query) ||
+            _safeLower(v.panNumber).contains(query) ||
+            _safeLower(v.address).contains(query);
+        if (!matches) return false;
+      }
+      if (_vendorBalanceFilter == 'WITH_BALANCE' && s.pendingAmount <= 0) return false;
+      if (_vendorBalanceFilter == 'ZERO_BALANCE' && s.pendingAmount > 0) return false;
+      return true;
+    }).toList();
 
     final totalCount = filtered.length;
     final pageSize = _safeVendorPageSize;
@@ -1635,6 +1620,19 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         _buildVendorControlsRow(totalCount, pageSummaries.length),
         const SizedBox(height: 16),
         _buildVendorAccountsTable(pageSummaries),
+        if (totalCount > 0) ...[
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: currentPage,
+            pageSize: pageSize,
+            totalRecords: totalCount,
+            onPageChanged: (newPage) => setState(() => _vendorCurrentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _vendorPageSize = newSize;
+              _vendorCurrentPage = 0;
+            }),
+          ),
+        ],
       ],
     );
   }
@@ -1642,135 +1640,55 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   Widget _buildVendorControlsRow(int totalCount, int shownCount) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 820;
-        final ctrl = _safeVendorSearchCtrl;
-        final pageSize = _safeVendorPageSize;
-        final currentPage = _safeVendorCurrentPage;
-
-        final searchBox = SizedBox(
-          width: isNarrow ? double.infinity : 320,
-          height: 42,
-          child: TextField(
-            controller: ctrl,
+        final isMobile = constraints.maxWidth < 650;
+        final searchInput = SizedBox(
+          width: isMobile ? double.infinity : 320,
+          child: ErpSearchInput(
+            hintText: 'Search vendor name, contact, GST...',
+            value: _vendorSearchQuery,
             onChanged: (val) {
               setState(() {
                 _vendorSearchQuery = val;
                 _vendorCurrentPage = 0;
               });
             },
-            decoration: InputDecoration(
-              hintText: 'Search vendors...',
-              hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
-              prefixIcon: Icon(Icons.search, size: 18, color: Colors.grey.shade500),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.primary),
-              ),
-            ),
           ),
         );
-
-        final paginationControls = Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Show:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                const SizedBox(width: 8),
-                Container(
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      value: (pageSize == 5 || pageSize == 10 || pageSize == 25 || pageSize == 50) ? pageSize : 10,
-                      style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
-                      items: const [
-                        DropdownMenuItem(value: 5, child: Text('5')),
-                        DropdownMenuItem(value: 10, child: Text('10')),
-                        DropdownMenuItem(value: 25, child: Text('25')),
-                        DropdownMenuItem(value: 50, child: Text('50')),
-                      ],
-                      onChanged: (newSize) {
-                        if (newSize != null) {
-                          setState(() {
-                            _vendorPageSize = newSize;
-                            _vendorCurrentPage = 0;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Text(
-              'Showing $shownCount of $totalCount vendors',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-            ),
-            if (totalCount > pageSize)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    onPressed: currentPage > 0
-                        ? () => setState(() => _vendorCurrentPage = currentPage - 1)
-                        : null,
-                  ),
-                  Text(
-                    '${currentPage + 1}/${max(1, (totalCount / pageSize).ceil())}',
-                    style: AppTextStyles.bodySmall,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    onPressed: (currentPage + 1) * pageSize < totalCount
-                        ? () => setState(() => _vendorCurrentPage = currentPage + 1)
-                        : null,
-                  ),
-                ],
-              ),
+        final balanceDropdown = ErpFilterDropdown<String>(
+          value: _vendorBalanceFilter,
+          items: const [
+            DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+            DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Pending Balance')),
+            DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
           ],
+          onChanged: (val) {
+            if (val != null) {
+              setState(() {
+                _vendorBalanceFilter = val;
+                _vendorCurrentPage = 0;
+              });
+            }
+          },
         );
 
-        if (isNarrow) {
+        if (isMobile) {
           return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              searchBox,
+              searchInput,
               const SizedBox(height: 10),
-              paginationControls,
+              balanceDropdown,
             ],
           );
         }
 
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            searchBox,
-            paginationControls,
+            searchInput,
+            balanceDropdown,
           ],
         );
       },
@@ -2025,201 +1943,241 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
   }
 
   void _openVendorHistoryDialog(VendorAccountSummary summary) {
+    DateTime? dialogStartDate;
+    DateTime? dialogEndDate;
+
     showDialog(
       context: context,
       builder: (ctx) {
         final isMobile = MediaQuery.of(ctx).size.width < 750;
-        return Dialog(
-          insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: isMobile ? 16 : 24),
-          child: Container(
-            constraints: BoxConstraints(maxWidth: 1140, maxHeight: isMobile ? MediaQuery.of(ctx).size.height * 0.88 : 700),
-            padding: EdgeInsets.all(isMobile ? 14 : 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEFF6FF),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB), size: 20),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  summary.vendor.name.isNotEmpty ? summary.vendor.name : 'Unnamed Vendor',
-                                  style: AppTextStyles.h2.copyWith(fontSize: isMobile ? 15 : 18),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  isMobile
-                                      ? 'Vendor Ledger (${summary.entries.length} txns)'
-                                      : 'Vendor Ledger & Transaction Statement (${summary.entries.length} Transactions)',
-                                  style: AppTextStyles.subtitle.copyWith(fontSize: 11),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      constraints: const BoxConstraints(),
-                      padding: EdgeInsets.zero,
-                      onPressed: () {
-                        FocusScope.of(ctx).unfocus();
-                        Navigator.of(ctx).pop();
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            final filteredEntries = summary.entries.where((entry) {
+              if (dialogStartDate != null &&
+                  entry.date.isBefore(DateTime(dialogStartDate!.year, dialogStartDate!.month, dialogStartDate!.day))) {
+                return false;
+              }
+              if (dialogEndDate != null &&
+                  entry.date.isAfter(DateTime(dialogEndDate!.year, dialogEndDate!.month, dialogEndDate!.day, 23, 59, 59))) {
+                return false;
+              }
+              return true;
+            }).toList();
 
-                // Summary Cards
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+            return Dialog(
+              insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: isMobile ? 16 : 24),
+              child: Container(
+                constraints: BoxConstraints(maxWidth: 1140, maxHeight: isMobile ? MediaQuery.of(ctx).size.height * 0.88 : 700),
+                padding: EdgeInsets.all(isMobile ? 14 : 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHistoryStatCard('Purchase Total', Formatters.formatCurrency(summary.purchaseTotal), Colors.black87),
-                    _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
-                    _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
-                    _buildHistoryStatCard(
-                      'Net Pending',
-                      Formatters.formatCurrency(summary.pendingAmount),
-                      summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                const Divider(height: 1),
-                const SizedBox(height: 12),
-
-                // 8-Column Ledger Table (Desktop) or Card List (Mobile)
-                Expanded(
-                  child: summary.entries.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
+                    // Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
                             children: [
-                              Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
-                              const SizedBox(height: 10),
-                              Text('No ledger entries recorded yet', style: AppTextStyles.bodyMedium),
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB), size: 20),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      summary.vendor.name.isNotEmpty ? summary.vendor.name : 'Unnamed Vendor',
+                                      style: AppTextStyles.h2.copyWith(fontSize: isMobile ? 15 : 18),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      isMobile
+                                          ? 'Vendor Ledger (${summary.entries.length} txns)'
+                                          : 'Vendor Ledger & Transaction Statement (${summary.entries.length} Transactions)',
+                                      style: AppTextStyles.subtitle.copyWith(fontSize: 11),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                        )
-                      : isMobile
-                          ? ListView.separated(
-                              itemCount: summary.entries.length,
-                              separatorBuilder: (c, i) => const SizedBox(height: 8),
-                              itemBuilder: (context, idx) => _buildMobileLedgerCard(summary.entries[idx], isVendor: true),
-                            )
-                          : ErpDataTable(
-                              enableVerticalScroll: true,
-                              fixedHeader: true,
-                              columnSpacing: 14,
-                              horizontalMargin: 16,
-                              columns: const [
-                                ErpColumn(title: 'Doc / Name', width: 145),
-                                ErpColumn(title: 'Total Pending (Opening)', isNumeric: true, width: 110),
-                                ErpColumn(title: 'Type', width: 85),
-                                ErpColumn(title: 'Date', width: 95),
-                                ErpColumn(title: 'Mode', width: 120),
-                                ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
-                                ErpColumn(title: 'Discount', isNumeric: true, width: 85),
-                                ErpColumn(title: 'New Pending (Closing)', isNumeric: true, width: 110),
-                                ErpColumn(title: 'Remarks', width: 160),
-                              ],
-                              rows: summary.entries.map((entry) {
-                                final isPurchase = entry.type.toLowerCase().contains('purchase') || entry.type.toLowerCase().contains('invoice');
-                                return [
-                                  Text(
-                                    entry.docNumber,
-                                    style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary),
-                                  ),
-                                  Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
-                                  isPurchase
-                                      ? ErpStatusBadge.neutral(entry.type)
-                                      : ErpStatusBadge.success(entry.type),
-                                  Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
-                                  ErpStatusBadge.neutral(entry.paymentMode),
-                                  Text(
-                                    Formatters.formatCurrency(entry.amount),
-                                    style: AppTextStyles.bodyBold.copyWith(
-                                      fontSize: 12,
-                                      color: isPurchase ? Colors.black87 : const Color(0xFF16A34A),
-                                    ),
-                                  ),
-                                  Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
-                                  Text(
-                                    Formatters.formatCurrency(entry.closingPending),
-                                    style: AppTextStyles.bodyBold.copyWith(
-                                      fontSize: 12,
-                                      color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
-                                    ),
-                                  ),
-                                  ConstrainedBox(
-                                    constraints: const BoxConstraints(maxWidth: 160),
-                                    child: Tooltip(
-                                      message: entry.remarks,
-                                      child: Text(
-                                        entry.remarks.isNotEmpty ? entry.remarks : '—',
-                                        style: AppTextStyles.bodySmall,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                ];
-                              }).toList(),
-                            ),
-                ),
-                const SizedBox(height: 14),
-
-                // Action buttons footer
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Close',
-                      isOutlined: true,
-                      onPressed: () {
-                        FocusScope.of(ctx).unfocus();
-                        Navigator.of(ctx).pop();
-                      },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          constraints: const BoxConstraints(),
+                          padding: EdgeInsets.zero,
+                          onPressed: () {
+                            FocusScope.of(ctx).unfocus();
+                            Navigator.of(ctx).pop();
+                          },
+                        ),
+                      ],
                     ),
-                    ErpButton(
-                      text: 'Record Transaction',
-                      icon: Icons.edit_note_rounded,
-                      onPressed: () {
-                        FocusScope.of(ctx).unfocus();
-                        Navigator.of(ctx).pop();
-                        _openRecordPaymentDialog(PaymentType.vendorPayment, preselectedPartyId: summary.vendor.id);
-                      },
+                    const SizedBox(height: 14),
+
+                    // Summary Cards
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildHistoryStatCard('Purchase Total', Formatters.formatCurrency(summary.purchaseTotal), Colors.black87),
+                        _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
+                        _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                        _buildHistoryStatCard(
+                          'Net Pending',
+                          Formatters.formatCurrency(summary.pendingAmount),
+                          summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    // Transaction History: Apply only a date filter per requirements
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isMobile ? 'Ledger (${filteredEntries.length})' : 'Transaction History (${filteredEntries.length} records)',
+                          style: AppTextStyles.h3.copyWith(fontSize: 13),
+                        ),
+                        ErpDateFilterBox(
+                          startDate: dialogStartDate,
+                          endDate: dialogEndDate,
+                          onDateRangeSelected: (start, end) {
+                            setDialogState(() {
+                              dialogStartDate = start;
+                              dialogEndDate = end;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+
+                    // 8-Column Ledger Table (Desktop) or Card List (Mobile)
+                    Expanded(
+                      child: filteredEntries.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
+                                  const SizedBox(height: 10),
+                                  Text('No ledger entries recorded for the selected date range.', style: AppTextStyles.bodyMedium),
+                                ],
+                              ),
+                            )
+                          : isMobile
+                              ? ListView.separated(
+                                  itemCount: filteredEntries.length,
+                                  separatorBuilder: (c, i) => const SizedBox(height: 8),
+                                  itemBuilder: (context, idx) => _buildMobileLedgerCard(filteredEntries[idx], isVendor: true),
+                                )
+                              : ErpDataTable(
+                                  enableVerticalScroll: true,
+                                  fixedHeader: true,
+                                  columnSpacing: 14,
+                                  horizontalMargin: 16,
+                                  columns: const [
+                                    ErpColumn(title: 'Doc / Name', width: 145),
+                                    ErpColumn(title: 'Total Pending (Opening)', isNumeric: true, width: 110),
+                                    ErpColumn(title: 'Type', width: 85),
+                                    ErpColumn(title: 'Date', width: 95),
+                                    ErpColumn(title: 'Mode', width: 120),
+                                    ErpColumn(title: 'Payment Amount', isNumeric: true, width: 125),
+                                    ErpColumn(title: 'Discount', isNumeric: true, width: 85),
+                                    ErpColumn(title: 'New Pending (Closing)', isNumeric: true, width: 110),
+                                    ErpColumn(title: 'Remarks', width: 160),
+                                  ],
+                                  rows: filteredEntries.map((entry) {
+                                    final isPurchase = entry.type.toLowerCase().contains('purchase') || entry.type.toLowerCase().contains('invoice');
+                                    return [
+                                      Text(
+                                        entry.docNumber,
+                                        style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary),
+                                      ),
+                                      Text(Formatters.formatCurrency(entry.openingPending), style: AppTextStyles.bodySmall),
+                                      isPurchase
+                                          ? ErpStatusBadge.neutral(entry.type)
+                                          : ErpStatusBadge.success(entry.type),
+                                      Text(Formatters.formatDate(entry.date), style: AppTextStyles.bodySmall),
+                                      ErpStatusBadge.neutral(entry.paymentMode),
+                                      Text(
+                                        Formatters.formatCurrency(entry.amount),
+                                        style: AppTextStyles.bodyBold.copyWith(
+                                          fontSize: 12,
+                                          color: isPurchase ? Colors.black87 : const Color(0xFF16A34A),
+                                        ),
+                                      ),
+                                      Text(Formatters.formatCurrency(entry.discount), style: AppTextStyles.bodySmall),
+                                      Text(
+                                        Formatters.formatCurrency(entry.closingPending),
+                                        style: AppTextStyles.bodyBold.copyWith(
+                                          fontSize: 12,
+                                          color: entry.closingPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                        ),
+                                      ),
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(maxWidth: 160),
+                                        child: Tooltip(
+                                          message: entry.remarks,
+                                          child: Text(
+                                            entry.remarks.isNotEmpty ? entry.remarks : '—',
+                                            style: AppTextStyles.bodySmall,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ];
+                                  }).toList(),
+                                ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Action buttons footer
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        ErpButton(
+                          text: 'Close',
+                          isOutlined: true,
+                          onPressed: () {
+                            FocusScope.of(ctx).unfocus();
+                            Navigator.of(ctx).pop();
+                          },
+                        ),
+                        ErpButton(
+                          text: 'Record Transaction',
+                          icon: Icons.edit_note_rounded,
+                          onPressed: () {
+                            FocusScope.of(ctx).unfocus();
+                            Navigator.of(ctx).pop();
+                            _openRecordPaymentDialog(PaymentType.vendorPayment, preselectedPartyId: summary.vendor.id);
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -2603,14 +2561,25 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
 
   List<ErpPayment> _filterPayments(List<ErpPayment> list) {
     final query = _safeLower(_searchQuery);
-    if (query.isEmpty) return list;
     return list.where((p) {
-      return _safeLower(p.paymentNumber).contains(query) ||
-          _safeLower(p.partyName).contains(query) ||
-          _safeLower(p.referenceDocumentNumber).contains(query) ||
-          _safeLower(p.transactionReference).contains(query) ||
-          _safeLower(p.paymentMode.name).contains(query) ||
-          _safeLower(p.notes).contains(query);
+      if (query.isNotEmpty) {
+        final matches = _safeLower(p.paymentNumber).contains(query) ||
+            _safeLower(p.partyName).contains(query) ||
+            _safeLower(p.referenceDocumentNumber).contains(query) ||
+            _safeLower(p.transactionReference).contains(query) ||
+            _safeLower(p.paymentMode.name).contains(query) ||
+            _safeLower(p.notes).contains(query);
+        if (!matches) return false;
+      }
+      if (_payoutStartDate != null &&
+          p.paymentDate.isBefore(DateTime(_payoutStartDate!.year, _payoutStartDate!.month, _payoutStartDate!.day))) {
+        return false;
+      }
+      if (_payoutEndDate != null &&
+          p.paymentDate.isAfter(DateTime(_payoutEndDate!.year, _payoutEndDate!.month, _payoutEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
     }).toList();
   }
 

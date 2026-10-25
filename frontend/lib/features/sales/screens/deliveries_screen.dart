@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -11,6 +12,7 @@ import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/erp_toast.dart';
@@ -31,6 +33,8 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
   String _searchQuery = '';
   DateTime? _startDate;
   DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -320,8 +324,8 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
           (d.trackingNumber != null && d.trackingNumber!.toLowerCase().contains(qLower)) ||
           (d.vehicleNumber != null && d.vehicleNumber!.toLowerCase().contains(qLower));
 
-      final matchesStart = _startDate == null || !d.date.isBefore(_startDate!);
-      final matchesEnd = _endDate == null || !d.date.isAfter(_endDate!.add(const Duration(days: 1)));
+      final matchesStart = _startDate == null || !d.date.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day));
+      final matchesEnd = _endDate == null || !d.date.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59));
 
       return matchesSearch && matchesStart && matchesEnd;
     }).toList();
@@ -416,7 +420,10 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
               ErpSearchInput(
                 hintText: 'Search challan, customer, courier, vehicle...',
                 value: _searchQuery,
-                onChanged: (val) => setState(() => _searchQuery = val),
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
               ),
               ErpDateFilterBox(
                 startDate: _startDate,
@@ -425,6 +432,7 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                   setState(() {
                     _startDate = start;
                     _endDate = end;
+                    _currentPage = 0;
                   });
                 },
               ),
@@ -453,22 +461,34 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
               ),
             )
           else
-            ErpDataTable(
-              dataRowMinHeight: 60,
-              dataRowMaxHeight: 74,
-              columnSpacing: 16,
-              horizontalMargin: 16,
-              columns: const [
-                ErpColumn(title: 'Challan No', width: 140),
-                ErpColumn(title: 'Date', width: 110),
-                ErpColumn(title: 'Customer / Party', width: 180),
-                ErpColumn(title: 'Courier & Tracking', width: 160),
-                ErpColumn(title: 'Vehicle / Transit', width: 130),
-                ErpColumn(title: 'Items Dispatched', width: 220),
-                ErpColumn(title: 'Status', width: 130),
-                ErpColumn(title: 'Actions', width: 220),
-              ],
-              rows: filtered.map((dlv) {
+            Builder(
+              builder: (context) {
+                final totalCount = filtered.length;
+                final maxPage = (totalCount / _pageSize).ceil();
+                final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+                final startIdx = effectivePage * _pageSize;
+                final endIdx = min(startIdx + _pageSize, totalCount);
+                final paginatedDeliveries = totalCount == 0 ? <Sale>[] : filtered.sublist(startIdx, endIdx);
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ErpDataTable(
+                      dataRowMinHeight: 60,
+                      dataRowMaxHeight: 74,
+                      columnSpacing: 16,
+                      horizontalMargin: 16,
+                      columns: const [
+                        ErpColumn(title: 'Challan No', width: 140),
+                        ErpColumn(title: 'Date', width: 110),
+                        ErpColumn(title: 'Customer / Party', width: 180),
+                        ErpColumn(title: 'Courier & Tracking', width: 160),
+                        ErpColumn(title: 'Vehicle / Transit', width: 130),
+                        ErpColumn(title: 'Items Dispatched', width: 220),
+                        ErpColumn(title: 'Status', width: 130),
+                        ErpColumn(title: 'Actions', width: 220),
+                      ],
+                      rows: paginatedDeliveries.map((dlv) {
                 return [
                   // 1. Challan No
                   InkWell(
@@ -693,9 +713,26 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                       ),
                     ],
                   ),
-                ];
-              }).toList(),
-            ),
+                  ];
+                }).toList(),
+              ),
+              if (filtered.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ErpPaginationBar(
+                  totalRecords: totalCount,
+                  currentPage: effectivePage,
+                  pageSize: _pageSize,
+                  onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                  onPageSizeChanged: (newSize) => setState(() {
+                    _pageSize = newSize;
+                    _currentPage = 0;
+                  }),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
         ],
       ),
     );

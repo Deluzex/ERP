@@ -11,16 +11,25 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_chart_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/stock_movement_icons.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  DateTime? _activityStartDate;
+  DateTime? _activityEndDate;
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final isDesktop = MediaQuery.of(context).size.width >= 1100;
     final isTablet = MediaQuery.of(context).size.width >= 700;
@@ -764,7 +773,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
           const SizedBox(height: 32),
 
-          // 7. Recent Activity Table
+          // 7. Recent Activity Table (Transaction History: Date filter only)
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -778,7 +787,7 @@ class DashboardScreen extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final isNarrow = constraints.maxWidth < 420;
+                      final isNarrow = constraints.maxWidth < 650;
                       final headerText = Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -791,6 +800,16 @@ class DashboardScreen extends ConsumerWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
+                      );
+                      final dateFilter = ErpDateFilterBox(
+                        startDate: _activityStartDate,
+                        endDate: _activityEndDate,
+                        onDateRangeSelected: (start, end) {
+                          setState(() {
+                            _activityStartDate = start;
+                            _activityEndDate = end;
+                          });
+                        },
                       );
                       final button = OutlinedButton(
                         onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
@@ -808,8 +827,16 @@ class DashboardScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             headerText,
-                            const SizedBox(height: 10),
-                            button,
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 10,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                dateFilter,
+                                button,
+                              ],
+                            ),
                           ],
                         );
                       }
@@ -818,6 +845,8 @@ class DashboardScreen extends ConsumerWidget {
                         children: [
                           Expanded(child: headerText),
                           const SizedBox(width: 12),
+                          dateFilter,
+                          const SizedBox(width: 12),
                           button,
                         ],
                       );
@@ -825,43 +854,71 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
                 const Divider(height: 1),
-                ErpDataTable(
-                  columns: const [
-                    ErpColumn(title: 'Activity'),
-                    ErpColumn(title: 'Reference'),
-                    ErpColumn(title: 'Type'),
-                    ErpColumn(title: 'Product / Item'),
-                    ErpColumn(title: 'Qty', isNumeric: true),
-                    ErpColumn(title: 'Date'),
-                    ErpColumn(title: 'User'),
-                  ],
-                  rows: db.stockMovements.take(6).map((m) {
-                    final isStockIn = m.stockIn > 0;
-                    final qty = isStockIn ? m.stockIn : m.stockOut;
-                    return [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          isStockIn
-                              ? const StockInIcon(size: 18, color: Color(0xFF16A34A))
-                              : const StockOutIcon(size: 18, color: Color(0xFFEF4444)),
-                          const SizedBox(width: 8),
-                          Text(m.transactionTypeLabel, style: AppTextStyles.bodyBold),
-                        ],
-                      ),
-                      Text(m.referenceNumber, style: AppTextStyles.bodySmall.copyWith(fontFamily: 'monospace')),
-                      _buildTypeBadge(m.transactionType),
-                      Text(m.itemName, style: AppTextStyles.bodyMedium),
-                      Text(
-                        '${isStockIn ? '+' : '-'}${Formatters.formatNumber(qty)} ${m.unit}',
-                        style: AppTextStyles.bodyBold.copyWith(
-                          color: isStockIn ? AppColors.successText : AppColors.dangerText,
+                Builder(
+                  builder: (context) {
+                    final filteredMovements = db.stockMovements.where((m) {
+                      if (_activityStartDate != null &&
+                          m.date.isBefore(DateTime(_activityStartDate!.year, _activityStartDate!.month, _activityStartDate!.day))) {
+                        return false;
+                      }
+                      if (_activityEndDate != null &&
+                          m.date.isAfter(DateTime(_activityEndDate!.year, _activityEndDate!.month, _activityEndDate!.day, 23, 59, 59))) {
+                        return false;
+                      }
+                      return true;
+                    }).toList();
+
+                    if (filteredMovements.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Center(
+                          child: Text(
+                            'No activity records found for the selected date range.',
+                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+                          ),
                         ),
-                      ),
-                      Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
-                      Text(m.performedBy, style: AppTextStyles.bodySmall),
-                    ];
-                  }).toList(),
+                      );
+                    }
+
+                    return ErpDataTable(
+                      columns: const [
+                        ErpColumn(title: 'Activity'),
+                        ErpColumn(title: 'Reference'),
+                        ErpColumn(title: 'Type'),
+                        ErpColumn(title: 'Product / Item'),
+                        ErpColumn(title: 'Qty', isNumeric: true),
+                        ErpColumn(title: 'Date'),
+                        ErpColumn(title: 'User'),
+                      ],
+                      rows: filteredMovements.take(6).map((m) {
+                        final isStockIn = m.stockIn > 0;
+                        final qty = isStockIn ? m.stockIn : m.stockOut;
+                        return [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              isStockIn
+                                  ? const StockInIcon(size: 18, color: Color(0xFF16A34A))
+                                  : const StockOutIcon(size: 18, color: Color(0xFFEF4444)),
+                              const SizedBox(width: 8),
+                              Text(m.transactionTypeLabel, style: AppTextStyles.bodyBold),
+                            ],
+                          ),
+                          Text(m.referenceNumber, style: AppTextStyles.bodySmall.copyWith(fontFamily: 'monospace')),
+                          _buildTypeBadge(m.transactionType),
+                          Text(m.itemName, style: AppTextStyles.bodyMedium),
+                          Text(
+                            '${isStockIn ? '+' : '-'}${Formatters.formatNumber(qty)} ${m.unit}',
+                            style: AppTextStyles.bodyBold.copyWith(
+                              color: isStockIn ? AppColors.successText : AppColors.dangerText,
+                            ),
+                          ),
+                          Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
+                          Text(m.performedBy, style: AppTextStyles.bodySmall),
+                        ];
+                      }).toList(),
+                    );
+                  },
                 ),
               ],
             ),

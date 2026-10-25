@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -60,5 +61,12 @@ export class ExpenseCategoriesController {
     @Body() dto: UpdateExpenseCategoryStatusDto,
   ) {
     return this.service.updateStatus(id, dto.isActive);
+  }
+
+  @Delete(':id')
+  @RequirePermission('masters.delete')
+  @ApiOperation({ summary: 'Delete expense category' })
+  delete(@Param('id') id: string) {
+    return this.service.delete(id);
   }
 }

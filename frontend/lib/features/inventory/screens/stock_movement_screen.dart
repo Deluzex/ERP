@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
@@ -8,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/stock_movement_icons.dart';
@@ -32,6 +34,8 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
   StockLedgerCategory _selectedCategory = StockLedgerCategory.all;
   DateTime? _startDate;
   DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -76,10 +80,16 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
           break;
       }
 
-      final matchesDate = (_startDate == null || !m.date.isBefore(_startDate!)) &&
-          (_endDate == null || !m.date.isAfter(_endDate!.add(const Duration(days: 1))));
+      if (_startDate != null &&
+          m.date.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) {
+        return false;
+      }
+      if (_endDate != null &&
+          m.date.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) {
+        return false;
+      }
 
-      return matchesSearch && matchesCategory && matchesDate;
+      return matchesSearch && matchesCategory;
     }).toList();
 
     return SingleChildScrollView(
@@ -283,7 +293,10 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
               ErpSearchInput(
                 hintText: 'Search by item code, name, ref no...',
                 value: _searchQuery,
-                onChanged: (val) => setState(() => _searchQuery = val),
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
               ),
               ErpDateFilterBox(
                 startDate: _startDate,
@@ -292,6 +305,7 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
                   setState(() {
                     _startDate = start;
                     _endDate = end;
+                    _currentPage = 0;
                   });
                 },
               ),
@@ -300,77 +314,105 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
           const SizedBox(height: 20),
 
           // Data Table
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Date & Time'),
-              ErpColumn(title: 'Item Details'),
-              ErpColumn(title: 'Item Type'),
-              ErpColumn(title: 'Transaction Type'),
-              ErpColumn(title: 'Reference No'),
-              ErpColumn(title: 'Stock In', isNumeric: true),
-              ErpColumn(title: 'Stock Out', isNumeric: true),
-              ErpColumn(title: 'Balance After', isNumeric: true),
-              ErpColumn(title: 'User'),
-            ],
-            rows: movements.map((m) {
-              return [
-                Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(m.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                    Text(m.itemName, style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+          Builder(
+            builder: (context) {
+              final totalRecords = movements.length;
+              final startIndex = _currentPage * _pageSize;
+              final pageMovements = (startIndex < totalRecords)
+                  ? movements.sublist(startIndex, min(startIndex + _pageSize, totalRecords))
+                  : <StockMovement>[];
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'Date & Time'),
+                      ErpColumn(title: 'Item Details'),
+                      ErpColumn(title: 'Item Type'),
+                      ErpColumn(title: 'Transaction Type'),
+                      ErpColumn(title: 'Reference No'),
+                      ErpColumn(title: 'Stock In', isNumeric: true),
+                      ErpColumn(title: 'Stock Out', isNumeric: true),
+                      ErpColumn(title: 'Balance After', isNumeric: true),
+                      ErpColumn(title: 'User'),
+                    ],
+                    rows: pageMovements.map((m) {
+                      return [
+                        Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(m.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                            Text(m.itemName, style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                        Text(
+                          m.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product',
+                          style: AppTextStyles.bodySmall,
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            m.stockIn > 0
+                                ? const StockInIcon(size: 16, color: Color(0xFF16A34A))
+                                : const StockOutIcon(size: 16, color: Color(0xFFEF4444)),
+                            const SizedBox(width: 8),
+                            Text(m.transactionTypeLabel, style: AppTextStyles.bodyBold),
+                          ],
+                        ),
+                        Text(m.referenceNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                        m.stockIn > 0
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const StockInIcon(size: 13, color: Color(0xFF16A34A)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '+${Formatters.formatNumber(m.stockIn)} ${m.unit}',
+                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText),
+                                  ),
+                                ],
+                              )
+                            : const Text('-', style: TextStyle(color: AppColors.textSecondary)),
+                        m.stockOut > 0
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const StockOutIcon(size: 13, color: Color(0xFFEF4444)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '-${Formatters.formatNumber(m.stockOut)} ${m.unit}',
+                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
+                                  ),
+                                ],
+                              )
+                            : const Text('-', style: TextStyle(color: AppColors.textSecondary)),
+                        Text(
+                          '${Formatters.formatNumber(m.currentBalance)} ${m.unit}',
+                          style: AppTextStyles.bodyBold.copyWith(color: AppColors.textPrimary),
+                        ),
+                        Text(m.performedBy, style: AppTextStyles.bodySmall),
+                      ];
+                    }).toList(),
+                  ),
+                  if (totalRecords > 0) ...[
+                    const SizedBox(height: 16),
+                    ErpPaginationBar(
+                      currentPage: _currentPage,
+                      pageSize: _pageSize,
+                      totalRecords: totalRecords,
+                      onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                      onPageSizeChanged: (newSize) => setState(() {
+                        _pageSize = newSize;
+                        _currentPage = 0;
+                      }),
+                    ),
                   ],
-                ),
-                Text(
-                  m.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product',
-                  style: AppTextStyles.bodySmall,
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    m.stockIn > 0
-                        ? const StockInIcon(size: 16, color: Color(0xFF16A34A))
-                        : const StockOutIcon(size: 16, color: Color(0xFFEF4444)),
-                    const SizedBox(width: 8),
-                    Text(m.transactionTypeLabel, style: AppTextStyles.bodyBold),
-                  ],
-                ),
-                Text(m.referenceNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                m.stockIn > 0
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const StockInIcon(size: 13, color: Color(0xFF16A34A)),
-                          const SizedBox(width: 4),
-                          Text(
-                            '+${Formatters.formatNumber(m.stockIn)} ${m.unit}',
-                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText),
-                          ),
-                        ],
-                      )
-                    : const Text('-', style: TextStyle(color: AppColors.textSecondary)),
-                m.stockOut > 0
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const StockOutIcon(size: 13, color: Color(0xFFEF4444)),
-                          const SizedBox(width: 4),
-                          Text(
-                            '-${Formatters.formatNumber(m.stockOut)} ${m.unit}',
-                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
-                          ),
-                        ],
-                      )
-                    : const Text('-', style: TextStyle(color: AppColors.textSecondary)),
-                Text(
-                  '${Formatters.formatNumber(m.currentBalance)} ${m.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.textPrimary),
-                ),
-                Text(m.performedBy, style: AppTextStyles.bodySmall),
-              ];
-            }).toList(),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -392,7 +434,10 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
     final bg = badgeBg ?? AppColors.primaryLight;
 
     return InkWell(
-      onTap: () => setState(() => _selectedCategory = category),
+      onTap: () => setState(() {
+        _selectedCategory = category;
+        _currentPage = 0;
+      }),
       borderRadius: BorderRadius.circular(8),
       child: Container(
         width: isFullWidth ? double.infinity : null,

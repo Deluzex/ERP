@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -12,6 +13,7 @@ import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/erp_toast.dart';
@@ -31,6 +33,8 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
   String _searchQuery = '';
   DateTime? _startDate;
   DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -313,7 +317,9 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textMuted,
               indicatorColor: AppColors.primary,
-              onTap: (_) => setState(() {}),
+              onTap: (_) => setState(() {
+                _currentPage = 0;
+              }),
               tabs: [
                 Tab(text: 'All Invoices (${db.salesInvoices.length})'),
                 Tab(text: 'Pending Due (${db.salesInvoices.where((i) => i.pendingAmount > 0).length})'),
@@ -334,7 +340,10 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
               ErpSearchInput(
                 hintText: 'Search invoices, customer, project...',
                 value: _searchQuery,
-                onChanged: (val) => setState(() => _searchQuery = val),
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
               ),
               ErpDateFilterBox(
                 startDate: _startDate,
@@ -343,6 +352,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
                   setState(() {
                     _startDate = start;
                     _endDate = end;
+                    _currentPage = 0;
                   });
                 },
               ),
@@ -390,10 +400,12 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
 
     // Filter by date range
     if (_startDate != null) {
-      filtered = filtered.where((i) => !i.date.isBefore(_startDate!)).toList();
+      final startDay = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+      filtered = filtered.where((i) => !i.date.isBefore(startDay)).toList();
     }
     if (_endDate != null) {
-      filtered = filtered.where((i) => !i.date.isAfter(_endDate!.add(const Duration(days: 1)))).toList();
+      final endDay = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+      filtered = filtered.where((i) => !i.date.isAfter(endDay)).toList();
     }
 
     if (filtered.isEmpty) {
@@ -417,8 +429,18 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
       );
     }
 
-    return ErpDataTable(
-      columns: const [
+    final totalCount = filtered.length;
+    final maxPage = (totalCount / _pageSize).ceil();
+    final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+    final startIdx = effectivePage * _pageSize;
+    final endIdx = min(startIdx + _pageSize, totalCount);
+    final paginatedInvoices = totalCount == 0 ? <Sale>[] : filtered.sublist(startIdx, endIdx);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ErpDataTable(
+          columns: const [
         ErpColumn(title: 'Invoice No'),
         ErpColumn(title: 'Date'),
         ErpColumn(title: 'Customer / Party'),
@@ -430,7 +452,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
         ErpColumn(title: 'Payment Status'),
         ErpColumn(title: 'Actions'),
       ],
-      rows: filtered.map((s) {
+      rows: paginatedInvoices.map((s) {
         ErpStatusBadge badge;
         switch (s.status) {
           case SaleStatus.paid:
@@ -514,6 +536,21 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
           ),
         ];
       }).toList(),
-    );
+    ),
+    if (filtered.isNotEmpty) ...[
+      const SizedBox(height: 12),
+      ErpPaginationBar(
+        totalRecords: totalCount,
+        currentPage: effectivePage,
+        pageSize: _pageSize,
+        onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+        onPageSizeChanged: (newSize) => setState(() {
+          _pageSize = newSize;
+          _currentPage = 0;
+        }),
+      ),
+    ],
+  ],
+);
   }
 }

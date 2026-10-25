@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -13,6 +14,7 @@ import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
@@ -31,6 +33,8 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
   String _selectedStatusFilter = 'ALL';
   DateTime? _startDate;
   DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -434,7 +438,9 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textMuted,
               indicatorColor: AppColors.primary,
-              onTap: (_) => setState(() {}),
+              onTap: (_) => setState(() {
+                _currentPage = 0;
+              }),
               tabs: [
                 Tab(text: 'All Orders (${db.salesOrders.length})'),
                 Tab(text: 'Ready for Dispatch (${db.ordersReadyForDispatchCount})'),
@@ -458,7 +464,10 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                 child: ErpSearchInput(
                   hintText: 'Search order no, customer, project...',
                   initialValue: _searchQuery,
-                  onChanged: (val) => setState(() => _searchQuery = val),
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
                 ),
               ),
               ErpFilterDropdown<String>(
@@ -472,7 +481,12 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                   DropdownMenuItem(value: 'DRAFT', child: Text('Draft / Other')),
                 ],
                 onChanged: (val) {
-                  if (val != null) setState(() => _selectedStatusFilter = val);
+                  if (val != null) {
+                    setState(() {
+                      _selectedStatusFilter = val;
+                      _currentPage = 0;
+                    });
+                  }
                 },
               ),
               ErpDateFilterBox(
@@ -481,6 +495,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                 onDateRangeSelected: (start, end) => setState(() {
                   _startDate = start;
                   _endDate = end;
+                  _currentPage = 0;
                 }),
               ),
             ],
@@ -578,12 +593,22 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
       );
     }
 
-    return ErpDataTable(
-      dataRowMinHeight: 60,
-      dataRowMaxHeight: 72,
-      columnSpacing: 16,
-      horizontalMargin: 16,
-      columns: const [
+    final totalCount = filtered.length;
+    final maxPage = (totalCount / _pageSize).ceil();
+    final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+    final startIdx = effectivePage * _pageSize;
+    final endIdx = min(startIdx + _pageSize, totalCount);
+    final paginatedOrders = totalCount == 0 ? <Sale>[] : filtered.sublist(startIdx, endIdx);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ErpDataTable(
+          dataRowMinHeight: 60,
+          dataRowMaxHeight: 72,
+          columnSpacing: 16,
+          horizontalMargin: 16,
+          columns: const [
         ErpColumn(title: 'SO Number', width: 130),
         ErpColumn(title: 'Customer / Party', width: 190),
         ErpColumn(title: 'Delivery Due', width: 120),
@@ -592,7 +617,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
         ErpColumn(title: 'Workflow Status', width: 155),
         ErpColumn(title: 'Actions', width: 90),
       ],
-      rows: filtered.map((so) {
+      rows: paginatedOrders.map((so) {
         ErpStatusBadge badge;
         switch (so.salesOrderStatus) {
           case SalesOrderStatus.readyForDispatch:
@@ -785,6 +810,21 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
           ),
         ];
       }).toList(),
-    );
+    ),
+    if (filtered.isNotEmpty) ...[
+      const SizedBox(height: 12),
+      ErpPaginationBar(
+        totalRecords: totalCount,
+        currentPage: effectivePage,
+        pageSize: _pageSize,
+        onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+        onPageSizeChanged: (newSize) => setState(() {
+          _pageSize = newSize;
+          _currentPage = 0;
+        }),
+      ),
+    ],
+  ],
+);
   }
 }

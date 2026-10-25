@@ -1,11 +1,28 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class BulkImportRawMaterialsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateRawMaterialDto)
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  items!: CreateRawMaterialDto[];
+
+  @IsString()
+  @IsOptional()
+  duplicatePolicy?: 'SKIP' = 'SKIP';
+}
 
 export class CreateRawMaterialDto {
   @IsString()

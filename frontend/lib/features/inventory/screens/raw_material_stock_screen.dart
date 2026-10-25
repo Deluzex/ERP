@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
@@ -10,6 +11,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/figma_metric_card.dart';
@@ -27,6 +29,8 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
   String _searchQuery = '';
   String? _selectedCategory;
   bool _showOnlyLowStock = false;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -438,7 +442,10 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
               ErpSearchInput(
                 hintText: 'Search raw material by name, code, category...',
                 value: _searchQuery,
-                onChanged: (val) => setState(() => _searchQuery = val),
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
               ),
               ErpFilterDropdown<String?>(
                 label: 'Category',
@@ -447,12 +454,18 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                   const DropdownMenuItem(value: null, child: Text('All Categories')),
                   ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                 ],
-                onChanged: (val) => setState(() => _selectedCategory = val),
+                onChanged: (val) => setState(() {
+                  _selectedCategory = val;
+                  _currentPage = 0;
+                }),
               ),
               FilterChip(
                 label: Text('Low Stock Only (${db.lowStockRawMaterials.length})'),
                 selected: _showOnlyLowStock,
-                onSelected: (val) => setState(() => _showOnlyLowStock = val),
+                onSelected: (val) => setState(() {
+                  _showOnlyLowStock = val;
+                  _currentPage = 0;
+                }),
                 selectedColor: AppColors.dangerLight,
                 checkmarkColor: AppColors.dangerText,
               ),
@@ -461,45 +474,73 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
           const SizedBox(height: 20),
 
           // Data Table
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Item Code'),
-              ErpColumn(title: 'Material Name'),
-              ErpColumn(title: 'Category'),
-              ErpColumn(title: 'Current Stock', isNumeric: true),
-              ErpColumn(title: 'Min Stock', isNumeric: true),
-              ErpColumn(title: 'Purchase Rate', isNumeric: true),
-              ErpColumn(title: 'Total Value', isNumeric: true),
-              ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
-            ],
-            rows: rawMaterials.map((rm) {
-              return [
-                Text(rm.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                Text(rm.name, style: AppTextStyles.bodyMedium),
-                Text(rm.categoryName, style: AppTextStyles.bodySmall),
-                Text(
-                  '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: rm.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
+          Builder(
+            builder: (context) {
+              final totalRecords = rawMaterials.length;
+              final startIndex = _currentPage * _pageSize;
+              final pageRawMaterials = (startIndex < totalRecords)
+                  ? rawMaterials.sublist(startIndex, min(startIndex + _pageSize, totalRecords))
+                  : <RawMaterial>[];
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'Item Code'),
+                      ErpColumn(title: 'Material Name'),
+                      ErpColumn(title: 'Category'),
+                      ErpColumn(title: 'Current Stock', isNumeric: true),
+                      ErpColumn(title: 'Min Stock', isNumeric: true),
+                      ErpColumn(title: 'Purchase Rate', isNumeric: true),
+                      ErpColumn(title: 'Total Value', isNumeric: true),
+                      ErpColumn(title: 'Status'),
+                      ErpColumn(title: 'Actions'),
+                    ],
+                    rows: pageRawMaterials.map((rm) {
+                      return [
+                        Text(rm.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                        Text(rm.name, style: AppTextStyles.bodyMedium),
+                        Text(rm.categoryName, style: AppTextStyles.bodySmall),
+                        Text(
+                          '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
+                          style: AppTextStyles.bodyBold.copyWith(
+                            color: rm.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
+                          ),
+                        ),
+                        Text('${Formatters.formatNumber(rm.minimumStock)} ${rm.unit}', style: AppTextStyles.bodySmall),
+                        Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
+                        Text(Formatters.formatCurrency(rm.totalValuation), style: AppTextStyles.bodyBold),
+                        rm.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('IN STOCK'),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              tooltip: 'Edit Material',
+                              onPressed: () => _openAddEditDialog(rm),
+                            ),
+                          ],
+                        ),
+                      ];
+                    }).toList(),
                   ),
-                ),
-                Text('${Formatters.formatNumber(rm.minimumStock)} ${rm.unit}', style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
-                Text(Formatters.formatCurrency(rm.totalValuation), style: AppTextStyles.bodyBold),
-                rm.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('IN STOCK'),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Material',
-                      onPressed: () => _openAddEditDialog(rm),
+                  if (totalRecords > 0) ...[
+                    const SizedBox(height: 16),
+                    ErpPaginationBar(
+                      currentPage: _currentPage,
+                      pageSize: _pageSize,
+                      totalRecords: totalRecords,
+                      onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                      onPageSizeChanged: (newSize) => setState(() {
+                        _pageSize = newSize;
+                        _currentPage = 0;
+                      }),
                     ),
                   ],
-                ),
-              ];
-            }).toList(),
+                ],
+              );
+            },
           ),
         ],
       ),

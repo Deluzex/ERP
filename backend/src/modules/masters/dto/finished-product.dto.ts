@@ -1,10 +1,28 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class BulkImportFinishedProductsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateFinishedProductDto)
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  items!: CreateFinishedProductDto[];
+
+  @IsString()
+  @IsOptional()
+  duplicatePolicy?: 'SKIP' = 'SKIP';
+}
 
 export class CreateFinishedProductDto {
   @IsString()

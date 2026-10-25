@@ -12,6 +12,7 @@ export interface ExpenseCategoryRecord {
   code: string;
   description: string | null;
   isActive: boolean;
+  linkedKey?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -94,14 +95,15 @@ export class ExpenseCategoriesService {
     }
 
     const res = await this.db.query<any>(
-      `INSERT INTO expense_categories (name, code, description, is_active)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO expense_categories (name, code, description, is_active, linked_key)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [
         dto.name.trim(),
         dto.code.trim().toUpperCase(),
         dto.description?.trim() || null,
         dto.isActive ?? true,
+        dto.linkedKey?.trim() || null,
       ],
     );
 
@@ -141,6 +143,10 @@ export class ExpenseCategoriesService {
       updates.push(`is_active = $${idx++}`);
       values.push(dto.isActive);
     }
+    if (dto.linkedKey !== undefined) {
+      updates.push(`linked_key = $${idx++}`);
+      values.push(dto.linkedKey?.trim() || null);
+    }
 
     if (updates.length > 0) {
       updates.push(`updated_at = NOW()`);
@@ -163,6 +169,12 @@ export class ExpenseCategoriesService {
     return this.findById(id);
   }
 
+  async delete(id: string): Promise<{ success: boolean }> {
+    await this.findById(id);
+    await this.db.query('DELETE FROM expense_categories WHERE id = $1', [id]);
+    return { success: true };
+  }
+
   private mapRow(r: any): ExpenseCategoryRecord {
     return {
       id: r.id,
@@ -170,6 +182,7 @@ export class ExpenseCategoriesService {
       code: r.code,
       description: r.description,
       isActive: r.is_active,
+      linkedKey: r.linked_key || null,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };

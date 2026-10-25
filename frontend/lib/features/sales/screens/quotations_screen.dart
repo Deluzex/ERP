@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -12,6 +13,7 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -31,6 +33,8 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
   String _selectedStatusFilter = 'ALL';
   DateTime? _startDate;
   DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -147,7 +151,9 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textMuted,
               indicatorColor: AppColors.primary,
-              onTap: (_) => setState(() {}),
+              onTap: (_) => setState(() {
+                _currentPage = 0;
+              }),
               tabs: [
                 Tab(text: 'All Quotes (${db.quotations.length})'),
                 Tab(text: 'Drafts (${db.quotations.where((q) => q.quotationStatus == QuotationStatus.draft).length})'),
@@ -169,7 +175,10 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
               ErpSearchInput(
                 hintText: 'Search quotation, client, project...',
                 value: _searchQuery,
-                onChanged: (val) => setState(() => _searchQuery = val),
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
               ),
               ErpDateFilterBox(
                 startDate: _startDate,
@@ -178,6 +187,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
                   setState(() {
                     _startDate = start;
                     _endDate = end;
+                    _currentPage = 0;
                   });
                 },
               ),
@@ -227,6 +237,16 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
       }).toList();
     }
 
+    // Filter by date range
+    if (_startDate != null) {
+      final startDay = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+      filtered = filtered.where((q) => !q.saleDate.isBefore(startDay)).toList();
+    }
+    if (_endDate != null) {
+      final endDay = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+      filtered = filtered.where((q) => !q.saleDate.isAfter(endDay)).toList();
+    }
+
     if (filtered.isEmpty) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -248,18 +268,28 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
       );
     }
 
-    return ErpDataTable(
-      columns: const [
-        ErpColumn(title: 'Quote Number'),
-        ErpColumn(title: 'Date'),
-        ErpColumn(title: 'Customer / Client'),
-        ErpColumn(title: 'Project'),
-        ErpColumn(title: 'Grand Total', isNumeric: true),
-        ErpColumn(title: 'Valid Till'),
+    final totalCount = filtered.length;
+    final maxPage = (totalCount / _pageSize).ceil();
+    final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+    final startIdx = effectivePage * _pageSize;
+    final endIdx = min(startIdx + _pageSize, totalCount);
+    final paginatedQuotes = totalCount == 0 ? <Sale>[] : filtered.sublist(startIdx, endIdx);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ErpDataTable(
+          columns: const [
+            ErpColumn(title: 'Quote Number'),
+            ErpColumn(title: 'Date'),
+            ErpColumn(title: 'Customer / Client'),
+            ErpColumn(title: 'Project'),
+            ErpColumn(title: 'Grand Total', isNumeric: true),
+            ErpColumn(title: 'Valid Till'),
         ErpColumn(title: 'Status'),
         ErpColumn(title: 'Actions'),
       ],
-      rows: filtered.map((quote) {
+      rows: paginatedQuotes.map((quote) {
         ErpStatusBadge badge;
         switch (quote.quotationStatus) {
           case QuotationStatus.accepted:
@@ -325,7 +355,22 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
           _buildQuoteActionMenu(context, ref, quote, db),
         ];
       }).toList(),
-    );
+    ),
+    if (filtered.isNotEmpty) ...[
+      const SizedBox(height: 12),
+      ErpPaginationBar(
+        totalRecords: totalCount,
+        currentPage: effectivePage,
+        pageSize: _pageSize,
+        onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+        onPageSizeChanged: (newSize) => setState(() {
+          _pageSize = newSize;
+          _currentPage = 0;
+        }),
+      ),
+    ],
+  ],
+);
   }
 
   Widget _buildQuoteActionMenu(BuildContext context, WidgetRef ref, Sale quote, MockDatabaseService db) {

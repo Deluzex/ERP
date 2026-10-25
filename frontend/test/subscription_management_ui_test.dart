@@ -206,7 +206,7 @@ void main() {
       await tester.tap(find.text('15 Days Left'));
       await tester.pumpAndSettle();
 
-      expect(find.text('સબ્સ્ક્રિપ્શન વિગતો'), findsOneWidget);
+      expect(find.text('Subscription Details'), findsOneWidget);
       expect(find.text('Raj Lighting'), findsOneWidget);
       expect(find.text('Standard Annual'), findsOneWidget);
       expect(find.text('Call Support'), findsOneWidget);

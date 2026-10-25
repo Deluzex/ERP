@@ -32,7 +32,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(databaseServiceProvider).loadExpenses());
+    Future.microtask(() {
+      ref.read(databaseServiceProvider).loadExpenses();
+      ref.read(databaseServiceProvider).loadExpenseCategories();
+    });
   }
 
   /// Resolves a stored payment method value (a Category Master payment mode

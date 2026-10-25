@@ -1,53 +1,56 @@
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_radius.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/models/subscription_model.dart';
 import '../../core/utils/document_sharing_service.dart';
+import '../providers/subscription_provider.dart';
 
-class SubscriptionDetailsSheet extends StatelessWidget {
-  final SubscriptionStatus status;
+class SubscriptionDetailsSheet extends ConsumerWidget {
+  final SubscriptionStatus? status;
 
-  const SubscriptionDetailsSheet({super.key, required this.status});
+  const SubscriptionDetailsSheet({super.key, this.status});
 
   static Future<void> show(
-    BuildContext context,
-    SubscriptionStatus status,
-  ) async {
+    BuildContext context, [
+    SubscriptionStatus? status,
+  ]) async {
     await showDialog(
       context: context,
       builder: (ctx) => SubscriptionDetailsSheet(status: status),
     );
   }
 
-  void _openWhatsApp() {
+  void _openWhatsApp(SubscriptionStatus currentStatus) {
     final message =
         'Hello Deluzex Support Team, I need information about '
         'the Deluzex ERP subscription for our company '
-        '(${status.clientName}).';
+        '(${currentStatus.clientName}).';
 
     DocumentSharingService.shareToWhatsApp(
-      phoneNumber: status.supportPhone,
+      phoneNumber: currentStatus.supportPhone,
       message: message,
     );
   }
 
-  void _makeCall() {
+  void _makeCall(SubscriptionStatus currentStatus) {
     final cleaned =
-        DocumentSharingService.cleanPhoneNumber(status.supportPhone);
+        DocumentSharingService.cleanPhoneNumber(currentStatus.supportPhone);
 
     DocumentSharingService.openUrl('tel:$cleaned');
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final SubscriptionStatus effectiveStatus =
+        status ?? ref.watch(subscriptionProvider);
     final expiryFormatted =
-        DateFormat('dd MMM yyyy').format(status.validUntil);
+        DateFormat('dd MMM yyyy').format(effectiveStatus.validUntil);
     final fromFormatted =
-        DateFormat('dd MMM yyyy').format(status.validFrom);
-    final isWarning = status.showRenewalWarning;
+        DateFormat('dd MMM yyyy').format(effectiveStatus.validFrom);
+    final isWarning = effectiveStatus.showRenewalWarning;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -82,50 +85,54 @@ class SubscriptionDetailsSheet extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: isWarning
-                              ? const Color(0xFFF59E0B)
-                                  .withValues(alpha: 0.15)
-                              : const Color(0xFF16A34A)
-                                  .withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          isWarning
-                              ? Icons.warning_amber_rounded
-                              : Icons.verified_rounded,
-                          color: isWarning
-                              ? const Color(0xFFD97706)
-                              : const Color(0xFF16A34A),
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Subscription Details',
-                            style: TextStyle(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: isWarning
+                                ? const Color(0xFFF59E0B)
+                                    .withValues(alpha: 0.15)
+                                : const Color(0xFF16A34A)
+                                    .withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          Text(
-                            'Deluzex Instance License',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.textDisabled,
-                              fontSize: 10.5,
-                            ),
+                          child: Icon(
+                            isWarning
+                                ? Icons.warning_amber_rounded
+                                : Icons.verified_rounded,
+                            color: isWarning
+                                ? const Color(0xFFD97706)
+                                : const Color(0xFF16A34A),
+                            size: 20,
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Subscription Details',
+                                style: TextStyle(
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Deluzex Instance License',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.textDisabled,
+                                  fontSize: 10.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(
@@ -150,13 +157,13 @@ class SubscriptionDetailsSheet extends StatelessWidget {
               // Subscription Information
               _buildDetailRow(
                 'Company / Client:',
-                status.clientName,
+                effectiveStatus.clientName,
               ),
               const SizedBox(height: 8),
 
               _buildDetailRow(
                 'Plan:',
-                status.planName,
+                effectiveStatus.planName,
               ),
               const SizedBox(height: 8),
 
@@ -216,7 +223,7 @@ class SubscriptionDetailsSheet extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${status.daysRemaining} Days Left',
+                          '${effectiveStatus.daysRemaining} Days Left',
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.bold,
@@ -248,7 +255,7 @@ class SubscriptionDetailsSheet extends StatelessWidget {
                 child: Text(
                   isWarning
                       ? 'Your subscription expires in '
-                          '${status.daysRemaining} days. '
+                          '${effectiveStatus.daysRemaining} days. '
                           'Please renew it on time to avoid '
                           'service interruption.'
                       : 'Your Deluzex ERP subscription is active. '
@@ -269,7 +276,7 @@ class SubscriptionDetailsSheet extends StatelessWidget {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _openWhatsApp,
+                      onPressed: () => _openWhatsApp(effectiveStatus),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF25D366),
                         foregroundColor: Colors.white,
@@ -299,7 +306,7 @@ class SubscriptionDetailsSheet extends StatelessWidget {
 
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _makeCall,
+                      onPressed: () => _makeCall(effectiveStatus),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(
                           color: AppColors.primary,

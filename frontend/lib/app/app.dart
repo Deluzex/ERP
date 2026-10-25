@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../shared/providers/app_state_providers.dart';
+import '../shared/providers/subscription_provider.dart';
 import 'app_shell.dart';
 import 'constants/app_constants.dart';
 import 'theme/app_colors.dart';
@@ -22,6 +23,7 @@ class _ErpApplicationState extends ConsumerState<ErpApplication> {
       final isBootstrapComplete = ref.read(isSessionBootstrapCompleteProvider);
       if (!isBootstrapComplete) {
         await ref.read(authStateProvider.notifier).restoreSession();
+        await ref.read(subscriptionProvider.notifier).fetchStatus();
         if (mounted) {
           ref.read(isSessionBootstrapCompleteProvider.notifier).state = true;
         }
@@ -52,7 +54,7 @@ class _ErpApplicationState extends ConsumerState<ErpApplication> {
                 ? const AppShell()
                 : LoginScreen(
                     onLoginSuccess: () {
-                      // State notifier updates isAuthenticatedProvider automatically
+                      ref.read(subscriptionProvider.notifier).fetchStatus();
                     },
                   )),
       ),

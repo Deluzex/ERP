@@ -1,0 +1,20 @@
+Material Name*,Item Code*,Category*,Unit*,HSN / SAC,Opening Stock,Minimum Stock,Reorder Level,Purchase Price (INR),Transport Charge (INR),GST %,Preferred Vendor
+Sim Alloy Rod 76177,RM-PRD-76177,Components,PCS,76012010,150,25,35,245.5,12,18,Apex Extrusions Ltd
+Sim Alloy Rod 99970,RM-PRD-99970,Components,PCS,76012010,150,25,35,245.5,12,18,Apex Extrusions Ltd
+Sim Alloy Rod 52866,RM-PRD-52866,Components,PCS,76012010,150,25,35,245.5,12,18,Apex Extrusions Ltd
+Sim Alloy Rod 17260,RM-PRD-17260,Components,PCS,76012010,150,25,35,245.5,12,18,Apex Extrusions Ltd
+Sim Alloy Rod 10688,RM-PRD-10688,Components,PCS,76012010,150,25,35,245.5,12,18,Apex Extrusions Ltd
+Sim Alloy Rod 55551,RM-PRD-55551,Components,PCS,76012010,150,25,35,245.5,12,18,Apex Extrusions Ltd
+Sim Alloy Rod 78914,RM-PRD-78914,Components,PCS,76012010,150,25,35,245.5,12,18,Apex Extrusions Ltd
+Sim Alloy Rod 03309,RM-PRD-03309,Components,PCS,76012010,150,25,35,245.5,12,18,Apex Extrusions Ltd
+Sim Alloy Rod 24421,RM-PRD-24421,Components,PCS,76012010,150,25,35,245.5,12,18,Apex Extrusions Ltd
+kamal,RAW-61119,Diffusers & Optics,PCS,76012010,150,25,35,245.5,12,18,Adarshidar
+SB,RAW-96270,Diffusers & Optics,PCS,76012010,150,25,35,245.5,12,18,Adarshidar
+WIRE,RAW-03571,Diffusers & Optics,PCS,76012010,150,25,35,245.5,12,18,Adarshidar
+kirtan,RAW-00911,Diffusers & Optics,PCS,76012010,150,25,35,245.5,12,18,Adarshidar
+xyz,RAW-25876,Diffusers & Optics,PCS,76012010,150,25,35,245.5,12,18,Adarshidar
+xyz,RAW-73057,Diffusers & Optics,PCS,76012010,150,25,35,245.5,12,18,Adarshidar
+test,RAW-91414,Diffusers & Optics,PCS,76012010,150,25,35,245.5,12,18,Adarshidar
+QA-BULK-RM-01,QA High Precision Optical Lens 50mm,Diffusers & Optics,PCS,90019090,200,40,60,185,15,18,Adarshidar
+QA-BULK-RM-02,QA Thermal Conductive Pad 20x20,Components,PCS,68159990,500,100,150,45,5,18,Apex Extrusions Ltd
+QA Copper Wire,QA-RM-PASS-101,Raw Material,KG,74081100,100,10,20,450,25,18,QA Metals Supplier
