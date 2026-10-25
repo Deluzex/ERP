@@ -510,56 +510,20 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
             icon: Icons.shopping_bag_outlined,
             title: 'Purchase Invoices',
             badgeText: 'PURCHASE MANAGEMENT',
-            action: LayoutBuilder(
-              builder: (context, actionBox) {
-                final isMobile = actionBox.maxWidth < 520;
-                if (isMobile) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'Create Direct Purchase',
-                          icon: Icons.add,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'Refresh',
-                          icon: Icons.refresh,
-                          isOutlined: true,
-                          isLoading: db.isLoadingPurchases,
-                          onPressed: () => db.loadPurchases(forceRefresh: true),
-                        ),
-                      ),
-                    ],
-                  );
-                }
-                return Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.end,
-                  children: [
-                    ErpButton(
-                      text: 'Refresh',
-                      icon: Icons.refresh,
-                      isOutlined: true,
-                      isLoading: db.isLoadingPurchases,
-                      onPressed: () => db.loadPurchases(forceRefresh: true),
-                    ),
-                    ErpButton(
-                      text: 'Create Direct Purchase',
-                      icon: Icons.add,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
-                    ),
-                  ],
-                );
-              },
-            ),
+            actions: [
+              ErpButton(
+                text: 'Create Direct Purchase',
+                icon: Icons.add,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+              ),
+              ErpButton(
+                text: 'Refresh',
+                icon: Icons.refresh,
+                isOutlined: true,
+                isLoading: db.isLoadingPurchases,
+                onPressed: () => db.loadPurchases(forceRefresh: true),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
 

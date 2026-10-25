@@ -358,35 +358,31 @@ class PurchaseRoleDashboard extends ConsumerWidget {
             icon: Icons.shopping_bag_outlined,
             title: 'Procurement & Purchase Hub',
             badgeText: 'PURCHASE MANAGER',
-            action: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ErpButton(
-                  text: 'Create Direct Purchase',
-                  icon: Icons.add_shopping_cart,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
-                ),
-                ErpButton(
-                  text: 'Purchase Invoices',
-                  icon: Icons.list_alt_rounded,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
-                ),
-                ErpButton(
-                  text: 'Vendors Directory',
-                  icon: Icons.storefront_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendors,
-                ),
-                ErpButton(
-                  text: 'Vendor Settlements',
-                  icon: Icons.payments_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'Create Direct Purchase',
+                icon: Icons.add_shopping_cart,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+              ),
+              ErpButton(
+                text: 'Purchase Invoices',
+                icon: Icons.list_alt_rounded,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+              ),
+              ErpButton(
+                text: 'Vendors Directory',
+                icon: Icons.storefront_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendors,
+              ),
+              ErpButton(
+                text: 'Vendor Settlements',
+                icon: Icons.payments_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
@@ -510,29 +506,25 @@ class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboar
             icon: Icons.precision_manufacturing_rounded,
             title: 'Factory & Production Dashboard',
             badgeText: 'PRODUCTION MANAGER',
-            action: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ErpButton(
-                  text: 'Create Production Order',
-                  icon: Icons.add_circle_outline,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
-                ),
-                ErpButton(
-                  text: 'Production Orders',
-                  icon: Icons.precision_manufacturing_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
-                ),
-                ErpButton(
-                  text: 'Raw Material Buffer',
-                  icon: Icons.inventory_2_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'Create Production Order',
+                icon: Icons.add_circle_outline,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
+              ),
+              ErpButton(
+                text: 'Production Orders',
+                icon: Icons.precision_manufacturing_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+              ),
+              ErpButton(
+                text: 'Raw Material Buffer',
+                icon: Icons.inventory_2_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
@@ -643,35 +635,31 @@ class _AccountsPaymentRoleDashboardState extends ConsumerState<AccountsPaymentRo
             icon: Icons.payments_rounded,
             title: 'Finance, Accounts & Payment Control',
             badgeText: 'ACCOUNTS & FINANCE',
-            action: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ErpButton(
-                  text: 'Customer Payments',
-                  icon: Icons.receipt_long_outlined,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments,
-                ),
-                ErpButton(
-                  text: 'Vendor Payments',
-                  icon: Icons.payments_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
-                ),
-                ErpButton(
-                  text: 'Commission Payouts',
-                  icon: Icons.monetization_on_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.commissionPayments,
-                ),
-                ErpButton(
-                  text: 'Expense Voucher Log',
-                  icon: Icons.receipt_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.expenseList,
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'Customer Payments',
+                icon: Icons.receipt_long_outlined,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments,
+              ),
+              ErpButton(
+                text: 'Vendor Payments',
+                icon: Icons.payments_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
+              ),
+              ErpButton(
+                text: 'Commission Payouts',
+                icon: Icons.monetization_on_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.commissionPayments,
+              ),
+              ErpButton(
+                text: 'Expense Voucher Log',
+                icon: Icons.receipt_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.expenseList,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
@@ -816,35 +804,31 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
             icon: Icons.apartment_rounded,
             title: 'Architectural Projects Portfolio',
             badgeText: 'PROJECT MANAGER',
-            action: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ErpButton(
-                  text: 'Projects Directory',
-                  icon: Icons.apartment_rounded,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectList,
-                ),
-                ErpButton(
-                  text: 'Architect Partners',
-                  icon: Icons.architecture_rounded,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
-                ),
-                ErpButton(
-                  text: 'Client Masters',
-                  icon: Icons.people_outline,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customers,
-                ),
-                ErpButton(
-                  text: 'Project Reports Hub',
-                  icon: Icons.analytics_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectReports,
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'Projects Directory',
+                icon: Icons.apartment_rounded,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectList,
+              ),
+              ErpButton(
+                text: 'Architect Partners',
+                icon: Icons.architecture_rounded,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
+              ),
+              ErpButton(
+                text: 'Client Masters',
+                icon: Icons.people_outline,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customers,
+              ),
+              ErpButton(
+                text: 'Project Reports Hub',
+                icon: Icons.analytics_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectReports,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
@@ -1280,23 +1264,19 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
             icon: Icons.analytics_outlined,
             title: 'Executive Financial Reports & Audit Hub',
             badgeText: 'AUDITOR & REPORT ANALYST',
-            action: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ErpButton(
-                  text: 'All ERP Statements',
-                  icon: Icons.bar_chart_rounded,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.reportsDashboard,
-                ),
-                ErpButton(
-                  text: 'Inventory Reports',
-                  icon: Icons.inventory_2_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.inventoryReports,
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'All ERP Statements',
+                icon: Icons.bar_chart_rounded,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.reportsDashboard,
+              ),
+              ErpButton(
+                text: 'Inventory Reports',
+                icon: Icons.inventory_2_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.inventoryReports,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 

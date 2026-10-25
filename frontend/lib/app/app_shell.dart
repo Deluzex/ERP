@@ -59,6 +59,9 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final Map<ErpNavSection, Widget> _cachedScreens = {};
+  String? _lastUserId;
+  String? _lastRoleId;
 
   @override
   void initState() {
@@ -66,6 +69,19 @@ class _AppShellState extends ConsumerState<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(subscriptionProvider.notifier).fetchStatus();
     });
+  }
+
+  ErpNavSection _canonicalSection(ErpNavSection section) {
+    switch (section) {
+      case ErpNavSection.customerPayments:
+      case ErpNavSection.dealerPayments:
+      case ErpNavSection.vendorPayments:
+      case ErpNavSection.vendorPaymentsSection:
+      case ErpNavSection.commissionPayments:
+        return ErpNavSection.customerPayments;
+      default:
+        return section;
+    }
   }
 
   @override
@@ -76,6 +92,13 @@ class _AppShellState extends ConsumerState<AppShell> {
     final db = ref.watch(databaseServiceProvider);
     final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
     final isAuthorized = currentUser.canAccessSection(currentSection, db.roles);
+
+    // Invalidate cached screens if user or their role changed (e.g. switch user / logout / re-login)
+    if (_lastUserId != currentUser.id || _lastRoleId != currentUser.primaryRoleId) {
+      _cachedScreens.clear();
+      _lastUserId = currentUser.id;
+      _lastRoleId = currentUser.primaryRoleId;
+    }
 
     // Persist active section on navigation change so reload stays on active screen
     ref.listen<ErpNavSection>(currentNavSectionProvider, (previous, next) async {
@@ -94,7 +117,26 @@ class _AppShellState extends ConsumerState<AppShell> {
       // 403 Forbidden Access Guard Barrier
       contentWidget = _buildAccessDeniedBarrier(context, currentUser, currentSection, db);
     } else {
-      contentWidget = _buildSectionWidget(currentSection, currentUser);
+      final canonicalKey = _canonicalSection(currentSection);
+      // Lazy load screen into cache if not present
+      if (!_cachedScreens.containsKey(canonicalKey)) {
+        _cachedScreens[canonicalKey] = _buildSectionWidget(canonicalKey, currentUser);
+      }
+
+      contentWidget = Stack(
+        fit: StackFit.expand,
+        children: [
+          for (final entry in _cachedScreens.entries)
+            Offstage(
+              key: ValueKey(entry.key),
+              offstage: entry.key != canonicalKey,
+              child: TickerMode(
+                enabled: entry.key == canonicalKey,
+                child: entry.value,
+              ),
+            ),
+        ],
+      );
     }
 
     return Scaffold(
