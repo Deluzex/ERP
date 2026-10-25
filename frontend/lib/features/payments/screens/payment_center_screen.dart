@@ -24,6 +24,7 @@ import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
+import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 
 class PaymentCenterScreen extends ConsumerStatefulWidget {
   final PaymentType? initialTab;
@@ -36,6 +37,7 @@ class PaymentCenterScreen extends ConsumerStatefulWidget {
 
 class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  int _currentTabIndex = 0;
   // Customer Payments Tab
   String? _customerSearchQuery = '';
   String? _customerBalanceFilter = 'ALL';
@@ -106,27 +108,40 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     _commissionSettlementFilter ??= 'ALL';
     _commissionPageSize ??= 10;
     _commissionCurrentPage ??= 0;
-    _tabController = TabController(length: 4, vsync: this);
-    if (widget.initialTab != null) {
-      _tabController.index = widget.initialTab!.index;
+    int initialIdx = 0;
+    final currentNav = ref.read(currentNavSectionProvider);
+    if (currentNav == ErpNavSection.dealerPayments) {
+      initialIdx = 1;
+    } else if (currentNav == ErpNavSection.vendorPayments || currentNav == ErpNavSection.vendorPaymentsSection) {
+      initialIdx = 2;
+    } else if (currentNav == ErpNavSection.commissionPayments) {
+      initialIdx = 3;
+    } else if (widget.initialTab != null) {
+      initialIdx = widget.initialTab!.index;
     }
+    _currentTabIndex = initialIdx;
+    _tabController = TabController(length: 4, vsync: this, initialIndex: initialIdx);
     _tabController.addListener(_handleTabChange);
     Future.microtask(() {
       final db = ref.read(databaseServiceProvider);
-      db.loadPayments();
-      db.loadCommissions();
-      db.loadCustomers();
-      db.loadDealers();
-      db.loadSalesInvoices();
-      db.loadVendors();
-      db.loadPurchases();
+      if (db.payments.isEmpty) db.loadPayments();
+      if (db.commissions.isEmpty) db.loadCommissions();
+      if (db.customers.isEmpty) db.loadCustomers();
+      if (db.dealers.isEmpty) db.loadDealers();
+      if (db.salesInvoices.isEmpty) db.loadSalesInvoices();
+      if (db.vendors.isEmpty) db.loadVendors();
+      if (db.purchases.isEmpty) db.loadPurchases();
     });
   }
 
   void _handleTabChange() {
     if (!mounted) return;
+    if (_currentTabIndex != _tabController.index) {
+      setState(() {
+        _currentTabIndex = _tabController.index;
+      });
+    }
     if (!_tabController.indexIsChanging) {
-      setState(() {});
       final targetSection = _getSectionForIndex(_tabController.index);
       if (ref.read(currentNavSectionProvider) != targetSection) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -158,13 +173,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     super.didUpdateWidget(oldWidget);
     if (widget.initialTab != null && widget.initialTab != oldWidget.initialTab) {
       final newIndex = widget.initialTab!.index;
-      if (_tabController.index != newIndex) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _tabController.index != newIndex) {
-            _tabController.animateTo(newIndex);
-            setState(() {});
-          }
+      if (_currentTabIndex != newIndex) {
+        setState(() {
+          _currentTabIndex = newIndex;
         });
+        if (_tabController.index != newIndex) {
+          _tabController.animateTo(newIndex);
+        }
       }
     }
   }
@@ -204,17 +219,17 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         targetIndex = 3;
       }
 
-      if (targetIndex != null && _tabController.index != targetIndex) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _tabController.index != targetIndex) {
-            _tabController.animateTo(targetIndex!);
-            setState(() {});
-          }
+      if (targetIndex != null && _currentTabIndex != targetIndex) {
+        setState(() {
+          _currentTabIndex = targetIndex!;
         });
+        if (_tabController.index != targetIndex) {
+          _tabController.animateTo(targetIndex!);
+        }
       }
     });
 
-    final (headerTitle, badgeText, buttonLabel, currentPaymentType) = switch (_tabController.index) {
+    final (headerTitle, badgeText, buttonLabel, currentPaymentType) = switch (_currentTabIndex) {
       0 => ('Customer Payments', 'ACCOUNTS RECEIVABLE', 'Record Customer Payment', PaymentType.customerPayment),
       1 => ('Dealer Payments', 'CHANNEL RECEIPTS', 'Record Dealer Payment', PaymentType.dealerPayment),
       2 => ('Vendor Payments', 'ACCOUNTS PAYABLE', 'Record Vendor Payment', PaymentType.vendorPayment),
@@ -246,6 +261,13 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondary,
             indicatorColor: AppColors.primary,
+            onTap: (index) {
+              if (_currentTabIndex != index) {
+                setState(() {
+                  _currentTabIndex = index;
+                });
+              }
+            },
             tabs: const [
               Tab(text: 'Customer Payments'),
               Tab(text: 'Dealer Payments'),
@@ -255,7 +277,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
           const SizedBox(height: 16),
 
-          switch (_tabController.index) {
+          switch (_currentTabIndex) {
             0 => _buildCustomerCollectionsTab(db),
             1 => _buildDealerReceiptsTab(db),
             2 => _buildVendorDisbursementsTab(db),
@@ -599,6 +621,12 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                               );
                             } else if (val == 'history') {
                               _openCustomerHistoryDialog(summary);
+                            } else if (val == 'whatsapp') {
+                              WhatsAppQuickChatDialog.showCustomerQuickChat(
+                                context,
+                                customerName: summary.customer.name,
+                                customerPhone: summary.customer.mobile,
+                              );
                             }
                           },
                           itemBuilder: (ctx) => const [
@@ -619,6 +647,16 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                   Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
                                   SizedBox(width: 8),
                                   Text('History', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'whatsapp',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.chat, size: 18, color: Colors.green),
+                                  SizedBox(width: 8),
+                                  Text('WhatsApp Chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                                 ],
                               ),
                             ),
@@ -864,6 +902,18 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           onPressed: () {
                             FocusScope.of(ctx).unfocus();
                             Navigator.of(ctx).pop();
+                          },
+                        ),
+                        ErpButton(
+                          text: 'WhatsApp Chat',
+                          icon: Icons.chat,
+                          isOutlined: true,
+                          onPressed: () {
+                            WhatsAppQuickChatDialog.showCustomerQuickChat(
+                              context,
+                              customerName: summary.customer.name,
+                              customerPhone: summary.customer.mobile,
+                            );
                           },
                         ),
                         ErpButton(
@@ -1207,6 +1257,12 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                               );
                             } else if (val == 'history') {
                               _openDealerHistoryDialog(summary);
+                            } else if (val == 'whatsapp') {
+                              WhatsAppQuickChatDialog.showCustomerQuickChat(
+                                context,
+                                customerName: summary.dealer.name,
+                                customerPhone: summary.dealer.mobile,
+                              );
                             }
                           },
                           itemBuilder: (ctx) => const [
@@ -1227,6 +1283,16 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                   Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
                                   SizedBox(width: 8),
                                   Text('History', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'whatsapp',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.chat, size: 18, color: Colors.green),
+                                  SizedBox(width: 8),
+                                  Text('WhatsApp Chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                                 ],
                               ),
                             ),
@@ -1472,6 +1538,18 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           onPressed: () {
                             FocusScope.of(ctx).unfocus();
                             Navigator.of(ctx).pop();
+                          },
+                        ),
+                        ErpButton(
+                          text: 'WhatsApp Chat',
+                          icon: Icons.chat,
+                          isOutlined: true,
+                          onPressed: () {
+                            WhatsAppQuickChatDialog.showCustomerQuickChat(
+                              context,
+                              customerName: summary.dealer.name,
+                              customerPhone: summary.dealer.mobile,
+                            );
                           },
                         ),
                         ErpButton(
@@ -1957,6 +2035,12 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                               );
                             } else if (val == 'history') {
                               _openVendorHistoryDialog(summary);
+                            } else if (val == 'whatsapp') {
+                              WhatsAppQuickChatDialog.showCustomerQuickChat(
+                                context,
+                                customerName: summary.vendor.name,
+                                customerPhone: summary.vendor.mobile,
+                              );
                             }
                           },
                           itemBuilder: (ctx) => const [
@@ -1977,6 +2061,16 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                                   Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
                                   SizedBox(width: 8),
                                   Text('History', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'whatsapp',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.chat, size: 18, color: Colors.green),
+                                  SizedBox(width: 8),
+                                  Text('WhatsApp Chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                                 ],
                               ),
                             ),
@@ -2226,6 +2320,18 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           onPressed: () {
                             FocusScope.of(ctx).unfocus();
                             Navigator.of(ctx).pop();
+                          },
+                        ),
+                        ErpButton(
+                          text: 'WhatsApp Chat',
+                          icon: Icons.chat,
+                          isOutlined: true,
+                          onPressed: () {
+                            WhatsAppQuickChatDialog.showCustomerQuickChat(
+                              context,
+                              customerName: summary.vendor.name,
+                              customerPhone: summary.vendor.mobile,
+                            );
                           },
                         ),
                         ErpButton(
@@ -2705,7 +2811,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       children: [
         _buildCommissionControlsRow(),
         const SizedBox(height: 16),
-        _buildPaymentTable(pagePayments),
+        _buildPaymentTable(pagePayments, db),
         const SizedBox(height: 16),
         ErpPaginationBar(
           currentPage: _safeCommissionCurrentPage,
@@ -2785,7 +2891,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     );
   }
 
-  Widget _buildPaymentTable(List<ErpPayment> payments) {
+  Widget _buildPaymentTable(List<ErpPayment> payments, MockDatabaseService db) {
     final isMobile = MediaQuery.of(context).size.width < 750;
 
     if (payments.isEmpty) {
@@ -2855,14 +2961,63 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                         ),
                       ),
                     ),
-                    Text(
-                      Formatters.formatCurrency(p.amount),
-                      style: AppTextStyles.bodyBold.copyWith(
-                        fontSize: 13,
-                        color: (p.paymentType == PaymentType.customerPayment || p.paymentType == PaymentType.dealerPayment)
-                            ? AppColors.successText
-                            : AppColors.textPrimary,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          Formatters.formatCurrency(p.amount),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 13,
+                            color: (p.paymentType == PaymentType.customerPayment || p.paymentType == PaymentType.dealerPayment)
+                                ? AppColors.successText
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        PopupMenuButton<String>(
+                          tooltip: 'Actions',
+                          icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onSelected: (val) {
+                            if (val == 'view') {
+                              ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', parentSection);
+                            } else if (val == 'whatsapp') {
+                              final architect = db.architects.where((a) => a.id == p.partyId).firstOrNull;
+                              WhatsAppQuickChatDialog.showArchitectQuickChat(
+                                context,
+                                architectName: architect?.name ?? p.partyName,
+                                architectPhone: architect?.mobile ?? '',
+                                firmName: architect?.companyName,
+                                projectName: p.projectName,
+                                commissionNumber: p.referenceDocumentNumber,
+                              );
+                            }
+                          },
+                          itemBuilder: (ctx) => const [
+                            PopupMenuItem(
+                              value: 'view',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
+                                  SizedBox(width: 8),
+                                  Text('View Details', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'whatsapp',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.chat, size: 18, color: Colors.green),
+                                  SizedBox(width: 8),
+                                  Text('WhatsApp Chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -2945,6 +3100,16 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                   DataColumn(numeric: true, label: Text('REMAINING (₹)', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
                   DataColumn(label: Text('PAYMENT MODE', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
                   DataColumn(label: Text('UTR / REF NO', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_note, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text('ACTIONS', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
                 ],
                 rows: payments.map((p) {
                   final parentSection = switch (p.paymentType) {
@@ -2994,6 +3159,51 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                       ),
                       DataCell(ErpStatusBadge.neutral(p.paymentMode.toString().split('.').last.toUpperCase())),
                       DataCell(Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall)),
+                      DataCell(
+                        PopupMenuButton<String>(
+                          tooltip: 'Actions',
+                          icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onSelected: (val) {
+                            if (val == 'view') {
+                              ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', parentSection);
+                            } else if (val == 'whatsapp') {
+                              final architect = db.architects.where((a) => a.id == p.partyId).firstOrNull;
+                              WhatsAppQuickChatDialog.showArchitectQuickChat(
+                                context,
+                                architectName: architect?.name ?? p.partyName,
+                                architectPhone: architect?.mobile ?? '',
+                                firmName: architect?.companyName,
+                                projectName: p.projectName,
+                                commissionNumber: p.referenceDocumentNumber,
+                              );
+                            }
+                          },
+                          itemBuilder: (ctx) => const [
+                            PopupMenuItem(
+                              value: 'view',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
+                                  SizedBox(width: 8),
+                                  Text('View Details', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'whatsapp',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.chat, size: 18, color: Colors.green),
+                                  SizedBox(width: 8),
+                                  Text('WhatsApp Chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   );
                 }).toList(),

@@ -62,6 +62,19 @@ class _AppShellState extends ConsumerState<AppShell> {
   String? _lastUserId;
   String? _lastRoleId;
 
+  ErpNavSection _canonicalSection(ErpNavSection section) {
+    switch (section) {
+      case ErpNavSection.customerPayments:
+      case ErpNavSection.dealerPayments:
+      case ErpNavSection.vendorPayments:
+      case ErpNavSection.vendorPaymentsSection:
+      case ErpNavSection.commissionPayments:
+        return ErpNavSection.customerPayments;
+      default:
+        return section;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentSection = ref.watch(currentNavSectionProvider);
@@ -95,9 +108,10 @@ class _AppShellState extends ConsumerState<AppShell> {
       // 403 Forbidden Access Guard Barrier
       contentWidget = _buildAccessDeniedBarrier(context, currentUser, currentSection, db);
     } else {
+      final canonicalKey = _canonicalSection(currentSection);
       // Lazy load screen into cache if not present
-      if (!_cachedScreens.containsKey(currentSection)) {
-        _cachedScreens[currentSection] = _buildSectionWidget(currentSection, currentUser);
+      if (!_cachedScreens.containsKey(canonicalKey)) {
+        _cachedScreens[canonicalKey] = _buildSectionWidget(canonicalKey, currentUser);
       }
 
       contentWidget = Stack(
@@ -106,9 +120,9 @@ class _AppShellState extends ConsumerState<AppShell> {
           for (final entry in _cachedScreens.entries)
             Offstage(
               key: ValueKey(entry.key),
-              offstage: entry.key != currentSection,
+              offstage: entry.key != canonicalKey,
               child: TickerMode(
-                enabled: entry.key == currentSection,
+                enabled: entry.key == canonicalKey,
                 child: entry.value,
               ),
             ),
