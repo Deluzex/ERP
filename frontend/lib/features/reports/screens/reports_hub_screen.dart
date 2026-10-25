@@ -1565,103 +1565,89 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
           ],
         );
 
-        final dateText = (_startDate != null && _endDate != null)
-            ? '${DateFormat('dd/MM/yyyy').format(_startDate!)} - ${DateFormat('dd/MM/yyyy').format(_endDate!)}'
-            : '23/06/2026 - 30/06/2026';
-
-        final dateButton = InkWell(
-          onTap: () async {
-            final picked = await showDateRangePicker(
-              context: context,
-              firstDate: DateTime(2020),
-              lastDate: DateTime(2030),
-              initialDateRange: (_startDate != null && _endDate != null)
-                  ? DateTimeRange(start: _startDate!, end: _endDate!)
-                  : null,
-            );
-            if (picked != null) {
-              setState(() {
-                _startDate = picked.start;
-                _endDate = picked.end;
-                _currentPage = 0;
-              });
-            }
+        final dateButton = ErpDateFilterBox(
+          startDate: _startDate,
+          endDate: _endDate,
+          width: isNarrow ? double.infinity : null,
+          onDateRangeSelected: (start, end) {
+            setState(() {
+              _startDate = start;
+              _endDate = end;
+              _currentPage = 0;
+            });
           },
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+        );
+
+        final printButton = OutlinedButton.icon(
+          onPressed: () => _printOrLayoutReport(activeIndex),
+          icon: const Icon(Icons.print_outlined, size: 16, color: Color(0xFF374151)),
+          label: const Text(
+            'Print Statement',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF374151),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.calendar_today_outlined, size: 15, color: Color(0xFF6B7280)),
-                const SizedBox(width: 8),
-                Text(
-                  dateText,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF374151),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF6B7280)),
-              ],
-            ),
+          ),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: Colors.white,
+            side: const BorderSide(color: Color(0xFFE5E7EB)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            minimumSize: const Size(0, 38),
           ),
         );
 
-        final actionButtons = Wrap(
-          spacing: 10,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            dateButton,
-            OutlinedButton.icon(
-              onPressed: () => _printOrLayoutReport(activeIndex),
-              icon: const Icon(Icons.print_outlined, size: 16, color: Color(0xFF374151)),
-              label: const Text(
-                'Print Statement',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF374151),
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: Color(0xFFE5E7EB)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                minimumSize: const Size(0, 38),
-              ),
+        final exportButton = ElevatedButton.icon(
+          onPressed: () => _downloadReportToDevice(activeIndex),
+          icon: const Icon(Icons.file_download_outlined, size: 16, color: Colors.white),
+          label: const Text(
+            'Export',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
             ),
-            ElevatedButton.icon(
-              onPressed: () => _downloadReportToDevice(activeIndex),
-              icon: const Icon(Icons.file_download_outlined, size: 16, color: Colors.white),
-              label: const Text(
-                'Export',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                minimumSize: const Size(0, 38),
-              ),
-            ),
-          ],
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            minimumSize: const Size(0, 38),
+          ),
         );
+
+        final actionButtons = isNarrow
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: dateButton,
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: printButton,
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: exportButton,
+                  ),
+                ],
+              )
+            : Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  dateButton,
+                  printButton,
+                  exportButton,
+                ],
+              );
 
         final iconBox = Container(
           padding: EdgeInsets.all(isMobile ? 10 : 12),
@@ -1699,10 +1685,13 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        iconBox,
-                        const SizedBox(width: 12),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: iconBox,
+                        ),
+                        SizedBox(width: isMobile ? 10 : 12),
                         Expanded(child: titleBlock),
                       ],
                     ),

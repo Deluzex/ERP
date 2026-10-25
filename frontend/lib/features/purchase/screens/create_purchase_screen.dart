@@ -1564,89 +1564,98 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                   else
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        const minTableWidth = 1050.0;
-                        final effectiveWidth = math.max(constraints.maxWidth, minTableWidth);
+                        final isDesktopSingleRow = constraints.maxWidth >= 1100;
+                        final isMobile = constraints.maxWidth < 600;
 
-                        return SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Container(
-                            width: effectiveWidth,
-                            clipBehavior: Clip.antiAlias,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF9FAFB),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: const Color(0xFFE5E7EB),
-                                width: 1.0,
+                        return ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _items.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final item = _items[index];
+                            final isFp = item.itemType == PurchaseItemType.finishedProduct;
+
+                            final typeDropdown = DropdownButtonFormField<PurchaseItemType>(
+                              value: item.itemType,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText: 'Item Type',
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                fillColor: isFp ? const Color(0xFFCCFBF1) : null,
                               ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: List.generate(_items.length, (index) {
-                                final item = _items[index];
-                                final isFp = item.itemType == PurchaseItemType.finishedProduct;
+                              items: const [
+                                DropdownMenuItem(
+                                  value: PurchaseItemType.rawMaterial,
+                                  child: Text('Raw Mat', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                ),
+                                DropdownMenuItem(
+                                  value: PurchaseItemType.finishedProduct,
+                                  child: Text('Fin Good', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F766E))),
+                                ),
+                              ],
+                              onChanged: (newType) {
+                                if (newType == null || newType == item.itemType) return;
+                                if (newType == PurchaseItemType.rawMaterial && db.rawMaterials.isNotEmpty) {
+                                  final rm = db.rawMaterials.first;
+                                  setState(() {
+                                    item.itemType = PurchaseItemType.rawMaterial;
+                                    item.itemId = rm.id;
+                                    item.itemName = rm.name;
+                                    item.itemCode = rm.itemCode;
+                                    item.unit = rm.unit;
+                                    item.rate = rm.defaultPurchasePrice;
+                                    item.gstPercent = rm.gstPercent;
+                                    item.transportationCharge = _resolveItemTransportationRate(
+                                      type: PurchaseItemType.rawMaterial,
+                                      itemId: rm.id,
+                                    );
+                                    _isManualTransportation = false;
+                                    _recalculateTransportation(force: true);
+                                  });
+                                } else if (newType == PurchaseItemType.finishedProduct && db.finishedProducts.isNotEmpty) {
+                                  final fp = db.finishedProducts.first;
+                                  setState(() {
+                                    item.itemType = PurchaseItemType.finishedProduct;
+                                    item.itemId = fp.id;
+                                    item.itemName = fp.name;
+                                    item.itemCode = fp.itemCode;
+                                    item.unit = fp.unit;
+                                    item.rate = fp.costPrice;
+                                    item.gstPercent = fp.gstPercent;
+                                    item.transportationCharge = _resolveItemTransportationRate(
+                                      type: PurchaseItemType.finishedProduct,
+                                      itemId: fp.id,
+                                    );
+                                    _isManualTransportation = false;
+                                    _recalculateTransportation(force: true);
+                                  });
+                                }
+                              },
+                            );
 
-                                return Container(
-                                  width: effectiveWidth,
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: isFp ? const Color(0xFFF0FDFA) : Colors.transparent,
-                                    border: index > 0
-                                        ? const Border(
-                                            top: BorderSide(
-                                              color: Color(0xFFE5E7EB),
-                                              width: 1.0,
-                                            ),
-                                          )
-                                        : null,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                // Type badge / toggle
-                                SizedBox(
-                                  width: 130,
-                                  child: DropdownButtonFormField<PurchaseItemType>(
-                                    value: item.itemType,
+                            final productDropdown = isFp
+                                ? DropdownButtonFormField<String>(
+                                    value: item.itemId,
                                     isExpanded: true,
-                                    decoration: InputDecoration(
-                                      labelText: 'Item Type',
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                      fillColor: isFp ? const Color(0xFFCCFBF1) : null,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Finished Product *',
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                     ),
-                                    items: const [
-                                      DropdownMenuItem(
-                                        value: PurchaseItemType.rawMaterial,
-                                        child: Text('Raw Mat', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: PurchaseItemType.finishedProduct,
-                                        child: Text('Fin Good', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F766E))),
-                                      ),
-                                    ],
-                                    onChanged: (newType) {
-                                      if (newType == null || newType == item.itemType) return;
-                                      if (newType == PurchaseItemType.rawMaterial && db.rawMaterials.isNotEmpty) {
-                                        final rm = db.rawMaterials.first;
+                                    items: db.finishedProducts.map((fp) {
+                                      return DropdownMenuItem(
+                                        value: fp.id,
+                                        child: Text(
+                                          '${fp.itemCode} - ${fp.name}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        final fp = db.finishedProducts.firstWhere((f) => f.id == val);
                                         setState(() {
-                                          item.itemType = PurchaseItemType.rawMaterial;
-                                          item.itemId = rm.id;
-                                          item.itemName = rm.name;
-                                          item.itemCode = rm.itemCode;
-                                          item.unit = rm.unit;
-                                          item.rate = rm.defaultPurchasePrice;
-                                          item.gstPercent = rm.gstPercent;
-                                          item.transportationCharge = _resolveItemTransportationRate(
-                                            type: PurchaseItemType.rawMaterial,
-                                            itemId: rm.id,
-                                          );
-                                          _isManualTransportation = false;
-                                          _recalculateTransportation(force: true);
-                                        });
-                                      } else if (newType == PurchaseItemType.finishedProduct && db.finishedProducts.isNotEmpty) {
-                                        final fp = db.finishedProducts.first;
-                                        setState(() {
-                                          item.itemType = PurchaseItemType.finishedProduct;
                                           item.itemId = fp.id;
                                           item.itemName = fp.name;
                                           item.itemCode = fp.itemCode;
@@ -1662,200 +1671,250 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                         });
                                       }
                                     },
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-
-                                // Material/Product Dropdown
-                                SizedBox(
-                                  width: 250,
-                                  child: isFp
-                                      ? DropdownButtonFormField<String>(
-                                          value: item.itemId,
-                                          isExpanded: true,
-                                          decoration: const InputDecoration(labelText: 'Finished Product *'),
-                                          items: db.finishedProducts.map((fp) {
-                                            return DropdownMenuItem(
-                                              value: fp.id,
-                                              child: Text(
-                                                '${fp.itemCode} - ${fp.name}',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            );
-                                          }).toList(),
-                                          onChanged: (val) {
-                                            if (val != null) {
-                                              final fp = db.finishedProducts.firstWhere((f) => f.id == val);
-                                              setState(() {
-                                                item.itemId = fp.id;
-                                                item.itemName = fp.name;
-                                                item.itemCode = fp.itemCode;
-                                                item.unit = fp.unit;
-                                                item.rate = fp.costPrice;
-                                                item.gstPercent = fp.gstPercent;
-                                                item.transportationCharge = _resolveItemTransportationRate(
-                                                  type: PurchaseItemType.finishedProduct,
-                                                  itemId: fp.id,
-                                                );
-                                                _isManualTransportation = false;
-                                                _recalculateTransportation(force: true);
-                                              });
-                                            }
-                                          },
-                                        )
-                                      : DropdownButtonFormField<String>(
-                                          value: item.itemId,
-                                          isExpanded: true,
-                                          decoration: const InputDecoration(labelText: 'Raw Material *'),
-                                          items: db.rawMaterials.map((rm) {
-                                            return DropdownMenuItem(
-                                              value: rm.id,
-                                              child: Text(
-                                                '${rm.itemCode} - ${rm.name}',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            );
-                                          }).toList(),
-                                          onChanged: (val) {
-                                            if (val != null) {
-                                              final rm = db.rawMaterials.firstWhere((r) => r.id == val);
-                                              setState(() {
-                                                item.itemId = rm.id;
-                                                item.itemName = rm.name;
-                                                item.itemCode = rm.itemCode;
-                                                item.unit = rm.unit;
-                                                item.rate = rm.defaultPurchasePrice;
-                                                item.gstPercent = rm.gstPercent;
-                                                item.transportationCharge = _resolveItemTransportationRate(
-                                                  type: PurchaseItemType.rawMaterial,
-                                                  itemId: rm.id,
-                                                );
-                                                _isManualTransportation = false;
-                                                _recalculateTransportation(force: true);
-                                              });
-                                            }
-                                          },
+                                  )
+                                : DropdownButtonFormField<String>(
+                                    value: item.itemId,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Raw Material *',
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    ),
+                                    items: db.rawMaterials.map((rm) {
+                                      return DropdownMenuItem(
+                                        value: rm.id,
+                                        child: Text(
+                                          '${rm.itemCode} - ${rm.name}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                ),
-                                const SizedBox(width: 10),
-
-                                // Quantity
-                                SizedBox(
-                                  width: 100,
-                                  child: TextFormField(
-                                    key: ValueKey('qty_${item.itemId}_${item.itemType}_$index'),
-                                    initialValue: item.quantity.toString(),
-                                    keyboardType: TextInputType.number,
-                                    validator: Validators.positiveNumber,
-                                    decoration: InputDecoration(labelText: 'Qty (${item.unit})'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() {
-                                        item.quantity = num;
-                                        _isManualTransportation = false;
-                                        _recalculateTransportation(force: true);
-                                      });
+                                      );
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        final rm = db.rawMaterials.firstWhere((r) => r.id == val);
+                                        setState(() {
+                                          item.itemId = rm.id;
+                                          item.itemName = rm.name;
+                                          item.itemCode = rm.itemCode;
+                                          item.unit = rm.unit;
+                                          item.rate = rm.defaultPurchasePrice;
+                                          item.gstPercent = rm.gstPercent;
+                                          item.transportationCharge = _resolveItemTransportationRate(
+                                            type: PurchaseItemType.rawMaterial,
+                                            itemId: rm.id,
+                                          );
+                                          _isManualTransportation = false;
+                                          _recalculateTransportation(force: true);
+                                        });
+                                      }
                                     },
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
+                                  );
 
-                                // Rate
-                                SizedBox(
-                                  width: 100,
-                                  child: TextFormField(
-                                    key: ValueKey('rate_${item.itemId}_${item.itemType}_$index'),
-                                    initialValue: item.rate.toString(),
-                                    keyboardType: TextInputType.number,
-                                    validator: Validators.positiveNumber,
-                                    decoration: const InputDecoration(labelText: 'Rate (₹)'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() {
-                                        item.rate = num;
-                                        _recalculateTransportation(force: true);
-                                      });
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
+                            final qtyField = TextFormField(
+                              key: ValueKey('qty_${item.itemId}_${item.itemType}_$index'),
+                              initialValue: item.quantity.toString(),
+                              keyboardType: TextInputType.number,
+                              validator: Validators.positiveNumber,
+                              decoration: InputDecoration(
+                                labelText: 'Qty (${item.unit})',
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                              onChanged: (v) {
+                                final num = double.tryParse(v) ?? 0.0;
+                                setState(() {
+                                  item.quantity = num;
+                                  _isManualTransportation = false;
+                                  _recalculateTransportation(force: true);
+                                });
+                              },
+                            );
 
-                                // Discount
-                                SizedBox(
-                                  width: 90,
-                                  child: TextFormField(
-                                    key: ValueKey('disc_${item.itemId}_${item.itemType}_$index'),
-                                    initialValue: item.discount.toString(),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                                      _MaxAmountTextInputFormatter(() => (item.quantity * item.rate).clamp(0.0, double.infinity)),
-                                    ],
-                                    decoration: const InputDecoration(labelText: 'Disc (₹)'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.discount = num);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
+                            final rateField = TextFormField(
+                              key: ValueKey('rate_${item.itemId}_${item.itemType}_$index'),
+                              initialValue: item.rate.toString(),
+                              keyboardType: TextInputType.number,
+                              validator: Validators.positiveNumber,
+                              decoration: const InputDecoration(
+                                labelText: 'Rate (₹)',
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                              onChanged: (v) {
+                                final num = double.tryParse(v) ?? 0.0;
+                                setState(() {
+                                  item.rate = num;
+                                  _recalculateTransportation(force: true);
+                                });
+                              },
+                            );
 
-                                // GST %
-                                SizedBox(
-                                  width: 80,
-                                  child: TextFormField(
-                                    key: ValueKey('gst_${item.itemId}_${item.itemType}_$index'),
-                                    initialValue: item.gstPercent.toString(),
-                                    keyboardType: TextInputType.number,
-                                    validator: Validators.nonNegativeNumber,
-                                    decoration: const InputDecoration(labelText: 'GST %'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.gstPercent = num);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-
-                                // Line Total
-                                SizedBox(
-                                  width: 130,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text('Line Total', style: AppTextStyles.bodySmall),
-                                      Text(
-                                        Formatters.formatCurrency(item.lineTotal),
-                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-                                      ),
-                                      if (_transportationCharges > 0 && _subtotalAmount > 0 && item.quantity > 0) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Landed: ₹${(((item.subtotal + ((item.subtotal / _subtotalAmount) * _transportationCharges)) / item.quantity * 100).round() / 100).toStringAsFixed(2)}/${item.unit}',
-                                          style: const TextStyle(fontSize: 10, color: AppColors.success, fontWeight: FontWeight.w600),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-
-                                // Delete button
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
-                                  onPressed: () => _removeLineItem(index),
-                                ),
+                            final discField = TextFormField(
+                              key: ValueKey('disc_${item.itemId}_${item.itemType}_$index'),
+                              initialValue: item.discount.toString(),
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                                _MaxAmountTextInputFormatter(() => (item.quantity * item.rate).clamp(0.0, double.infinity)),
                               ],
-                            ),
-                          );
-                        }),
-                      ),
+                              decoration: const InputDecoration(
+                                labelText: 'Disc (₹)',
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                              onChanged: (v) {
+                                final num = double.tryParse(v) ?? 0.0;
+                                setState(() => item.discount = num);
+                              },
+                            );
+
+                            final gstField = TextFormField(
+                              key: ValueKey('gst_${item.itemId}_${item.itemType}_$index'),
+                              initialValue: item.gstPercent.toString(),
+                              keyboardType: TextInputType.number,
+                              validator: Validators.nonNegativeNumber,
+                              decoration: const InputDecoration(
+                                labelText: 'GST %',
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                              onChanged: (v) {
+                                final num = double.tryParse(v) ?? 0.0;
+                                setState(() => item.gstPercent = num);
+                              },
+                            );
+
+                            final lineTotalWidget = Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0FDF4),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFBBF7D0)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Line Total',
+                                    style: AppTextStyles.caption.copyWith(color: AppColors.textMuted, fontSize: 10),
+                                  ),
+                                  Text(
+                                    Formatters.formatCurrency(item.lineTotal),
+                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 13),
+                                  ),
+                                  if (_transportationCharges > 0 && _subtotalAmount > 0 && item.quantity > 0) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Landed: ₹${(((item.subtotal + ((item.subtotal / _subtotalAmount) * _transportationCharges)) / item.quantity * 100).round() / 100).toStringAsFixed(2)}/${item.unit}',
+                                      style: const TextStyle(fontSize: 10, color: AppColors.success, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+
+                            final deleteButton = IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                              tooltip: 'Remove Item',
+                              onPressed: () => _removeLineItem(index),
+                            );
+
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isFp ? const Color(0xFFF0FDFA) : const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isFp ? const Color(0xFF99F6E4) : const Color(0xFFE5E7EB),
+                                  width: 1.0,
+                                ),
+                              ),
+                              child: isDesktopSingleRow
+                                  ? Row(
+                                      children: [
+                                        SizedBox(width: 120, child: typeDropdown),
+                                        const SizedBox(width: 8),
+                                        Expanded(flex: 3, child: productDropdown),
+                                        const SizedBox(width: 8),
+                                        Expanded(flex: 1, child: qtyField),
+                                        const SizedBox(width: 8),
+                                        Expanded(flex: 1, child: rateField),
+                                        const SizedBox(width: 8),
+                                        Expanded(flex: 1, child: discField),
+                                        const SizedBox(width: 8),
+                                        Expanded(flex: 1, child: gstField),
+                                        const SizedBox(width: 10),
+                                        lineTotalWidget,
+                                        const SizedBox(width: 4),
+                                        deleteButton,
+                                      ],
+                                    )
+                                  : isMobile
+                                      ? Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(child: typeDropdown),
+                                                const SizedBox(width: 8),
+                                                deleteButton,
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            productDropdown,
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              children: [
+                                                Expanded(child: qtyField),
+                                                const SizedBox(width: 8),
+                                                Expanded(child: rateField),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Row(
+                                              children: [
+                                                Expanded(child: discField),
+                                                const SizedBox(width: 8),
+                                                Expanded(child: gstField),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Align(
+                                              alignment: Alignment.centerRight,
+                                              child: lineTotalWidget,
+                                            ),
+                                          ],
+                                        )
+                                      : Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                SizedBox(width: 125, child: typeDropdown),
+                                                const SizedBox(width: 10),
+                                                Expanded(child: productDropdown),
+                                                const SizedBox(width: 8),
+                                                deleteButton,
+                                              ],
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              children: [
+                                                Expanded(flex: 2, child: qtyField),
+                                                const SizedBox(width: 8),
+                                                Expanded(flex: 2, child: rateField),
+                                                const SizedBox(width: 8),
+                                                Expanded(flex: 2, child: discField),
+                                                const SizedBox(width: 8),
+                                                Expanded(flex: 2, child: gstField),
+                                                const SizedBox(width: 12),
+                                                lineTotalWidget,
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                            );
+                          },
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
                 ],
               ),
             ),

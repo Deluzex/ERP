@@ -321,6 +321,7 @@ class ErpDateFilterBox extends StatelessWidget {
   final void Function(DateTime? start, DateTime? end) onDateRangeSelected;
   final DateTime? firstDate;
   final DateTime? lastDate;
+  final double? width;
 
   const ErpDateFilterBox({
     super.key,
@@ -330,6 +331,7 @@ class ErpDateFilterBox extends StatelessWidget {
     required this.onDateRangeSelected,
     this.firstDate,
     this.lastDate,
+    this.width,
   });
 
   bool get hasFilter => startDate != null || endDate != null;
@@ -368,6 +370,7 @@ class ErpDateFilterBox extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Container(
         height: 38,
+        width: width,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: hasFilter ? AppColors.primary.withValues(alpha: 0.08) : AppColors.surface,
@@ -378,23 +381,29 @@ class ErpDateFilterBox extends StatelessWidget {
           ),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: width != null ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: width != null ? MainAxisAlignment.spaceBetween : MainAxisAlignment.start,
           children: [
-            Icon(
-              hasFilter
-                  ? (isSingleDate ? Icons.event : Icons.date_range)
-                  : Icons.calendar_today_outlined,
-              size: 15,
-              color: hasFilter ? AppColors.primary : AppColors.textMuted,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              displayText,
-              style: AppTextStyles.bodyMedium.copyWith(
-                fontSize: 12.5,
-                color: hasFilter ? AppColors.primaryDark : AppColors.textPrimary,
-                fontWeight: hasFilter ? FontWeight.w600 : FontWeight.normal,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  hasFilter
+                      ? (isSingleDate ? Icons.event : Icons.date_range)
+                      : Icons.calendar_today_outlined,
+                  size: 15,
+                  color: hasFilter ? AppColors.primary : AppColors.textMuted,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  displayText,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontSize: 12.5,
+                    color: hasFilter ? AppColors.primaryDark : AppColors.textPrimary,
+                    fontWeight: hasFilter ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ],
             ),
             if (hasFilter) ...[
               const SizedBox(width: 6),

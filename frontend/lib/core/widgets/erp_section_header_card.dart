@@ -8,6 +8,7 @@ class ErpSectionHeaderCard extends StatelessWidget {
   final String? badgeText;
   final String? subtitle;
   final Widget? action;
+  final List<Widget>? actions;
   final double narrowBreakpoint;
 
   const ErpSectionHeaderCard({
@@ -17,6 +18,7 @@ class ErpSectionHeaderCard extends StatelessWidget {
     this.badgeText,
     this.subtitle,
     this.action,
+    this.actions,
     this.narrowBreakpoint = 750,
   });
 
@@ -27,6 +29,33 @@ class ErpSectionHeaderCard extends StatelessWidget {
         final isNarrow = constraints.maxWidth < narrowBreakpoint;
         final isMobile = constraints.maxWidth < 520;
         final isSmallMobile = constraints.maxWidth < 380;
+
+        Widget? effectiveAction = action;
+        if (actions != null && actions!.isNotEmpty) {
+          if (isNarrow) {
+            effectiveAction = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (int i = 0; i < actions!.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: actions![i],
+                  ),
+                ],
+              ],
+            );
+          } else {
+            effectiveAction = Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: actions!,
+            );
+          }
+        }
 
         final badgeWidget = (badgeText != null && badgeText!.isNotEmpty)
             ? Container(
@@ -127,11 +156,11 @@ class ErpSectionHeaderCard extends StatelessWidget {
                         Expanded(child: titleBlock),
                       ],
                     ),
-                    if (action != null) ...[
+                    if (effectiveAction != null) ...[
                       SizedBox(height: isMobile ? 12 : 16),
                       SizedBox(
                         width: double.infinity,
-                        child: action!,
+                        child: effectiveAction,
                       ),
                     ],
                   ],
@@ -142,9 +171,9 @@ class ErpSectionHeaderCard extends StatelessWidget {
                     iconBox,
                     const SizedBox(width: 16),
                     Expanded(child: titleBlock),
-                    if (action != null) ...[
+                    if (effectiveAction != null) ...[
                       const SizedBox(width: 16),
-                      action!,
+                      effectiveAction,
                     ],
                   ],
                 ),
