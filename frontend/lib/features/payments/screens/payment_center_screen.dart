@@ -21,8 +21,6 @@ import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
-import '../../../core/widgets/erp_filter_controls.dart';
-import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
@@ -226,7 +224,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           _currentTabIndex = targetIndex!;
         });
         if (_tabController.index != targetIndex) {
-          _tabController.animateTo(targetIndex!);
+          _tabController.animateTo(targetIndex);
         }
       }
     });
@@ -624,11 +622,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             } else if (val == 'history') {
                               _openCustomerHistoryDialog(summary);
                             } else if (val == 'whatsapp') {
-                              WhatsAppQuickChatDialog.showCustomerQuickChat(
-                                context,
-                                customerName: summary.customer.name,
-                                customerPhone: summary.customer.mobile,
-                              );
+                              _openCustomerWhatsAppReminder(summary);
                             }
                           },
                           itemBuilder: (ctx) => const [
@@ -673,6 +667,42 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           );
         },
       ),
+    );
+  }
+
+  void _openCustomerWhatsAppReminder(CustomerAccountSummary summary) {
+    DateTime? oldestInvoiceDate;
+    String? oldestDocNumber;
+    final saleEntries = summary.entries.where((e) => e.type == 'Sale Invoice').toList();
+    if (saleEntries.isNotEmpty) {
+      for (final entry in saleEntries) {
+        if (oldestInvoiceDate == null || entry.date.isBefore(oldestInvoiceDate)) {
+          oldestInvoiceDate = entry.date;
+          oldestDocNumber = entry.docNumber;
+        }
+      }
+    }
+
+    if (oldestInvoiceDate == null && summary.entries.isNotEmpty) {
+      oldestInvoiceDate = summary.entries.last.date;
+      oldestDocNumber = summary.entries.last.docNumber;
+    }
+
+    final now = DateTime.now();
+    final pendingDays = oldestInvoiceDate != null
+        ? now.difference(oldestInvoiceDate).inDays
+        : (summary.pendingAmount > 0 ? 30 : 0);
+
+    WhatsAppQuickChatDialog.showCustomerQuickChat(
+      context,
+      customerName: summary.customer.name,
+      customerPhone: summary.customer.mobile,
+      docNumber: oldestDocNumber,
+      pendingAmount: summary.pendingAmount,
+      saleTotal: summary.saleTotal,
+      paidAmount: summary.paidAmount,
+      pendingDays: pendingDays,
+      oldestInvoiceDate: oldestInvoiceDate,
     );
   }
 
@@ -911,11 +941,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                           icon: Icons.chat,
                           isOutlined: true,
                           onPressed: () {
-                            WhatsAppQuickChatDialog.showCustomerQuickChat(
-                              context,
-                              customerName: summary.customer.name,
-                              customerPhone: summary.customer.mobile,
-                            );
+                            _openCustomerWhatsAppReminder(summary);
                           },
                         ),
                         ErpButton(
