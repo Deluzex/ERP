@@ -47,34 +47,84 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
             icon: Icons.inventory_2_rounded,
             title: 'Inventory & Warehouse Dashboard',
             badgeText: 'INVENTORY MANAGER',
-            action: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ErpButton(
-                  text: 'New Stock Adjustment',
-                  icon: Icons.tune_rounded,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
-                ),
-                ErpButton(
-                  text: 'Raw Material Stock',
-                  icon: Icons.category_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                ),
-                ErpButton(
-                  text: 'Finished Product Stock',
-                  icon: Icons.inventory_2_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProductStock,
-                ),
-                ErpButton(
-                  text: 'Stock Movement Ledger',
-                  icon: Icons.swap_horiz_rounded,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
-                ),
-              ],
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobileHeader = actionBox.maxWidth < 520;
+                if (isMobileHeader) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'New Stock Adjustment',
+                          icon: Icons.tune_rounded,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Raw Material Stock',
+                          icon: Icons.category_outlined,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Finished Product Stock',
+                          icon: Icons.inventory_2_outlined,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProductStock,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Stock Movement Ledger',
+                          icon: Icons.swap_horiz_rounded,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ErpButton(
+                      text: 'New Stock Adjustment',
+                      icon: Icons.tune_rounded,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
+                    ),
+                    ErpButton(
+                      text: 'Raw Material Stock',
+                      icon: Icons.category_outlined,
+                      isOutlined: true,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
+                    ),
+                    ErpButton(
+                      text: 'Finished Product Stock',
+                      icon: Icons.inventory_2_outlined,
+                      isOutlined: true,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProductStock,
+                    ),
+                    ErpButton(
+                      text: 'Stock Movement Ledger',
+                      icon: Icons.swap_horiz_rounded,
+                      isOutlined: true,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 24),
@@ -263,71 +313,129 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
                 return true;
               }).toList();
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text('Recent Stock Movements (Ledger)', style: AppTextStyles.h2),
-                      ErpDateFilterBox(
-                        startDate: _movementsStartDate,
-                        endDate: _movementsEndDate,
-                        onDateRangeSelected: (start, end) {
-                          setState(() {
-                            _movementsStartDate = start;
-                            _movementsEndDate = end;
-                          });
+              return Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: AppRadius.lgBorderRadius,
+                  border: Border.all(color: AppColors.border, width: 1),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isNarrow = constraints.maxWidth < 650;
+                          final headerText = Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Recent Stock Movements (Ledger)', style: AppTextStyles.h3),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Real-time immutable stock ledger transactions',
+                                style: AppTextStyles.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          );
+                          final dateFilter = ErpDateFilterBox(
+                            startDate: _movementsStartDate,
+                            endDate: _movementsEndDate,
+                            onDateRangeSelected: (start, end) {
+                              setState(() {
+                                _movementsStartDate = start;
+                                _movementsEndDate = end;
+                              });
+                            },
+                          );
+                          final button = OutlinedButton(
+                            onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppColors.border, width: 1),
+                              foregroundColor: AppColors.textPrimary,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                            child: Text('View Full Ledger', style: AppTextStyles.button.copyWith(fontSize: 12)),
+                          );
+
+                          if (isNarrow) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                headerText,
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    dateFilter,
+                                    button,
+                                  ],
+                                ),
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              headerText,
+                              Row(
+                                children: [
+                                  dateFilter,
+                                  const SizedBox(width: 8),
+                                  button,
+                                ],
+                              ),
+                            ],
+                          );
                         },
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (filteredMovements.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(32),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Text('No movements recorded for the selected date range.', style: AppTextStyles.bodyMedium),
-                    )
-                  else
-                    ErpDataTable(
-                      columns: const [
-                        ErpColumn(title: 'Date & Time'),
-                        ErpColumn(title: 'Item / SKU'),
-                        ErpColumn(title: 'Movement Type'),
-                        ErpColumn(title: 'Quantity Changed', isNumeric: true),
-                        ErpColumn(title: 'Balance After', isNumeric: true),
-                        ErpColumn(title: 'Reference / Source'),
-                      ],
-                      rows: filteredMovements.take(10).map((m) {
-                        final isPositive = m.stockIn > 0;
-
-                        return [
-                          Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
-                          Text(m.itemName, style: AppTextStyles.bodyBold),
-                          ErpStatusBadge(
-                            label: m.transactionTypeLabel,
-                            backgroundColor: isPositive ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
-                            textColor: isPositive ? Colors.green.shade800 : Colors.orange.shade900,
-                          ),
-                          Text(
-                            '${isPositive ? "+" : "-"}${isPositive ? m.stockIn : m.stockOut} ${m.unit}',
-                            style: AppTextStyles.bodyBold.copyWith(color: isPositive ? Colors.green : Colors.red),
-                          ),
-                          Text('${m.currentBalance} ${m.unit}', style: AppTextStyles.bodySmall),
-                          Text(m.referenceNumber.isNotEmpty ? m.referenceNumber : (m.notes ?? '-'), style: AppTextStyles.bodySmall),
-                        ];
-                      }).toList(),
                     ),
-                ],
+                    const Divider(height: 1, color: AppColors.border),
+                    if (filteredMovements.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Center(
+                          child: Text('No movements recorded for the selected date range.', style: AppTextStyles.bodyMedium),
+                        ),
+                      )
+                    else
+                      ErpDataTable(
+                        columns: const [
+                          ErpColumn(title: 'Date & Time'),
+                          ErpColumn(title: 'Item / SKU'),
+                          ErpColumn(title: 'Movement Type'),
+                          ErpColumn(title: 'Quantity Changed', isNumeric: true),
+                          ErpColumn(title: 'Balance After', isNumeric: true),
+                          ErpColumn(title: 'Reference / Source'),
+                        ],
+                        rows: filteredMovements.take(10).map((m) {
+                          final isPositive = m.stockIn > 0;
+
+                          return [
+                            Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
+                            Text(m.itemName, style: AppTextStyles.bodyBold),
+                            ErpStatusBadge(
+                              label: m.transactionTypeLabel,
+                              backgroundColor: isPositive ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                              textColor: isPositive ? Colors.green.shade800 : Colors.orange.shade900,
+                            ),
+                            Text(
+                              '${isPositive ? "+" : "-"}${isPositive ? m.stockIn : m.stockOut} ${m.unit}',
+                              style: AppTextStyles.bodyBold.copyWith(color: isPositive ? Colors.green : Colors.red),
+                            ),
+                            Text('${m.currentBalance} ${m.unit}', style: AppTextStyles.bodySmall),
+                            Text(m.referenceNumber.isNotEmpty ? m.referenceNumber : (m.notes ?? '-'), style: AppTextStyles.bodySmall),
+                          ];
+                        }).toList(),
+                      ),
+                  ],
+                ),
               );
             },
           ),

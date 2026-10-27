@@ -24,150 +24,98 @@ class ErpHeader extends ConsumerWidget {
       final details = activeRecordStack.last;
       switch (details.recordType) {
         case 'rawMaterial':
-          return 'Raw Material Details';
-        case 'vendor':
-          return 'Vendor Details';
+          return 'Inventory';
         case 'purchase':
-          return 'Purchase Order Details';
+          return 'Purchase';
         case 'production':
-          return 'Production Order Details';
-        case 'customer':
-          return 'Customer Profile';
-        case 'dealer':
-          return 'Dealer Profile';
-        case 'architect':
-          return 'Architect Profile';
-        case 'project':
-          return 'Project Details';
+          return 'Production';
         case 'quotation':
-          return 'Quotation Details';
         case 'proformaInvoice':
-          return 'Proforma Invoice Details';
         case 'salesOrder':
-          return 'Sales Order Details';
         case 'delivery':
-          return 'Delivery Challan Details';
         case 'invoice':
-          return 'Sales Tax Invoice Details';
         case 'salesReturn':
-          return 'Sales Return & Credit Note Details';
+          return 'Sales';
         case 'payment':
-          return 'Payment Voucher Details';
+          return 'Payments';
+        case 'vendor':
+        case 'customer':
+        case 'dealer':
+        case 'architect':
+        case 'project':
+          return 'Masters';
         default:
-          return 'Record Details';
+          return 'Dashboard';
       }
     }
 
     final currentSection = ref.watch(currentNavSectionProvider);
-    final db = ref.watch(databaseServiceProvider);
-    final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
-    final userRole = db.getUserRole(currentUser);
 
     switch (currentSection) {
       case ErpNavSection.dashboard:
-        return '${userRole.name} Dashboard';
+        return 'Dashboard';
       case ErpNavSection.inventoryDashboard:
-        return 'Inventory Dashboard';
       case ErpNavSection.rawMaterialStock:
-        return 'Raw Material Stock';
       case ErpNavSection.finishedProductStock:
-        return 'Finished Product Stock';
       case ErpNavSection.stockMovement:
-        return 'Stock Movement (Ledger)';
       case ErpNavSection.stockAdjustments:
-        return 'Stock Adjustments';
+        return 'Inventory';
       case ErpNavSection.purchaseDashboard:
-        return 'Purchase Dashboard';
       case ErpNavSection.purchaseList:
       case ErpNavSection.purchaseHistory:
-        return 'Purchase Orders';
       case ErpNavSection.createPurchase:
-        return 'Create Purchase Order';
       case ErpNavSection.vendorPayments:
-        return 'Vendor Payments';
+        return 'Purchase';
       case ErpNavSection.productionDashboard:
-        return 'Production Dashboard';
       case ErpNavSection.productionOrders:
       case ErpNavSection.productionHistory:
-        return 'Production Orders';
       case ErpNavSection.createProduction:
-        return 'Create Production Order';
       case ErpNavSection.productionCosting:
-        return 'Production Costing';
+        return 'Production';
       case ErpNavSection.salesDashboard:
-        return 'Sales Dashboard';
       case ErpNavSection.quotations:
-        return 'Quotations';
       case ErpNavSection.createQuotation:
-        return 'Create Quotation';
       case ErpNavSection.proformaInvoices:
-        return 'Proforma Invoices';
       case ErpNavSection.salesOrders:
-        return 'Sales Orders';
       case ErpNavSection.createSalesOrder:
-        return 'Create Sales Order';
       case ErpNavSection.salesDeliveries:
-        return 'Sales Deliveries & Dispatch';
       case ErpNavSection.salesInvoiceList:
-        return 'Sales Invoices';
       case ErpNavSection.createSale:
-        return 'Create Sales Invoice';
       case ErpNavSection.salesReturns:
       case ErpNavSection.createSalesReturn:
-        return 'Sales Returns';
+        return 'Sales';
+      case ErpNavSection.paymentsDashboard:
+      case ErpNavSection.customerPayments:
+      case ErpNavSection.dealerPayments:
+      case ErpNavSection.vendorPaymentsSection:
+      case ErpNavSection.commissionPayments:
+      case ErpNavSection.expenseList:
+        return 'Payments';
+      case ErpNavSection.mastersDashboard:
+      case ErpNavSection.categoriesUnits:
+      case ErpNavSection.vendors:
+      case ErpNavSection.customers:
+      case ErpNavSection.dealers:
+      case ErpNavSection.architects:
+      case ErpNavSection.rawMaterials:
+      case ErpNavSection.finishedProducts:
+      case ErpNavSection.billOfMaterials:
       case ErpNavSection.projectList:
       case ErpNavSection.createProject:
-        return 'Projects';
-      case ErpNavSection.paymentsDashboard:
-        return 'Payments & Treasury Center';
-      case ErpNavSection.customerPayments:
-        return 'Customer Payments';
-      case ErpNavSection.dealerPayments:
-        return 'Dealer Payments';
-      case ErpNavSection.vendorPaymentsSection:
-        return 'Vendor Payments';
-      case ErpNavSection.commissionPayments:
-        return 'Commission Payouts';
-      case ErpNavSection.expenseList:
-        return 'Expense Management';
-      case ErpNavSection.mastersDashboard:
-        return 'Masters Hub';
-      case ErpNavSection.categoriesUnits:
-        return 'Categories & Units';
-      case ErpNavSection.vendors:
-        return 'Vendors Master';
-      case ErpNavSection.customers:
-        return 'Customers Master';
-      case ErpNavSection.dealers:
-        return 'Dealers Master';
-      case ErpNavSection.architects:
-        return 'Architects Master';
-      case ErpNavSection.rawMaterials:
-        return 'Raw Materials Master';
-      case ErpNavSection.finishedProducts:
-        return 'Product Master';
-      case ErpNavSection.billOfMaterials:
-        return 'BOM Master';
+        return 'Masters';
       case ErpNavSection.reportsDashboard:
-        return 'Reports & Analytics';
       case ErpNavSection.inventoryReports:
-        return 'Inventory Reports';
       case ErpNavSection.purchaseReports:
-        return 'Purchase Reports';
       case ErpNavSection.productionReports:
-        return 'Production Reports';
       case ErpNavSection.salesReports:
-        return 'Sales Reports';
       case ErpNavSection.projectReports:
-        return 'Project Reports';
       case ErpNavSection.commissionReports:
-        return 'Commission Reports';
       case ErpNavSection.financialReports:
-        return 'Financial Reports';
+        return 'Reports';
       case ErpNavSection.chatSupport:
         return 'Chat Support';
       case ErpNavSection.settings:
-        return 'Settings & User Management';
+        return 'Settings';
     }
   }
 

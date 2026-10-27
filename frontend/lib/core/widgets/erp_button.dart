@@ -11,6 +11,7 @@ class ErpButton extends StatelessWidget {
   final bool isDanger;
   final bool isOutlined;
   final bool isLoading;
+  final EdgeInsetsGeometry? padding;
 
   const ErpButton({
     super.key,
@@ -21,6 +22,7 @@ class ErpButton extends StatelessWidget {
     this.isDanger = false,
     this.isOutlined = false,
     this.isLoading = false,
+    this.padding,
   });
 
   @override
@@ -33,7 +35,7 @@ class ErpButton extends StatelessWidget {
             color: isDanger ? AppColors.danger : AppColors.border,
             width: 1.2,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: padding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.mdBorderRadius),
           foregroundColor: isDanger ? AppColors.danger : AppColors.textPrimary,
         ),
@@ -58,7 +60,7 @@ class ErpButton extends StatelessWidget {
         backgroundColor: bgColor,
         foregroundColor: fgColor,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        padding: padding ?? const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.mdBorderRadius),
       ),
       child: _buildChild(fgColor),
@@ -75,28 +77,31 @@ class ErpButton extends StatelessWidget {
     }
 
     if (icon != null) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: fgColor),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
+      return FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: fgColor),
+            const SizedBox(width: 8),
+            Text(
               text,
               style: AppTextStyles.button.copyWith(color: fgColor),
               maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
-    return Text(
-      text,
-      style: AppTextStyles.button.copyWith(color: fgColor),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        text,
+        style: AppTextStyles.button.copyWith(color: fgColor),
+        maxLines: 1,
+      ),
     );
   }
 }

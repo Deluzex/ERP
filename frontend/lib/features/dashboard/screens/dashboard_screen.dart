@@ -60,8 +60,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             badgeText: 'OVERVIEW',
             action: LayoutBuilder(
               builder: (context, actionBox) {
-                final isNarrowAction = actionBox.maxWidth < 360;
-                if (isNarrowAction) {
+                final isMobileHeader = actionBox.maxWidth < 520;
+                if (isMobileHeader) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -282,6 +282,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         iconColor: AppColors.primary,
                         badgeText: '+14% vs yesterday',
                         isPositive: true,
+                        onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
                       ),
                     ),
                     const SizedBox(width: 20),
@@ -293,6 +294,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         iconColor: AppColors.primary,
                         badgeText: 'Receivables',
                         isPositive: false,
+                        onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments,
                       ),
                     ),
                     const SizedBox(width: 20),
@@ -304,6 +306,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         iconColor: AppColors.primary,
                         badgeText: 'Payables',
                         isPositive: false,
+                        onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
                       ),
                     ),
                   ],
@@ -317,6 +320,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       iconColor: AppColors.primary,
                       badgeText: '+14% vs yesterday',
                       isPositive: true,
+                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
                     ),
                     const SizedBox(height: 16),
                     _buildMetricCard(
@@ -326,6 +330,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       iconColor: AppColors.primary,
                       badgeText: 'Receivables',
                       isPositive: false,
+                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments,
                     ),
                     const SizedBox(height: 16),
                     _buildMetricCard(
@@ -335,6 +340,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       iconColor: AppColors.primary,
                       badgeText: 'Payables',
                       isPositive: false,
+                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
                     ),
                   ],
                 ),
@@ -347,317 +353,55 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     // Pending Commission Card
                     Expanded(
                       flex: 1,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x06000000),
-                              blurRadius: 4,
-                              offset: Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: const [
-                                Icon(Icons.history_rounded, size: 18, color: AppColors.primary),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Pending Commission',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFF4B5563),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                Formatters.formatCurrency(pendingCommissionVal),
-                                style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF111827),
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            InkWell(
-                              onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
-                              borderRadius: BorderRadius.circular(4),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: const [
-                                  Text(
-                                    'View all',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                  SizedBox(width: 4),
-                                  Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.primary),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: _buildMetricCard(
+                        title: 'Pending Commission',
+                        value: Formatters.formatCurrency(pendingCommissionVal),
+                        icon: Icons.history_rounded,
+                        iconColor: AppColors.primary,
+                        badgeText: 'View all',
+                        isPositive: false,
+                        onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
                       ),
                     ),
                     const SizedBox(width: 20),
 
-                    // Low Stock Items Banner
+                    // Low Stock Items Card
                     Expanded(
                       flex: 2,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x06000000),
-                              blurRadius: 4,
-                              offset: Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: LayoutBuilder(
-                          builder: (context, bannerBox) {
-                            final isNarrow = bannerBox.maxWidth < 490;
-                            final contentBlock = Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: const [
-                                    Icon(Icons.warning_amber_rounded, size: 18, color: Color(0xFFEF4444)),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Low Stock Items',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFFEF4444),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  '$lowStockItemsCount Items',
-                                  style: const TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF111827),
-                                    letterSpacing: -0.5,
-                                  ),
-                                ),
-                              ],
-                            );
-
-                            final button = OutlinedButton.icon(
-                              onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                              icon: const Icon(Icons.arrow_forward_rounded, size: 15),
-                              label: const Text('View Items'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFFEF4444),
-                                side: const BorderSide(color: Color(0xFFFCA5A5)),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              ),
-                            );
-
-                            if (isNarrow) {
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  contentBlock,
-                                  const SizedBox(height: 12),
-                                  button,
-                                ],
-                              );
-                            }
-
-                            return Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                contentBlock,
-                                button,
-                              ],
-                            );
-                          },
-                        ),
+                      child: _buildMetricCard(
+                        title: 'Low Stock Items',
+                        value: '$lowStockItemsCount Items',
+                        icon: Icons.warning_amber_rounded,
+                        iconColor: const Color(0xFFEF4444),
+                        titleColor: const Color(0xFFEF4444),
+                        badgeText: 'View Items',
+                        isPositive: false,
+                        onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
                       ),
                     ),
                   ],
                 )
               : Column(
                   children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x06000000),
-                            blurRadius: 4,
-                            offset: Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: const [
-                              Icon(Icons.history_rounded, size: 18, color: AppColors.primary),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Pending Commission',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFF4B5563),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            Formatters.formatCurrency(pendingCommissionVal),
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF111827),
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          InkWell(
-                            onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
-                            borderRadius: BorderRadius.circular(4),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Text(
-                                  'View all',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                                SizedBox(width: 4),
-                                Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.primary),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                    _buildMetricCard(
+                      title: 'Pending Commission',
+                      value: Formatters.formatCurrency(pendingCommissionVal),
+                      icon: Icons.history_rounded,
+                      iconColor: AppColors.primary,
+                      badgeText: 'View all',
+                      isPositive: false,
+                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
                     ),
                     const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x06000000),
-                            blurRadius: 4,
-                            offset: Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final isNarrow = constraints.maxWidth < 360;
-                          final info = Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: const [
-                                  Icon(Icons.warning_amber_rounded, size: 18, color: Color(0xFFEF4444)),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Low Stock Items',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFFEF4444),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                '$lowStockItemsCount Items',
-                                style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF111827),
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                            ],
-                          );
-                          final action = OutlinedButton.icon(
-                            onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                            icon: const Icon(Icons.arrow_forward_rounded, size: 15),
-                            label: const Text('View Items'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFFEF4444),
-                              side: const BorderSide(color: Color(0xFFFCA5A5)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            ),
-                          );
-
-                          if (isNarrow) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                info,
-                                const SizedBox(height: 12),
-                                SizedBox(width: double.infinity, child: action),
-                              ],
-                            );
-                          }
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              info,
-                              action,
-                            ],
-                          );
-                        },
-                      ),
+                    _buildMetricCard(
+                      title: 'Low Stock Items',
+                      value: '$lowStockItemsCount Items',
+                      icon: Icons.warning_amber_rounded,
+                      iconColor: const Color(0xFFEF4444),
+                      titleColor: const Color(0xFFEF4444),
+                      badgeText: 'View Items',
+                      isPositive: false,
+                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
                     ),
                   ],
                 ),
@@ -923,55 +667,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 32),
 
-          // 8. Quick Actions [ Create Purchase ] [ Create Product ] [ Create Sale ]
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: AppRadius.lgBorderRadius,
-              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Quick Actions',
-                  style: AppTextStyles.h3.copyWith(
-                    color: const Color(0xFF1E293B),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _buildActionButton(
-                      label: 'Create Purchase',
-                      icon: Icons.shopping_bag_outlined,
-                      color: AppColors.primary,
-                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
-                    ),
-                    _buildActionButton(
-                      label: 'Create Product',
-                      icon: Icons.inventory_2_outlined,
-                      color: AppColors.primary,
-                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProducts,
-                    ),
-                    _buildActionButton(
-                      label: 'Create Sale',
-                      icon: Icons.point_of_sale_outlined,
-                      color: AppColors.primary,
-                      onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 32),
         ],
       ),
@@ -995,7 +691,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF4B5563),
                 ),
@@ -1006,16 +702,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
         const SizedBox(height: 10),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF111827),
-            letterSpacing: -0.4,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111827),
+              letterSpacing: -0.4,
+            ),
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -1028,8 +726,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required Color iconColor,
     required String badgeText,
     required bool isPositive,
+    Color? titleColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final cardContent = Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1053,10 +753,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 13,
+                  style: TextStyle(
+                    fontSize: 13.5,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFF4B5563),
+                    color: titleColor ?? const Color(0xFF4B5563),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1110,20 +810,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ],
       ),
     );
-  }
 
-  Widget _buildActionButton({
-    required String label,
-    required IconData icon,
-    Color? color,
-    required VoidCallback onTap,
-  }) {
-    return _DashboardActionButtonWidget(
-      label: label,
-      icon: icon,
-      color: color ?? AppColors.primary,
-      onTap: onTap,
-    );
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: cardContent,
+      );
+    }
+    return cardContent;
   }
 
   Widget _buildTypeBadge(StockMovementType type) {
@@ -1148,93 +843,4 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 }
 
-class _DashboardActionButtonWidget extends StatefulWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _DashboardActionButtonWidget({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  State<_DashboardActionButtonWidget> createState() => _DashboardActionButtonWidgetState();
-}
-
-class _DashboardActionButtonWidgetState extends State<_DashboardActionButtonWidget> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: widget.onTap,
-        onHover: (hovering) {
-          if (mounted && _isHovered != hovering) {
-            setState(() => _isHovered = hovering);
-          }
-        },
-        borderRadius: BorderRadius.circular(10),
-        hoverColor: Colors.transparent,
-        splashColor: AppColors.primary.withValues(alpha: 0.1),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          constraints: const BoxConstraints(
-            minWidth: 175,
-            minHeight: 60,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: _isHovered ? AppColors.primary : const Color(0xFFE2E8F0),
-              width: 1.0,
-            ),
-            boxShadow: [
-              if (_isHovered)
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.16),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 2),
-                )
-              else
-                const BoxShadow(
-                  color: Color(0x06000000),
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(widget.icon, color: widget.color, size: 22),
-              const SizedBox(width: 12),
-              Text(
-                widget.label,
-                style: const TextStyle(
-                  color: Color(0xFF1F2937),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.1,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 

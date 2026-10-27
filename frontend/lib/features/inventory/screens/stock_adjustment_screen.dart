@@ -10,6 +10,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -402,113 +403,180 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Global Filters
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              ErpSearchInput(
-                hintText: 'Search adjustments by number, item, reason...',
-                value: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
-              ),
-              ErpDateFilterBox(
-                startDate: _startDate,
-                endDate: _endDate,
-                onDateRangeSelected: (start, end) {
-                  setState(() {
-                    _startDate = start;
-                    _endDate = end;
-                    _currentPage = 0;
-                  });
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
+          // Table enclosed in card container
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 650;
+                    if (isMobile) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ErpSearchInput(
+                            hintText: 'Search adjustments by number, item, reason...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                          const SizedBox(height: 10),
+                          ErpDateFilterBox(
+                            startDate: _startDate,
+                            endDate: _endDate,
+                            width: double.infinity,
+                            onDateRangeSelected: (start, end) {
+                              setState(() {
+                                _startDate = start;
+                                _endDate = end;
+                                _currentPage = 0;
+                              });
+                            },
+                          ),
+                        ],
+                      );
+                    }
 
-          // Data Table of adjustments
-          Builder(
-            builder: (context) {
-              final totalRecords = adjustments.length;
-              final startIndex = _currentPage * _pageSize;
-              final pageAdjustments = (startIndex < totalRecords)
-                  ? adjustments.sublist(startIndex, min(startIndex + _pageSize, totalRecords))
-                  : <StockAdjustment>[];
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ErpDataTable(
-                    columns: const [
-                      ErpColumn(title: 'Date'),
-                      ErpColumn(title: 'Adjustment No'),
-                      ErpColumn(title: 'Item Details'),
-                      ErpColumn(title: 'Item Type'),
-                      ErpColumn(title: 'Before Stock', isNumeric: true),
-                      ErpColumn(title: 'Adjustment', isNumeric: true),
-                      ErpColumn(title: 'Final Stock', isNumeric: true),
-                      ErpColumn(title: 'Reason'),
-                      ErpColumn(title: 'Remarks'),
-                      ErpColumn(title: 'Performed By'),
-                    ],
-                    rows: pageAdjustments.map((adj) {
-                      return [
-                        Text(Formatters.formatDateTime(adj.adjustmentDate), style: AppTextStyles.bodySmall),
-                        Text(adj.adjustmentNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(adj.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                            Text(adj.itemName, style: AppTextStyles.bodySmall),
-                          ],
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 320,
+                          child: ErpSearchInput(
+                            hintText: 'Search adjustments by number, item, reason...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
                         ),
-                        Text(adj.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product', style: AppTextStyles.bodySmall),
-                        Text('${Formatters.formatNumber(adj.currentStockBefore)} ${adj.unit}', style: AppTextStyles.bodySmall),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            adj.adjustmentQuantity >= 0
-                                ? const StockInIcon(size: 13, color: Color(0xFF16A34A))
-                                : const StockOutIcon(size: 13, color: Color(0xFFEF4444)),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${adj.adjustmentQuantity >= 0 ? "+" : ""}${Formatters.formatNumber(adj.adjustmentQuantity)} ${adj.unit}',
-                              style: AppTextStyles.bodyBold.copyWith(
-                                color: adj.adjustmentQuantity >= 0 ? AppColors.successText : AppColors.dangerText,
+                        ErpDateFilterBox(
+                          startDate: _startDate,
+                          endDate: _endDate,
+                          onDateRangeSelected: (start, end) {
+                            setState(() {
+                              _startDate = start;
+                              _endDate = end;
+                              _currentPage = 0;
+                            });
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Data Table of adjustments
+                Builder(
+                  builder: (context) {
+                    final totalRecords = adjustments.length;
+                    final startIndex = _currentPage * _pageSize;
+                    final pageAdjustments = (startIndex < totalRecords)
+                        ? adjustments.sublist(startIndex, min(startIndex + _pageSize, totalRecords))
+                        : <StockAdjustment>[];
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ErpDataTable(
+                          columns: const [
+                            ErpColumn(title: 'Date'),
+                            ErpColumn(title: 'Adjustment No'),
+                            ErpColumn(title: 'Item Details'),
+                            ErpColumn(title: 'Item Type'),
+                            ErpColumn(title: 'Before Stock', isNumeric: true),
+                            ErpColumn(title: 'Adjustment', isNumeric: true),
+                            ErpColumn(title: 'Final Stock', isNumeric: true),
+                            ErpColumn(title: 'Reason'),
+                            ErpColumn(title: 'Remarks'),
+                            ErpColumn(title: 'Performed By'),
+                          ],
+                          rows: pageAdjustments.map((adj) {
+                            final isPositive = adj.adjustmentQuantity > 0;
+                            return [
+                              Text(Formatters.formatDate(adj.adjustmentDate), style: AppTextStyles.bodySmall),
+                              Text(adj.adjustmentNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(adj.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 11)),
+                                  Text(adj.itemName, style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
                               ),
-                            ),
-                          ],
+                              Text(
+                                adj.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product',
+                                style: AppTextStyles.bodySmall,
+                              ),
+                              Text('${adj.currentStockBefore} ${adj.unit}', style: AppTextStyles.bodySmall),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  isPositive
+                                      ? const StockInIcon(size: 16, color: Color(0xFF16A34A))
+                                      : const StockOutIcon(size: 16, color: Color(0xFFEF4444)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${isPositive ? "+" : ""}${adj.adjustmentQuantity} ${adj.unit}',
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      color: isPositive ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Text('${adj.adjustedStockAfter} ${adj.unit}', style: AppTextStyles.bodyBold),
+                              ErpStatusBadge(
+                                label: adj.reasonLabel,
+                                backgroundColor: AppColors.neutralLight,
+                                textColor: AppColors.textPrimary,
+                              ),
+                              Text(adj.remarks ?? '-', style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              Text(adj.performedBy, style: AppTextStyles.bodySmall),
+                            ];
+                          }).toList(),
                         ),
-                        Text('${Formatters.formatNumber(adj.adjustedStockAfter)} ${adj.unit}', style: AppTextStyles.bodyBold),
-                        Text(adj.reasonLabel, style: AppTextStyles.bodyMedium),
-                        Text(adj.remarks, style: AppTextStyles.bodySmall),
-                        Text(adj.performedBy, style: AppTextStyles.bodySmall),
-                      ];
-                    }).toList(),
-                  ),
-                  if (totalRecords > 0) ...[
-                    const SizedBox(height: 16),
-                    ErpPaginationBar(
-                      currentPage: _currentPage,
-                      pageSize: _pageSize,
-                      totalRecords: totalRecords,
-                      onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-                      onPageSizeChanged: (newSize) => setState(() {
-                        _pageSize = newSize;
-                        _currentPage = 0;
-                      }),
-                    ),
-                  ],
-                ],
-              );
-            },
+                        if (totalRecords > 0) ...[
+                          const SizedBox(height: 16),
+                          ErpPaginationBar(
+                            currentPage: _currentPage,
+                            pageSize: _pageSize,
+                            totalRecords: totalRecords,
+                            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                            onPageSizeChanged: (newSize) => setState(() {
+                              _pageSize = newSize;
+                              _currentPage = 0;
+                            }),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );

@@ -223,22 +223,52 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
             icon: Icons.receipt_outlined,
             title: 'Sales Invoices & Revenue',
             badgeText: 'TAX INVOICES',
-            action: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ErpButton(
-                  text: 'Invoice from Delivery',
-                  icon: Icons.local_shipping_outlined,
-                  isOutlined: true,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesDeliveries,
-                ),
-                ErpButton(
-                  text: 'Create Direct Sale',
-                  icon: Icons.point_of_sale_outlined,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
-                ),
-              ],
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobileHeader = actionBox.maxWidth < 520;
+                if (isMobileHeader) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Invoice from Delivery',
+                          icon: Icons.local_shipping_outlined,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesDeliveries,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Create Direct Sale',
+                          icon: Icons.point_of_sale_outlined,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ErpButton(
+                      text: 'Invoice from Delivery',
+                      icon: Icons.local_shipping_outlined,
+                      isOutlined: true,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesDeliveries,
+                    ),
+                    ErpButton(
+                      text: 'Create Direct Sale',
+                      icon: Icons.point_of_sale_outlined,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 18),

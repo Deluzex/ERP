@@ -28,7 +28,7 @@ class RawMaterialStockScreen extends ConsumerStatefulWidget {
 class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen> {
   String _searchQuery = '';
   String? _selectedCategory;
-  bool _showOnlyLowStock = false;
+  String _stockFilter = 'ALL';
   int _currentPage = 0;
   int _pageSize = 10;
 
@@ -311,8 +311,10 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
           rm.unit.toLowerCase().contains(query) ||
           rm.preferredVendorNames.any((v) => v.toLowerCase().contains(query));
       final matchesCategory = _selectedCategory == null || rm.categoryId == _selectedCategory;
-      final matchesLow = !_showOnlyLowStock || rm.isLowStock;
-      return matchesSearch && matchesCategory && matchesLow;
+      if (_stockFilter == 'LOW' && !rm.isLowStock) return false;
+      if (_stockFilter == 'OUT_OF_STOCK' && rm.currentStock > 0) return false;
+      if (_stockFilter == 'IN_STOCK' && rm.currentStock <= 0) return false;
+      return matchesSearch && matchesCategory;
     }).toList();
 
     return SingleChildScrollView(
@@ -433,115 +435,205 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
           ),
           const SizedBox(height: 20),
 
-          // Global Filter bar
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              ErpSearchInput(
-                hintText: 'Search raw material by name, code, category...',
-                value: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
-              ),
-              ErpFilterDropdown<String?>(
-                label: 'Category',
-                value: _selectedCategory,
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('All Categories')),
-                  ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
-                ],
-                onChanged: (val) => setState(() {
-                  _selectedCategory = val;
-                  _currentPage = 0;
-                }),
-              ),
-              FilterChip(
-                label: Text('Low Stock Only (${db.lowStockRawMaterials.length})'),
-                selected: _showOnlyLowStock,
-                onSelected: (val) => setState(() {
-                  _showOnlyLowStock = val;
-                  _currentPage = 0;
-                }),
-                selectedColor: AppColors.dangerLight,
-                checkmarkColor: AppColors.dangerText,
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
+          // Table enclosed in card container
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 650;
+                    if (isMobile) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ErpSearchInput(
+                            hintText: 'Search raw material by name, code, category...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                          const SizedBox(height: 10),
+                          ErpFilterDropdown<String?>(
+                            label: 'Category',
+                            value: _selectedCategory,
+                            width: double.infinity,
+                            isExpanded: true,
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('All Categories')),
+                              ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                            ],
+                            onChanged: (val) => setState(() {
+                              _selectedCategory = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                          const SizedBox(height: 10),
+                          ErpFilterDropdown<String>(
+                            label: 'Stock Status',
+                            value: _stockFilter,
+                            width: double.infinity,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                              DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                              DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                              DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _stockFilter = val;
+                                  _currentPage = 0;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      );
+                    }
 
-          // Data Table
-          Builder(
-            builder: (context) {
-              final totalRecords = rawMaterials.length;
-              final startIndex = _currentPage * _pageSize;
-              final pageRawMaterials = (startIndex < totalRecords)
-                  ? rawMaterials.sublist(startIndex, min(startIndex + _pageSize, totalRecords))
-                  : <RawMaterial>[];
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ErpDataTable(
-                    columns: const [
-                      ErpColumn(title: 'Item Code'),
-                      ErpColumn(title: 'Material Name'),
-                      ErpColumn(title: 'Category'),
-                      ErpColumn(title: 'Current Stock', isNumeric: true),
-                      ErpColumn(title: 'Min Stock', isNumeric: true),
-                      ErpColumn(title: 'Purchase Rate', isNumeric: true),
-                      ErpColumn(title: 'Total Value', isNumeric: true),
-                      ErpColumn(title: 'Status'),
-                      ErpColumn(title: 'Actions'),
-                    ],
-                    rows: pageRawMaterials.map((rm) {
-                      return [
-                        Text(rm.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                        Text(rm.name, style: AppTextStyles.bodyMedium),
-                        Text(rm.categoryName, style: AppTextStyles.bodySmall),
-                        Text(
-                          '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
-                          style: AppTextStyles.bodyBold.copyWith(
-                            color: rm.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 320,
+                          child: ErpSearchInput(
+                            hintText: 'Search raw material by name, code, category...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
                           ),
                         ),
-                        Text('${Formatters.formatNumber(rm.minimumStock)} ${rm.unit}', style: AppTextStyles.bodySmall),
-                        Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
-                        Text(Formatters.formatCurrency(rm.totalValuation), style: AppTextStyles.bodyBold),
-                        rm.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('IN STOCK'),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              tooltip: 'Edit Material',
-                              onPressed: () => _openAddEditDialog(rm),
-                            ),
+                        ErpFilterDropdown<String?>(
+                          label: 'Category',
+                          value: _selectedCategory,
+                          items: [
+                            const DropdownMenuItem(value: null, child: Text('All Categories')),
+                            ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                           ],
+                          onChanged: (val) => setState(() {
+                            _selectedCategory = val;
+                            _currentPage = 0;
+                          }),
                         ),
-                      ];
-                    }).toList(),
-                  ),
-                  if (totalRecords > 0) ...[
-                    const SizedBox(height: 16),
-                    ErpPaginationBar(
-                      currentPage: _currentPage,
-                      pageSize: _pageSize,
-                      totalRecords: totalRecords,
-                      onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-                      onPageSizeChanged: (newSize) => setState(() {
-                        _pageSize = newSize;
-                        _currentPage = 0;
-                      }),
-                    ),
-                  ],
-                ],
-              );
-            },
+                        ErpFilterDropdown<String>(
+                          label: 'Stock Status',
+                          value: _stockFilter,
+                          items: const [
+                            DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                            DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                            DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                            DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _stockFilter = val;
+                                _currentPage = 0;
+                              });
+                            }
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Data Table
+                Builder(
+                  builder: (context) {
+                    final totalRecords = rawMaterials.length;
+                    final startIndex = _currentPage * _pageSize;
+                    final pageRawMaterials = (startIndex < totalRecords)
+                        ? rawMaterials.sublist(startIndex, min(startIndex + _pageSize, totalRecords))
+                        : <RawMaterial>[];
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ErpDataTable(
+                          columns: const [
+                            ErpColumn(title: 'Item Code'),
+                            ErpColumn(title: 'Material Name'),
+                            ErpColumn(title: 'Category'),
+                            ErpColumn(title: 'Current Stock', isNumeric: true),
+                            ErpColumn(title: 'Min Stock', isNumeric: true),
+                            ErpColumn(title: 'Purchase Rate', isNumeric: true),
+                            ErpColumn(title: 'Total Value', isNumeric: true),
+                            ErpColumn(title: 'Status'),
+                            ErpColumn(title: 'Actions'),
+                          ],
+                          rows: pageRawMaterials.map((rm) {
+                            return [
+                              Text(rm.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                              Text(rm.name, style: AppTextStyles.bodyMedium),
+                              Text(rm.categoryName, style: AppTextStyles.bodySmall),
+                              Text(
+                                '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  color: rm.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
+                                ),
+                              ),
+                              Text('${Formatters.formatNumber(rm.minimumStock)} ${rm.unit}', style: AppTextStyles.bodySmall),
+                              Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
+                              Text(Formatters.formatCurrency(rm.totalValuation), style: AppTextStyles.bodyBold),
+                              rm.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('IN STOCK'),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 18),
+                                    tooltip: 'Edit Material',
+                                    onPressed: () => _openAddEditDialog(rm),
+                                  ),
+                                ],
+                              ),
+                            ];
+                          }).toList(),
+                        ),
+                        if (totalRecords > 0) ...[
+                          const SizedBox(height: 16),
+                          ErpPaginationBar(
+                            currentPage: _currentPage,
+                            pageSize: _pageSize,
+                            totalRecords: totalRecords,
+                            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                            onPageSizeChanged: (newSize) => setState(() {
+                              _pageSize = newSize;
+                              _currentPage = 0;
+                            }),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );

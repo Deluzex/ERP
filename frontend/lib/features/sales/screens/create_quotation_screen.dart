@@ -1325,7 +1325,11 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                         },
                       );
 
-                      final partyPicker = DropdownButtonFormField<String>(
+                      final isPartyInList = (_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId)) ||
+                          (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId)) ||
+                          (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId));
+
+                      final partyPicker = DropdownButtonFormField<String?>(
                         value: _selectedPartyId,
                         isExpanded: true,
                         decoration: InputDecoration(
@@ -1333,11 +1337,23 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               ? 'Select Customer *'
                               : (_partyType == PartyType.dealer ? 'Select Dealer *' : 'Select Architect *'),
                         ),
-                        items: _partyType == PartyType.customer
-                            ? db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))).toList()
-                            : (_partyType == PartyType.dealer
-                                ? db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis))).toList()
-                                : db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.companyName.isNotEmpty ? '${a.name} (${a.companyName})' : a.name, maxLines: 1, overflow: TextOverflow.ellipsis))).toList()),
+                        items: [
+                          if (_selectedPartyId != null && !isPartyInList)
+                            DropdownMenuItem<String?>(
+                              value: _selectedPartyId,
+                              child: Text(
+                                _sourceQuotation?.partyName ?? 'Current Party ($_selectedPartyId)',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          if (_partyType == PartyType.customer)
+                            ...db.customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                          else if (_partyType == PartyType.dealer)
+                            ...db.dealers.map((d) => DropdownMenuItem<String?>(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                          else
+                            ...db.architects.map((a) => DropdownMenuItem<String?>(value: a.id, child: Text(a.companyName.isNotEmpty ? '${a.name} (${a.companyName})' : a.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                        ],
                         onChanged: (val) {
                           if (val != null) {
                             setState(() {
