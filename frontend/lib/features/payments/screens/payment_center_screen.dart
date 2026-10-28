@@ -471,7 +471,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -482,7 +481,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -493,7 +491,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -504,7 +501,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1133,7 +1129,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1144,7 +1139,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1155,7 +1149,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1166,7 +1159,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1911,7 +1903,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1922,7 +1913,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1933,7 +1923,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1944,7 +1933,6 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     ),
                   ),
                   DataColumn(
-                    numeric: true,
                     label: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -3123,9 +3111,9 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                   DataColumn(label: Text('DATE', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
                   DataColumn(label: Text('PARTY / BENEFICIARY', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
                   DataColumn(label: Text('REFERENCE DOC', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(numeric: true, label: Text('AMOUNT (₹)', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
+                  DataColumn(label: Text('AMOUNT (₹)', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
                   DataColumn(label: Text('SETTLEMENT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(numeric: true, label: Text('REMAINING (₹)', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
+                  DataColumn(label: Text('REMAINING (₹)', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
                   DataColumn(label: Text('PAYMENT MODE', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
                   DataColumn(label: Text('UTR / REF NO', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
                   DataColumn(

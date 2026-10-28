@@ -201,7 +201,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Container(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  center: const Alignment(0.65, -0.05),
+                  center: const Alignment(0.22, -0.05),
                   radius: 0.85,
                   colors: [
                     AppColors.primary.withValues(alpha: 0.07),
@@ -266,7 +266,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       children: [
         // Left Column: Brand Showcase & Value Proposition
         Expanded(
-          flex: 5,
+          flex: 1,
           child: Container(
             decoration: BoxDecoration(
               border: Border(
@@ -274,119 +274,124 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 52, vertical: 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Top Brand Header
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        height: 42,
-                        child: SvgPicture.asset(
-                          'assets/images/logo_white.svg',
+              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 36),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top Brand Header
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
                           height: 42,
-                          fit: BoxFit.contain,
-                          alignment: Alignment.centerLeft,
-                          placeholderBuilder: (context) => Image.asset(
-                            'assets/images/logo_white.png',
+                          child: SvgPicture.asset(
+                            'assets/images/logo_white.svg',
                             height: 42,
                             fit: BoxFit.contain,
                             alignment: Alignment.centerLeft,
+                            placeholderBuilder: (context) => Image.asset(
+                              'assets/images/logo_white.png',
+                              height: 42,
+                              fit: BoxFit.contain,
+                              alignment: Alignment.centerLeft,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 32),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppColors.primary,
+                        const SizedBox(height: 32),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppColors.primary,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'ENTERPRISE MANUFACTURING & INVENTORY',
-                              style: AppTextStyles.caption.copyWith(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.8,
-                                fontSize: 11,
+                              const SizedBox(width: 8),
+                              Text(
+                                'ENTERPRISE MANUFACTURING & INVENTORY',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.8,
+                                  fontSize: 11,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        'Precision Engineering.\nComplete Operational Control.',
-                        style: AppTextStyles.h1.copyWith(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800,
-                          height: 1.25,
-                          letterSpacing: -0.5,
+                        const SizedBox(height: 18),
+                        Text(
+                          'Precision Engineering.\nComplete Operational Control.',
+                          style: AppTextStyles.h1.copyWith(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            height: 1.25,
+                            letterSpacing: -0.5,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Seamless, real-time coordination across multi-tier bill of materials, shop-floor production, stock movements, and statutory tax invoices.',
-                        style: AppTextStyles.bodyRegular.copyWith(
-                          color: const Color(0xFF94A3B8),
-                          fontSize: 14.5,
-                          height: 1.5,
+                        const SizedBox(height: 12),
+                        Text(
+                          'Seamless, real-time coordination across multi-tier bill of materials, shop-floor production, stock movements, and statutory tax invoices.',
+                          softWrap: true,
+                          style: AppTextStyles.bodyRegular.copyWith(
+                            color: const Color(0xFF94A3B8),
+                            fontSize: 14.5,
+                            height: 1.5,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
 
-                  // Center: Feature Grid Cards
-                  Column(
-                    children: [
-                      _buildShowcaseFeature(
-                        icon: Icons.precision_manufacturing_outlined,
-                        title: 'Multi-Level BOM & WIP Tracking',
-                        description: 'Real-time stage-wise material consumption, scrap calculation, and direct manufacturing costing.',
-                      ),
-                      const SizedBox(height: 14),
-                      _buildShowcaseFeature(
-                        icon: Icons.receipt_long_outlined,
-                        title: 'Statutory GST & Revenue Operations',
-                        description: 'Direct sales invoices, delivery challans, credit notes, and automated customer ledgers.',
-                      ),
-                      const SizedBox(height: 14),
-                      _buildShowcaseFeature(
-                        icon: Icons.admin_panel_settings_outlined,
-                        title: 'Multi-Role Granular RBAC',
-                        description: 'Strict security boundaries across Admin, Inventory, Production, Sales, and Payments teams.',
-                      ),
-                    ],
-                  ),
-                ],
+                    // Center: Feature Grid Cards (Compact & neatly constrained)
+                    Column(
+                      children: [
+                        _buildShowcaseFeature(
+                          icon: Icons.precision_manufacturing_outlined,
+                          title: 'Multi-Level BOM & WIP Tracking',
+                          description: 'Real-time stage-wise material consumption, scrap calculation, and direct manufacturing costing.',
+                        ),
+                        const SizedBox(height: 10),
+                        _buildShowcaseFeature(
+                          icon: Icons.receipt_long_outlined,
+                          title: 'Statutory GST & Revenue Operations',
+                          description: 'Direct sales invoices, delivery challans, credit notes, and automated customer ledgers.',
+                        ),
+                        const SizedBox(height: 10),
+                        _buildShowcaseFeature(
+                          icon: Icons.admin_panel_settings_outlined,
+                          title: 'Multi-Role Granular RBAC',
+                          description: 'Strict security boundaries across Admin, Inventory, Production, Sales, and Payments teams.',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
 
-        // Right Column: Sign In Form
+        // Right Column: Sign In Form (Brought more into the left)
         Expanded(
-          flex: 4,
-          child: Center(
+          flex: 1,
+          child: Align(
+            alignment: Alignment.centerLeft,
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              padding: const EdgeInsets.only(left: 36, right: 36, top: 24, bottom: 24),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
                 child: _buildLoginFormCard(context, isCompact: false),
@@ -448,43 +453,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     required String description,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF13131A),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.sidebarBorder),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: AppColors.primary, size: 20),
+            child: Icon(icon, color: AppColors.primary, size: 18),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   title,
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
-                    fontSize: 14,
+                    fontSize: 13.5,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   description,
                   style: const TextStyle(
                     color: Color(0xFF94A3B8),
-                    fontSize: 12.5,
-                    height: 1.4,
+                    fontSize: 12,
+                    height: 1.35,
                   ),
                 ),
               ],

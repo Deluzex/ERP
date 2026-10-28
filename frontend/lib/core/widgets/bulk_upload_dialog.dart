@@ -1274,7 +1274,7 @@ class _BulkUploadDialogState extends ConsumerState<BulkUploadDialog> {
             child: Text(
               'Qty: ${row.fields['openingStock']}',
               style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600),
-              textAlign: TextAlign.right,
+              textAlign: TextAlign.left,
             ),
           ),
 

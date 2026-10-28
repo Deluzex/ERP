@@ -161,21 +161,50 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
           }
 
           final p = currentPurchase;
-          final screenWidth = MediaQuery.of(ctx).size.width;
-          final isCompact = screenWidth < 600;
+          final isMobile = MediaQuery.of(ctx).size.width < 768;
 
           return AlertDialog(
-            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            titlePadding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
+            contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
             title: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text('PO Details: ${p.purchaseNumber}', style: AppTextStyles.h3),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.receipt_long_outlined,
+                          color: AppColors.primary,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Invoice Details: ${p.purchaseNumber}',
+                          style: AppTextStyles.h2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                if (p.status != PurchaseStatus.cancelled)
+                const SizedBox(width: 12),
+                _buildStatusBadge(p.status),
+                if (p.status != PurchaseStatus.cancelled) ...[
+                  const SizedBox(width: 6),
                   IconButton(
                     tooltip: 'Edit / Reopen Purchase',
-                    icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
+                    icon: const Icon(Icons.edit_outlined, color: AppColors.primary, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                     onPressed: () {
                       Navigator.pop(ctx);
                       Navigator.push(
@@ -186,266 +215,345 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                       );
                     },
                   ),
+                ],
+                const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(ctx),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => Navigator.of(ctx).pop(),
                 ),
               ],
             ),
-            content: Container(
-              constraints: const BoxConstraints(maxWidth: 650),
-              width: double.infinity,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (isCompact)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+            content: SizedBox(
+              width: 720,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.78,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Divider(),
+                      const SizedBox(height: 12),
+
+                      // Header Info Grid
+                      Wrap(
+                        spacing: isMobile ? 16 : 24,
+                        runSpacing: 12,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Vendor: ${p.vendorName}',
-                                  style: AppTextStyles.bodyBold,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primarySoft,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  p.statusLabel,
-                                  style: const TextStyle(
-                                    color: AppColors.primaryDark,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          Text('Invoice #: ${p.vendorInvoiceNumber}', style: AppTextStyles.bodySmall),
-                          const SizedBox(height: 3),
-                          Text('Date: ${Formatters.formatDate(p.purchaseDate)}', style: AppTextStyles.bodySmall),
-                          const SizedBox(height: 3),
-                          Text('Type: ${p.purchaseTypeLabel}', style: AppTextStyles.bodySmall),
-                          const SizedBox(height: 3),
-                          Text('Payment Mode: ${p.paymentMode.name.toUpperCase()}', style: AppTextStyles.bodySmall),
+                          _buildDetailField('Vendor Name', p.vendorName),
+                          _buildDetailField('Vendor Invoice', p.vendorInvoiceNumber.isNotEmpty ? p.vendorInvoiceNumber : 'N/A'),
+                          _buildDetailField('Purchase Date', Formatters.formatDate(p.purchaseDate)),
+                          _buildDetailField('Purchase Type', p.purchaseTypeLabel),
+                          _buildDetailField('Payment Mode', p.paymentMode.name.toUpperCase()),
+                          if (p.projectName != null && p.projectName!.isNotEmpty)
+                            _buildDetailField('Project', p.projectName!),
                         ],
-                      )
-                    else
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Purchased Items Table Heading
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Vendor: ${p.vendorName}',
-                                  style: AppTextStyles.bodyBold,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  'Invoice #: ${p.vendorInvoiceNumber}',
-                                  style: AppTextStyles.bodySmall,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 3),
-                                Text('Date: ${Formatters.formatDate(p.purchaseDate)}', style: AppTextStyles.bodySmall),
-                              ],
+                            child: Text(
+                              'Purchased Items & Materials (${p.items.length})',
+                              style: AppTextStyles.h3,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('Type: ${p.purchaseTypeLabel}', style: AppTextStyles.bodyBold),
-                              const SizedBox(height: 3),
-                              Text('Payment Mode: ${p.paymentMode.name.toUpperCase()}', style: AppTextStyles.bodySmall),
-                              const SizedBox(height: 3),
-                              Text('Status: ${p.statusLabel}', style: AppTextStyles.bodySmall),
-                            ],
-                          ),
+                          if (isLoading) ...[
+                            const SizedBox(width: 8),
+                            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                          ],
                         ],
                       ),
-                    const Divider(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Line Items (${p.items.length})', style: AppTextStyles.bodyBold),
-                        if (isLoading)
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (isLoading)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (p.items.isEmpty)
+                      const SizedBox(height: 8),
+
+                      // Items Breakdown Table
                       Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceMuted,
-                          borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: AppColors.border),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          'No line items recorded for this purchase order.',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-                        ),
-                      )
-                    else
-                      isCompact
-                          ? SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: SizedBox(
-                                width: 520,
-                                child: Table(
-                                  border: TableBorder.all(color: AppColors.border),
-                                  children: [
-                                    TableRow(
-                                      decoration: const BoxDecoration(color: AppColors.surfaceMuted),
-                                      children: [
-                                        Padding(padding: const EdgeInsets.all(8), child: Text('Item', style: AppTextStyles.bodyBold)),
-                                        Padding(padding: const EdgeInsets.all(8), child: Text('Qty', style: AppTextStyles.bodyBold)),
-                                        Padding(padding: const EdgeInsets.all(8), child: Text('Rate', style: AppTextStyles.bodyBold)),
-                                        Padding(padding: const EdgeInsets.all(8), child: Text('GST', style: AppTextStyles.bodyBold)),
-                                        Padding(padding: const EdgeInsets.all(8), child: Text('Total', style: AppTextStyles.bodyBold)),
-                                      ],
-                                    ),
-                                    ...p.items.map(
-                                      (item) => TableRow(
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.all(8),
-                                            child: Text(
-                                              item.displayCode.isNotEmpty
-                                                  ? '${item.displayName} (${item.displayCode})'
-                                                  : item.displayName,
-                                              style: AppTextStyles.bodySmall,
+                        child: p.items.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Center(
+                                  child: isLoading
+                                      ? const Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                                            SizedBox(width: 10),
+                                            Text(
+                                              'Loading items from server...',
+                                              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                                             ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8),
-                                            child: Text(
-                                              Formatters.formatQuantity(item.quantity, item.unit),
-                                              style: AppTextStyles.bodySmall,
-                                            ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8),
-                                            child: Text(Formatters.formatCurrency(item.rate), style: AppTextStyles.bodySmall),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8),
-                                            child: Text('${Formatters.formatNumber(item.gstPercent)}%', style: AppTextStyles.bodySmall),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8),
-                                            child: Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodySmall),
-                                          ),
-                                        ],
-                                      ),
+                                          ],
+                                        )
+                                      : const Text(
+                                          'No line items recorded for this purchase order.',
+                                          style: TextStyle(color: AppColors.textMuted),
+                                        ),
+                                ),
+                              )
+                            : isMobile
+                                ? SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: SizedBox(
+                                      width: 540,
+                                      child: _buildPurchaseItemsTable(p),
                                     ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          : Table(
-                              border: TableBorder.all(color: AppColors.border),
-                              children: [
-                                TableRow(
-                                  decoration: const BoxDecoration(color: AppColors.surfaceMuted),
-                                  children: [
-                                    Padding(padding: const EdgeInsets.all(8), child: Text('Item', style: AppTextStyles.bodyBold)),
-                                    Padding(padding: const EdgeInsets.all(8), child: Text('Qty', style: AppTextStyles.bodyBold)),
-                                    Padding(padding: const EdgeInsets.all(8), child: Text('Rate', style: AppTextStyles.bodyBold)),
-                                    Padding(padding: const EdgeInsets.all(8), child: Text('GST', style: AppTextStyles.bodyBold)),
-                                    Padding(padding: const EdgeInsets.all(8), child: Text('Total', style: AppTextStyles.bodyBold)),
-                                  ],
-                                ),
-                                ...p.items.map(
-                                  (item) => TableRow(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(8),
-                                        child: Text(
-                                          item.displayCode.isNotEmpty
-                                              ? '${item.displayName} (${item.displayCode})'
-                                              : item.displayName,
-                                          style: AppTextStyles.bodySmall,
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.all(8),
-                                        child: Text(
-                                          Formatters.formatQuantity(item.quantity, item.unit),
-                                          style: AppTextStyles.bodySmall,
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.all(8),
-                                        child: Text(Formatters.formatCurrency(item.rate), style: AppTextStyles.bodySmall),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.all(8),
-                                        child: Text('${Formatters.formatNumber(item.gstPercent)}%', style: AppTextStyles.bodySmall),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.all(8),
-                                        child: Text(Formatters.formatCurrency(item.lineTotal), style: AppTextStyles.bodySmall),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                    const SizedBox(height: 16),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text('Subtotal: ${Formatters.formatCurrency(p.subtotalAmount)}', style: AppTextStyles.bodySmall),
-                          Text('GST Tax: ${Formatters.formatCurrency(p.gstAmount)}', style: AppTextStyles.bodySmall),
-                          if (p.transportationCharges > 0)
-                            Text('Transportation Charges: ${Formatters.formatCurrency(p.transportationCharges)}',
-                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-                          Text('Total Amount: ${Formatters.formatCurrency(p.totalAmount)}', style: AppTextStyles.bodyBold),
-                          Text('Paid Amount: ${Formatters.formatCurrency(p.paidAmount)}',
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
-                          Text('Pending Amount: ${Formatters.formatCurrency(p.pendingAmount)}',
-                              style: AppTextStyles.bodyBold.copyWith(
-                                color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
-                              )),
-                        ],
+                                  )
+                                : _buildPurchaseItemsTable(p),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+
+                      // Financial Summary Card
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          children: [
+                            _buildCostRow('Taxable Subtotal:', Formatters.formatCurrency(p.subtotalAmount)),
+                            const SizedBox(height: 6),
+                            if (p.isInterStateTax)
+                              _buildCostRow('IGST Tax:', Formatters.formatCurrency(p.igstAmount))
+                            else ...[
+                              _buildCostRow('CGST Tax:', Formatters.formatCurrency(p.cgstAmount)),
+                              const SizedBox(height: 6),
+                              _buildCostRow('SGST Tax:', Formatters.formatCurrency(p.sgstAmount)),
+                            ],
+                            if (p.transportationCharges > 0) ...[
+                              const SizedBox(height: 6),
+                              _buildCostRow('Transportation Charges:', Formatters.formatCurrency(p.transportationCharges), highlight: true),
+                            ],
+                            const Divider(height: 16),
+                            _buildCostRow('Total Invoice Amount:', Formatters.formatCurrency(p.totalAmount), isBold: true),
+                            const SizedBox(height: 6),
+                            _buildCostRow('Amount Paid:', Formatters.formatCurrency(p.paidAmount), valueColor: AppColors.successText),
+                            const SizedBox(height: 6),
+                            _buildCostRow(
+                              'Balance Pending:',
+                              Formatters.formatCurrency(p.pendingAmount),
+                              isBold: true,
+                              highlight: p.pendingAmount > 0,
+                              valueColor: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      if (p.notes != null && p.notes!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text('Purchase Notes / Remarks:', style: AppTextStyles.bodyBold),
+                        const SizedBox(height: 4),
+                        Text(p.notes!, style: AppTextStyles.bodySmall),
+                      ],
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
               ),
             ),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            actions: isMobile
+                ? [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (p.status != PurchaseStatus.cancelled) ...[
+                          ErpButton(
+                            text: 'Edit Purchase',
+                            icon: Icons.edit_outlined,
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CreatePurchaseScreen(existingPurchase: p),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        ErpButton(
+                          text: 'Close',
+                          isOutlined: true,
+                          onPressed: () => Navigator.of(ctx).pop(),
+                        ),
+                      ],
+                    ),
+                  ]
+                : [
+                    if (p.status != PurchaseStatus.cancelled) ...[
+                      ErpButton(
+                        text: 'Edit Purchase',
+                        icon: Icons.edit_outlined,
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CreatePurchaseScreen(existingPurchase: p),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    ErpButton(
+                      text: 'Close',
+                      isOutlined: true,
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
           );
         },
       ),
+    );
+  }
+
+  Widget _buildDetailField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
+        const SizedBox(height: 2),
+        Text(value, style: AppTextStyles.bodyBold.copyWith(fontSize: 13)),
+      ],
+    );
+  }
+
+  Widget _tableHeaderCell(String text, {TextAlign align = TextAlign.left}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Text(text, textAlign: align, style: AppTextStyles.bodyBold.copyWith(fontSize: 11, color: AppColors.textSecondary)),
+    );
+  }
+
+  Widget _buildPurchaseItemsTable(Purchase p) {
+    return Table(
+      columnWidths: const {
+        0: FlexColumnWidth(4),
+        1: FlexColumnWidth(2),
+        2: FlexColumnWidth(2),
+        3: FlexColumnWidth(1.5),
+        4: FlexColumnWidth(2.2),
+      },
+      children: [
+        TableRow(
+          decoration: const BoxDecoration(color: AppColors.surfaceMuted),
+          children: [
+            _tableHeaderCell('Item / Material'),
+            _tableHeaderCell('Qty'),
+            _tableHeaderCell('Unit Rate'),
+            _tableHeaderCell('GST'),
+            _tableHeaderCell('Total'),
+          ],
+        ),
+        ...p.items.map((item) {
+          return TableRow(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.displayName,
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 12),
+                    ),
+                    if (item.displayCode.isNotEmpty)
+                      Text(
+                        item.displayCode,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Text(
+                  Formatters.formatQuantity(item.quantity, item.unit),
+                  style: AppTextStyles.bodySmall,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Text(
+                  Formatters.formatCurrency(item.rate),
+                  style: AppTextStyles.bodySmall,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Text(
+                  '${Formatters.formatNumber(item.gstPercent)}%',
+                  style: AppTextStyles.bodySmall,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Text(
+                  Formatters.formatCurrency(item.lineTotal),
+                  style: AppTextStyles.bodyBold.copyWith(fontSize: 12),
+                ),
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildCostRow(
+    String title,
+    String amount, {
+    bool isBold = false,
+    bool highlight = false,
+    Color? valueColor,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: isBold
+                ? AppTextStyles.bodyBold.copyWith(
+                    color: highlight ? AppColors.primaryDark : AppColors.textPrimary,
+                  )
+                : AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          amount,
+          style: isBold
+              ? AppTextStyles.bodyBold.copyWith(
+                  color: valueColor ?? (highlight ? AppColors.primaryDark : AppColors.textPrimary),
+                  fontSize: highlight ? 15 : 13,
+                )
+              : AppTextStyles.bodySmall.copyWith(
+                  color: valueColor ?? AppColors.textPrimary,
+                ),
+        ),
+      ],
     );
   }
 

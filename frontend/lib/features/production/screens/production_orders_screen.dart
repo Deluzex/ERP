@@ -683,9 +683,9 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
           decoration: const BoxDecoration(color: AppColors.surfaceMuted),
           children: [
             _tableHeaderCell('Raw Material'),
-            _tableHeaderCell('Qty Used', align: TextAlign.right),
-            _tableHeaderCell('Unit Cost', align: TextAlign.right),
-            _tableHeaderCell('Total Cost', align: TextAlign.right),
+            _tableHeaderCell('Qty Used'),
+            _tableHeaderCell('Unit Cost'),
+            _tableHeaderCell('Total Cost'),
           ],
         ),
         ...o.rawMaterialsUsed.map((u) {
@@ -705,7 +705,6 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Text(
                   '${Formatters.formatNumber(u.quantityUsed)} ${u.unit}',
-                  textAlign: TextAlign.right,
                   style: AppTextStyles.bodySmall,
                 ),
               ),
@@ -713,7 +712,6 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Text(
                   Formatters.formatCurrency(u.unitCost),
-                  textAlign: TextAlign.right,
                   style: AppTextStyles.bodySmall,
                 ),
               ),
@@ -721,7 +719,6 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Text(
                   Formatters.formatCurrency(u.totalCost),
-                  textAlign: TextAlign.right,
                   style: AppTextStyles.bodyBold.copyWith(fontSize: 12),
                 ),
               ),

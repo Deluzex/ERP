@@ -130,8 +130,7 @@ class _ErpDataTableState extends State<ErpDataTable> {
                           SizedBox(
                             width: _getColWidth(i, extraWidth),
                             child: Align(
-                              alignment: widget.columns[i].alignment ??
-                                  (widget.columns[i].isNumeric ? Alignment.centerRight : Alignment.centerLeft),
+                              alignment: widget.columns[i].alignment ?? Alignment.centerLeft,
                               child: Text(
                                 widget.columns[i].title.toUpperCase(),
                                 style: const TextStyle(
@@ -174,7 +173,7 @@ class _ErpDataTableState extends State<ErpDataTable> {
                                         SizedBox(
                                           width: _getColWidth(i, extraWidth),
                                           child: Align(
-                                            alignment: widget.columns[i].isNumeric ? Alignment.centerRight : Alignment.centerLeft,
+                                            alignment: widget.columns[i].alignment ?? Alignment.centerLeft,
                                             child: i < widget.rows[r].length ? widget.rows[r][i] : const SizedBox.shrink(),
                                           ),
                                         ),
@@ -206,7 +205,7 @@ class _ErpDataTableState extends State<ErpDataTable> {
                                   SizedBox(
                                     width: _getColWidth(i, extraWidth),
                                     child: Align(
-                                      alignment: widget.columns[i].isNumeric ? Alignment.centerRight : Alignment.centerLeft,
+                                      alignment: widget.columns[i].alignment ?? Alignment.centerLeft,
                                       child: i < widget.rows[r].length ? widget.rows[r][i] : const SizedBox.shrink(),
                                     ),
                                   ),
@@ -268,13 +267,13 @@ class _ErpDataTableState extends State<ErpDataTable> {
                   label = SizedBox(
                     width: col.width,
                     child: Align(
-                      alignment: col.alignment ?? (col.isNumeric ? Alignment.centerRight : Alignment.centerLeft),
+                      alignment: col.alignment ?? Alignment.centerLeft,
                       child: label,
                     ),
                   );
                 }
                 return DataColumn(
-                  numeric: col.isNumeric,
+                  numeric: false,
                   label: label,
                 );
               }).toList(),

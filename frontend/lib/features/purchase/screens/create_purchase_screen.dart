@@ -756,6 +756,15 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     });
   }
 
+  void _navigateBack() {
+    _resetForm();
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
+    }
+  }
+
   Future<void> _savePurchase(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
     if (_items.isEmpty) {
@@ -882,8 +891,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
           ),
         );
 
-        _resetForm();
-        ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
+        _navigateBack();
       }
     } catch (e) {
       if (mounted) {
@@ -980,8 +988,9 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+    final canPop = ModalRoute.of(context)?.canPop ?? false;
 
-    return SingleChildScrollView(
+    final formContent = SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Form(
         key: _formKey,
@@ -991,8 +1000,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
             // Header enclosed in section header card
             ErpSectionHeaderCard(
               icon: Icons.shopping_bag_outlined,
-              title: 'Create Direct Purchase',
-              badgeText: 'DIRECT PROCUREMENT',
+              title: widget.existingPurchase != null
+                  ? 'Edit Purchase (${widget.existingPurchase!.purchaseNumber})'
+                  : 'Create Direct Purchase',
+              badgeText: widget.existingPurchase != null ? 'EDIT PROCUREMENT' : 'DIRECT PROCUREMENT',
               action: LayoutBuilder(
                 builder: (context, actionBox) {
                   final isMobile = actionBox.maxWidth < 600;
@@ -1023,12 +1034,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                           child: ErpButton(
                             text: 'Cancel',
                             isOutlined: true,
-                            onPressed: _isSubmitting
-                                ? null
-                                : () {
-                                _resetForm();
-                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
-                              },
+                            onPressed: _isSubmitting ? null : _navigateBack,
                           ),
                         ),
                       ],
@@ -1043,12 +1049,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                       ErpButton(
                         text: 'Cancel',
                         isOutlined: true,
-                        onPressed: _isSubmitting
-                            ? null
-                            : () {
-                                _resetForm();
-                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
-                              },
+                        onPressed: _isSubmitting ? null : _navigateBack,
                       ),
                       ErpButton(
                         text: 'Save Draft',
@@ -2334,12 +2335,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                           child: ErpButton(
                             text: 'Cancel',
                             isOutlined: true,
-                            onPressed: _isSubmitting
-                                ? null
-                                : () {
-                                _resetForm();
-                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
-                              },
+                            onPressed: _isSubmitting ? null : _navigateBack,
                           ),
                         ),
                       ],
@@ -2356,12 +2352,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                         ErpButton(
                           text: 'Cancel',
                           isOutlined: true,
-                          onPressed: _isSubmitting
-                              ? null
-                              : () {
-                                _resetForm();
-                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList;
-                              },
+                          onPressed: _isSubmitting ? null : _navigateBack,
                         ),
                         ErpButton(
                           text: 'Save Draft',
@@ -2383,6 +2374,35 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
           ],
         ),
       ),
+    );
+
+    if (canPop) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 1,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            onPressed: _navigateBack,
+          ),
+          title: Text(
+            widget.existingPurchase != null
+                ? 'Edit Purchase: ${widget.existingPurchase!.purchaseNumber}'
+                : 'Create Direct Purchase',
+            style: AppTextStyles.h3,
+          ),
+        ),
+        body: Material(
+          color: AppColors.background,
+          child: formContent,
+        ),
+      );
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: formContent,
     );
   }
 }

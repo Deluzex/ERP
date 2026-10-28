@@ -647,9 +647,9 @@ class _ConvertProformaDialogState extends ConsumerState<ConvertProformaDialog> {
                     Row(
                       children: [
                         Expanded(flex: 4, child: Text('PRODUCT', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold))),
-                        Expanded(flex: 2, child: Text('REQUIRED', textAlign: TextAlign.right, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold))),
-                        Expanded(flex: 2, child: Text('AVAILABLE', textAlign: TextAlign.right, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold))),
-                        Expanded(flex: 2, child: Text('SHORTAGE', textAlign: TextAlign.right, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold, color: AppColors.dangerText))),
+                        Expanded(flex: 2, child: Text('REQUIRED', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold))),
+                        Expanded(flex: 2, child: Text('AVAILABLE', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold))),
+                        Expanded(flex: 2, child: Text('SHORTAGE', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold, color: AppColors.dangerText))),
                       ],
                     ),
                     const Divider(height: 12),
@@ -671,17 +671,16 @@ class _ConvertProformaDialogState extends ConsumerState<ConvertProformaDialog> {
                             ),
                             Expanded(
                               flex: 2,
-                              child: Text('${Formatters.formatNumber(s.requiredQuantity)} ${s.lineItem.unit}', textAlign: TextAlign.right, style: AppTextStyles.bodySmall),
+                              child: Text('${Formatters.formatNumber(s.requiredQuantity)} ${s.lineItem.unit}', style: AppTextStyles.bodySmall),
                             ),
                             Expanded(
                               flex: 2,
-                              child: Text('${Formatters.formatNumber(s.availableStock)} ${s.lineItem.unit}', textAlign: TextAlign.right, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                              child: Text('${Formatters.formatNumber(s.availableStock)} ${s.lineItem.unit}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
                             ),
                             Expanded(
                               flex: 2,
                               child: Text(
                                 '${Formatters.formatNumber(s.shortageQuantity)} ${s.lineItem.unit}',
-                                textAlign: TextAlign.right,
                                 style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
                               ),
                             ),

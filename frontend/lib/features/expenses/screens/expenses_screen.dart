@@ -816,7 +816,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     ),
                   ),
                   Align(
-                    alignment: Alignment.centerRight,
+                    alignment: Alignment.centerLeft,
                     child: Text(Formatters.formatCurrency(exp.amount), style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5)),
                   ),
                   ErpStatusBadge.success(exp.paymentStatus.name.toUpperCase()),

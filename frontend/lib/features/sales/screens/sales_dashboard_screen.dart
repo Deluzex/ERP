@@ -198,7 +198,6 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
   Widget _buildSalesWorkflowSection(BuildContext context, WidgetRef ref, MockDatabaseService db) {
     final steps = [
       _SalesWorkflowStepData(
-        stepNumber: '01',
         title: 'Quotations',
         count: '${db.pendingQuotationsCount} Pending',
         activeCount: '${db.quotations.length} Total',
@@ -207,48 +206,43 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
         section: ErpNavSection.quotations,
       ),
       _SalesWorkflowStepData(
-        stepNumber: '02',
         title: 'Proforma Invoices',
         count: '${db.proformaInvoices.length} Issued',
         activeCount: 'Advance Tracking',
         icon: Icons.receipt_outlined,
-        color: AppColors.purple,
+        color: AppColors.primary,
         section: ErpNavSection.proformaInvoices,
       ),
       _SalesWorkflowStepData(
-        stepNumber: '03',
         title: 'Stock & Production',
         count: '${db.ordersPendingProductionCount} In Production',
         activeCount: '${db.ordersReadyForDispatchCount} Ready',
         icon: Icons.inventory_2_outlined,
-        color: AppColors.warning,
+        color: AppColors.primary,
         section: ErpNavSection.salesOrders,
       ),
       _SalesWorkflowStepData(
-        stepNumber: '04',
         title: 'Delivery / Dispatch',
         count: '${db.deliveries.length} Dispatched',
         activeCount: 'Stock Out Movement',
         icon: Icons.local_shipping_outlined,
-        color: AppColors.info,
+        color: AppColors.primary,
         section: ErpNavSection.salesDeliveries,
       ),
       _SalesWorkflowStepData(
-        stepNumber: '05',
         title: 'Sales Invoices',
         count: '${db.salesInvoices.length} Invoiced',
         activeCount: Formatters.formatCurrency(db.totalInvoicedRevenue),
         icon: Icons.receipt_long_outlined,
-        color: AppColors.success,
+        color: AppColors.primary,
         section: ErpNavSection.salesInvoiceList,
       ),
       _SalesWorkflowStepData(
-        stepNumber: '06',
         title: 'Sales Returns',
         count: '${db.salesReturns.length} Returned',
         activeCount: 'Restock & Credit Note',
         icon: Icons.assignment_return_outlined,
-        color: AppColors.danger,
+        color: AppColors.primary,
         section: ErpNavSection.salesReturns,
       ),
     ];
@@ -375,7 +369,7 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
                     ),
                   );
                   if (i < steps.length - 1) {
-                    rowChildren.add(_buildStepConnector());
+                    rowChildren.add(const SizedBox(width: 10));
                   }
                 }
                 return IntrinsicHeight(
@@ -430,27 +424,7 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
 
 
 
-  Widget _buildStepConnector() {
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        width: 20,
-        height: 20,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: const Center(
-          child: Icon(
-            Icons.chevron_right_rounded,
-            size: 14,
-            color: Color(0xFF64748B),
-          ),
-        ),
-      ),
-    );
-  }
+
 
 
   Widget _buildRecentOrdersCard(BuildContext context, WidgetRef ref, MockDatabaseService db) {
@@ -618,7 +592,6 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
 }
 
 class _SalesWorkflowStepData {
-  final String stepNumber;
   final String title;
   final String count;
   final String activeCount;
@@ -627,12 +600,11 @@ class _SalesWorkflowStepData {
   final ErpNavSection section;
 
   const _SalesWorkflowStepData({
-    required this.stepNumber,
     required this.title,
     required this.count,
     required this.activeCount,
     required this.icon,
-    required this.color,
+    this.color = AppColors.primary,
     required this.section,
   });
 }
@@ -714,82 +686,62 @@ class _SalesWorkflowCardItemState extends State<_SalesWorkflowCardItem> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: color.withValues(alpha: 0.20),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Text(
-                              'STEP ${step.stepNumber}',
-                              style: TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                color: color,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
+                  padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(step.icon, color: color, size: 15),
+                          child: Icon(step.icon, color: color, size: 16),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          step.title,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 12.5,
+                            color: AppColors.textPrimary,
+                            height: 1.2,
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        step.title,
-                        style: AppTextStyles.bodyBold.copyWith(
-                          fontSize: 12.5,
-                          color: AppColors.textPrimary,
-                          height: 1.15,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        step.count,
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: color,
-                          height: 1.15,
+                        const SizedBox(height: 5),
+                        Text(
+                          step.count,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                            height: 1.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        step.activeCount,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textMuted,
-                          height: 1.15,
+                        const SizedBox(height: 3),
+                        Text(
+                          step.activeCount,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textMuted,
+                            height: 1.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],

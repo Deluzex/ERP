@@ -18,7 +18,7 @@ class ErpSidebar extends ConsumerStatefulWidget {
 class _ErpSidebarState extends ConsumerState<ErpSidebar> {
   ErpNavSection? _lastSection;
   final Map<String, bool> _expandedGroups = {
-    'Inventory': true,
+    'Inventory': false,
     'Purchase': false,
     'Production': false,
     'Sales': false,

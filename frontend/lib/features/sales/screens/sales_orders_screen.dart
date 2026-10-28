@@ -771,7 +771,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
 
           // 5. Order Value
           Align(
-            alignment: Alignment.centerRight,
+            alignment: Alignment.centerLeft,
             child: Text(
               Formatters.formatCurrency(so.totalAmount),
               style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5),
