@@ -1,0 +1,7 @@
+Product Name*,Item Code / SKU*,Category*,Unit*,HSN / SAC Code,Opening Stock,Minimum Stock,Cost Price (INR),Transport Charge (INR),Dealer Selling Price (INR),Customer Selling Price (INR),GST %
+Aura Cylindrical Wall Sconce,FP-SCON-901,Wall Lights & Sconces,PCS,94054090,25.00,5.00,1200.00,50.00,1800.00,2400.00,18.00
+Nova Hexagon Chandelier 600mm,FP-HEX-602,Pendants & Chandeliers,PCS,94054090,15.00,3.00,4500.00,100.00,7200.00,9500.00,18.00
+Aarix Axis Wall Light,DLX-WL-001,Wall Lights & Sconces,PCS,94054090,20.00,15.00,2150.00,25.00,3800.00,4800.00,18.00
+,FP-ERR-101,Invalid Lighting Cat,PCS,94054090,-10.00,2.00,800.00,20.00,1200.00,1600.00,18.00
+Linear Slim Downlight,FP-ERR-102,Wall Lights & Sconces,INVALID_UNIT,94054090,30.00,5.00,-400.00,30.00,900.00,1200.00,150.00
+Aura Sconce Duplicate Code,FP-SCON-901,Wall Lights & Sconces,PCS,94054090,10.00,2.00,1200.00,50.00,1800.00,2400.00,18.00

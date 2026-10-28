@@ -12,6 +12,7 @@ class RawMaterial {
   final double minimumStock;
   final double reorderLevel;
   final double defaultPurchasePrice;
+  final double transportationCharge;
   final double gstPercent;
   final List<String> preferredVendorIds;
   final List<String> preferredVendorNames;
@@ -34,6 +35,7 @@ class RawMaterial {
     required this.minimumStock,
     required this.reorderLevel,
     required this.defaultPurchasePrice,
+    this.transportationCharge = 0.0,
     required this.gstPercent,
     required this.preferredVendorIds,
     this.preferredVendorNames = const [],
@@ -44,7 +46,8 @@ class RawMaterial {
   });
 
   bool get isLowStock => currentStock <= minimumStock;
-  double get totalValuation => currentStock * defaultPurchasePrice;
+  double get totalPurchaseCost => defaultPurchasePrice + transportationCharge;
+  double get totalValuation => currentStock * totalPurchaseCost;
 
   RawMaterial copyWith({
     String? id,
@@ -60,6 +63,7 @@ class RawMaterial {
     double? minimumStock,
     double? reorderLevel,
     double? defaultPurchasePrice,
+    double? transportationCharge,
     double? gstPercent,
     List<String>? preferredVendorIds,
     List<String>? preferredVendorNames,
@@ -82,6 +86,7 @@ class RawMaterial {
       minimumStock: minimumStock ?? this.minimumStock,
       reorderLevel: reorderLevel ?? this.reorderLevel,
       defaultPurchasePrice: defaultPurchasePrice ?? this.defaultPurchasePrice,
+      transportationCharge: transportationCharge ?? this.transportationCharge,
       gstPercent: gstPercent ?? this.gstPercent,
       preferredVendorIds: preferredVendorIds ?? this.preferredVendorIds,
       preferredVendorNames: preferredVendorNames ?? this.preferredVendorNames,
@@ -107,6 +112,7 @@ class RawMaterial {
       minimumStock: double.tryParse(json['minimumStock']?.toString() ?? json['minimum_stock']?.toString() ?? '0') ?? 0.0,
       reorderLevel: double.tryParse(json['reorderLevel']?.toString() ?? json['reorder_level']?.toString() ?? '0') ?? 0.0,
       defaultPurchasePrice: double.tryParse(json['defaultPurchasePrice']?.toString() ?? json['default_purchase_price']?.toString() ?? '0') ?? 0.0,
+      transportationCharge: double.tryParse(json['transportationCharge']?.toString() ?? json['transportation_charge']?.toString() ?? '0') ?? 0.0,
       gstPercent: double.tryParse(json['gstPercent']?.toString() ?? json['gst_percent']?.toString() ?? '18') ?? 18.0,
       preferredVendorIds: (json['preferredVendorIds'] as List?)?.map((e) => e.toString()).toList() ?? [],
       preferredVendorNames: (json['preferredVendorNames'] as List?)?.map((e) => e.toString()).toList() ?? [],
@@ -128,6 +134,23 @@ class RawMaterial {
       'minimumStock': minimumStock,
       'reorderLevel': reorderLevel,
       'defaultPurchasePrice': defaultPurchasePrice,
+      'transportationCharge': transportationCharge,
+      'gstPercent': gstPercent,
+      'preferredVendorIds': preferredVendorIds,
+    };
+  }
+
+  Map<String, dynamic> toUpdateJson() {
+    return {
+      'name': name,
+      'categoryId': categoryId,
+      if (unitId != null && unitId!.isNotEmpty) 'unitId': unitId,
+      if (hsnSacCode != null && hsnSacCode!.isNotEmpty) 'hsnSacCode': hsnSacCode,
+      'currentStock': currentStock,
+      'minimumStock': minimumStock,
+      'reorderLevel': reorderLevel,
+      'defaultPurchasePrice': defaultPurchasePrice,
+      'transportationCharge': transportationCharge,
       'gstPercent': gstPercent,
       'preferredVendorIds': preferredVendorIds,
     };

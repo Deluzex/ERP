@@ -91,8 +91,21 @@ export class ProjectsService {
         p.actual_completion_date,
         p.status,
         p.budget_amount::float as budget_amount,
-        p.total_sales_amount::float as total_sales_amount,
-        p.total_commission_amount::float as total_commission_amount,
+        COALESCE(
+          (SELECT SUM(s.total_amount) FROM sales s WHERE s.project_id = p.id AND s.document_type = 'invoice' AND s.status != 'cancelled'),
+          p.total_sales_amount,
+          0
+        )::float as total_sales_amount,
+        COALESCE(
+          (SELECT SUM(s.architect_commission_amount) FROM sales s WHERE s.project_id = p.id AND s.document_type = 'invoice' AND s.status != 'cancelled'),
+          p.total_commission_amount,
+          0
+        )::float as total_commission_amount,
+        p.site_state,
+        p.site_state_code,
+        p.site_address,
+        p.site_pincode,
+        p.pos_verified,
         p.notes,
         p.created_at,
         p.updated_at
@@ -140,8 +153,21 @@ export class ProjectsService {
         p.actual_completion_date,
         p.status,
         p.budget_amount::float as budget_amount,
-        p.total_sales_amount::float as total_sales_amount,
-        p.total_commission_amount::float as total_commission_amount,
+        COALESCE(
+          (SELECT SUM(s.total_amount) FROM sales s WHERE s.project_id = p.id AND s.document_type = 'invoice' AND s.status != 'cancelled'),
+          p.total_sales_amount,
+          0
+        )::float as total_sales_amount,
+        COALESCE(
+          (SELECT SUM(s.architect_commission_amount) FROM sales s WHERE s.project_id = p.id AND s.document_type = 'invoice' AND s.status != 'cancelled'),
+          p.total_commission_amount,
+          0
+        )::float as total_commission_amount,
+        p.site_state,
+        p.site_state_code,
+        p.site_address,
+        p.site_pincode,
+        p.pos_verified,
         p.notes,
         p.created_at,
         p.updated_at
@@ -198,18 +224,25 @@ export class ProjectsService {
     const startDate = dto.startDate || new Date().toISOString().split('T')[0];
     const status = dto.status || 'active';
     const budgetAmount = dto.budgetAmount || 0;
+    const siteState = dto.siteState?.trim() || null;
+    const siteStateCode = dto.siteStateCode?.trim() || (siteState?.toLowerCase() === 'gujarat' ? '24' : (siteState?.toLowerCase() === 'maharashtra' ? '27' : null));
+    const siteAddress = dto.siteAddress?.trim() || null;
+    const sitePincode = dto.sitePincode?.trim() || null;
+    const posVerified = dto.posVerified !== undefined ? dto.posVerified : Boolean(siteState);
 
     const res = await this.db.query<any>(
       `INSERT INTO projects (
         project_code, name, customer_id, customer_name,
         dealer_id, dealer_name, architect_id, architect_name,
         start_date, expected_completion_date, status,
-        budget_amount, notes, created_by, created_at, updated_at
+        budget_amount, site_state, site_state_code, site_address, site_pincode, pos_verified,
+        notes, created_by, created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4,
         $5, $6, $7, $8,
         $9, $10, $11,
-        $12, $13, $14, now(), now()
+        $12, $13, $14, $15, $16, $17,
+        $18, $19, now(), now()
       )
       RETURNING *`,
       [
@@ -225,6 +258,11 @@ export class ProjectsService {
         dto.expectedCompletionDate || null,
         status,
         budgetAmount,
+        siteState,
+        siteStateCode,
+        siteAddress,
+        sitePincode,
+        posVerified,
         dto.notes?.trim() || null,
         userId || null,
       ],
@@ -287,6 +325,19 @@ export class ProjectsService {
       }
     }
 
+    const hasSiteState = dto.siteState !== undefined;
+    const siteState = dto.siteState ? dto.siteState.trim() : null;
+    const hasSiteStateCode = dto.siteStateCode !== undefined;
+    const siteStateCode = hasSiteStateCode
+      ? (dto.siteStateCode ? dto.siteStateCode.trim() : null)
+      : (hasSiteState && siteState ? (siteState.toLowerCase() === 'gujarat' ? '24' : (siteState.toLowerCase() === 'maharashtra' ? '27' : null)) : null);
+    const hasSiteAddress = dto.siteAddress !== undefined;
+    const siteAddress = dto.siteAddress ? dto.siteAddress.trim() : null;
+    const hasSitePincode = dto.sitePincode !== undefined;
+    const sitePincode = dto.sitePincode ? dto.sitePincode.trim() : null;
+    const hasPosVerified = dto.posVerified !== undefined;
+    const posVerified = dto.posVerified ?? false;
+
     const res = await this.db.query<any>(
       `UPDATE projects SET
         name = COALESCE($1, name),
@@ -301,9 +352,14 @@ export class ProjectsService {
         actual_completion_date = CASE WHEN $14::boolean THEN $15 ELSE actual_completion_date END,
         status = COALESCE($16, status),
         budget_amount = COALESCE($17, budget_amount),
-        notes = CASE WHEN $18::boolean THEN $19 ELSE notes END,
+        site_state = CASE WHEN $18::boolean THEN $19 ELSE site_state END,
+        site_state_code = CASE WHEN $20::boolean THEN $21 ELSE site_state_code END,
+        site_address = CASE WHEN $22::boolean THEN $23 ELSE site_address END,
+        site_pincode = CASE WHEN $24::boolean THEN $25 ELSE site_pincode END,
+        pos_verified = CASE WHEN $26::boolean THEN $27 ELSE pos_verified END,
+        notes = CASE WHEN $28::boolean THEN $29 ELSE notes END,
         updated_at = now()
-      WHERE id = $20 AND is_deleted = false
+      WHERE id = $30 AND is_deleted = false
       RETURNING *`,
       [
         dto.name?.trim() || null,
@@ -323,6 +379,16 @@ export class ProjectsService {
         dto.actualCompletionDate || null,
         dto.status || null,
         dto.budgetAmount !== undefined ? dto.budgetAmount : null,
+        hasSiteState,
+        siteState,
+        hasSiteState || hasSiteStateCode,
+        siteStateCode,
+        hasSiteAddress,
+        siteAddress,
+        hasSitePincode,
+        sitePincode,
+        hasPosVerified,
+        posVerified,
         dto.notes !== undefined,
         dto.notes ? dto.notes.trim() : null,
         id,
@@ -442,6 +508,11 @@ export class ProjectsService {
       budgetAmount: typeof row.budget_amount === 'number' ? row.budget_amount : parseFloat(row.budget_amount || '0'),
       totalSalesAmount: typeof row.total_sales_amount === 'number' ? row.total_sales_amount : parseFloat(row.total_sales_amount || '0'),
       totalCommissionAmount: typeof row.total_commission_amount === 'number' ? row.total_commission_amount : parseFloat(row.total_commission_amount || '0'),
+      siteState: row.site_state || null,
+      siteStateCode: row.site_state_code || null,
+      siteAddress: row.site_address || null,
+      sitePincode: row.site_pincode || null,
+      posVerified: row.pos_verified ?? false,
       notes: row.notes,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

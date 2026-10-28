@@ -35,32 +35,236 @@ export class SalesService {
   // ==========================================================================
   private async getNextSequenceNumber(prefix: string): Promise<string> {
     const year = new Date().getFullYear();
-    const countRes = await this.db.query<{ count: string }>(
-      `SELECT count(*)::text as count FROM sales WHERE invoice_number LIKE $1`,
-      [`%${prefix}/${year}/%`],
+    const pattern = `%/${prefix}/${year}/%`;
+    const res = await this.db.query<{ invoice_number: string }>(
+      `SELECT invoice_number FROM sales WHERE invoice_number LIKE $1`,
+      [pattern],
     );
-    const seq = parseInt(countRes.rows[0].count, 10) + 1;
-    return `DLZ/${prefix}/${year}/${seq.toString().padStart(4, '0')}`;
+
+    let maxSeq = 0;
+    const regex = new RegExp(`/${prefix}/${year}/(\\d+)`);
+    for (const row of res.rows) {
+      const match = row.invoice_number.match(regex);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxSeq) {
+          maxSeq = num;
+        }
+      }
+    }
+
+    let nextSeq = maxSeq + 1;
+    let candidate = `DLZ/${prefix}/${year}/${nextSeq.toString().padStart(4, '0')}`;
+
+    while (true) {
+      const existsRes = await this.db.query<{ id: string }>(
+        `SELECT id FROM sales WHERE invoice_number = $1`,
+        [candidate],
+      );
+      if (existsRes.rows.length === 0) {
+        break;
+      }
+      nextSeq++;
+      candidate = `DLZ/${prefix}/${year}/${nextSeq.toString().padStart(4, '0')}`;
+    }
+
+    return candidate;
+  }
+
+  private normalizeStateCode(stateNameOrCode?: string | null): string | null {
+    if (!stateNameOrCode) return null;
+    const cleaned = stateNameOrCode.trim();
+    if (/^\d{2}$/.test(cleaned)) return cleaned;
+    const lower = cleaned.toLowerCase();
+    const stateMap: Record<string, string> = {
+      gujarat: '24',
+      maharashtra: '27',
+      rajasthan: '08',
+      'madhya pradesh': '23',
+      delhi: '07',
+      karnataka: '29',
+      'tamil nadu': '33',
+      telangana: '36',
+      'andhra pradesh': '37',
+      'uttar pradesh': '09',
+      haryana: '06',
+      punjab: '03',
+      kerala: '32',
+      'west bengal': '19',
+      goa: '30',
+      bihar: '10',
+      assam: '18',
+      odisha: '21',
+      jharkhand: '20',
+      chhattisgarh: '22',
+      uttarakhand: '05',
+      'himachal pradesh': '02',
+      'jammu and kashmir': '01',
+      chandigarh: '04',
+      puducherry: '34',
+      // Common city mappings
+      pune: '27',
+      mumbai: '27',
+      nagpur: '27',
+      nashik: '27',
+      thane: '27',
+      ahmedabad: '24',
+      surat: '24',
+      vadodara: '24',
+      baroda: '24',
+      rajkot: '24',
+      gandhinagar: '24',
+      jaipur: '08',
+      indore: '23',
+      bhopal: '23',
+      bengaluru: '29',
+      bangalore: '29',
+      chennai: '33',
+      hyderabad: '36',
+      kolkata: '19',
+    };
+    if (stateMap[lower]) return stateMap[lower];
+    for (const [key, code] of Object.entries(stateMap)) {
+      if (lower.includes(key)) return code;
+    }
+    return null;
+  }
+
+  private async getSellerState(): Promise<{ stateCode: string; stateName: string }> {
+    try {
+      const res = await this.db.query<{ state_code: string; state_name: string }>(
+        `SELECT state_code, state_name FROM companies LIMIT 1`,
+      );
+      if (res.rows.length > 0 && res.rows[0].state_code) {
+        return {
+          stateCode: res.rows[0].state_code.trim(),
+          stateName: res.rows[0].state_name ? res.rows[0].state_name.trim() : 'Gujarat',
+        };
+      }
+    } catch {
+      // fallback to Gujarat
+    }
+    return { stateCode: '24', stateName: 'Gujarat' };
+  }
+
+  private async resolvePlaceOfSupply(
+    partyType: string,
+    party: { gst_number?: string | null; state?: string | null; state_code?: string | null },
+    projectId?: string | null,
+    dtoIsInterStateTax?: boolean,
+    explicitState?: string | null,
+    explicitStateCode?: string | null,
+  ): Promise<boolean> {
+    const seller = await this.getSellerState();
+    let placeOfSupplyStateCode: string | null = null;
+
+    if (explicitStateCode || explicitState) {
+      placeOfSupplyStateCode = explicitStateCode || this.normalizeStateCode(explicitState);
+    }
+
+    if (!placeOfSupplyStateCode && projectId) {
+      const projRes = await this.db.query<{ site_state: string | null; site_state_code: string | null }>(
+        `SELECT site_state, site_state_code FROM projects WHERE id = $1`,
+        [projectId],
+      );
+      if (projRes.rows.length === 0) {
+        throw new NotFoundException(`Project ${projectId} not found`);
+      }
+      const proj = projRes.rows[0];
+      if (!proj.site_state && !proj.site_state_code) {
+        throw new BadRequestException({
+          code: 'UNRESOLVED_PLACE_OF_SUPPLY',
+          message: 'Project site state is required for tax determination',
+        });
+      }
+      placeOfSupplyStateCode = proj.site_state_code || this.normalizeStateCode(proj.site_state);
+      if (!placeOfSupplyStateCode) {
+        throw new BadRequestException({
+          code: 'UNRESOLVED_PLACE_OF_SUPPLY',
+          message: 'Valid state code could not be resolved for project site',
+        });
+      }
+    } else if (!placeOfSupplyStateCode) {
+      let code: string | null = null;
+      if (party.gst_number && /^\d{2}/.test(party.gst_number.trim())) {
+        code = party.gst_number.trim().slice(0, 2);
+      }
+      if (!code && party.state_code) {
+        code = this.normalizeStateCode(party.state_code);
+      }
+      if (!code && party.state) {
+        code = this.normalizeStateCode(party.state);
+      }
+
+      if (!code) {
+        throw new BadRequestException({
+          code: 'MISSING_PLACE_OF_SUPPLY',
+          message: 'Party state or GST number is required for tax determination',
+        });
+      }
+      placeOfSupplyStateCode = code;
+    }
+
+    const isInterState = placeOfSupplyStateCode !== seller.stateCode;
+
+    if (dtoIsInterStateTax !== undefined && dtoIsInterStateTax !== isInterState) {
+      throw new BadRequestException({
+        code: 'INVALID_TAX_CLASSIFICATION',
+        message: 'Client tax classification does not match statutory Place of Supply rules',
+      });
+    }
+
+    return isInterState;
   }
 
   private async getPartyDetails(partyType: string, partyId: string) {
     if (partyType === 'customer') {
-      const res = await this.db.query<{ name: string; mobile: string; email: string; gst_number: string; address: string }>(
-        `SELECT name, mobile, email, gst_number, address FROM customers WHERE id = $1`,
+      const res = await this.db.query<{
+        name: string;
+        mobile: string;
+        email: string;
+        gst_number: string;
+        address: string;
+        state: string | null;
+        state_code: string | null;
+        pincode: string | null;
+      }>(
+        `SELECT name, mobile, email, gst_number, address, state, state_code, pincode FROM customers WHERE id = $1`,
         [partyId],
       );
       if (res.rows.length === 0) throw new NotFoundException(`Customer ${partyId} not found`);
       return res.rows[0];
     } else if (partyType === 'dealer') {
-      const res = await this.db.query<{ name: string; contact_person: string; mobile: string; email: string; gst_number: string; address: string }>(
-        `SELECT name, contact_person, mobile, email, gst_number, address FROM dealers WHERE id = $1`,
+      const res = await this.db.query<{
+        name: string;
+        contact_person: string;
+        mobile: string;
+        email: string;
+        gst_number: string;
+        address: string;
+        state: string | null;
+        state_code: string | null;
+        pincode: string | null;
+      }>(
+        `SELECT name, contact_person, mobile, email, gst_number, address, state, state_code, pincode FROM dealers WHERE id = $1`,
         [partyId],
       );
       if (res.rows.length === 0) throw new NotFoundException(`Dealer ${partyId} not found`);
       return res.rows[0];
     } else {
-      const res = await this.db.query<{ name: string; company_name: string; mobile: string; email: string; gst_number: string; address: string; default_commission_rate: string }>(
-        `SELECT name, company_name, mobile, email, gst_number, address, default_commission_rate FROM architects WHERE id = $1`,
+      const res = await this.db.query<{
+        name: string;
+        company_name: string;
+        mobile: string;
+        email: string;
+        gst_number: string;
+        address: string;
+        state: string | null;
+        state_code: string | null;
+        pincode: string | null;
+        default_commission_rate: string;
+      }>(
+        `SELECT name, company_name, mobile, email, gst_number, address, state, state_code, pincode, default_commission_rate FROM architects WHERE id = $1`,
         [partyId],
       );
       if (res.rows.length === 0) throw new NotFoundException(`Architect ${partyId} not found`);
@@ -79,6 +283,15 @@ export class SalesService {
       if (archRes.rows.length > 0) archName = archRes.rows[0].name;
     }
 
+    const isInterState = await this.resolvePlaceOfSupply(
+      dto.partyType,
+      party,
+      dto.projectId,
+      dto.isInterStateTax,
+      dto.placeOfSupplyState,
+      dto.placeOfSupplyStateCode,
+    );
+
     const invoiceNumber = await this.getNextSequenceNumber('QT');
     const validUntil = new Date(Date.now() + (dto.validDays ?? 30) * 86400000);
 
@@ -89,20 +302,57 @@ export class SalesService {
 
     const computedItems: any[] = [];
     for (const item of dto.items) {
-      const fpRes = await this.db.query<{ name: string; item_code: string; unit: string; customer_selling_price: string; gst_percent: string }>(
-        `SELECT fp.name, fp.item_code, mu.symbol as unit, fp.customer_selling_price, fp.gst_percent
-         FROM finished_products fp
-         JOIN measurement_units mu ON mu.id = fp.unit_id
-         WHERE fp.id = $1`,
-        [item.finishedProductId],
-      );
-      if (fpRes.rows.length === 0) {
-        throw new NotFoundException(`Finished product ${item.finishedProductId} not found`);
+      const isRawMaterial = item.itemType === 'raw_material' || (!item.finishedProductId && !!item.rawMaterialId);
+      let name = '';
+      let code = '';
+      let unit = '';
+      let defaultPrice = '0';
+      let gstPercentVal = 18;
+      let finishedProductId: string | null = null;
+      let rawMaterialId: string | null = null;
+
+      if (isRawMaterial) {
+        const rmId = item.rawMaterialId || item.finishedProductId;
+        const rmRes = await this.db.query<{ name: string; item_code: string; unit: string; default_purchase_price: string; gst_percent: string }>(
+          `SELECT rm.name, rm.item_code, mu.symbol as unit, rm.default_purchase_price, rm.gst_percent
+           FROM raw_materials rm
+           JOIN measurement_units mu ON mu.id = rm.unit_id
+           WHERE rm.id = $1`,
+          [rmId],
+        );
+        if (rmRes.rows.length === 0) {
+          throw new NotFoundException(`Raw material ${rmId} not found`);
+        }
+        const rm = rmRes.rows[0];
+        name = item.rawMaterialName || rm.name;
+        code = item.rawMaterialCode || rm.item_code;
+        unit = rm.unit;
+        defaultPrice = rm.default_purchase_price;
+        gstPercentVal = parseFloat(rm.gst_percent || '18');
+        rawMaterialId = rmId!;
+      } else {
+        const fpRes = await this.db.query<{ name: string; item_code: string; unit: string; customer_selling_price: string; gst_percent: string }>(
+          `SELECT fp.name, fp.item_code, mu.symbol as unit, fp.customer_selling_price, fp.gst_percent
+           FROM finished_products fp
+           JOIN measurement_units mu ON mu.id = fp.unit_id
+           WHERE fp.id = $1`,
+          [item.finishedProductId],
+        );
+        if (fpRes.rows.length === 0) {
+          throw new NotFoundException(`Finished product ${item.finishedProductId} not found`);
+        }
+        const fp = fpRes.rows[0];
+        name = item.finishedProductName || fp.name;
+        code = item.finishedProductCode || fp.item_code;
+        unit = fp.unit;
+        defaultPrice = fp.customer_selling_price;
+        gstPercentVal = parseFloat(fp.gst_percent || '18');
+        finishedProductId = item.finishedProductId!;
       }
-      const fp = fpRes.rows[0];
-      const rate = item.rate ?? parseFloat(fp.customer_selling_price);
+
+      const rate = item.rate ?? parseFloat(defaultPrice);
       const discount = item.discountAmount ?? 0;
-      const gstPercent = item.gstPercent ?? parseFloat(fp.gst_percent);
+      const gstPercent = item.gstPercent ?? gstPercentVal;
       const taxable = Math.max(0, item.quantity * rate - discount);
       const gst = taxable * (gstPercent / 100);
       const lineTotal = taxable + gst;
@@ -112,19 +362,21 @@ export class SalesService {
       totalGst += gst;
 
       computedItems.push({
-        finishedProductId: item.finishedProductId,
-        finishedProductName: fp.name,
-        finishedProductCode: fp.item_code,
+        itemType: isRawMaterial ? 'raw_material' : 'finished_product',
+        rawMaterialId,
+        finishedProductId,
+        finishedProductName: name,
+        finishedProductCode: code,
         productDescription: item.productDescription ?? '',
         quantity: item.quantity,
-        unit: fp.unit,
+        unit: item.unit || unit,
         rate,
         discountAmount: discount,
         gstPercent,
         taxableAmount: taxable,
-        cgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        sgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        igstAmount: dto.isInterStateTax ? gst : 0,
+        cgstAmount: isInterState ? 0 : gst / 2,
+        sgstAmount: isInterState ? 0 : gst / 2,
+        igstAmount: isInterState ? gst : 0,
         lineTotal,
       });
     }
@@ -132,29 +384,35 @@ export class SalesService {
     const taxableAmount = Math.max(0, subtotal - totalDiscount);
     const grandTotal = taxableAmount + totalGst;
 
+    let projName: string | null = null;
+    if (dto.projectId) {
+      const pRes = await this.db.query<{ name: string }>(`SELECT name FROM projects WHERE id = $1`, [dto.projectId]);
+      if (pRes.rows.length > 0) projName = pRes.rows[0].name;
+    }
+
     const saleRes = await this.db.query<{ id: string }>(
       `INSERT INTO sales (
         invoice_number, document_type, party_type, party_id, party_name,
         customer_contact_person, customer_mobile, customer_email, customer_gst_number,
-        billing_address, shipping_address, architect_id, architect_name,
+        billing_address, shipping_address, project_id, project_name, architect_id, architect_name,
         sales_executive, valid_until, subtotal_amount, discount_amount, taxable_amount,
         cgst_amount, sgst_amount, igst_amount, gst_amount, total_amount, pending_amount,
         is_inter_state_tax, quotation_status, status, notes, terms_and_conditions, created_by
       ) VALUES (
         $1, 'quotation', $2, $3, $4,
         $5, $6, $7, $8,
-        $9, $10, $11, $12,
-        $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23,
-        $24, $25, 'draft', $26, $27, $28
+        $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18, $19,
+        $20, $21, $22, $23, $24, $25,
+        $26, $27, 'draft', $28, $29, $30
       ) RETURNING id`,
       [
         invoiceNumber, dto.partyType, dto.partyId, party.name,
         (party as any).contact_person ?? null, party.mobile, party.email, party.gst_number,
-        party.address, party.address, dto.architectId ?? null, archName,
+        party.address, party.address, dto.projectId ?? null, projName, dto.architectId ?? null, archName,
         dto.salesExecutive ?? null, validUntil, subtotal, totalDiscount, taxableAmount,
-        dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? totalGst : 0, totalGst, grandTotal, grandTotal,
-        dto.isInterStateTax ?? false, dto.isDraft ? 'draft' : 'sent', dto.notes ?? null, dto.termsAndConditions ?? null, userId ?? null,
+        isInterState ? 0 : totalGst / 2, isInterState ? 0 : totalGst / 2, isInterState ? totalGst : 0, totalGst, grandTotal, grandTotal,
+        isInterState, dto.isDraft ? 'draft' : 'sent', dto.notes ?? null, dto.termsAndConditions ?? null, userId ?? null,
       ],
     );
     const saleId = saleRes.rows[0].id;
@@ -162,12 +420,12 @@ export class SalesService {
     for (const i of computedItems) {
       await this.db.query(
         `INSERT INTO sale_items (
-          sale_id, finished_product_id, finished_product_name, finished_product_code,
+          sale_id, item_type, raw_material_id, finished_product_id, finished_product_name, finished_product_code,
           product_description, quantity, unit, rate, discount_amount, gst_percent,
           taxable_amount, cgst_amount, sgst_amount, igst_amount, line_total
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
         [
-          saleId, i.finishedProductId, i.finishedProductName, i.finishedProductCode,
+          saleId, i.itemType, i.rawMaterialId, i.finishedProductId, i.finishedProductName, i.finishedProductCode,
           i.productDescription, i.quantity, i.unit, i.rate, i.discountAmount, i.gstPercent,
           i.taxableAmount, i.cgstAmount, i.sgstAmount, i.igstAmount, i.lineTotal,
         ],
@@ -312,7 +570,7 @@ export class SalesService {
       `INSERT INTO sales (
         invoice_number, document_type, party_type, party_id, party_name,
         customer_contact_person, customer_mobile, customer_email, customer_gst_number,
-        billing_address, shipping_address, architect_id, architect_name,
+        billing_address, shipping_address, project_id, project_name, architect_id, architect_name,
         sales_executive, subtotal_amount, discount_amount, taxable_amount,
         cgst_amount, sgst_amount, igst_amount, gst_amount, total_amount, pending_amount,
         is_inter_state_tax, proforma_status, status, quotation_reference_id, parent_quotation_number,
@@ -320,16 +578,16 @@ export class SalesService {
       ) VALUES (
         $1, 'proformaInvoice', $2, $3, $4,
         $5, $6, $7, $8,
-        $9, $10, $11, $12,
-        $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22,
-        $23, 'issued', 'active', $24, $25,
-        $26, $27, $28
+        $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18,
+        $19, $20, $21, $22, $23, $24,
+        $25, 'issued', 'active', $26, $27,
+        $28, $29, $30
       ) RETURNING id`,
       [
         piNumber, q.partyType, q.partyId, q.partyName,
         q.customerContactPerson, q.customerMobile, q.customerEmail, q.customerGstNumber,
-        q.billingAddress, q.shippingAddress, q.architectId, q.architectName,
+        q.billingAddress, q.shippingAddress, q.projectId ?? null, q.projectName ?? null, q.architectId, q.architectName,
         q.salesExecutive, q.subtotalAmount, q.discountAmount, q.taxableAmount,
         q.cgstAmount, q.sgstAmount, q.igstAmount, q.gstAmount, q.totalAmount, q.totalAmount,
         q.isInterStateTax, q.id, q.invoiceNumber,
@@ -400,6 +658,8 @@ export class SalesService {
       const archRes = await this.db.query<{ name: string }>(`SELECT name FROM architects WHERE id = $1`, [dto.architectId]);
       if (archRes.rows.length > 0) archName = archRes.rows[0].name;
     }
+
+    const isInterState = await this.resolvePlaceOfSupply(dto.partyType, party, null, dto.isInterStateTax);
 
     const soNumber = await this.getNextSequenceNumber('SO');
 
@@ -487,9 +747,9 @@ export class SalesService {
         discountAmount: discount,
         gstPercent,
         taxableAmount: taxable,
-        cgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        sgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        igstAmount: dto.isInterStateTax ? gst : 0,
+        cgstAmount: isInterState ? 0 : gst / 2,
+        sgstAmount: isInterState ? 0 : gst / 2,
+        igstAmount: isInterState ? gst : 0,
         lineTotal,
       });
     }
@@ -520,8 +780,8 @@ export class SalesService {
         party.address, party.address, dto.architectId ?? null, archName,
         finalStatus, dto.deliveryDate ? new Date(dto.deliveryDate) : null,
         subtotal, totalDiscount, taxableAmount,
-        dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? totalGst : 0,
-        totalGst, grandTotal, grandTotal, dto.isInterStateTax ?? false, dto.paymentMode ?? 'bankTransfer', dto.notes ?? null, userId ?? null,
+        isInterState ? 0 : totalGst / 2, isInterState ? 0 : totalGst / 2, isInterState ? totalGst : 0,
+        totalGst, grandTotal, grandTotal, isInterState, dto.paymentMode ?? 'bankTransfer', dto.notes ?? null, userId ?? null,
       ],
     );
     const soId = soRes.rows[0].id;
@@ -544,8 +804,30 @@ export class SalesService {
     // Auto-create Production Orders for shortages
     for (const shortage of shortagesToProduce) {
       const year = new Date().getFullYear();
-      const prdCount = await this.db.query<{ count: string }>(`SELECT count(*)::text as count FROM production_orders WHERE production_number LIKE $1`, [`%PRD-${year}-%`]);
-      const prdNum = `PRD-${year}-${(parseInt(prdCount.rows[0].count, 10) + 1).toString().padStart(4, '0')}`;
+      const prdRes = await this.db.query<{ production_number: string }>(
+        `SELECT production_number FROM production_orders WHERE production_number LIKE $1`,
+        [`%PRD-${year}-%`],
+      );
+      let maxPrdSeq = 0;
+      const regex = new RegExp(`PRD-${year}-(\\d+)`);
+      for (const row of prdRes.rows) {
+        const match = row.production_number.match(regex);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxPrdSeq) maxPrdSeq = num;
+        }
+      }
+      let nextSeq = maxPrdSeq + 1;
+      let prdNum = `PRD-${year}-${nextSeq.toString().padStart(4, '0')}`;
+      while (true) {
+        const exists = await this.db.query<{ id: string }>(
+          `SELECT id FROM production_orders WHERE production_number = $1`,
+          [prdNum],
+        );
+        if (exists.rows.length === 0) break;
+        nextSeq++;
+        prdNum = `PRD-${year}-${nextSeq.toString().padStart(4, '0')}`;
+      }
 
       await this.db.query(
         `INSERT INTO production_orders (
@@ -859,6 +1141,15 @@ export class SalesService {
           taxable, parseFloat(archRes.rows[0].default_commission_rate), commissionAmount,
         ],
       );
+
+      await this.db.query(
+        `UPDATE architects
+         SET pending_commission = COALESCE(pending_commission, 0) + $1,
+             total_commission_earned = COALESCE(total_commission_earned, 0) + $1,
+             updated_at = now()
+         WHERE id = $2`,
+        [commissionAmount, dlv.architectId],
+      );
     }
 
     // 3. Record initial payment receipt if provided
@@ -892,6 +1183,14 @@ export class SalesService {
         commissionRate = parseFloat(archRes.rows[0].default_commission_rate);
       }
     }
+
+    let projName: string | null = null;
+    if (dto.projectId) {
+      const pRes = await this.db.query<{ name: string }>(`SELECT name FROM projects WHERE id = $1`, [dto.projectId]);
+      if (pRes.rows.length > 0) projName = pRes.rows[0].name;
+    }
+
+    const isInterState = await this.resolvePlaceOfSupply(dto.partyType, party, dto.projectId ?? null, dto.isInterStateTax);
 
     const invNumber = await this.getNextSequenceNumber('INV');
 
@@ -950,9 +1249,9 @@ export class SalesService {
         discountAmount: discount,
         gstPercent,
         taxableAmount: taxable,
-        cgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        sgstAmount: dto.isInterStateTax ? 0 : gst / 2,
-        igstAmount: dto.isInterStateTax ? gst : 0,
+        cgstAmount: isInterState ? 0 : gst / 2,
+        sgstAmount: isInterState ? 0 : gst / 2,
+        igstAmount: isInterState ? gst : 0,
         lineTotal,
       });
     }
@@ -968,25 +1267,25 @@ export class SalesService {
       `INSERT INTO sales (
         invoice_number, document_type, party_type, party_id, party_name,
         customer_contact_person, customer_mobile, customer_email, customer_gst_number,
-        billing_address, shipping_address, architect_id, architect_name,
+        billing_address, shipping_address, project_id, project_name, architect_id, architect_name,
         subtotal_amount, discount_amount, taxable_amount, cgst_amount, sgst_amount, igst_amount,
         gst_amount, total_amount, paid_amount, pending_amount, is_inter_state_tax, payment_mode, status,
         architect_commission_amount, notes, created_by
       ) VALUES (
         $1, 'invoice', $2, $3, $4,
         $5, $6, $7, $8,
-        $9, $10, $11, $12,
-        $13, $14, $15, $16, $17, $18,
-        $19, $20, $21, $22, $23, $24, $25,
-        $26, $27, $28
+        $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18, $19, $20,
+        $21, $22, $23, $24, $25, $26, $27,
+        $28, $29, $30
       ) RETURNING id`,
       [
         invNumber, dto.partyType, dto.partyId, party.name,
         (party as any).contact_person ?? null, party.mobile, party.email, party.gst_number,
-        party.address, party.address, dto.architectId ?? null, archName,
+        party.address, party.address, dto.projectId ?? null, projName, dto.architectId ?? null, archName,
         subtotal, totalDiscount, taxableAmount,
-        dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? 0 : totalGst / 2, dto.isInterStateTax ? totalGst : 0,
-        totalGst, grandTotal, paidAmount, pendingAmount, dto.isInterStateTax ?? false, dto.paymentMode ?? 'upi', status,
+        isInterState ? 0 : totalGst / 2, isInterState ? 0 : totalGst / 2, isInterState ? totalGst : 0,
+        totalGst, grandTotal, paidAmount, pendingAmount, isInterState, dto.paymentMode ?? 'upi', status,
         commissionAmount, dto.notes ?? 'Direct Counter POS Sale', userId ?? null,
       ],
     );
@@ -1036,6 +1335,15 @@ export class SalesService {
           sale_amount, commission_rate, commission_amount, status, generated_date
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'generated', now())`,
         [comNum, dto.architectId, archName, invId, invNumber, taxableAmount, commissionRate, commissionAmount],
+      );
+
+      await this.db.query(
+        `UPDATE architects
+         SET pending_commission = COALESCE(pending_commission, 0) + $1,
+             total_commission_earned = COALESCE(total_commission_earned, 0) + $1,
+             updated_at = now()
+         WHERE id = $2`,
+        [commissionAmount, dto.architectId],
       );
     }
 
@@ -1333,9 +1641,22 @@ export class SalesService {
       params.push(query.documentType);
     }
 
-    if (query.status) {
-      conditions.push(`s.status = $${idx++}`);
+    if (query.status && query.status !== 'all') {
+      if (query.documentType === 'quotation') {
+        conditions.push(`(s.quotation_status = $${idx} OR s.status = $${idx})`);
+      } else if (query.documentType === 'proformaInvoice') {
+        conditions.push(`(s.proforma_status = $${idx} OR s.status = $${idx})`);
+      } else if (query.documentType === 'salesOrder') {
+        conditions.push(`(s.sales_order_status = $${idx} OR s.status = $${idx})`);
+      } else if (query.documentType === 'delivery') {
+        conditions.push(`(s.delivery_status = $${idx} OR s.status = $${idx})`);
+      } else if (query.documentType === 'salesReturn') {
+        conditions.push(`(s.sales_return_status = $${idx} OR s.status = $${idx})`);
+      } else {
+        conditions.push(`s.status = $${idx}`);
+      }
       params.push(query.status);
+      idx++;
     }
 
     if (query.partyId) {
@@ -1344,7 +1665,7 @@ export class SalesService {
     }
 
     if (query.search) {
-      conditions.push(`(s.invoice_number ILIKE $${idx} OR s.party_name ILIKE $${idx})`);
+      conditions.push(`(s.invoice_number ILIKE $${idx} OR s.party_name ILIKE $${idx} OR COALESCE(s.parent_quotation_number, '') ILIKE $${idx} OR COALESCE(s.project_name, '') ILIKE $${idx})`);
       params.push(`%${query.search}%`);
       idx++;
     }
@@ -1524,6 +1845,8 @@ export class SalesService {
     return {
       id: row.id,
       saleId: row.sale_id,
+      itemType: row.item_type || (row.raw_material_id ? 'raw_material' : 'finished_product'),
+      rawMaterialId: row.raw_material_id,
       finishedProductId: row.finished_product_id,
       finishedProductName: row.finished_product_name,
       finishedProductCode: row.finished_product_code,

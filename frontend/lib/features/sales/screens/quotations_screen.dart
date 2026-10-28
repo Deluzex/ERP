@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -7,9 +8,14 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_toast.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
@@ -24,6 +30,11 @@ class QuotationsScreen extends ConsumerStatefulWidget {
 class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
+  String _selectedStatusFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -48,55 +59,85 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
+          ErpSectionHeaderCard(
+            icon: Icons.request_quote_outlined,
+            title: 'Quotations & Commercial Estimates',
+            badgeText: 'COMMERCIAL QUOTES',
+            action: ErpButton(
+              text: 'Create Quotation',
+              icon: Icons.add,
+              onPressed: () {
+                ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
+                ref.read(salesCreateSourceDocIdProvider.notifier).state = null;
+                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 2. Summary Metric Cards (Project Theme)
           LayoutBuilder(
             builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              final totalPipeline = db.quotations.fold(0.0, (sum, q) => sum + q.totalAmount);
+              final sentCount = db.quotations.where((q) => q.quotationStatus == QuotationStatus.sent).length;
+              final acceptedCount = db.quotations.where((q) => q.quotationStatus == QuotationStatus.accepted || q.quotationStatus == QuotationStatus.approved).length;
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Text('Quotations & Commercial Estimates', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Manage quotes, revision branches, client approval & proforma conversion',
-                    style: AppTextStyles.subtitle,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.request_quote_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Quotations',
+                      value: '${db.quotations.length}',
+                      subtext: 'Commercial Estimates',
+                    ),
                   ),
-                ],
-              );
-
-              final actionBtn = ErpButton(
-                text: 'Create Quotation',
-                icon: Icons.add,
-                onPressed: () {
-                  ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
-                  ref.read(salesCreateSourceDocIdProvider.notifier).state = null;
-                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
-                },
-              );
-
-              if (isStacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    titleBlock,
-                    const SizedBox(height: 12),
-                    actionBtn,
-                  ],
-                );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: titleBlock),
-                  const SizedBox(width: 12),
-                  actionBtn,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.schedule_outlined,
+                      iconColor: AppColors.warning,
+                      title: 'Pending Review',
+                      value: '$sentCount Quotes',
+                      subtext: 'Awaiting Client Decision',
+                      subtextColor: AppColors.warning,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      iconColor: AppColors.success,
+                      title: 'Accepted & Won',
+                      value: '$acceptedCount Quotes',
+                      subtext: 'Approved Pipeline',
+                      subtextColor: AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.primary,
+                      title: 'Pipeline Valuation',
+                      value: Formatters.formatCurrency(totalPipeline),
+                      subtext: 'Active Quote Value',
+                    ),
+                  ),
                 ],
               );
             },
           ),
           const SizedBox(height: 20),
 
-          // 2. Tabs: All, Draft, Sent, Accepted, Revisions/History, Rejected/Expired
+          // 3. Tabs: All, Draft, Sent, Accepted, Revisions/History, Rejected/Expired
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -110,7 +151,9 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textMuted,
               indicatorColor: AppColors.primary,
-              onTap: (_) => setState(() {}),
+              onTap: (_) => setState(() {
+                _currentPage = 0;
+              }),
               tabs: [
                 Tab(text: 'All Quotes (${db.quotations.length})'),
                 Tab(text: 'Drafts (${db.quotations.where((q) => q.quotationStatus == QuotationStatus.draft).length})'),
@@ -123,13 +166,32 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
           ),
           const SizedBox(height: 16),
 
-          // 3. Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search quotations by number, customer, project or executive...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // 3. Global Filters
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search quotation, client, project...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -175,6 +237,16 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
       }).toList();
     }
 
+    // Filter by date range
+    if (_startDate != null) {
+      final startDay = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+      filtered = filtered.where((q) => !q.saleDate.isBefore(startDay)).toList();
+    }
+    if (_endDate != null) {
+      final endDay = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+      filtered = filtered.where((q) => !q.saleDate.isAfter(endDay)).toList();
+    }
+
     if (filtered.isEmpty) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -196,18 +268,28 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
       );
     }
 
-    return ErpDataTable(
-      columns: const [
-        ErpColumn(title: 'Quote Number'),
-        ErpColumn(title: 'Date'),
-        ErpColumn(title: 'Customer / Client'),
-        ErpColumn(title: 'Project'),
-        ErpColumn(title: 'Grand Total', isNumeric: true),
-        ErpColumn(title: 'Valid Till'),
+    final totalCount = filtered.length;
+    final maxPage = (totalCount / _pageSize).ceil();
+    final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+    final startIdx = effectivePage * _pageSize;
+    final endIdx = min(startIdx + _pageSize, totalCount);
+    final paginatedQuotes = totalCount == 0 ? <Sale>[] : filtered.sublist(startIdx, endIdx);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ErpDataTable(
+          columns: const [
+            ErpColumn(title: 'Quote Number'),
+            ErpColumn(title: 'Date'),
+            ErpColumn(title: 'Customer / Client'),
+            ErpColumn(title: 'Project'),
+            ErpColumn(title: 'Grand Total', isNumeric: true),
+            ErpColumn(title: 'Valid Till'),
         ErpColumn(title: 'Status'),
         ErpColumn(title: 'Actions'),
       ],
-      rows: filtered.map((quote) {
+      rows: paginatedQuotes.map((quote) {
         ErpStatusBadge badge;
         switch (quote.quotationStatus) {
           case QuotationStatus.accepted:
@@ -273,7 +355,22 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
           _buildQuoteActionMenu(context, ref, quote, db),
         ];
       }).toList(),
-    );
+    ),
+    if (filtered.isNotEmpty) ...[
+      const SizedBox(height: 12),
+      ErpPaginationBar(
+        totalRecords: totalCount,
+        currentPage: effectivePage,
+        pageSize: _pageSize,
+        onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+        onPageSizeChanged: (newSize) => setState(() {
+          _pageSize = newSize;
+          _currentPage = 0;
+        }),
+      ),
+    ],
+  ],
+);
   }
 
   Widget _buildQuoteActionMenu(BuildContext context, WidgetRef ref, Sale quote, MockDatabaseService db) {
@@ -330,9 +427,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         case 'reject':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.rejected.name);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Quotation ${quote.invoiceNumber} marked as REJECTED.'), backgroundColor: AppColors.danger),
-          );
+          ErpToast.showSuccess(context, 'Quotation ${quote.invoiceNumber} marked as REJECTED.');
           break;
         case 'revision':
           ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
@@ -342,9 +437,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         case 'proforma':
           final proforma = await db.convertQuotationToProformaAsync(quote.id);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Created Proforma Invoice ${proforma.invoiceNumber}!'), backgroundColor: AppColors.success),
-          );
+          ErpToast.showSuccess(context, 'Created Proforma Invoice ${proforma.invoiceNumber}!');
           ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.proformaInvoices;
           break;
         case 'duplicate':
@@ -355,9 +448,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Action failed: $e'), backgroundColor: AppColors.danger),
-      );
+      ErpToast.showError(context, 'Action failed: $e');
     }
   }
 }

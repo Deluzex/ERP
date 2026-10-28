@@ -5,13 +5,17 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/project_model.dart';
+import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ProjectListScreen extends ConsumerStatefulWidget {
@@ -23,12 +27,18 @@ class ProjectListScreen extends ConsumerStatefulWidget {
 
 class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
   String _searchQuery = '';
+  String _statusFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(databaseServiceProvider).loadProjects();
+      ref.read(databaseServiceProvider).loadSalesInvoices();
       ref.read(databaseServiceProvider).loadCustomers();
       ref.read(databaseServiceProvider).loadArchitects();
     });
@@ -45,6 +55,9 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
           ? existing.budgetAmount.toStringAsFixed(2)
           : '',
     );
+    final siteStateCtrl = TextEditingController(text: existing?.siteState ?? '');
+    final sitePincodeCtrl = TextEditingController(text: existing?.sitePincode ?? '');
+    final siteAddressCtrl = TextEditingController(text: existing?.siteAddress ?? '');
     String? selectedCustomerId = existing?.customerId ?? (db.customers.isNotEmpty ? db.customers.first.id : null);
     String? selectedArchitectId = existing?.architectId ?? (db.architects.isNotEmpty ? db.architects.first.id : null);
     ProjectStatus selectedStatus = existing?.status ?? ProjectStatus.active;
@@ -412,6 +425,43 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                           }),
                         ],
                         const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: siteStateCtrl,
+                                validator: (v) => Validators.requiredField(v, 'Site state is required for GST determination'),
+                                decoration: const InputDecoration(
+                                  labelText: 'Site State (Place of Supply) *',
+                                  hintText: 'e.g. Gujarat, Maharashtra',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: sitePincodeCtrl,
+                                validator: (v) => Validators.pincode(v, false),
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Site PIN Code',
+                                  hintText: 'e.g. 380054',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: siteAddressCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Site Delivery Address',
+                            hintText: 'Plot / Tower / Site street address',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         TextFormField(
                           controller: notesCtrl,
                           maxLines: 2,
@@ -456,6 +506,10 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                               ? double.tryParse(budgetCtrl.text.trim())
                               : null;
 
+                          final siteStateVal = siteStateCtrl.text.trim().isNotEmpty ? siteStateCtrl.text.trim() : null;
+                          final sitePincodeVal = sitePincodeCtrl.text.trim().isNotEmpty ? sitePincodeCtrl.text.trim() : null;
+                          final siteAddressVal = siteAddressCtrl.text.trim().isNotEmpty ? siteAddressCtrl.text.trim() : null;
+
                           try {
                             if (isEdit) {
                               final updatedProject = existing.copyWith(
@@ -468,6 +522,10 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                 startDate: startDate,
                                 expectedCompletionDate: expDate,
                                 status: selectedStatus,
+                                siteState: siteStateVal,
+                                sitePincode: sitePincodeVal,
+                                siteAddress: siteAddressVal,
+                                posVerified: siteStateVal != null,
                                 notes: notesCtrl.text.trim(),
                               );
                               await db.updateProjectAsync(updatedProject);
@@ -483,6 +541,10 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                 startDate: startDate,
                                 expectedCompletionDate: expDate,
                                 status: selectedStatus,
+                                siteState: siteStateVal,
+                                sitePincode: sitePincodeVal,
+                                siteAddress: siteAddressVal,
+                                posVerified: siteStateVal != null,
                                 notes: notesCtrl.text.trim(),
                                 createdAt: DateTime.now(),
                               );
@@ -546,64 +608,318 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
     );
   }
 
+  void _openUpdateProjectStatusDialog(Project project) {
+    ProjectStatus newStatus = project.status;
+    final notesCtrl = TextEditingController(text: project.notes ?? '');
+    bool isSubmitting = false;
+    String? serverError;
+
+    showDialog(
+      context: context,
+      barrierDismissible: !isSubmitting,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.published_with_changes, color: AppColors.primary, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Update Project Status', style: AppTextStyles.h3),
+                        Text(
+                          project.name,
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (serverError != null) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(serverError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.danger)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    Text('Select New Status:', style: AppTextStyles.bodyBold),
+                    const SizedBox(height: 10),
+                    ...ProjectStatus.values.map((s) {
+                      final isSelected = s == newStatus;
+                      Color badgeColor;
+                      switch (s) {
+                        case ProjectStatus.active:
+                          badgeColor = AppColors.success;
+                          break;
+                        case ProjectStatus.completed:
+                          badgeColor = AppColors.info;
+                          break;
+                        case ProjectStatus.planned:
+                          badgeColor = AppColors.warning;
+                          break;
+                        case ProjectStatus.closed:
+                          badgeColor = AppColors.textMuted;
+                          break;
+                        case ProjectStatus.cancelled:
+                          badgeColor = AppColors.danger;
+                          break;
+                      }
+
+                      return InkWell(
+                        onTap: () => setDlgState(() => newStatus = s),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isSelected ? badgeColor.withValues(alpha: 0.1) : AppColors.surfaceMuted.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isSelected ? badgeColor : AppColors.border,
+                              width: isSelected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Radio<ProjectStatus>(
+                                value: s,
+                                groupValue: newStatus,
+                                activeColor: badgeColor,
+                                onChanged: (val) {
+                                  if (val != null) setDlgState(() => newStatus = val);
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      s.name.toUpperCase(),
+                                      style: AppTextStyles.bodyBold.copyWith(
+                                        color: isSelected ? badgeColor : AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    Text(
+                                      _getStatusDescription(s),
+                                      style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: notesCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Remarks / Milestone Notes (Optional)',
+                        hintText: 'Add context regarding this status update...',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                ErpButton(
+                  text: 'Cancel',
+                  isOutlined: true,
+                  onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+                ),
+                ErpButton(
+                  text: 'Update Status',
+                  isLoading: isSubmitting,
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (newStatus == project.status && notesCtrl.text.trim() == (project.notes ?? '')) {
+                            Navigator.of(ctx).pop();
+                            return;
+                          }
+                          setDlgState(() {
+                            isSubmitting = true;
+                            serverError = null;
+                          });
+                          final db = ref.read(databaseServiceProvider);
+                          try {
+                            final updated = project.copyWith(
+                              status: newStatus,
+                              notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : project.notes,
+                              actualCompletionDate: newStatus == ProjectStatus.completed
+                                  ? (project.actualCompletionDate ?? DateTime.now())
+                                  : project.actualCompletionDate,
+                            );
+                            await db.updateProjectAsync(updated);
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Project status updated to ${newStatus.name.toUpperCase()} successfully!'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDlgState(() {
+                              serverError = e.toString().replaceFirst('Exception: ', '');
+                              isSubmitting = false;
+                            });
+                          }
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _getStatusDescription(ProjectStatus status) {
+    switch (status) {
+      case ProjectStatus.planned:
+        return 'Project created, scope drafted, waiting to start';
+      case ProjectStatus.active:
+        return 'In progress, manufacturing & procurement underway';
+      case ProjectStatus.completed:
+        return 'All deliverables manufactured, installed & completed';
+      case ProjectStatus.closed:
+        return 'Project delivered, invoiced & accounts finalized';
+      case ProjectStatus.cancelled:
+        return 'Project halted or cancelled by client';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final projects = db.projects.where((p) {
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          p.name.toLowerCase().contains(query) ||
-          (p.projectCode.isNotEmpty && p.projectCode.toLowerCase().contains(query)) ||
-          (p.customerName != null && p.customerName!.toLowerCase().contains(query)) ||
-          (p.architectName != null && p.architectName!.toLowerCase().contains(query)) ||
-          (p.notes != null && p.notes!.toLowerCase().contains(query)) ||
-          p.status.toString().toLowerCase().contains(query);
+      if (query.isNotEmpty) {
+        final matches = p.name.toLowerCase().contains(query) ||
+            (p.projectCode.isNotEmpty && p.projectCode.toLowerCase().contains(query)) ||
+            (p.customerName != null && p.customerName!.toLowerCase().contains(query)) ||
+            (p.architectName != null && p.architectName!.toLowerCase().contains(query)) ||
+            (p.notes != null && p.notes!.toLowerCase().contains(query)) ||
+            p.status.toString().toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_statusFilter != 'ALL' && p.status.name.toLowerCase() != _statusFilter.toLowerCase()) {
+        return false;
+      }
+      if (_startDate != null && p.startDate.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && p.startDate.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = projects.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedProjects = totalRecords == 0 ? <Project>[] : projects.sublist(startIndex, endIndex);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 180),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Project Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Manage architectural projects, client assignments, lead architects, and lifecycle status', style: AppTextStyles.subtitle),
-                      ],
-                    ),
-                  ),
-                  ErpButton(
-                    text: 'New Project',
-                    icon: Icons.add,
-                    onPressed: () => _openAddEditProjectDialog(),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search projects by code, name, customer, architect, status, or notes...',
-              prefixIcon: Icon(Icons.search, size: 18),
+          ErpSectionHeaderCard(
+            icon: Icons.assignment_rounded,
+            title: 'Project Master',
+            badgeText: 'PROJECT REGISTRY',
+            action: ErpButton(
+              text: 'New Project',
+              icon: Icons.add,
+              onPressed: () => _openAddEditProjectDialog(),
             ),
           ),
           const SizedBox(height: 20),
+
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search projects by code, name, client...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _statusFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Project Statuses')),
+                  DropdownMenuItem(value: 'planned', child: Text('Planned')),
+                  DropdownMenuItem(value: 'active', child: Text('Active / In Progress')),
+                  DropdownMenuItem(value: 'completed', child: Text('Completed')),
+                  DropdownMenuItem(value: 'closed', child: Text('Closed')),
+                  DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _statusFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           ErpDataTable(
             columns: const [
@@ -618,7 +934,7 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
               ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
-            rows: projects.map((p) {
+            rows: pagedProjects.map((p) {
               ErpStatusBadge badge;
               switch (p.status) {
                 case ProjectStatus.active:
@@ -637,6 +953,15 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                   badge = ErpStatusBadge.danger('CANCELLED');
                   break;
               }
+
+              final prjInvoices = db.sales.where((s) =>
+                  s.projectId == p.id &&
+                  s.documentType == SalesDocumentType.invoice &&
+                  s.status != SaleStatus.cancelled).toList();
+              final invoicedSum = prjInvoices.fold<double>(0.0, (acc, s) => acc + s.totalAmount);
+              final commissionSum = prjInvoices.fold<double>(0.0, (acc, s) => acc + s.architectCommissionAmount);
+              final displaySalesAmount = invoicedSum > 0 ? invoicedSum : p.totalSalesAmount;
+              final displayCommissionAmount = commissionSum > 0 ? commissionSum : p.totalCommissionAmount;
 
               return [
                 Text(
@@ -662,33 +987,96 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                   p.budgetAmount > 0 ? Formatters.formatCurrency(p.budgetAmount) : '—',
                   style: AppTextStyles.bodyMedium,
                 ),
-                Text(Formatters.formatCurrency(p.totalSalesAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(Formatters.formatCurrency(p.totalCommissionAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
-                badge,
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
-                      tooltip: 'View 10-Section Project Breakdown',
-                      onPressed: () {
-                        ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'project', ErpNavSection.projectList);
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Project',
-                      onPressed: () => _openAddEditProjectDialog(p),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                      tooltip: 'Delete Project',
-                      onPressed: () => _confirmDeleteProject(p),
-                    ),
-                  ],
+                Text(Formatters.formatCurrency(displaySalesAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                Text(Formatters.formatCurrency(displayCommissionAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.purple)),
+                Tooltip(
+                  message: 'Click to update status',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(4),
+                    onTap: () => _openUpdateProjectStatusDialog(p),
+                    child: badge,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 10.0),
+                  child: PopupMenuButton<String>(
+                    tooltip: 'Actions',
+                    icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onSelected: (action) {
+                      switch (action) {
+                        case 'view':
+                          ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'project', ErpNavSection.projectList);
+                          break;
+                        case 'status':
+                          _openUpdateProjectStatusDialog(p);
+                          break;
+                        case 'edit':
+                          _openAddEditProjectDialog(p);
+                          break;
+                        case 'delete':
+                          _confirmDeleteProject(p);
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'view',
+                        child: Row(
+                          children: [
+                            Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                            SizedBox(width: 8),
+                            Text('View Project Details'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'status',
+                        child: Row(
+                          children: [
+                            Icon(Icons.published_with_changes, color: AppColors.primary, size: 18),
+                            SizedBox(width: 8),
+                            Text('Update Project Status'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                            SizedBox(width: 8),
+                            Text('Edit Project'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
+                            SizedBox(width: 8),
+                            Text('Delete Project'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

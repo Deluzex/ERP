@@ -167,4 +167,20 @@ class PaymentsApiService {
       throw _client.handleDioError(e);
     }
   }
+
+  /// Reject Architect Commission
+  Future<ArchitectCommission> rejectCommission(String id, {String? reason}) async {
+    try {
+      final response = await _client.dio.post(
+        '/payments/commissions/$id/reject',
+        data: {
+          if (reason != null) 'reason': reason,
+        },
+      );
+      final data = _client.unwrap<Map<String, dynamic>>(response);
+      return ArchitectCommission.fromJson(data);
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
 }

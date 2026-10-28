@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -8,9 +9,14 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/purchase_model.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
@@ -25,6 +31,10 @@ class SalesInvoiceListScreen extends ConsumerStatefulWidget {
 class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -59,7 +69,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: AppColors.success.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
                   child: const Icon(Icons.payments_outlined, color: AppColors.success, size: 20),
                 ),
                 const SizedBox(width: 12),
@@ -162,15 +172,11 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
                 icon: Icons.check,
                 onPressed: () async {
                   if (enteredAmount <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter a valid receipt amount.'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showWarning(context, 'Please enter a valid receipt amount.');
                     return;
                   }
                   if (enteredAmount > invoice.pendingAmount) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Receipt amount cannot exceed pending due.'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showWarning(context, 'Receipt amount cannot exceed pending due.');
                     return;
                   }
 
@@ -184,15 +190,14 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
                     );
 
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Payment of ${Formatters.formatCurrency(enteredAmount)} recorded! Customer outstanding balance reduced.'),
-                        backgroundColor: AppColors.success,
-                      ),
+                    ErpToast.showSuccess(
+                      context,
+                      'Payment of ${Formatters.formatCurrency(enteredAmount)} recorded successfully!',
                     );
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to record payment: $e'), backgroundColor: AppColors.danger),
+                    ErpToast.showError(
+                      context,
+                      'Failed to record payment: $e',
                     );
                   }
                 },
@@ -214,63 +219,121 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 750;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Sales Invoices & Revenue', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Tax invoices created from delivered goods, payment receipts & customer outstanding balances',
-                    style: AppTextStyles.subtitle,
-                  ),
-                ],
-              );
-
-              final actionButtons = Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ErpButton(
-                    text: 'Invoice from Delivery',
-                    icon: Icons.local_shipping_outlined,
-                    isOutlined: true,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesDeliveries,
-                  ),
-                  ErpButton(
-                    text: 'Create Direct Sale',
-                    icon: Icons.point_of_sale_outlined,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
-                  ),
-                ],
-              );
-
-              if (isStacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          ErpSectionHeaderCard(
+            icon: Icons.receipt_outlined,
+            title: 'Sales Invoices & Revenue',
+            badgeText: 'TAX INVOICES',
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobileHeader = actionBox.maxWidth < 520;
+                if (isMobileHeader) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Invoice from Delivery',
+                          icon: Icons.local_shipping_outlined,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesDeliveries,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Create Direct Sale',
+                          icon: Icons.point_of_sale_outlined,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    titleBlock,
-                    const SizedBox(height: 16),
-                    actionButtons,
+                    ErpButton(
+                      text: 'Invoice from Delivery',
+                      icon: Icons.local_shipping_outlined,
+                      isOutlined: true,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesDeliveries,
+                    ),
+                    ErpButton(
+                      text: 'Create Direct Sale',
+                      icon: Icons.point_of_sale_outlined,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                    ),
                   ],
                 );
-              }
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
 
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // 2. Summary Metric Cards (Project Theme)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              final totalPaid = db.salesInvoices.fold(0.0, (sum, inv) => sum + inv.paidAmount);
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(child: titleBlock),
-                  const SizedBox(width: 12),
-                  actionButtons,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.point_of_sale_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Invoiced Revenue',
+                      value: Formatters.formatCurrency(db.totalInvoicedRevenue),
+                      subtext: 'Gross Revenue Billed',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.receipt_long_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Tax Invoices',
+                      value: '${db.salesInvoices.length}',
+                      subtext: 'Generated Invoices',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      iconColor: AppColors.success,
+                      title: 'Collected to Date',
+                      value: Formatters.formatCurrency(totalPaid),
+                      subtext: 'Realized Revenue',
+                      subtextColor: AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'Customer Due / Balance',
+                      value: Formatters.formatCurrency(db.pendingCustomerPayments),
+                      subtext: 'Outstanding Receivables',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
                 ],
               );
             },
           ),
           const SizedBox(height: 20),
 
-          // 2. Tabs: All, Unpaid/Active, Partially Paid, Fully Paid, Overdue
+          // 3. Tabs: All, Unpaid/Active, Partially Paid, Fully Paid, Overdue
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -284,7 +347,9 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textMuted,
               indicatorColor: AppColors.primary,
-              onTap: (_) => setState(() {}),
+              onTap: (_) => setState(() {
+                _currentPage = 0;
+              }),
               tabs: [
                 Tab(text: 'All Invoices (${db.salesInvoices.length})'),
                 Tab(text: 'Pending Due (${db.salesInvoices.where((i) => i.pendingAmount > 0).length})'),
@@ -296,13 +361,32 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
           ),
           const SizedBox(height: 16),
 
-          // 3. Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search sales invoices by invoice number, customer/dealer, or project...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // 3. Global Filters
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search invoices, customer, project...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -344,6 +428,16 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
       }).toList();
     }
 
+    // Filter by date range
+    if (_startDate != null) {
+      final startDay = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+      filtered = filtered.where((i) => !i.date.isBefore(startDay)).toList();
+    }
+    if (_endDate != null) {
+      final endDay = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+      filtered = filtered.where((i) => !i.date.isAfter(endDay)).toList();
+    }
+
     if (filtered.isEmpty) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -365,8 +459,18 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
       );
     }
 
-    return ErpDataTable(
-      columns: const [
+    final totalCount = filtered.length;
+    final maxPage = (totalCount / _pageSize).ceil();
+    final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+    final startIdx = effectivePage * _pageSize;
+    final endIdx = min(startIdx + _pageSize, totalCount);
+    final paginatedInvoices = totalCount == 0 ? <Sale>[] : filtered.sublist(startIdx, endIdx);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ErpDataTable(
+          columns: const [
         ErpColumn(title: 'Invoice No'),
         ErpColumn(title: 'Date'),
         ErpColumn(title: 'Customer / Party'),
@@ -378,7 +482,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
         ErpColumn(title: 'Payment Status'),
         ErpColumn(title: 'Actions'),
       ],
-      rows: filtered.map((s) {
+      rows: paginatedInvoices.map((s) {
         ErpStatusBadge badge;
         switch (s.status) {
           case SaleStatus.paid:
@@ -410,7 +514,6 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
             returnBadge = ErpStatusBadge.warning('PARTIAL RETURN');
             break;
           case InvoiceReturnIndicator.noReturn:
-          default:
             returnBadge = ErpStatusBadge.neutral('NO RETURN');
             break;
         }
@@ -463,6 +566,21 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
           ),
         ];
       }).toList(),
-    );
+    ),
+    if (filtered.isNotEmpty) ...[
+      const SizedBox(height: 12),
+      ErpPaginationBar(
+        totalRecords: totalCount,
+        currentPage: effectivePage,
+        pageSize: _pageSize,
+        onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+        onPageSizeChanged: (newSize) => setState(() {
+          _pageSize = newSize;
+          _currentPage = 0;
+        }),
+      ),
+    ],
+  ],
+);
   }
 }

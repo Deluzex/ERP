@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
@@ -9,7 +10,14 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/stock_movement_icons.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class StockAdjustmentScreen extends ConsumerStatefulWidget {
@@ -21,6 +29,10 @@ class StockAdjustmentScreen extends ConsumerStatefulWidget {
 
 class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
   String _searchQuery = '';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -278,6 +290,10 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
 
                     db.performStockAdjustmentAsync(adjustment);
                     Navigator.of(ctx).pop();
+                    ErpToast.showSuccess(
+                      context,
+                      'Stock adjustment ${adjustment.adjustmentNumber} recorded successfully!',
+                    );
                   },
                 ),
               ],
@@ -293,13 +309,24 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
     final db = ref.watch(databaseServiceProvider);
     final adjustments = db.stockAdjustments.where((adj) {
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
+      final matchesQuery = query.isEmpty ||
           adj.adjustmentNumber.toLowerCase().contains(query) ||
           adj.itemName.toLowerCase().contains(query) ||
           adj.itemCode.toLowerCase().contains(query) ||
           adj.reasonLabel.toLowerCase().contains(query) ||
           adj.performedBy.toLowerCase().contains(query) ||
           (adj.remarks != null && adj.remarks!.toLowerCase().contains(query));
+
+      if (_startDate != null &&
+          adj.adjustmentDate.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) {
+        return false;
+      }
+      if (_endDate != null &&
+          adj.adjustmentDate.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) {
+        return false;
+      }
+
+      return matchesQuery;
     }).toList();
 
     return SingleChildScrollView(
@@ -307,87 +334,249 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: isSmall ? double.infinity : constraints.maxWidth - 240),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Stock Adjustments', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Reconcile physical stock counts, log damages, and record audited corrections', style: AppTextStyles.subtitle),
-                      ],
-                    ),
-                  ),
-                  ErpButton(
+          ErpSectionHeaderCard(
+            icon: Icons.tune_rounded,
+            title: 'Stock Adjustments',
+            badgeText: 'AUDIT & RECONCILIATION',
+            subtitle: 'Reconcile physical stock counts, log damages, and record audited corrections',
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobile = actionBox.maxWidth < 520;
+                return SizedBox(
+                  width: isMobile ? double.infinity : null,
+                  child: ErpButton(
                     text: 'New Stock Adjustment',
                     icon: Icons.tune_rounded,
                     onPressed: _openCreateAdjustmentDialog,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 3 Key Metrics
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final increases = db.stockAdjustments.where((a) => a.adjustmentQuantity > 0).length;
+              final reductions = db.stockAdjustments.where((a) => a.adjustmentQuantity < 0).length;
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (2 * 12)) / 3
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.tune_rounded,
+                      iconColor: AppColors.primary,
+                      title: 'Total Adjustments',
+                      value: '${adjustments.length}',
+                      subtext: 'Audited Corrections',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      iconWidget: const StockInIcon(size: 16, color: Color(0xFF16A34A)),
+                      title: 'Stock Increases',
+                      value: '$increases',
+                      subtext: 'Physical Count Surplus',
+                      subtextColor: const Color(0xFF16A34A),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      iconWidget: const StockOutIcon(size: 16, color: Color(0xFFEF4444)),
+                      title: 'Stock Reductions / Damage',
+                      value: '$reductions',
+                      subtext: 'Shortages & Damages',
+                      subtextColor: const Color(0xFFEF4444),
+                    ),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 24),
-
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search adjustments by number, item, reason, notes, or user...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
           const SizedBox(height: 20),
 
-          // Data Table of adjustments
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Date'),
-              ErpColumn(title: 'Adjustment No'),
-              ErpColumn(title: 'Item Details'),
-              ErpColumn(title: 'Item Type'),
-              ErpColumn(title: 'Before Stock', isNumeric: true),
-              ErpColumn(title: 'Adjustment', isNumeric: true),
-              ErpColumn(title: 'Final Stock', isNumeric: true),
-              ErpColumn(title: 'Reason'),
-              ErpColumn(title: 'Remarks'),
-              ErpColumn(title: 'Performed By'),
-            ],
-            rows: adjustments.map((adj) {
-              return [
-                Text(Formatters.formatDateTime(adj.adjustmentDate), style: AppTextStyles.bodySmall),
-                Text(adj.adjustmentNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(adj.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                    Text(adj.itemName, style: AppTextStyles.bodySmall),
-                  ],
+          // Table enclosed in card container
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
                 ),
-                Text(adj.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product', style: AppTextStyles.bodySmall),
-                Text('${Formatters.formatNumber(adj.currentStockBefore)} ${adj.unit}', style: AppTextStyles.bodySmall),
-                Text(
-                  '${adj.adjustmentQuantity >= 0 ? "+" : ""}${Formatters.formatNumber(adj.adjustmentQuantity)} ${adj.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: adj.adjustmentQuantity >= 0 ? AppColors.successText : AppColors.dangerText,
-                  ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 650;
+                    if (isMobile) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ErpSearchInput(
+                            hintText: 'Search adjustments by number, item, reason...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                          const SizedBox(height: 10),
+                          ErpDateFilterBox(
+                            startDate: _startDate,
+                            endDate: _endDate,
+                            width: double.infinity,
+                            onDateRangeSelected: (start, end) {
+                              setState(() {
+                                _startDate = start;
+                                _endDate = end;
+                                _currentPage = 0;
+                              });
+                            },
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 320,
+                          child: ErpSearchInput(
+                            hintText: 'Search adjustments by number, item, reason...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                        ),
+                        ErpDateFilterBox(
+                          startDate: _startDate,
+                          endDate: _endDate,
+                          onDateRangeSelected: (start, end) {
+                            setState(() {
+                              _startDate = start;
+                              _endDate = end;
+                              _currentPage = 0;
+                            });
+                          },
+                        ),
+                      ],
+                    );
+                  },
                 ),
-                Text('${Formatters.formatNumber(adj.adjustedStockAfter)} ${adj.unit}', style: AppTextStyles.bodyBold),
-                Text(adj.reasonLabel, style: AppTextStyles.bodyMedium),
-                Text(adj.remarks, style: AppTextStyles.bodySmall),
-                Text(adj.performedBy, style: AppTextStyles.bodySmall),
-              ];
-            }).toList(),
+                const SizedBox(height: 16),
+
+                // Data Table of adjustments
+                Builder(
+                  builder: (context) {
+                    final totalRecords = adjustments.length;
+                    final startIndex = _currentPage * _pageSize;
+                    final pageAdjustments = (startIndex < totalRecords)
+                        ? adjustments.sublist(startIndex, min(startIndex + _pageSize, totalRecords))
+                        : <StockAdjustment>[];
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ErpDataTable(
+                          columns: const [
+                            ErpColumn(title: 'Date'),
+                            ErpColumn(title: 'Adjustment No'),
+                            ErpColumn(title: 'Item Details'),
+                            ErpColumn(title: 'Item Type'),
+                            ErpColumn(title: 'Before Stock', isNumeric: true),
+                            ErpColumn(title: 'Adjustment', isNumeric: true),
+                            ErpColumn(title: 'Final Stock', isNumeric: true),
+                            ErpColumn(title: 'Reason'),
+                            ErpColumn(title: 'Remarks'),
+                            ErpColumn(title: 'Performed By'),
+                          ],
+                          rows: pageAdjustments.map((adj) {
+                            final isPositive = adj.adjustmentQuantity > 0;
+                            return [
+                              Text(Formatters.formatDate(adj.adjustmentDate), style: AppTextStyles.bodySmall),
+                              Text(adj.adjustmentNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(adj.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 11)),
+                                  Text(adj.itemName, style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                              Text(
+                                adj.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product',
+                                style: AppTextStyles.bodySmall,
+                              ),
+                              Text('${adj.currentStockBefore} ${adj.unit}', style: AppTextStyles.bodySmall),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  isPositive
+                                      ? const StockInIcon(size: 16, color: Color(0xFF16A34A))
+                                      : const StockOutIcon(size: 16, color: Color(0xFFEF4444)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${isPositive ? "+" : ""}${adj.adjustmentQuantity} ${adj.unit}',
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      color: isPositive ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Text('${adj.adjustedStockAfter} ${adj.unit}', style: AppTextStyles.bodyBold),
+                              ErpStatusBadge(
+                                label: adj.reasonLabel,
+                                backgroundColor: AppColors.neutralLight,
+                                textColor: AppColors.textPrimary,
+                              ),
+                              Text(adj.remarks ?? '-', style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              Text(adj.performedBy, style: AppTextStyles.bodySmall),
+                            ];
+                          }).toList(),
+                        ),
+                        if (totalRecords > 0) ...[
+                          const SizedBox(height: 16),
+                          ErpPaginationBar(
+                            currentPage: _currentPage,
+                            pageSize: _pageSize,
+                            totalRecords: totalRecords,
+                            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                            onPageSizeChanged: (newSize) => setState(() {
+                              _pageSize = newSize;
+                              _currentPage = 0;
+                            }),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );

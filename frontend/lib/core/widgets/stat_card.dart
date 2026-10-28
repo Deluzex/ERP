@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_radius.dart';
-import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 
 class StatCard extends StatelessWidget {
@@ -43,10 +42,12 @@ class StatCard extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: (trendText != null || actionText != null)
+            ? MainAxisAlignment.spaceBetween
+            : MainAxisAlignment.center,
         children: [
           Row(
             children: [
@@ -68,7 +69,7 @@ class StatCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -77,8 +78,8 @@ class StatCard extends StatelessWidget {
               style: AppTextStyles.metricValue.copyWith(fontSize: 22),
             ),
           ),
-          const SizedBox(height: 6),
-          if (trendText != null)
+          if (trendText != null) ...[
+            const SizedBox(height: 4),
             Row(
               children: [
                 if (isPositiveTrend != null) ...[
@@ -106,8 +107,9 @@ class StatCard extends StatelessWidget {
                   ),
                 ),
               ],
-            )
-          else if (actionText != null)
+            ),
+          ] else if (actionText != null) ...[
+            const SizedBox(height: 4),
             InkWell(
               onTap: onActionTap,
               borderRadius: BorderRadius.circular(4),
@@ -129,9 +131,8 @@ class StatCard extends StatelessWidget {
                   ),
                 ],
               ),
-            )
-          else
-            const SizedBox.shrink(),
+            ),
+          ],
         ],
       ),
     );

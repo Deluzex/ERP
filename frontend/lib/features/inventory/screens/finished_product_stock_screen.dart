@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
@@ -8,7 +9,12 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
+import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class FinishedProductStockScreen extends ConsumerStatefulWidget {
@@ -21,7 +27,10 @@ class FinishedProductStockScreen extends ConsumerStatefulWidget {
 // This is class ant
 class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStockScreen> {
   String _searchQuery = '';
-  bool _showOnlyLowStock = false;
+  String? _selectedCategory;
+  String _stockFilter = 'ALL';
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -53,7 +62,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text('Edit Finished Product', style: AppTextStyles.h2),
               content: Container(
-                constraints: const BoxConstraints(maxWidth: 580),
+                constraints: BoxConstraints(maxWidth: 580, maxHeight: MediaQuery.of(context).size.height * 0.72),
                 width: double.infinity,
                 child: Form(
                   key: formKey,
@@ -80,10 +89,11 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     value: selectedCategory.isNotEmpty ? selectedCategory : null,
                                     decoration: const InputDecoration(labelText: 'Category'),
                                     items: db.categories.map((cat) {
-                                      return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
+                                      return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis));
                                     }).toList(),
                                     onChanged: (val) {
                                       if (val != null) setDlgState(() => selectedCategory = val);
@@ -152,10 +162,11 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         value: selectedCategory.isNotEmpty ? selectedCategory : null,
                                         decoration: const InputDecoration(labelText: 'Category'),
                                         items: db.categories.map((cat) {
-                                          return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
+                                          return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis));
                                         }).toList(),
                                         onChanged: (val) {
                                           if (val != null) setDlgState(() => selectedCategory = val);
@@ -270,11 +281,9 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                       updatedAt: DateTime.now(),
                     ));
                     Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Product updated successfully!'),
-                        backgroundColor: AppColors.success,
-                      ),
+                    ErpToast.showSuccess(
+                      context,
+                      'Product updated successfully!',
                     );
                   },
                 ),
@@ -296,8 +305,11 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
           fp.itemCode.toLowerCase().contains(query) ||
           fp.categoryName.toLowerCase().contains(query) ||
           fp.unit.toLowerCase().contains(query);
-      final matchesLow = !_showOnlyLowStock || fp.isLowStock;
-      return matchesSearch && matchesLow;
+      final matchesCategory = _selectedCategory == null || fp.categoryId == _selectedCategory;
+      if (_stockFilter == 'LOW' && !fp.isLowStock) return false;
+      if (_stockFilter == 'OUT_OF_STOCK' && fp.currentStock > 0) return false;
+      if (_stockFilter == 'IN_STOCK' && fp.currentStock <= 0) return false;
+      return matchesSearch && matchesCategory;
     }).toList();
 
     return SingleChildScrollView(
@@ -305,65 +317,80 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Finished Product Stock', style: AppTextStyles.h1),
-              const SizedBox(height: 4),
-              Text(
-                'Manage finished goods catalog, multi-tier pricing, and stock levels',
-                style: AppTextStyles.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+          ErpSectionHeaderCard(
+            icon: Icons.inventory_2_outlined,
+            title: 'Finished Product Stock',
+            badgeText: 'FINISHED GOODS',
+            subtitle: 'Manage finished goods catalog, multi-tier pricing, and stock levels',
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobile = actionBox.maxWidth < 520;
+                return SizedBox(
+                  width: isMobile ? double.infinity : null,
+                  child: ErpButton(
+                    text: 'Refresh Stock',
+                    icon: Icons.refresh,
+                    isOutlined: true,
+                    onPressed: () => db.loadFinishedProducts(forceRefresh: true),
+                  ),
+                );
+              },
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
 
-          // Filter bar
+          // 4 Key Metrics
           LayoutBuilder(
             builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-              if (isSmall) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search product by name, SKU or category...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilterChip(
-                      label: Text('Low Stock (${db.lowStockFinishedProducts.length})'),
-                      selected: _showOnlyLowStock,
-                      onSelected: (val) => setState(() => _showOnlyLowStock = val),
-                      selectedColor: AppColors.dangerLight,
-                      checkmarkColor: AppColors.dangerText,
-                    ),
-                  ],
-                );
-              }
-              return Row(
+              final activeProds = db.finishedProducts.where((p) => !p.isDeleted).toList();
+              final totalUnits = activeProds.fold(0.0, (sum, p) => sum + p.currentStock);
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search product by name, SKU or category...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.inventory_2_rounded,
+                      iconColor: AppColors.primary,
+                      title: 'Finished Goods Value',
+                      value: Formatters.formatCurrency(db.finishedProductStockValue),
+                      subtext: 'Total Inventory Assets',
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  FilterChip(
-                    label: Text('Low Stock (${db.lowStockFinishedProducts.length})'),
-                    selected: _showOnlyLowStock,
-                    onSelected: (val) => setState(() => _showOnlyLowStock = val),
-                    selectedColor: AppColors.dangerLight,
-                    checkmarkColor: AppColors.dangerText,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.inventory_2_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Product SKUs',
+                      value: '${activeProds.length}',
+                      subtext: 'Active Catalog SKUs',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.warning_amber_rounded,
+                      iconColor: db.lowStockFinishedProducts.isNotEmpty ? AppColors.danger : AppColors.success,
+                      title: 'Low Stock Items',
+                      value: '${db.lowStockFinishedProducts.length}',
+                      subtext: db.lowStockFinishedProducts.isNotEmpty ? 'Below minimum buffer' : 'Adequate buffer',
+                      subtextColor: db.lowStockFinishedProducts.isNotEmpty ? AppColors.danger : AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      iconColor: AppColors.success,
+                      title: 'Total Stock Units',
+                      value: Formatters.formatNumber(totalUnits),
+                      subtext: 'Units on Hand',
+                    ),
                   ),
                 ],
               );
@@ -371,49 +398,208 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
           ),
           const SizedBox(height: 20),
 
-          // Data Table
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'SKU Code'),
-              ErpColumn(title: 'Product Name'),
-              ErpColumn(title: 'Category'),
-              ErpColumn(title: 'Current Stock', isNumeric: true),
-              ErpColumn(title: 'Cost Price', isNumeric: true),
-              ErpColumn(title: 'Dealer Price', isNumeric: true),
-              ErpColumn(title: 'Customer Price', isNumeric: true),
-              ErpColumn(title: 'Inventory Value', isNumeric: true),
-              ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
-            ],
-            rows: products.map((fp) {
-              return [
-                Text(fp.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                Text(fp.name, style: AppTextStyles.bodyMedium),
-                Text(fp.categoryName, style: AppTextStyles.bodySmall),
-                Text(
-                  '${Formatters.formatNumber(fp.currentStock)} ${fp.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: fp.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
-                  ),
+          // Table enclosed in card container
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
                 ),
-                Text(Formatters.formatCurrency(fp.costPrice), style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(fp.dealerSellingPrice), style: AppTextStyles.bodyMedium),
-                Text(Formatters.formatCurrency(fp.customerSellingPrice), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                Text(Formatters.formatCurrency(fp.totalValuation), style: AppTextStyles.bodyBold),
-                fp.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('AVAILABLE'),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Product',
-                      onPressed: () => _openEditDialog(fp),
-                    ),
-                  ],
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 650;
+                    if (isMobile) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ErpSearchInput(
+                            hintText: 'Search product by name, SKU or category...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                          const SizedBox(height: 10),
+                          ErpFilterDropdown<String?>(
+                            label: 'Category',
+                            value: _selectedCategory,
+                            width: double.infinity,
+                            isExpanded: true,
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('All Categories')),
+                              ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                            ],
+                            onChanged: (val) => setState(() {
+                              _selectedCategory = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                          const SizedBox(height: 10),
+                          ErpFilterDropdown<String>(
+                            label: 'Stock Status',
+                            value: _stockFilter,
+                            width: double.infinity,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                              DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                              DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                              DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _stockFilter = val;
+                                  _currentPage = 0;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 320,
+                          child: ErpSearchInput(
+                            hintText: 'Search product by name, SKU or category...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                        ),
+                        ErpFilterDropdown<String?>(
+                          label: 'Category',
+                          value: _selectedCategory,
+                          items: [
+                            const DropdownMenuItem(value: null, child: Text('All Categories')),
+                            ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                          ],
+                          onChanged: (val) => setState(() {
+                            _selectedCategory = val;
+                            _currentPage = 0;
+                          }),
+                        ),
+                        ErpFilterDropdown<String>(
+                          label: 'Stock Status',
+                          value: _stockFilter,
+                          items: const [
+                            DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                            DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                            DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                            DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _stockFilter = val;
+                                _currentPage = 0;
+                              });
+                            }
+                          },
+                        ),
+                      ],
+                    );
+                  },
                 ),
-              ];
-            }).toList(),
+                const SizedBox(height: 16),
+
+                // Data Table
+                Builder(
+                  builder: (context) {
+                    final totalCount = products.length;
+                    final maxPage = (totalCount / _pageSize).ceil();
+                    final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+                    final startIdx = effectivePage * _pageSize;
+                    final endIdx = min(startIdx + _pageSize, totalCount);
+                    final paginatedProducts = totalCount == 0 ? <FinishedProduct>[] : products.sublist(startIdx, endIdx);
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ErpDataTable(
+                          columns: const [
+                            ErpColumn(title: 'SKU Code'),
+                            ErpColumn(title: 'Product Name'),
+                            ErpColumn(title: 'Category'),
+                            ErpColumn(title: 'Current Stock', isNumeric: true),
+                            ErpColumn(title: 'Cost Price', isNumeric: true),
+                            ErpColumn(title: 'Dealer Price', isNumeric: true),
+                            ErpColumn(title: 'Customer Price', isNumeric: true),
+                            ErpColumn(title: 'Inventory Value', isNumeric: true),
+                            ErpColumn(title: 'Status'),
+                            ErpColumn(title: 'Actions'),
+                          ],
+                          rows: paginatedProducts.map((fp) {
+                            return [
+                              Text(fp.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                              Text(fp.name, style: AppTextStyles.bodyMedium),
+                              Text(fp.categoryName, style: AppTextStyles.bodySmall),
+                              Text(
+                                '${Formatters.formatNumber(fp.currentStock)} ${fp.unit}',
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  color: fp.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
+                                ),
+                              ),
+                              Text(Formatters.formatCurrency(fp.costPrice), style: AppTextStyles.bodySmall),
+                              Text(Formatters.formatCurrency(fp.dealerSellingPrice), style: AppTextStyles.bodyMedium),
+                              Text(Formatters.formatCurrency(fp.customerSellingPrice), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                              Text(Formatters.formatCurrency(fp.totalValuation), style: AppTextStyles.bodyBold),
+                              fp.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('AVAILABLE'),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 18),
+                                    tooltip: 'Edit Product',
+                                    onPressed: () => _openEditDialog(fp),
+                                  ),
+                                ],
+                              ),
+                            ];
+                          }).toList(),
+                        ),
+                        if (totalCount > 0) ...[
+                          const SizedBox(height: 16),
+                          ErpPaginationBar(
+                            currentPage: effectivePage,
+                            pageSize: _pageSize,
+                            totalRecords: totalCount,
+                            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                            onPageSizeChanged: (newSize) => setState(() {
+                              _pageSize = newSize;
+                              _currentPage = 0;
+                            }),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );

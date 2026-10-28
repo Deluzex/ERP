@@ -20,6 +20,8 @@ describe('Masters Domain Lifecycle (E2E with Auto-Cleanup)', () => {
   let customerId: string;
   let architectId: string;
   let dealerId: string;
+  const bulkCreatedRmIds: string[] = [];
+  const bulkCreatedFpIds: string[] = [];
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -57,6 +59,12 @@ describe('Masters Domain Lifecycle (E2E with Auto-Cleanup)', () => {
     try {
       if (rawMaterialId) {
         await db.query('DELETE FROM raw_materials WHERE id = $1', [rawMaterialId]);
+      }
+      if (bulkCreatedRmIds.length > 0) {
+        await db.query('DELETE FROM raw_materials WHERE id = ANY($1)', [bulkCreatedRmIds]);
+      }
+      if (bulkCreatedFpIds.length > 0) {
+        await db.query('DELETE FROM finished_products WHERE id = ANY($1)', [bulkCreatedFpIds]);
       }
       await db.query('DELETE FROM raw_materials WHERE item_code = $1', [testItemCode]);
       if (finishedProductId) {
@@ -433,6 +441,214 @@ describe('Masters Domain Lifecycle (E2E with Auto-Cleanup)', () => {
 
       expect(archRes.body.data.linkedCustomerId).toBe(customerId);
       expect(archRes.body.data.isAlsoCustomer).toBe(true);
+    });
+  });
+
+  describe('5. Bulk Master Upload (Raw Materials & Finished Products)', () => {
+    it('Positive: should bulk import valid raw materials and report accurate counts', async () => {
+      const code1 = `RM-BLK-${Date.now().toString().slice(-4)}-1`;
+      const code2 = `RM-BLK-${Date.now().toString().slice(-4)}-2`;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/masters/raw-materials/bulk')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          items: [
+            {
+              name: 'Bulk Aluminum Ingot',
+              itemCode: code1,
+              categoryId,
+              unitId,
+              openingStock: 100,
+              minimumStock: 20,
+              defaultPurchasePrice: 250,
+              transportationCharge: 15,
+              gstPercent: 18,
+            },
+            {
+              name: 'Bulk Brass Sheet',
+              itemCode: code2,
+              categoryId,
+              unitId,
+              openingStock: 50,
+              minimumStock: 10,
+              defaultPurchasePrice: 420,
+              transportationCharge: 20,
+              gstPercent: 18,
+            },
+          ],
+          duplicatePolicy: 'SKIP',
+        })
+        .expect(201);
+
+      expect(res.body.data.totalRows).toBe(2);
+      expect(res.body.data.importedCount).toBe(2);
+      expect(res.body.data.duplicateCount).toBe(0);
+      expect(res.body.data.skippedCount).toBe(0);
+      expect(res.body.data.failedCount).toBe(0);
+      expect(res.body.data.importedIds.length).toBe(2);
+
+      bulkCreatedRmIds.push(...res.body.data.importedIds);
+
+      // Verify records and stock initialization in DB
+      const dbCheck = await db.query(
+        'SELECT name, item_code, opening_stock, current_stock FROM raw_materials WHERE id = ANY($1)',
+        [res.body.data.importedIds],
+      );
+      expect(dbCheck.rows.length).toBe(2);
+      for (const row of dbCheck.rows) {
+        expect(row.opening_stock).toBe(row.current_stock);
+      }
+    });
+
+    it('Negative & Duplicate Handling: should skip database duplicate and report in-payload duplicate', async () => {
+      const existingCode = `RM-BLK-${Date.now().toString().slice(-4)}-1`;
+      // Insert one first
+      const createRes = await request(app.getHttpServer())
+        .post('/api/v1/masters/raw-materials/bulk')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          items: [
+            {
+              name: 'Pre-existing RM',
+              itemCode: existingCode,
+              categoryId,
+              unitId,
+              openingStock: 10,
+            },
+          ],
+        })
+        .expect(201);
+      bulkCreatedRmIds.push(...createRes.body.data.importedIds);
+
+      const newCode = `RM-NEW-${Date.now().toString().slice(-4)}`;
+
+      // Now send a batch with:
+      // 1. existingCode (should be skipped per SKIP policy)
+      // 2. newCode (should be imported)
+      // 3. newCode repeated (in-payload duplicate - should be flagged as error/duplicate)
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/masters/raw-materials/bulk')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          items: [
+            {
+              name: 'Duplicate In DB',
+              itemCode: existingCode,
+              categoryId,
+              unitId,
+            },
+            {
+              name: 'Valid New RM',
+              itemCode: newCode,
+              categoryId,
+              unitId,
+            },
+            {
+              name: 'Repeated in Batch',
+              itemCode: newCode,
+              categoryId,
+              unitId,
+            },
+          ],
+          duplicatePolicy: 'SKIP',
+        })
+        .expect(201);
+
+      expect(res.body.data.totalRows).toBe(3);
+      expect(res.body.data.importedCount).toBe(1);
+      expect(res.body.data.duplicateCount).toBe(2); // 1 in DB, 1 in batch
+      expect(res.body.data.skippedCount).toBe(2);
+      expect(res.body.data.importedIds.length).toBe(1);
+
+      bulkCreatedRmIds.push(...res.body.data.importedIds);
+    });
+
+    it('Positive: should bulk import valid finished products', async () => {
+      const fpCode1 = `FP-BLK-${Date.now().toString().slice(-4)}-1`;
+      const fpCode2 = `FP-BLK-${Date.now().toString().slice(-4)}-2`;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/masters/finished-products/bulk')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          items: [
+            {
+              name: 'Bulk Architectural Spotlight 15W',
+              itemCode: fpCode1,
+              categoryId,
+              unitId,
+              openingStock: 40,
+              minimumStock: 5,
+              costPrice: 850,
+              transportationCharge: 25,
+              dealerSellingPrice: 1200,
+              customerSellingPrice: 1650,
+              gstPercent: 18,
+            },
+            {
+              name: 'Bulk Linear Profile 2M',
+              itemCode: fpCode2,
+              categoryId,
+              unitId,
+              openingStock: 60,
+              minimumStock: 10,
+              costPrice: 620,
+              transportationCharge: 30,
+              dealerSellingPrice: 950,
+              customerSellingPrice: 1350,
+              gstPercent: 18,
+            },
+          ],
+          duplicatePolicy: 'SKIP',
+        })
+        .expect(201);
+
+      expect(res.body.data.totalRows).toBe(2);
+      expect(res.body.data.importedCount).toBe(2);
+      expect(res.body.data.importedIds.length).toBe(2);
+
+      bulkCreatedFpIds.push(...res.body.data.importedIds);
+
+      // Verify stock initialization
+      const dbCheck = await db.query(
+        'SELECT name, item_code, opening_stock, current_stock FROM finished_products WHERE id = ANY($1)',
+        [res.body.data.importedIds],
+      );
+      expect(dbCheck.rows.length).toBe(2);
+      for (const row of dbCheck.rows) {
+        expect(row.opening_stock).toBe(row.current_stock);
+      }
+    });
+
+    it('Negative: should report non-existent category reference as error without crashing', async () => {
+      const badCode = `RM-ERR-${Date.now().toString().slice(-4)}`;
+      const fakeUuid = '00000000-0000-0000-0000-000000000000';
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/masters/raw-materials/bulk')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          items: [
+            {
+              name: 'Item With Bad Category',
+              itemCode: badCode,
+              categoryId: fakeUuid,
+              unitId,
+            },
+          ],
+        })
+        .expect(201);
+
+      expect(res.body.data.importedCount).toBe(0);
+      expect(res.body.data.failedCount).toBe(1);
+      expect(res.body.data.errors.length).toBeGreaterThan(0);
+      expect(res.body.data.errors[0].field).toBe('categoryId');
     });
   });
 });

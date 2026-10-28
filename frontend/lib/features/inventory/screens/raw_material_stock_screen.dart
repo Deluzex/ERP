@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
@@ -9,7 +10,12 @@ import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
+import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class RawMaterialStockScreen extends ConsumerStatefulWidget {
@@ -21,7 +27,10 @@ class RawMaterialStockScreen extends ConsumerStatefulWidget {
 
 class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen> {
   String _searchQuery = '';
-  bool _showOnlyLowStock = false;
+  String? _selectedCategory;
+  String _stockFilter = 'ALL';
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -53,7 +62,7 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text(isEdit ? 'Edit Raw Material' : 'Add Raw Material', style: AppTextStyles.h2),
               content: Container(
-                constraints: const BoxConstraints(maxWidth: 540),
+                constraints: BoxConstraints(maxWidth: 540, maxHeight: MediaQuery.of(context).size.height * 0.72),
                 width: double.infinity,
                 child: Form(
                   key: formKey,
@@ -80,10 +89,11 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     value: selectedCategory.isNotEmpty ? selectedCategory : null,
                                     decoration: const InputDecoration(labelText: 'Category'),
                                     items: db.categories.map((cat) {
-                                      return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
+                                      return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis));
                                     }).toList(),
                                     onChanged: (val) {
                                       if (val != null) setDlgState(() => selectedCategory = val);
@@ -138,10 +148,11 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         value: selectedCategory.isNotEmpty ? selectedCategory : null,
                                         decoration: const InputDecoration(labelText: 'Category'),
                                         items: db.categories.map((cat) {
-                                          return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium));
+                                          return DropdownMenuItem(value: cat.id, child: Text(cat.name, style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis));
                                         }).toList(),
                                         onChanged: (val) {
                                           if (val != null) setDlgState(() => selectedCategory = val);
@@ -204,12 +215,13 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String?>(
+                          isExpanded: true,
                           value: selectedVendorId,
                           decoration: const InputDecoration(labelText: 'Preferred Vendor'),
                           items: [
-                            const DropdownMenuItem(value: null, child: Text('None')),
+                            const DropdownMenuItem(value: null, child: Text('None', maxLines: 1, overflow: TextOverflow.ellipsis)),
                             ...db.vendors.map((v) {
-                              return DropdownMenuItem(value: v.id, child: Text(v.name));
+                              return DropdownMenuItem(value: v.id, child: Text(v.name, maxLines: 1, overflow: TextOverflow.ellipsis));
                             }),
                           ],
                           onChanged: (val) => setDlgState(() => selectedVendorId = val),
@@ -273,6 +285,10 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                       db.addRawMaterialAsync(newRm);
                     }
                     Navigator.of(ctx).pop();
+                    ErpToast.showSuccess(
+                      context,
+                      isEdit ? 'Raw material updated successfully!' : 'Raw material created successfully!',
+                    );
                   },
                 ),
               ],
@@ -294,8 +310,11 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
           rm.categoryName.toLowerCase().contains(query) ||
           rm.unit.toLowerCase().contains(query) ||
           rm.preferredVendorNames.any((v) => v.toLowerCase().contains(query));
-      final matchesLow = !_showOnlyLowStock || rm.isLowStock;
-      return matchesSearch && matchesLow;
+      final matchesCategory = _selectedCategory == null || rm.categoryId == _selectedCategory;
+      if (_stockFilter == 'LOW' && !rm.isLowStock) return false;
+      if (_stockFilter == 'OUT_OF_STOCK' && rm.currentStock > 0) return false;
+      if (_stockFilter == 'IN_STOCK' && rm.currentStock <= 0) return false;
+      return matchesSearch && matchesCategory;
     }).toList();
 
     return SingleChildScrollView(
@@ -303,65 +322,112 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Raw Material Stock', style: AppTextStyles.h1),
-              const SizedBox(height: 4),
-              Text(
-                'Manage raw material quantities, thresholds, and valuations',
-                style: AppTextStyles.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Filter bar
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-              if (isSmall) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search raw material by name, code, category, or vendor...',
-                        prefixIcon: Icon(Icons.search, size: 18),
+          ErpSectionHeaderCard(
+            icon: Icons.layers_outlined,
+            title: 'Raw Material Stock',
+            badgeText: 'INVENTORY ASSETS',
+            subtitle: 'Manage raw material quantities, thresholds, and valuations',
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobile = actionBox.maxWidth < 520;
+                if (isMobile) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Add Raw Material',
+                          icon: Icons.add,
+                          onPressed: () => _openAddEditDialog(),
+                        ),
                       ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Refresh',
+                          icon: Icons.refresh,
+                          isOutlined: true,
+                          onPressed: () => db.loadRawMaterials(forceRefresh: true),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    ErpButton(
+                      text: 'Add Raw Material',
+                      icon: Icons.add,
+                      onPressed: () => _openAddEditDialog(),
                     ),
-                    const SizedBox(height: 12),
-                    FilterChip(
-                      label: Text('Low Stock Only (${db.lowStockRawMaterials.length})'),
-                      selected: _showOnlyLowStock,
-                      onSelected: (val) => setState(() => _showOnlyLowStock = val),
-                      selectedColor: AppColors.dangerLight,
-                      checkmarkColor: AppColors.dangerText,
+                    ErpButton(
+                      text: 'Refresh',
+                      icon: Icons.refresh,
+                      isOutlined: true,
+                      onPressed: () => db.loadRawMaterials(forceRefresh: true),
                     ),
                   ],
                 );
-              }
-              return Row(
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 4 Key Metrics
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                      decoration: const InputDecoration(
-                        hintText: 'Search raw material by name, code, category, or vendor...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Raw Material Valuation',
+                      value: Formatters.formatCurrency(db.rawMaterialStockValue),
+                      subtext: 'Total Inventory Assets',
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  FilterChip(
-                    label: Text('Low Stock Only (${db.lowStockRawMaterials.length})'),
-                    selected: _showOnlyLowStock,
-                    onSelected: (val) => setState(() => _showOnlyLowStock = val),
-                    selectedColor: AppColors.dangerLight,
-                    checkmarkColor: AppColors.dangerText,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.category_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Materials',
+                      value: '${db.rawMaterials.where((r) => !r.isDeleted).length}',
+                      subtext: 'Active Catalog Items',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.warning_amber_rounded,
+                      iconColor: db.lowStockRawMaterials.isNotEmpty ? AppColors.danger : AppColors.success,
+                      title: 'Low Stock Alert',
+                      value: '${db.lowStockRawMaterials.length}',
+                      subtext: db.lowStockRawMaterials.isNotEmpty ? 'Critical restocking required' : 'Adequate buffer level',
+                      subtextColor: db.lowStockRawMaterials.isNotEmpty ? AppColors.danger : AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.folder_open_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Categories',
+                      value: '${db.categories.length}',
+                      subtext: 'Active Classifications',
+                    ),
                   ),
                 ],
               );
@@ -369,47 +435,205 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
           ),
           const SizedBox(height: 20),
 
-          // Data Table
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Item Code'),
-              ErpColumn(title: 'Material Name'),
-              ErpColumn(title: 'Category'),
-              ErpColumn(title: 'Current Stock', isNumeric: true),
-              ErpColumn(title: 'Min Stock', isNumeric: true),
-              ErpColumn(title: 'Purchase Rate', isNumeric: true),
-              ErpColumn(title: 'Total Value', isNumeric: true),
-              ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
-            ],
-            rows: rawMaterials.map((rm) {
-              return [
-                Text(rm.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                Text(rm.name, style: AppTextStyles.bodyMedium),
-                Text(rm.categoryName, style: AppTextStyles.bodySmall),
-                Text(
-                  '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: rm.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
-                  ),
+          // Table enclosed in card container
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
                 ),
-                Text('${Formatters.formatNumber(rm.minimumStock)} ${rm.unit}', style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
-                Text(Formatters.formatCurrency(rm.totalValuation), style: AppTextStyles.bodyBold),
-                rm.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('IN STOCK'),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Material',
-                      onPressed: () => _openAddEditDialog(rm),
-                    ),
-                  ],
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 650;
+                    if (isMobile) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ErpSearchInput(
+                            hintText: 'Search raw material by name, code, category...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                          const SizedBox(height: 10),
+                          ErpFilterDropdown<String?>(
+                            label: 'Category',
+                            value: _selectedCategory,
+                            width: double.infinity,
+                            isExpanded: true,
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('All Categories')),
+                              ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                            ],
+                            onChanged: (val) => setState(() {
+                              _selectedCategory = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                          const SizedBox(height: 10),
+                          ErpFilterDropdown<String>(
+                            label: 'Stock Status',
+                            value: _stockFilter,
+                            width: double.infinity,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                              DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                              DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                              DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _stockFilter = val;
+                                  _currentPage = 0;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 320,
+                          child: ErpSearchInput(
+                            hintText: 'Search raw material by name, code, category...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                        ),
+                        ErpFilterDropdown<String?>(
+                          label: 'Category',
+                          value: _selectedCategory,
+                          items: [
+                            const DropdownMenuItem(value: null, child: Text('All Categories')),
+                            ...db.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                          ],
+                          onChanged: (val) => setState(() {
+                            _selectedCategory = val;
+                            _currentPage = 0;
+                          }),
+                        ),
+                        ErpFilterDropdown<String>(
+                          label: 'Stock Status',
+                          value: _stockFilter,
+                          items: const [
+                            DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                            DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                            DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                            DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _stockFilter = val;
+                                _currentPage = 0;
+                              });
+                            }
+                          },
+                        ),
+                      ],
+                    );
+                  },
                 ),
-              ];
-            }).toList(),
+                const SizedBox(height: 16),
+
+                // Data Table
+                Builder(
+                  builder: (context) {
+                    final totalRecords = rawMaterials.length;
+                    final startIndex = _currentPage * _pageSize;
+                    final pageRawMaterials = (startIndex < totalRecords)
+                        ? rawMaterials.sublist(startIndex, min(startIndex + _pageSize, totalRecords))
+                        : <RawMaterial>[];
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ErpDataTable(
+                          columns: const [
+                            ErpColumn(title: 'Item Code'),
+                            ErpColumn(title: 'Material Name'),
+                            ErpColumn(title: 'Category'),
+                            ErpColumn(title: 'Current Stock', isNumeric: true),
+                            ErpColumn(title: 'Min Stock', isNumeric: true),
+                            ErpColumn(title: 'Purchase Rate', isNumeric: true),
+                            ErpColumn(title: 'Total Value', isNumeric: true),
+                            ErpColumn(title: 'Status'),
+                            ErpColumn(title: 'Actions'),
+                          ],
+                          rows: pageRawMaterials.map((rm) {
+                            return [
+                              Text(rm.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                              Text(rm.name, style: AppTextStyles.bodyMedium),
+                              Text(rm.categoryName, style: AppTextStyles.bodySmall),
+                              Text(
+                                '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  color: rm.isLowStock ? AppColors.dangerText : AppColors.textPrimary,
+                                ),
+                              ),
+                              Text('${Formatters.formatNumber(rm.minimumStock)} ${rm.unit}', style: AppTextStyles.bodySmall),
+                              Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
+                              Text(Formatters.formatCurrency(rm.totalValuation), style: AppTextStyles.bodyBold),
+                              rm.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('IN STOCK'),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 18),
+                                    tooltip: 'Edit Material',
+                                    onPressed: () => _openAddEditDialog(rm),
+                                  ),
+                                ],
+                              ),
+                            ];
+                          }).toList(),
+                        ),
+                        if (totalRecords > 0) ...[
+                          const SizedBox(height: 16),
+                          ErpPaginationBar(
+                            currentPage: _currentPage,
+                            pageSize: _pageSize,
+                            totalRecords: totalRecords,
+                            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                            onPageSizeChanged: (newSize) => setState(() {
+                              _pageSize = newSize;
+                              _currentPage = 0;
+                            }),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );

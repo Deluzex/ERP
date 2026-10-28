@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_radius.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/models/whatsapp_models.dart';
 import '../../core/utils/document_sharing_service.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/widgets/erp_button.dart';
 import '../providers/app_state_providers.dart';
@@ -27,6 +29,12 @@ class WhatsAppQuickChatDialog extends ConsumerStatefulWidget {
   final String? relatedEntityType;
   final String? relatedEntityId;
   final String? relatedEntityNumber;
+  final QuickWhatsAppTemplate? initialTemplate;
+  final double? pendingAmount;
+  final double? saleTotal;
+  final double? paidAmount;
+  final int? pendingDays;
+  final DateTime? oldestInvoiceDate;
 
   const WhatsAppQuickChatDialog({
     super.key,
@@ -36,6 +44,12 @@ class WhatsAppQuickChatDialog extends ConsumerStatefulWidget {
     this.relatedEntityType,
     this.relatedEntityId,
     this.relatedEntityNumber,
+    this.initialTemplate,
+    this.pendingAmount,
+    this.saleTotal,
+    this.paidAmount,
+    this.pendingDays,
+    this.oldestInvoiceDate,
   });
 
   static void show(
@@ -46,6 +60,12 @@ class WhatsAppQuickChatDialog extends ConsumerStatefulWidget {
     String? relatedEntityType,
     String? relatedEntityId,
     String? relatedEntityNumber,
+    QuickWhatsAppTemplate? initialTemplate,
+    double? pendingAmount,
+    double? saleTotal,
+    double? paidAmount,
+    int? pendingDays,
+    DateTime? oldestInvoiceDate,
   }) {
     showDialog(
       context: context,
@@ -56,6 +76,12 @@ class WhatsAppQuickChatDialog extends ConsumerStatefulWidget {
         relatedEntityType: relatedEntityType,
         relatedEntityId: relatedEntityId,
         relatedEntityNumber: relatedEntityNumber,
+        initialTemplate: initialTemplate,
+        pendingAmount: pendingAmount,
+        saleTotal: saleTotal,
+        paidAmount: paidAmount,
+        pendingDays: pendingDays,
+        oldestInvoiceDate: oldestInvoiceDate,
       ),
     );
   }
@@ -66,7 +92,14 @@ class WhatsAppQuickChatDialog extends ConsumerStatefulWidget {
     required String customerPhone,
     String? docNumber,
     String? projectName,
+    double? pendingAmount,
+    double? saleTotal,
+    double? paidAmount,
+    int? pendingDays,
+    DateTime? oldestInvoiceDate,
+    QuickWhatsAppTemplate? initialTemplate,
   }) {
+    final hasPending = (pendingAmount != null && pendingAmount > 0);
     show(
       context,
       recipientName: customerName,
@@ -74,6 +107,37 @@ class WhatsAppQuickChatDialog extends ConsumerStatefulWidget {
       partyRole: 'Customer',
       relatedEntityType: projectName != null ? 'Project' : (docNumber != null ? 'Document' : null),
       relatedEntityNumber: docNumber ?? projectName,
+      initialTemplate: initialTemplate ?? (hasPending ? QuickWhatsAppTemplate.paymentReminder : QuickWhatsAppTemplate.customMessage),
+      pendingAmount: pendingAmount,
+      saleTotal: saleTotal,
+      paidAmount: paidAmount,
+      pendingDays: pendingDays,
+      oldestInvoiceDate: oldestInvoiceDate,
+    );
+  }
+
+  static void showCustomerPaymentReminder(
+    BuildContext context, {
+    required String customerName,
+    required String customerPhone,
+    required double pendingAmount,
+    double? saleTotal,
+    double? paidAmount,
+    int? pendingDays,
+    DateTime? oldestInvoiceDate,
+    String? docNumber,
+  }) {
+    showCustomerQuickChat(
+      context,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      docNumber: docNumber,
+      pendingAmount: pendingAmount,
+      saleTotal: saleTotal,
+      paidAmount: paidAmount,
+      pendingDays: pendingDays,
+      oldestInvoiceDate: oldestInvoiceDate,
+      initialTemplate: QuickWhatsAppTemplate.paymentReminder,
     );
   }
 
@@ -102,13 +166,17 @@ class WhatsAppQuickChatDialog extends ConsumerStatefulWidget {
 class _WhatsAppQuickChatDialogState extends ConsumerState<WhatsAppQuickChatDialog> {
   late TextEditingController _phoneCtrl;
   late TextEditingController _messageCtrl;
-  QuickWhatsAppTemplate _selectedTemplate = QuickWhatsAppTemplate.customMessage;
+  late QuickWhatsAppTemplate _selectedTemplate;
 
   @override
   void initState() {
     super.initState();
     _phoneCtrl = TextEditingController(text: widget.recipientNumber);
     _messageCtrl = TextEditingController();
+    _selectedTemplate = widget.initialTemplate ??
+        ((widget.pendingAmount != null && widget.pendingAmount! > 0)
+            ? QuickWhatsAppTemplate.paymentReminder
+            : QuickWhatsAppTemplate.customMessage);
     _applyTemplate(_selectedTemplate);
   }
 
@@ -119,11 +187,56 @@ class _WhatsAppQuickChatDialogState extends ConsumerState<WhatsAppQuickChatDialo
     super.dispose();
   }
 
+  String _formatDurationEnglish(int? days) {
+    if (days == null || days <= 0) return 'recent days';
+    if (days >= 30) {
+      final months = (days / 30).floor();
+      if (months == 1) return '1 month ($days days)';
+      return '$months months ($days days)';
+    }
+    return '$days days';
+  }
+
   void _applyTemplate(QuickWhatsAppTemplate template) {
-    String name = widget.recipientName;
-    String docNum = widget.relatedEntityNumber ?? 'DOC-2026';
+    final name = widget.recipientName;
+    final docNum = widget.relatedEntityNumber ?? 'DOC-2026';
 
     switch (template) {
+      case QuickWhatsAppTemplate.paymentReminder:
+        if (widget.pendingAmount != null && widget.pendingAmount! > 0) {
+          final pendingStr = Formatters.formatCurrency(widget.pendingAmount!);
+          final saleStr = widget.saleTotal != null ? Formatters.formatCurrency(widget.saleTotal!) : null;
+          final paidStr = widget.paidAmount != null ? Formatters.formatCurrency(widget.paidAmount!) : null;
+          final durationEng = _formatDurationEnglish(widget.pendingDays);
+          final dateStr = widget.oldestInvoiceDate != null
+              ? DateFormat('dd MMM yyyy').format(widget.oldestInvoiceDate!)
+              : null;
+
+          _messageCtrl.text = '''Dear $name,
+
+Greetings from Deluzex Lighting Systems.
+
+This is a gentle reminder that your payment of $pendingStr has been pending for $durationEng${dateStr != null ? ' (since $dateStr)' : ''}.
+
+📊 Account Summary:
+${saleStr != null ? '• Total Billed: $saleStr\n' : ''}${paidStr != null ? '• Amount Paid: $paidStr\n' : ''}• Outstanding Balance: $pendingStr
+
+Kindly arrange the payment remittance at your earliest convenience. If already settled, please share the payment confirmation/reference.
+
+Thank you!
+Deluzex Accounts & Billing Team
+📞 +91 98250 12345''';
+        } else {
+          _messageCtrl.text = '''Dear $name,
+
+This is a friendly reminder regarding the pending milestone payment for Invoice $docNum.
+
+Kindly arrange the remittance as per agreed terms. Thank you for your continued partnership!
+
+_Deluzex Accounts Desk_''';
+        }
+        break;
+
       case QuickWhatsAppTemplate.quotationSent:
         _messageCtrl.text = '''Hello $name,
 
@@ -142,16 +255,6 @@ Your order confirmation ($docNum) has been successfully verified and moved to ou
 We will keep you updated as milestone production and QC checks progress.
 
 _Deluzex Order Fulfillment Desk_''';
-        break;
-
-      case QuickWhatsAppTemplate.paymentReminder:
-        _messageCtrl.text = '''Dear $name,
-
-This is a friendly reminder regarding the pending milestone payment for Invoice $docNum.
-
-Kindly arrange the remittance as per agreed terms. Thank you for your continued partnership!
-
-_Deluzex Accounts Desk_''';
         break;
 
       case QuickWhatsAppTemplate.dispatchInfo:
@@ -230,6 +333,8 @@ Greetings from Deluzex Lighting Systems.
   @override
   Widget build(BuildContext context) {
     final isCompact = MediaQuery.of(context).size.width < 450;
+    final hasPending = widget.pendingAmount != null && widget.pendingAmount! > 0;
+
     return Dialog(
       backgroundColor: AppColors.surface,
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -254,7 +359,7 @@ Greetings from Deluzex Lighting Systems.
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF25D366).withOpacity(0.15),
+                            color: const Color(0xFF25D366).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(Icons.chat_outlined, color: Color(0xFF25D366), size: 22),
@@ -283,6 +388,36 @@ Greetings from Deluzex Lighting Systems.
               const Divider(height: 1),
               const SizedBox(height: 14),
 
+              // Pending Payment Reminder Alert Banner
+              if (hasPending) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFF59E0B)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.alarm_on_rounded, color: Color(0xFFB45309), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Pending Payment Reminder: ${Formatters.formatCurrency(widget.pendingAmount!)} (${_formatDurationEnglish(widget.pendingDays)})',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
+
               // Recipient Phone
               TextFormField(
                 controller: _phoneCtrl,
@@ -297,18 +432,19 @@ Greetings from Deluzex Lighting Systems.
               Text('Select Message Template', style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
               const SizedBox(height: 6),
               DropdownButtonFormField<QuickWhatsAppTemplate>(
-                value: _selectedTemplate,
+                initialValue: _selectedTemplate,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.quickreply_outlined, size: 18),
                 ),
                 items: const [
-                  DropdownMenuItem(value: QuickWhatsAppTemplate.quotationSent, child: Text('📄 Quotation Sent')),
-                  DropdownMenuItem(value: QuickWhatsAppTemplate.orderConfirmation, child: Text('✅ Order Confirmation')),
-                  DropdownMenuItem(value: QuickWhatsAppTemplate.paymentReminder, child: Text('🔔 Payment Reminder')),
-                  DropdownMenuItem(value: QuickWhatsAppTemplate.dispatchInfo, child: Text('🚚 Dispatch & Tracking Info')),
-                  DropdownMenuItem(value: QuickWhatsAppTemplate.deliveryUpdate, child: Text('📦 Delivery Confirmation')),
-                  DropdownMenuItem(value: QuickWhatsAppTemplate.projectUpdate, child: Text('📐 Project Progress Update')),
-                  DropdownMenuItem(value: QuickWhatsAppTemplate.customMessage, child: Text('✍️ Custom Message')),
+                  DropdownMenuItem(value: QuickWhatsAppTemplate.paymentReminder, child: Text('🔔 Payment Reminder', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: QuickWhatsAppTemplate.quotationSent, child: Text('📄 Quotation Sent', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: QuickWhatsAppTemplate.orderConfirmation, child: Text('✅ Order Confirmation', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: QuickWhatsAppTemplate.dispatchInfo, child: Text('🚚 Dispatch & Tracking Info', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: QuickWhatsAppTemplate.deliveryUpdate, child: Text('📦 Delivery Confirmation', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: QuickWhatsAppTemplate.projectUpdate, child: Text('📐 Project Progress Update', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: QuickWhatsAppTemplate.customMessage, child: Text('✍️ Custom Message', overflow: TextOverflow.ellipsis)),
                 ],
                 onChanged: (val) {
                   if (val != null) {
@@ -326,7 +462,7 @@ Greetings from Deluzex Lighting Systems.
               const SizedBox(height: 6),
               TextFormField(
                 controller: _messageCtrl,
-                maxLines: 6,
+                maxLines: 7,
                 style: const TextStyle(fontSize: 12.5),
                 decoration: const InputDecoration(
                   hintText: 'Type your message...',

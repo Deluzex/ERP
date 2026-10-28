@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -9,11 +10,17 @@ import '../../../core/models/purchase_model.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_toast.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
+import '../widgets/convert_proforma_dialog.dart';
 import '../widgets/sales_pdf_generator.dart';
 
 class ProformaInvoicesScreen extends ConsumerStatefulWidget {
@@ -26,10 +33,15 @@ class ProformaInvoicesScreen extends ConsumerStatefulWidget {
 class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(databaseServiceProvider).loadProforma(forceRefresh: true));
     _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(databaseServiceProvider).loadProforma());
   }
@@ -60,7 +72,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: AppColors.primaryLight.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: AppColors.primaryLight.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
                   child: const Icon(Icons.payments_outlined, color: AppColors.primary, size: 20),
                 ),
                 const SizedBox(width: 12),
@@ -196,9 +208,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
                       ),
                     );
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to record payment: $e'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showError(context, 'Failed to record payment: $e');
                   }
                 },
               ),
@@ -219,51 +229,94 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
+          ErpSectionHeaderCard(
+            icon: Icons.receipt_long_outlined,
+            title: 'Proforma Invoices',
+            badgeText: 'COMMERCIAL BILLING',
+            action: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: db.isLoadingProforma
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.refresh, color: AppColors.primary, size: 20),
+                  tooltip: 'Refresh from Database',
+                  onPressed: db.isLoadingProforma ? null : () => ref.read(databaseServiceProvider).loadProforma(forceRefresh: true),
+                ),
+                const SizedBox(width: 8),
+                ErpButton(
+                  text: 'Create Proforma from Quote',
+                  icon: Icons.receipt_long_outlined,
+                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 2. Summary Metric Cards (Project Theme)
           LayoutBuilder(
             builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              final totalValue = db.proformaInvoices.fold(0.0, (sum, p) => sum + p.totalAmount);
+              final totalPaid = db.proformaInvoices.fold(0.0, (sum, p) => sum + p.paidAmount);
+              final totalPending = db.proformaInvoices.fold(0.0, (sum, p) => sum + p.pendingAmount);
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Text('Proforma Invoices', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Commercial advance billing (Not a Tax Invoice) & milestone payment receipts',
-                    style: AppTextStyles.subtitle,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.receipt_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Proformas',
+                      value: '${db.proformaInvoices.length}',
+                      subtext: 'Commercial Advance Notes',
+                    ),
                   ),
-                ],
-              );
-
-              final actionBtn = ErpButton(
-                text: 'Create Proforma from Quote',
-                icon: Icons.receipt_long_outlined,
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
-              );
-
-              if (isStacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    titleBlock,
-                    const SizedBox(height: 12),
-                    actionBtn,
-                  ],
-                );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: titleBlock),
-                  const SizedBox(width: 12),
-                  actionBtn,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.primary,
+                      title: 'Total Billed Value',
+                      value: Formatters.formatCurrency(totalValue),
+                      subtext: 'Cumulative Proforma Total',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      iconColor: AppColors.success,
+                      title: 'Advances Received',
+                      value: Formatters.formatCurrency(totalPaid),
+                      subtext: 'Realized Advance Cash',
+                      subtextColor: AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.warning,
+                      title: 'Pending Balance',
+                      value: Formatters.formatCurrency(totalPending),
+                      subtext: 'Outstanding Advance',
+                      subtextColor: AppColors.warning,
+                    ),
+                  ),
                 ],
               );
             },
           ),
           const SizedBox(height: 20),
 
-          // 2. Tabs: All, Issued, Partially Paid, Paid, Converted
+          // 3. Tabs: All, Issued, Partially Paid, Paid, Converted
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -277,7 +330,9 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textMuted,
               indicatorColor: AppColors.primary,
-              onTap: (_) => setState(() {}),
+              onTap: (_) => setState(() {
+                _currentPage = 0;
+              }),
               tabs: [
                 Tab(text: 'All Proformas (${db.proformaInvoices.length})'),
                 Tab(text: 'Issued / Pending (${db.proformaInvoices.where((p) => p.proformaStatus == ProformaStatus.issued).length})'),
@@ -289,13 +344,32 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
           ),
           const SizedBox(height: 16),
 
-          // 3. Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search proforma invoice by number, customer, project or quotation reference...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // 3. Search and Date Filter Bar
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search proforma invoice by number, customer, project or quote...',
+                value: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -338,6 +412,16 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
       }).toList();
     }
 
+    // Filter by date range
+    if (_startDate != null) {
+      final startDay = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+      filtered = filtered.where((p) => !p.saleDate.isBefore(startDay)).toList();
+    }
+    if (_endDate != null) {
+      final endDay = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+      filtered = filtered.where((p) => !p.saleDate.isAfter(endDay)).toList();
+    }
+
     if (filtered.isEmpty) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -359,19 +443,29 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
       );
     }
 
-    return ErpDataTable(
-      columns: const [
-        ErpColumn(title: 'Proforma No'),
-        ErpColumn(title: 'Date'),
-        ErpColumn(title: 'Customer / Party'),
-        ErpColumn(title: 'Quote Ref'),
-        ErpColumn(title: 'Total Amount', isNumeric: true),
-        ErpColumn(title: 'Advance Paid', isNumeric: true),
-        ErpColumn(title: 'Balance Due', isNumeric: true),
-        ErpColumn(title: 'Status'),
-        ErpColumn(title: 'Actions'),
-      ],
-      rows: filtered.map((proforma) {
+    final totalCount = filtered.length;
+    final maxPage = (totalCount / _pageSize).ceil();
+    final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+    final startIdx = effectivePage * _pageSize;
+    final endIdx = min(startIdx + _pageSize, totalCount);
+    final paginatedProformas = totalCount == 0 ? <Sale>[] : filtered.sublist(startIdx, endIdx);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ErpDataTable(
+          columns: const [
+            ErpColumn(title: 'Proforma No'),
+            ErpColumn(title: 'Date'),
+            ErpColumn(title: 'Customer / Party'),
+            ErpColumn(title: 'Quote Ref'),
+            ErpColumn(title: 'Total Amount', isNumeric: true),
+            ErpColumn(title: 'Advance Paid', isNumeric: true),
+            ErpColumn(title: 'Balance Due', isNumeric: true),
+            ErpColumn(title: 'Status'),
+            ErpColumn(title: 'Actions'),
+          ],
+          rows: paginatedProformas.map((proforma) {
         ErpStatusBadge badge;
         switch (proforma.proformaStatus) {
           case ProformaStatus.paid:
@@ -435,6 +529,23 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
                         ? await db.getProformaDetailAsync(proforma.id)
                         : proforma;
                     if (!context.mounted) return;
+
+                    // 1. Check stock for each line item against finished product available stock
+                    final hasShortage = hydratedProforma.items.any((item) {
+                      final fp = db.finishedProducts
+                          .where((p) => p.id == item.finishedProductId || p.itemCode == item.finishedProductCode)
+                          .firstOrNull;
+                      final available = fp?.availableStock ?? 0.0;
+                      return item.quantity > available;
+                    });
+
+                    // 2. If insufficient stock: prompt Sales person with Purchase/Production decision
+                    if (hasShortage) {
+                      await ConvertProformaDialog.show(context, hydratedProforma);
+                      return;
+                    }
+
+                    // 3. If sufficient stock: continue existing Sales Order workflow without interruption
                     final soNumber = 'DLZ/SO/2026/${(db.nextSalesOrderNumber).toString().padLeft(4, '0')}';
                     final so = Sale(
                       id: IdGenerator.generateId('SO'),
@@ -496,6 +607,21 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
           ),
         ];
       }).toList(),
-    );
+    ),
+    if (filtered.isNotEmpty) ...[
+      const SizedBox(height: 12),
+      ErpPaginationBar(
+        totalRecords: totalCount,
+        currentPage: effectivePage,
+        pageSize: _pageSize,
+        onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+        onPageSizeChanged: (newSize) => setState(() {
+          _pageSize = newSize;
+          _currentPage = 0;
+        }),
+      ),
+    ],
+  ],
+);
   }
 }

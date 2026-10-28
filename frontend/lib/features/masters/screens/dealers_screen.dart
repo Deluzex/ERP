@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -8,10 +9,15 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 
 class DealersScreen extends ConsumerStatefulWidget {
   const DealersScreen({super.key});
@@ -22,6 +28,11 @@ class DealersScreen extends ConsumerStatefulWidget {
 
 class _DealersScreenState extends ConsumerState<DealersScreen> {
   String _searchQuery = '';
+  String _balanceFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -41,6 +52,8 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
     final emailCtrl = TextEditingController(text: existing?.email ?? '');
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final addrCtrl = TextEditingController(text: existing?.address ?? '');
+    final stateCtrl = TextEditingController(text: existing?.state ?? '');
+    final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     final formKey = GlobalKey<FormState>();
 
     bool isSubmitting = false;
@@ -84,6 +97,8 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                                 mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
                                 emailCtrl.text = data['Email'] ?? emailCtrl.text;
                                 addrCtrl.text = data['Address'] ?? addrCtrl.text;
+                                if (data.containsKey('State')) stateCtrl.text = data['State']!;
+                                if (data.containsKey('Pincode')) pincodeCtrl.text = data['Pincode']!;
                                 Navigator.of(ocrCtx).pop();
                               },
                             ),
@@ -183,11 +198,58 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                           validator: (v) => Validators.requiredField(v, 'Showroom / Business address required'),
                           decoration: const InputDecoration(labelText: 'Showroom / Business Address *'),
                         ),
-                      ],
+                        const SizedBox(height: 12),
+                       
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: stateCtrl,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'State is required';
+                                  }
+                                  return null;
+                                },
+                                decoration: const InputDecoration(
+                                  labelText: 'State *',
+                                  hintText: 'E.g., Gujarat',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: pincodeCtrl,
+                                keyboardType: TextInputType.number,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'PIN Code is required';
+                                  }
+
+                                  if (!RegExp(r'^[1-9][0-9]{5}$')
+                                      .hasMatch(value.trim())) {
+                                    return 'Enter a valid 6-digit PIN Code';
+                                  }
+
+                                  return null;
+                                },
+                                decoration: const InputDecoration(
+                                  labelText: 'PIN Code *',
+                                  hintText: 'E.g., 382481',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
               actions: [
                 ErpButton(
                   text: 'Cancel',
@@ -216,6 +278,8 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                                 email: emailCtrl.text.trim(),
                                 gstNumber: gstCtrl.text.trim(),
                                 address: addrCtrl.text.trim(),
+                                state: stateCtrl.text.trim(),
+                                pincode: pincodeCtrl.text.trim(),
                               ));
                             } else {
                               final newDealer = Dealer(
@@ -227,6 +291,8 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                                 email: emailCtrl.text.trim(),
                                 gstNumber: gstCtrl.text.trim(),
                                 address: addrCtrl.text.trim(),
+                                state: stateCtrl.text.trim(),
+                                pincode: pincodeCtrl.text.trim(),
                                 outstandingAmount: 0.0,
                                 createdAt: DateTime.now(),
                               );
@@ -301,122 +367,310 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
     final dealers = db.dealers.where((d) {
       if (d.isDeleted) return false;
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          d.name.toLowerCase().contains(query) ||
-          d.contactPerson.toLowerCase().contains(query) ||
-          d.companyName.toLowerCase().contains(query) ||
-          d.mobile.toLowerCase().contains(query) ||
-          d.email.toLowerCase().contains(query) ||
-          d.gstNumber.toLowerCase().contains(query) ||
-          d.address.toLowerCase().contains(query);
+      if (query.isNotEmpty) {
+        final matches = d.name.toLowerCase().contains(query) ||
+            d.contactPerson.toLowerCase().contains(query) ||
+            d.companyName.toLowerCase().contains(query) ||
+            d.mobile.toLowerCase().contains(query) ||
+            d.email.toLowerCase().contains(query) ||
+            d.gstNumber.toLowerCase().contains(query) ||
+            d.address.toLowerCase().contains(query) ||
+            d.state.toLowerCase().contains(query) ||
+            d.pincode.toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_balanceFilter == 'WITH_BALANCE' && d.outstandingAmount <= 0) return false;
+      if (_balanceFilter == 'ZERO_BALANCE' && d.outstandingAmount > 0) return false;
+      if (_startDate != null && d.createdAt.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && d.createdAt.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = dealers.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedDealers = totalRecords == 0 ? <Dealer>[] : dealers.sublist(startIndex, endIndex);
+
+    final totalDealersCount = db.dealers.where((d) => !d.isDeleted).length;
+    final withBalanceCount = db.dealers.where((d) => !d.isDeleted && d.outstandingAmount > 0).length;
+    final zeroBalanceCount = db.dealers.where((d) => !d.isDeleted && d.outstandingAmount <= 0).length;
+    final totalOutstanding = db.dealers.where((d) => !d.isDeleted).fold(0.0, (sum, d) => sum + d.outstandingAmount);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ErpSectionHeaderCard(
+            icon: Icons.store_mall_directory_outlined,
+            title: 'Dealers & Franchise Network',
+            badgeText: 'DISTRIBUTION NETWORK',
+            action: ErpButton(
+              text: 'Add Dealer',
+              icon: Icons.add,
+              onPressed: () => _openAddEditDealerDialog(),
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 5 Summary Metric Cards
           LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 550) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Dealers & Franchise Network', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Authorized distribution partners, retail showrooms, and channel receivables', style: AppTextStyles.subtitle),
-                    const SizedBox(height: 12),
-                    ErpButton(
-                      text: 'Add Dealer',
-                      icon: Icons.add,
-                      onPressed: () => _openAddEditDealerDialog(),
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (4 * 12)) / 5
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Dealers & Franchise Network', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Authorized distribution partners, retail showrooms, and channel receivables', style: AppTextStyles.subtitle),
-                      ],
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.store_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Dealers',
+                      value: '${totalDealersCount}',
+                      subtext: 'Network Partners',
                     ),
                   ),
-                  ErpButton(
-                    text: 'Add Dealer',
-                    icon: Icons.add,
-                    onPressed: () => _openAddEditDealerDialog(),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.storefront_outlined,
+                      iconColor: AppColors.success,
+                      title: 'Showrooms',
+                      value: '${totalDealersCount}',
+                      subtext: 'Operational',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'With Balance',
+                      value: '${withBalanceCount}',
+                      subtext: 'Pending Collection',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.verified_outlined,
+                      iconColor: AppColors.categoryTeal,
+                      title: 'Zero Balance',
+                      value: '${zeroBalanceCount}',
+                      subtext: 'Fully Cleared',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.categoryGold,
+                      title: 'Total Outstanding',
+                      value: Formatters.formatCurrency(totalOutstanding),
+                      subtext: 'Total Receivables',
+                    ),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
 
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search dealer by showroom name, contact person, mobile, email, or company...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search dealer by name, showroom, GST...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _balanceFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                  DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Receivables / Balance')),
+                  DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _balanceFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           ErpDataTable(
             columns: const [
               ErpColumn(title: 'Showroom / Dealer Name'),
               ErpColumn(title: 'Company Entity'),
               ErpColumn(title: 'Contact Person'),
+              ErpColumn(title: 'State'),
               ErpColumn(title: 'Mobile / Email'),
               ErpColumn(title: 'GST Number'),
-              ErpColumn(title: 'Showroom Address'),
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
               ErpColumn(title: 'Actions'),
             ],
-            rows: dealers.map((d) {
+            rows: pagedDealers.map((d) {
               return [
-                Text(d.name, style: AppTextStyles.bodyBold),
-                Text(d.companyName, style: AppTextStyles.bodyMedium),
-                Text(d.contactPerson, style: AppTextStyles.bodySmall),
+                InkWell(
+                  onTap: () {
+                    ref.read(activeRecordDetailsStackProvider.notifier).push(d.id, 'dealer', ErpNavSection.dealers);
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        d.name,
+                        style: AppTextStyles.bodyBold.copyWith(
+                          fontSize: 13,
+                          color: const Color(0xFF1E293B),
+                        ),
+                      ),
+                      if (d.address.isNotEmpty || d.state.isNotEmpty || d.pincode.isNotEmpty)
+                        Text(
+                          [
+                            if (d.address.isNotEmpty) d.address,
+                            if (d.state.isNotEmpty) d.state,
+                            if (d.pincode.isNotEmpty) d.pincode,
+                          ].join(', '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
+                    ],
+                  ),
+                ),
+                Text(d.companyName, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
+                Text(d.contactPerson, style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                Text(d.state.isNotEmpty ? d.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(d.mobile, style: AppTextStyles.bodySmall),
+                    Text(d.mobile, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
                     if (d.email.isNotEmpty)
-                      Text(d.email, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                      Text(d.email, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                   ],
                 ),
-                Text(d.gstNumber.isNotEmpty ? d.gstNumber : '-', style: AppTextStyles.bodySmall),
-                Text(d.address, style: AppTextStyles.bodySmall),
+                Text(d.gstNumber.isNotEmpty ? d.gstNumber : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Text(
                   Formatters.formatCurrency(d.outstandingAmount),
                   style: AppTextStyles.bodyBold.copyWith(
-                    color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText,
+                    fontSize: 13,
+                    color: d.outstandingAmount > 0 ? AppColors.danger : const Color(0xFF1E293B),
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Dealer',
-                      onPressed: () => _openAddEditDealerDialog(d),
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'view':
+                        ref.read(activeRecordDetailsStackProvider.notifier).push(d.id, 'dealer', ErpNavSection.dealers);
+                        break;
+                      case 'whatsapp':
+                        WhatsAppQuickChatDialog.showCustomerQuickChat(
+                          context,
+                          customerName: d.name,
+                          customerPhone: d.mobile,
+                        );
+                        break;
+                      case 'edit':
+                        _openAddEditDealerDialog(d);
+                        break;
+                      case 'delete':
+                        _confirmDeleteDealer(d);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('View Dealer Profile'),
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                      tooltip: 'Delete Dealer',
-                      onPressed: () => _confirmDeleteDealer(d),
+                    PopupMenuItem(
+                      value: 'whatsapp',
+                      child: Row(
+                        children: [
+                          Icon(Icons.chat, color: Colors.green, size: 18),
+                          SizedBox(width: 8),
+                          Text('WhatsApp Chat'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 18),
+                          SizedBox(width: 8),
+                          Text('Edit Dealer'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                          SizedBox(width: 8),
+                          Text('Delete Dealer', style: TextStyle(color: AppColors.danger)),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

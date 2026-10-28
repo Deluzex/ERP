@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
   IsNumber,
@@ -47,8 +48,30 @@ export class CreateProjectDto {
 
   @IsNumber()
   @Min(0)
+  @IsNumber()
+  @Min(0)
   @IsOptional()
   budgetAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  siteState?: string;
+
+  @IsString()
+  @IsOptional()
+  siteStateCode?: string;
+
+  @IsString()
+  @IsOptional()
+  siteAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  sitePincode?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  posVerified?: boolean;
 
   @IsString()
   @IsOptional()
@@ -92,6 +115,26 @@ export class UpdateProjectDto {
   @Min(0)
   @IsOptional()
   budgetAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  siteState?: string;
+
+  @IsString()
+  @IsOptional()
+  siteStateCode?: string;
+
+  @IsString()
+  @IsOptional()
+  siteAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  sitePincode?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  posVerified?: boolean;
 
   @IsString()
   @IsOptional()

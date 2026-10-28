@@ -30,6 +30,17 @@ class Validators {
     return null;
   }
 
+  static String? percentage(String? value, [String message = 'Must be between 0% and 100%']) {
+    if (value == null || value.trim().isEmpty) {
+      return 'This field is required';
+    }
+    final num = double.tryParse(value.trim());
+    if (num == null || num < 0 || num > 100) {
+      return message;
+    }
+    return null;
+  }
+
   /// Optional email (valid format if provided)
   static String? email(String? value) {
     if (value == null || value.trim().isEmpty) return null;
@@ -109,4 +120,18 @@ class Validators {
     }
     return null;
   }
+
+  /// Mandatory 6-digit Indian Postal PIN code validator (e.g. 380054, 400001)
+  static String? pincode(String? value, [bool isRequired = true]) {
+    if (value == null || value.trim().isEmpty) {
+      return isRequired ? 'PIN code is required' : null;
+    }
+    final cleaned = value.trim();
+    final pinRegex = RegExp(r'^[1-9][0-9]{5}$');
+    if (!pinRegex.hasMatch(cleaned)) {
+      return 'Enter valid 6-digit PIN code (e.g., 380054)';
+    }
+    return null;
+  }
 }
+

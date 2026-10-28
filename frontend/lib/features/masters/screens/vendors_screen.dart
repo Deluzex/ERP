@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -8,12 +9,17 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 
 class VendorsScreen extends ConsumerStatefulWidget {
   const VendorsScreen({super.key});
@@ -24,6 +30,11 @@ class VendorsScreen extends ConsumerStatefulWidget {
 
 class _VendorsScreenState extends ConsumerState<VendorsScreen> {
   String _searchQuery = '';
+  String _duesFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 25;
 
   @override
   void initState() {
@@ -43,8 +54,11 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
     final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
     final panCtrl = TextEditingController(text: existing?.panNumber ?? '');
     final addressCtrl = TextEditingController(text: existing?.address ?? '');
+    final stateCtrl = TextEditingController(text: existing?.state ?? '');
+    final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
     final termsCtrl = TextEditingController(text: existing?.paymentTerms ?? 'Net 30 Days');
     final creditCtrl = TextEditingController(text: existing?.creditLimit.toString() ?? '500000');
+    final transportCtrl = TextEditingController(text: existing?.defaultTransportationCharges.toString() ?? '0');
     final formKey = GlobalKey<FormState>();
 
     bool isSubmitting = false;
@@ -87,6 +101,8 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                 mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
                                 emailCtrl.text = data['Email'] ?? emailCtrl.text;
                                 addressCtrl.text = data['Address'] ?? addressCtrl.text;
+                                if (data.containsKey('State')) stateCtrl.text = data['State']!;
+                                if (data.containsKey('Pincode')) pincodeCtrl.text = data['Pincode']!;
                                 if (data.containsKey('Payment Terms')) {
                                   termsCtrl.text = data['Payment Terms']!;
                                 }
@@ -212,10 +228,62 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
+                          controller: transportCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Default Transportation / Freight (₹)',
+                            prefixIcon: Icon(Icons.local_shipping_outlined, size: 20),
+                            hintText: 'E.g., 500',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
                           controller: addressCtrl,
                           validator: (v) => Validators.requiredField(v, 'Registered factory address required'),
                           maxLines: 2,
                           decoration: const InputDecoration(labelText: 'Factory / Registered Address *'),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+  controller: stateCtrl,
+  validator: (v) {
+    if (v == null || v.trim().isEmpty) {
+      return 'State is required';
+    }
+    return null;
+  },
+  decoration: const InputDecoration(
+    labelText: 'State *',
+    hintText: 'E.g., Gujarat',
+  ),
+),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+  controller: pincodeCtrl,
+  keyboardType: TextInputType.number,
+  validator: (v) {
+    if (v == null || v.trim().isEmpty) {
+      return 'PIN Code is required';
+    }
+    if (!RegExp(r'^[1-9][0-9]{5}$').hasMatch(v.trim())) {
+      return 'Enter a valid 6-digit PIN Code';
+    }
+    return null;
+  },
+  decoration: const InputDecoration(
+    labelText: 'PIN Code *',
+    hintText: 'E.g., 382481',
+  ),
+),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -241,6 +309,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                           });
 
                           final creditVal = double.tryParse(creditCtrl.text.trim()) ?? 0.0;
+                          final transportVal = double.tryParse(transportCtrl.text.trim()) ?? 0.0;
                           try {
                             if (isEdit) {
                               await db.updateVendorAsync(existing.copyWith(
@@ -251,8 +320,11 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                 gstNumber: gstCtrl.text.trim().toUpperCase(),
                                 panNumber: panCtrl.text.trim().toUpperCase(),
                                 address: addressCtrl.text.trim(),
+                                state: stateCtrl.text.trim(),
+                                pincode: pincodeCtrl.text.trim(),
                                 paymentTerms: termsCtrl.text.trim(),
                                 creditLimit: creditVal,
+                                defaultTransportationCharges: transportVal,
                               ));
                             } else {
                               final newVendor = Vendor(
@@ -264,8 +336,11 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                                 gstNumber: gstCtrl.text.trim().toUpperCase(),
                                 panNumber: panCtrl.text.trim().toUpperCase(),
                                 address: addressCtrl.text.trim(),
+                                state: stateCtrl.text.trim(),
+                                pincode: pincodeCtrl.text.trim(),
                                 paymentTerms: termsCtrl.text.trim(),
                                 creditLimit: creditVal,
+                                defaultTransportationCharges: transportVal,
                                 outstandingBalance: 0.0,
                                 createdAt: DateTime.now(),
                               );
@@ -346,126 +421,318 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
     final db = ref.watch(databaseServiceProvider);
     final vendors = db.vendors.where((v) {
       final query = _searchQuery.trim().toLowerCase();
-      return query.isEmpty ||
-          v.name.toLowerCase().contains(query) ||
-          v.contactPerson.toLowerCase().contains(query) ||
-          v.mobile.toLowerCase().contains(query) ||
-          v.email.toLowerCase().contains(query) ||
-          v.gstNumber.toLowerCase().contains(query) ||
-          v.panNumber.toLowerCase().contains(query) ||
-          v.address.toLowerCase().contains(query) ||
-          v.paymentTerms.toLowerCase().contains(query);
+      if (query.isNotEmpty) {
+        final matches = v.name.toLowerCase().contains(query) ||
+            v.contactPerson.toLowerCase().contains(query) ||
+            v.mobile.toLowerCase().contains(query) ||
+            v.email.toLowerCase().contains(query) ||
+            v.gstNumber.toLowerCase().contains(query) ||
+            v.panNumber.toLowerCase().contains(query) ||
+            v.address.toLowerCase().contains(query) ||
+            v.state.toLowerCase().contains(query) ||
+            v.pincode.toLowerCase().contains(query) ||
+            v.paymentTerms.toLowerCase().contains(query);
+        if (!matches) return false;
+      }
+      if (_duesFilter == 'HAS_DUES' && v.outstandingBalance <= 0) return false;
+      if (_duesFilter == 'ZERO_DUES' && v.outstandingBalance > 0) return false;
+      if (_startDate != null && v.createdAt.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
+      if (_endDate != null && v.createdAt.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+      return true;
     }).toList();
+
+    final totalRecords = vendors.length;
+    final safePageSize = _pageSize <= 0 ? 25 : _pageSize;
+    final totalPages = (totalRecords <= 0) ? 1 : (totalRecords / safePageSize).ceil();
+    final maxPage = totalPages > 0 ? totalPages - 1 : 0;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * safePageSize;
+    final endIndex = (startIndex + safePageSize).clamp(0, totalRecords);
+    final pagedVendors = totalRecords == 0 ? <Vendor>[] : vendors.sublist(startIndex, endIndex);
+
+    final totalVendorsCount = db.vendors.where((v) => !v.isDeleted).length;
+    final withDuesCount = db.vendors.where((v) => !v.isDeleted && v.outstandingBalance > 0).length;
+    final zeroDuesCount = db.vendors.where((v) => !v.isDeleted && v.outstandingBalance <= 0).length;
+    final totalPayables = db.vendors.where((v) => !v.isDeleted).fold(0.0, (sum, v) => sum + v.outstandingBalance);
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ErpSectionHeaderCard(
+            icon: Icons.storefront_outlined,
+            title: 'Vendors Master',
+            badgeText: 'SUPPLIER DIRECTORY',
+            action: ErpButton(
+              text: 'Add Vendor',
+              icon: Icons.add,
+              onPressed: () => _openAddEditVendorDialog(),
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 5 Summary Metric Cards
           LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 550) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Vendors Master', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text('Raw material suppliers, payment terms, credit limits, and outstanding balances', style: AppTextStyles.subtitle),
-                    const SizedBox(height: 12),
-                    ErpButton(
-                      text: 'Add Vendor',
-                      icon: Icons.add,
-                      onPressed: () => _openAddEditVendorDialog(),
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (4 * 12)) / 5
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Vendors Master', style: AppTextStyles.h1),
-                        const SizedBox(height: 4),
-                        Text('Raw material suppliers, payment terms, credit limits, and outstanding balances', style: AppTextStyles.subtitle),
-                      ],
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.local_shipping_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Vendors',
+                      value: '$totalVendorsCount',
+                      subtext: 'All Suppliers',
                     ),
                   ),
-                  ErpButton(
-                    text: 'Add Vendor',
-                    icon: Icons.add,
-                    onPressed: () => _openAddEditVendorDialog(),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.check_circle_outline,
+                      iconColor: AppColors.success,
+                      title: 'Active Vendors',
+                      value: '$totalVendorsCount',
+                      subtext: 'Operational',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'With Dues',
+                      value: '$withDuesCount',
+                      subtext: 'Payment Pending',
+                      subtextColor: AppColors.danger,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.verified_outlined,
+                      iconColor: AppColors.categoryTeal,
+                      title: 'Settled Vendors',
+                      value: '$zeroDuesCount',
+                      subtext: 'Zero Balance',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.categoryGold,
+                      title: 'Total Payables',
+                      value: Formatters.formatCurrency(totalPayables),
+                      subtext: 'Current Dues',
+                    ),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
 
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search vendors by name, contact person, mobile, email, GST, or PAN...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // Modern Filter Controls Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search vendors by name, contact, GST...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _duesFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Vendors')),
+                  DropdownMenuItem(value: 'HAS_DUES', child: Text('Has Dues / Payable')),
+                  DropdownMenuItem(value: 'ZERO_DUES', child: Text('Zero Balance / Settled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _duesFilter = val;
+                    _currentPage = 0;
+                  });
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           ErpDataTable(
             columns: const [
               ErpColumn(title: 'Vendor Name'),
               ErpColumn(title: 'Contact Person'),
               ErpColumn(title: 'Mobile / Email'),
+              ErpColumn(title: 'State'),
               ErpColumn(title: 'GST Number'),
-              ErpColumn(title: 'Payment Terms'),
-              ErpColumn(title: 'Credit Limit', isNumeric: true),
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
               ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
-            rows: vendors.map((v) {
+            rows: pagedVendors.map((v) {
               return [
-                Text(v.name, style: AppTextStyles.bodyBold),
-                Text(v.contactPerson, style: AppTextStyles.bodyMedium),
+                InkWell(
+                  onTap: () {
+                    ref.read(activeRecordDetailsStackProvider.notifier).push(v.id, 'vendor', ErpNavSection.vendors);
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        v.name,
+                        style: AppTextStyles.bodyBold.copyWith(
+                          fontSize: 13,
+                          color: const Color(0xFF1E293B),
+                        ),
+                      ),
+                      if (v.address.isNotEmpty || v.state.isNotEmpty || v.pincode.isNotEmpty)
+                        Text(
+                          [
+                            if (v.address.isNotEmpty) v.address,
+                            if (v.state.isNotEmpty) v.state,
+                            if (v.pincode.isNotEmpty) v.pincode,
+                          ].join(', '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
+                    ],
+                  ),
+                ),
+                Text(v.contactPerson, style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(v.mobile, style: AppTextStyles.bodySmall),
-                    Text(v.email, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                    Text(v.mobile, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
+                    if (v.email.isNotEmpty)
+                      Text(v.email, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                   ],
                 ),
-                Text(v.gstNumber.trim().isNotEmpty ? v.gstNumber : '-', style: AppTextStyles.bodySmall),
-                Text(v.paymentTerms, style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(v.creditLimit), style: AppTextStyles.bodySmall),
+                Text(v.state.isNotEmpty ? v.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                Text(v.gstNumber.trim().isNotEmpty ? v.gstNumber : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Text(
                   Formatters.formatCurrency(v.outstandingBalance),
                   style: AppTextStyles.bodyBold.copyWith(
-                    color: v.outstandingBalance > 0 ? AppColors.dangerText : AppColors.textMuted,
+                    fontSize: 13,
+                    color: v.outstandingBalance > 0 ? AppColors.danger : const Color(0xFF1E293B),
                   ),
                 ),
                 v.isDeleted
-                    ? ErpStatusBadge.danger('DELETED (${v.deleteReason ?? "Reason not specified"})')
+                    ? Tooltip(
+                        message: v.deleteReason != null ? 'Deleted: ${v.deleteReason}' : 'Deleted vendor',
+                        child: ErpStatusBadge.danger('DELETED'),
+                      )
                     : ErpStatusBadge.success('ACTIVE'),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit Vendor',
-                      onPressed: v.isDeleted ? null : () => _openAddEditVendorDialog(v),
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'view':
+                        ref.read(activeRecordDetailsStackProvider.notifier).push(v.id, 'vendor', ErpNavSection.vendors);
+                        break;
+                      case 'whatsapp':
+                        WhatsAppQuickChatDialog.showCustomerQuickChat(
+                          context,
+                          customerName: v.name,
+                          customerPhone: v.mobile,
+                        );
+                        break;
+                      case 'edit':
+                        if (!v.isDeleted) _openAddEditVendorDialog(v);
+                        break;
+                      case 'delete':
+                        if (!v.isDeleted) _confirmDeleteVendor(v);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, color: AppColors.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text('View Details'),
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                      tooltip: 'Delete with Reason',
-                      onPressed: v.isDeleted ? null : () => _confirmDeleteVendor(v),
+                    const PopupMenuItem(
+                      value: 'whatsapp',
+                      child: Row(
+                        children: [
+                          Icon(Icons.chat, color: Colors.green, size: 18),
+                          SizedBox(width: 8),
+                          Text('WhatsApp Chat'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'edit',
+                      enabled: !v.isDeleted,
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 18, color: v.isDeleted ? Colors.grey : AppColors.textPrimary),
+                          const SizedBox(width: 8),
+                          Text('Edit Vendor', style: TextStyle(color: v.isDeleted ? Colors.grey : null)),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      enabled: !v.isDeleted,
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: v.isDeleted ? Colors.grey : AppColors.danger, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Delete with Reason', style: TextStyle(color: v.isDeleted ? Colors.grey : AppColors.danger)),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ];
             }).toList(),
+          ),
+          const SizedBox(height: 16),
+          ErpPaginationBar(
+            currentPage: safeCurrentPage,
+            pageSize: safePageSize,
+            totalRecords: totalRecords,
+            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+            onPageSizeChanged: (newSize) => setState(() {
+              _pageSize = newSize;
+              _currentPage = 0;
+            }),
           ),
         ],
       ),

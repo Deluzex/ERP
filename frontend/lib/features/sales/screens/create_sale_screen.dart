@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -14,6 +15,7 @@ import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -66,6 +68,8 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
   PaymentMode _paymentMode = PaymentMode.bankTransfer;
   final List<_SaleLineItemDraft> _items = [];
 
+  bool _isInterStateTax = false;
+
   @override
   void initState() {
     super.initState();
@@ -73,42 +77,364 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
     if (db.customers.isNotEmpty) {
       _selectedPartyId = db.customers.first.id;
     }
-    if (db.finishedProducts.isNotEmpty) {
-      final fp = db.finishedProducts.first;
-      _items.add(_SaleLineItemDraft(
-        finishedProductId: fp.id,
-        finishedProductName: fp.name,
-        finishedProductCode: fp.itemCode,
-        unit: fp.unit,
-        quantity: 10.0,
-        rate: _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice,
-        discount: 0.0,
-        gstPercent: fp.gstPercent,
-      ));
-    }
-  }
-
-  void _addNewLineItem() {
-    final db = ref.read(databaseServiceProvider);
-    if (db.finishedProducts.isEmpty) return;
-    final fp = db.finishedProducts.first;
-    setState(() {
-      _items.add(_SaleLineItemDraft(
-        finishedProductId: fp.id,
-        finishedProductName: fp.name,
-        finishedProductCode: fp.itemCode,
-        unit: fp.unit,
-        quantity: 1.0,
-        rate: _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice,
-        gstPercent: fp.gstPercent,
-      ));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _resolveTaxClassification();
+        });
+      }
     });
   }
 
-  void _removeLineItem(int index) {
-    if (_items.length > 1) {
-      setState(() => _items.removeAt(index));
+  void _resolveTaxClassification() {
+    final db = ref.read(databaseServiceProvider);
+
+    // 1. If project is selected, project site location authoritatively governs Place of Supply
+    if (_selectedProjectId != null) {
+      final project = db.projects.where((p) => p.id == _selectedProjectId).firstOrNull;
+      if (project != null) {
+        final siteState = project.siteState?.trim().toLowerCase();
+        final siteCode = project.siteStateCode?.trim();
+
+        if ((siteState != null && siteState.isNotEmpty) || (siteCode != null && siteCode.isNotEmpty)) {
+          final isGujarat = siteCode == '24' || siteState == 'gujarat';
+          _isInterStateTax = !isGujarat;
+          return;
+        }
+      }
     }
+
+    // 2. Fall back to party location
+    String? partyGst;
+    String? partyState;
+    String? partyStateCode;
+
+    if (_partyType == PartyType.customer) {
+      final c = db.customers.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (c != null) {
+        partyGst = c.gstNumber.trim();
+        partyState = c.state.trim().toLowerCase();
+        partyStateCode = c.stateCode.trim();
+      }
+    } else if (_partyType == PartyType.dealer) {
+      final d = db.dealers.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (d != null) {
+        partyGst = d.gstNumber.trim();
+        partyState = d.state.trim().toLowerCase();
+      }
+    } else if (_partyType == PartyType.architect) {
+      final a = db.architects.where((x) => x.id == _selectedPartyId).firstOrNull;
+      if (a != null) {
+        partyGst = a.gstNumber.trim();
+        partyState = a.state.trim().toLowerCase();
+      }
+    }
+
+    if (partyGst != null && partyGst.length >= 2) {
+      final prefix = partyGst.substring(0, 2);
+      if (RegExp(r'^\d{2}$').hasMatch(prefix)) {
+        _isInterStateTax = (prefix != '24');
+        return;
+      }
+    }
+
+    if (partyStateCode != null && partyStateCode.isNotEmpty) {
+      _isInterStateTax = (partyStateCode != '24');
+      return;
+    }
+
+    if (partyState != null && partyState.isNotEmpty) {
+      _isInterStateTax = (partyState != 'gujarat');
+      return;
+    }
+
+    _isInterStateTax = false;
+  }
+
+  Future<void> _showAddProductDialog() async {
+    final db = ref.read(databaseServiceProvider);
+    if (db.finishedProducts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No finished products found in catalog.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    final dialogFormKey = GlobalKey<FormState>();
+    String? selectedProductId = db.finishedProducts.first.id;
+    final firstFp = db.finishedProducts.first;
+    final initialRate = _partyType == PartyType.customer ? firstFp.customerSellingPrice : firstFp.dealerSellingPrice;
+
+    final qtyCtrl = TextEditingController(text: '1');
+    final rateCtrl = TextEditingController(text: initialRate.toStringAsFixed(0));
+    final discountCtrl = TextEditingController(text: '0');
+    final gstCtrl = TextEditingController(text: firstFp.gstPercent.toString());
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) {
+          final selectedFp = db.finishedProducts.firstWhere(
+            (p) => p.id == selectedProductId,
+            orElse: () => db.finishedProducts.first,
+          );
+          final qty = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
+          final rate = double.tryParse(rateCtrl.text.trim()) ?? 0.0;
+          final discount = double.tryParse(discountCtrl.text.trim()) ?? 0.0;
+          final gstPercent = double.tryParse(gstCtrl.text.trim()) ?? selectedFp.gstPercent;
+
+          final taxable = ((qty * rate) - discount).clamp(0.0, double.infinity);
+          final gstAmount = taxable * (gstPercent / 100.0);
+          final lineTotal = taxable + gstAmount;
+          final isStockShort = selectedFp.currentStock < qty;
+
+          return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.mdBorderRadius),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: AppRadius.smBorderRadius,
+                  ),
+                  child: const Icon(Icons.inventory_2_outlined, color: AppColors.primaryDark, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Add Product', style: AppTextStyles.h3),
+                      Text(
+                        'Select product item and specify dispatch quantity & pricing',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: Container(
+              constraints: const BoxConstraints(maxWidth: 520),
+              width: double.infinity,
+              child: Form(
+                key: dialogFormKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Product Dropdown
+                      DropdownButtonFormField<String>(
+                        value: selectedProductId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Select Product *',
+                          prefixIcon: Icon(Icons.category_outlined, size: 20),
+                        ),
+                        items: db.finishedProducts.map((fp) {
+                          return DropdownMenuItem(
+                            value: fp.id,
+                            child: Text(
+                              '${fp.itemCode} - ${fp.name} (Stock: ${Formatters.formatNumber(fp.currentStock)} ${fp.unit})',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            final chosen = db.finishedProducts.firstWhere((p) => p.id == val);
+                            setDlgState(() {
+                              selectedProductId = chosen.id;
+                              final newRate = _partyType == PartyType.customer
+                                  ? chosen.customerSellingPrice
+                                  : chosen.dealerSellingPrice;
+                              rateCtrl.text = newRate.toStringAsFixed(0);
+                              gstCtrl.text = chosen.gstPercent.toString();
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Current Stock Status Pill
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isStockShort ? AppColors.dangerLight : AppColors.successLight,
+                          borderRadius: AppRadius.smBorderRadius,
+                          border: Border.all(
+                            color: isStockShort ? AppColors.danger : AppColors.success,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isStockShort ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                              size: 18,
+                              color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                isStockShort
+                                    ? 'Low Stock: Available ${Formatters.formatNumber(selectedFp.currentStock)} ${selectedFp.unit} (Short by ${Formatters.formatNumber(qty - selectedFp.currentStock)} ${selectedFp.unit})'
+                                    : 'Available in Stock: ${Formatters.formatNumber(selectedFp.currentStock)} ${selectedFp.unit}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isStockShort ? AppColors.dangerText : AppColors.successText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Quantity and Rate
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: qtyCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              validator: Validators.positiveNumber,
+                              decoration: InputDecoration(
+                                labelText: 'Quantity (${selectedFp.unit}) *',
+                                prefixIcon: const Icon(Icons.numbers, size: 20),
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: TextFormField(
+                              controller: rateCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              validator: Validators.positiveNumber,
+                              decoration: const InputDecoration(
+                                labelText: 'Rate (₹) *',
+                                prefixIcon: Icon(Icons.currency_rupee, size: 20),
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Discount and GST%
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: discountCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(
+                                labelText: 'Discount (₹)',
+                                prefixIcon: Icon(Icons.discount_outlined, size: 20),
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: TextFormField(
+                              controller: gstCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              validator: Validators.positiveNumber,
+                              decoration: const InputDecoration(
+                                labelText: 'GST (%) *',
+                                prefixIcon: Icon(Icons.percent, size: 20),
+                              ),
+                              onChanged: (_) => setDlgState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Cost / Line Total Preview Card
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceMuted,
+                          borderRadius: AppRadius.smBorderRadius,
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Line Total (inc. Tax):', style: AppTextStyles.bodySmall),
+                                Text(
+                                  Formatters.formatCurrency(lineTotal),
+                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 16),
+                                ),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text('Taxable: ${Formatters.formatCurrency(taxable)}', style: AppTextStyles.bodySmall),
+                                Text('GST (${gstPercent.toStringAsFixed(0)}%): ${Formatters.formatCurrency(gstAmount)}', style: AppTextStyles.bodySmall),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            actions: [
+              ErpButton(
+                text: 'Cancel',
+                isOutlined: true,
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+              ErpButton(
+                text: 'Add to Order',
+                icon: Icons.add,
+                onPressed: () {
+                  if (!dialogFormKey.currentState!.validate()) return;
+                  setState(() {
+                    _items.add(_SaleLineItemDraft(
+                      finishedProductId: selectedFp.id,
+                      finishedProductName: selectedFp.name,
+                      finishedProductCode: selectedFp.itemCode,
+                      unit: selectedFp.unit,
+                      quantity: qty,
+                      rate: rate,
+                      discount: discount,
+                      gstPercent: gstPercent,
+                    ));
+                  });
+                  Navigator.of(ctx).pop();
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _removeLineItem(int index) {
+    setState(() => _items.removeAt(index));
   }
 
   double get _subtotalAmount => _items.fold(0.0, (sum, i) => sum + (i.quantity * i.rate));
@@ -401,6 +727,9 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
   void _openQuickAddProjectDialog() {
     final db = ref.read(databaseServiceProvider);
     final nameCtrl = TextEditingController();
+    final siteStateCtrl = TextEditingController(text: 'Gujarat');
+    final sitePincodeCtrl = TextEditingController();
+    final siteAddressCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
     String? selectedCustId;
@@ -450,8 +779,8 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Linked Client / Customer (Optional)'),
                           items: [
-                            const DropdownMenuItem(value: null, child: Text('None (Direct Architect Specification)')),
-                            ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                            const DropdownMenuItem<String?>(value: null, child: Text('None (Direct Architect Specification)')),
+                            ...db.customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                           ],
                           onChanged: (val) => setDlgState(() => selectedCustId = val),
                         ),
@@ -466,6 +795,32 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                           onChanged: (val) {
                             if (val != null) setDlgState(() => status = val);
                           },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: siteStateCtrl,
+                          validator: (v) => Validators.requiredField(v, 'Site state is required for GST determination'),
+                          decoration: const InputDecoration(
+                            labelText: 'Site State (Place of Supply) *',
+                            hintText: 'e.g. Gujarat, Maharashtra',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: sitePincodeCtrl,
+                          validator: (v) => v != null && v.trim().isNotEmpty ? Validators.pincode(v) : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Site PIN Code (Optional)',
+                            hintText: 'e.g. 380001',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: siteAddressCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Site Address (Optional)',
+                            hintText: 'Full project construction address',
+                          ),
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
@@ -496,6 +851,8 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                       custName = db.customers.where((c) => c.id == selectedCustId).firstOrNull?.name;
                     }
 
+                    final stateName = siteStateCtrl.text.trim();
+                    final isGujarat = stateName.toLowerCase() == 'gujarat' || stateName == '24';
                     final newProj = Project(
                       id: IdGenerator.generateId('PRJ'),
                       name: nameCtrl.text.trim(),
@@ -506,6 +863,11 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                       startDate: DateTime.now(),
                       expectedCompletionDate: DateTime.now().add(const Duration(days: 90)),
                       status: status,
+                      siteState: stateName.isNotEmpty ? stateName : null,
+                      siteStateCode: isGujarat ? '24' : (stateName.toLowerCase() == 'maharashtra' ? '27' : null),
+                      sitePincode: sitePincodeCtrl.text.trim().isNotEmpty ? sitePincodeCtrl.text.trim() : null,
+                      siteAddress: siteAddressCtrl.text.trim().isNotEmpty ? siteAddressCtrl.text.trim() : null,
+                      posVerified: stateName.isNotEmpty,
                       notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
                       createdAt: DateTime.now(),
                     );
@@ -513,6 +875,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                     db.addProject(newProj);
                     setState(() {
                       _selectedProjectId = newProj.id;
+                      _resolveTaxClassification();
                     });
 
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -533,7 +896,35 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
 
   Future<void> _createInvoice(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one finished product to invoice.'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
     final db = ref.read(databaseServiceProvider);
+
+    if (_selectedProjectId != null) {
+      final p = db.projects.where((prj) => prj.id == _selectedProjectId).firstOrNull;
+      if (p != null) {
+        final siteState = p.siteState?.trim();
+        final siteCode = p.siteStateCode?.trim();
+        if ((siteState == null || siteState.isEmpty) && (siteCode == null || siteCode.isEmpty)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot finalize sale: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+          return;
+        }
+      }
+    }
+
+    _resolveTaxClassification();
 
     // Validate finished product inventory
     if (!isDraft) {
@@ -578,6 +969,12 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
     }
 
     final saleItems = _items.map((i) {
+      final taxable = ((i.quantity * i.rate) - i.discount).clamp(0.0, double.infinity);
+      final gst = taxable * (i.gstPercent / 100.0);
+      final cgst = _isInterStateTax ? 0.0 : (gst / 2);
+      final sgst = _isInterStateTax ? 0.0 : (gst / 2);
+      final igst = _isInterStateTax ? gst : 0.0;
+
       return SaleLineItem(
         finishedProductId: i.finishedProductId,
         finishedProductName: i.finishedProductName,
@@ -587,6 +984,10 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
         rate: i.rate,
         discountAmount: i.discount,
         gstPercent: i.gstPercent,
+        taxableAmount: taxable,
+        cgstAmount: cgst,
+        sgstAmount: sgst,
+        igstAmount: igst,
         lineTotal: i.lineTotal,
       );
     }).toList();
@@ -617,6 +1018,11 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
       items: saleItems,
       subtotalAmount: _subtotalAmount,
       discountAmount: _totalDiscount,
+      taxableAmount: _subtotalAmount - _totalDiscount,
+      cgstAmount: _isInterStateTax ? 0.0 : (_totalGst / 2),
+      sgstAmount: _isInterStateTax ? 0.0 : (_totalGst / 2),
+      igstAmount: _isInterStateTax ? _totalGst : 0.0,
+      isInterStateTax: _isInterStateTax,
       gstAmount: _totalGst,
       totalAmount: _totalAmount,
       paidAmount: _paidAmount,
@@ -664,64 +1070,70 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isStacked = constraints.maxWidth < 750;
-                final titleBlock = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Create Sales Invoice', style: AppTextStyles.h1),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Dispatch finished products, link project/architect, and record revenue',
-                      style: AppTextStyles.subtitle,
-                    ),
-                  ],
-                );
-
-                final actionButtons = Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Cancel',
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
-                    ),
-                    ErpButton(
-                      text: 'Save Draft',
-                      isOutlined: true,
-                      onPressed: () => _createInvoice(true),
-                    ),
-                    ErpButton(
-                      text: 'Create Invoice & Dispatch',
-                      icon: Icons.receipt_long_outlined,
-                      onPressed: () => _createInvoice(false),
-                    ),
-                  ],
-                );
-
-                if (isStacked) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      titleBlock,
-                      const SizedBox(height: 16),
-                      actionButtons,
-                    ],
-                  );
-                }
-
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(child: titleBlock),
-                    const SizedBox(width: 16),
-                    actionButtons,
-                  ],
-                );
-              },
-            ),
+            ErpSectionHeaderCard(
+                icon: Icons.point_of_sale_outlined,
+                title: 'Create Sales Invoice',
+                badgeText: 'DIRECT SALE / INVOICE',
+                action: LayoutBuilder(
+                  builder: (context, actionBox) {
+                    final isMobile = actionBox.maxWidth < 520;
+                    if (isMobile) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: ErpButton(
+                              text: 'Create Invoice & Dispatch',
+                              icon: Icons.receipt_long_outlined,
+                              onPressed: () => _createInvoice(false),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ErpButton(
+                              text: 'Save Draft',
+                              isOutlined: true,
+                              onPressed: () => _createInvoice(true),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ErpButton(
+                              text: 'Cancel',
+                              isOutlined: true,
+                              onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        ErpButton(
+                          text: 'Cancel',
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
+                        ),
+                        ErpButton(
+                          text: 'Save Draft',
+                          isOutlined: true,
+                          onPressed: () => _createInvoice(true),
+                        ),
+                        ErpButton(
+                          text: 'Create Invoice & Dispatch',
+                          icon: Icons.receipt_long_outlined,
+                          onPressed: () => _createInvoice(false),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
             const SizedBox(height: 24),
 
             // Party & Billing Card
@@ -740,137 +1152,46 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                   LayoutBuilder(
                     builder: (context, partyBox) {
                       final isNarrow = partyBox.maxWidth < 750;
-                      final isMobileRadio = partyBox.maxWidth < 650;
 
-                      final radioGroup = isMobileRadio
-                          ? Column(
-                              children: [
-                                Material(
-                                  color: Colors.transparent,
-                                  child: RadioListTile<PartyType>(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    title: const Text('Direct Customer'),
-                                    value: PartyType.customer,
-                                    groupValue: _partyType,
-                                    onChanged: (val) {
-                                      if (val != null) {
-                                        setState(() {
-                                          _partyType = val;
-                                          _selectedProjectId = null;
-                                          _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                                Material(
-                                  color: Colors.transparent,
-                                  child: RadioListTile<PartyType>(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    title: const Text('Dealer Channel'),
-                                    value: PartyType.dealer,
-                                    groupValue: _partyType,
-                                    onChanged: (val) {
-                                      if (val != null) {
-                                        setState(() {
-                                          _partyType = val;
-                                          _selectedProjectId = null;
-                                          _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                                Material(
-                                  color: Colors.transparent,
-                                  child: RadioListTile<PartyType>(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    title: const Text('Architect'),
-                                    value: PartyType.architect,
-                                    groupValue: _partyType,
-                                    onChanged: (val) {
-                                      if (val != null) {
-                                        setState(() {
-                                          _partyType = val;
-                                          _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ],
-                            )
-                          : Row(
-                              children: [
-                                Expanded(
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: RadioListTile<PartyType>(
-                                      dense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text('Direct Customer'),
-                                      value: PartyType.customer,
-                                      groupValue: _partyType,
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          setState(() {
-                                            _partyType = val;
-                                            _selectedProjectId = null;
-                                            _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: RadioListTile<PartyType>(
-                                      dense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text('Dealer Channel'),
-                                      value: PartyType.dealer,
-                                      groupValue: _partyType,
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          setState(() {
-                                            _partyType = val;
-                                            _selectedProjectId = null;
-                                            _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: RadioListTile<PartyType>(
-                                      dense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text('Architect'),
-                                      value: PartyType.architect,
-                                      groupValue: _partyType,
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          setState(() {
-                                            _partyType = val;
-                                            _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
+                      final partyTypeDropdown = DropdownButtonFormField<PartyType>(
+                        value: _partyType,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Customer / Channel Type *',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: PartyType.customer,
+                            child: Text('Direct Customer'),
+                          ),
+                          DropdownMenuItem(
+                            value: PartyType.dealer,
+                            child: Text('Dealer Channel'),
+                          ),
+                          DropdownMenuItem(
+                            value: PartyType.architect,
+                            child: Text('Architect'),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null && val != _partyType) {
+                            setState(() {
+                              _partyType = val;
+                              _selectedProjectId = null;
+                              if (val == PartyType.customer) {
+                                _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
+                              } else if (val == PartyType.dealer) {
+                                _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
+                              } else {
+                                _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
+                              }
+                              _resolveTaxClassification();
+                            });
+                          }
+                        },
+                      );
 
-                      final dropdownField = DropdownButtonFormField<String>(
+                      final dropdownField = DropdownButtonFormField<String?>(
                         value: ((_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId)) ||
                                 (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId)) ||
                                 (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId)))
@@ -885,7 +1206,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                   : 'Select Architect *',
                         ),
                         items: [
-                          DropdownMenuItem<String>(
+                          DropdownMenuItem<String?>(
                             value: '__ADD_NEW__',
                             child: Row(
                               children: [
@@ -902,17 +1223,17 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                               ],
                             ),
                           ),
-                          const DropdownMenuItem<String>(
+                          const DropdownMenuItem<String?>(
                             enabled: false,
                             value: '__DIVIDER__',
                             child: Divider(height: 1),
                           ),
                           if (_partyType == PartyType.customer)
-                            ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                            ...db.customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
                           else if (_partyType == PartyType.dealer)
-                            ...db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                            ...db.dealers.map((d) => DropdownMenuItem<String?>(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
                           else
-                            ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
+                            ...db.architects.map((a) => DropdownMenuItem<String?>(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
                         ],
                         onChanged: (val) {
                           if (val == '__ADD_NEW__') {
@@ -920,15 +1241,18 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                             return;
                           }
                           if (val == '__DIVIDER__') return;
-                          setState(() => _selectedPartyId = val);
+                          setState(() {
+                            _selectedPartyId = val;
+                            _resolveTaxClassification();
+                          });
                         },
                       );
 
                       if (isNarrow) {
                         return Column(
                           children: [
-                            radioGroup,
-                            const SizedBox(height: 12),
+                            partyTypeDropdown,
+                            const SizedBox(height: 14),
                             dropdownField,
                           ],
                         );
@@ -936,75 +1260,94 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
 
                       return Row(
                         children: [
-                          Expanded(flex: 3, child: radioGroup),
+                          Expanded(flex: 2, child: partyTypeDropdown),
                           const SizedBox(width: 16),
-                          Expanded(flex: 2, child: dropdownField),
+                          Expanded(flex: 3, child: dropdownField),
                         ],
                       );
                     },
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      if (_partyType == PartyType.architect) ...[
-                        Expanded(
-                          child: DropdownButtonFormField<String?>(
-                            value: (_selectedProjectId != null && db.projects.any((p) => p.id == _selectedProjectId))
-                                ? _selectedProjectId
-                                : null,
-                            isExpanded: true,
-                            decoration: const InputDecoration(labelText: 'Linked Project (Optional)'),
-                            items: [
-                              DropdownMenuItem<String?>(
-                                value: '__ADD_PROJECT__',
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '+ Add New Project',
-                                      style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-                                    ),
-                                  ],
+                  LayoutBuilder(
+                    builder: (context, partySubBox) {
+                      final isMobileParty = partySubBox.maxWidth < 650;
+                      final projectField = DropdownButtonFormField<String?>(
+                        value: (_selectedProjectId != null && db.projects.any((p) => p.id == _selectedProjectId))
+                            ? _selectedProjectId
+                            : null,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Linked Project (Optional)'),
+                        items: [
+                          DropdownMenuItem<String?>(
+                            value: '__ADD_PROJECT__',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '+ Add New Project',
+                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
                                 ),
-                              ),
-                              const DropdownMenuItem<String?>(
-                                enabled: false,
-                                value: '__DIVIDER_PROJECT__',
-                                child: Divider(height: 1),
-                              ),
-                              const DropdownMenuItem<String?>(value: null, child: Text('None (Direct Site)')),
-                              ...db.projects.map((p) => DropdownMenuItem<String?>(value: p.id, child: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
-                            ],
-                            onChanged: (val) {
-                              if (val == '__ADD_PROJECT__') {
-                                _openQuickAddProjectDialog();
-                                return;
-                              }
-                              if (val == '__DIVIDER_PROJECT__') return;
-                              setState(() => _selectedProjectId = val);
-                            },
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                      ],
-                      Expanded(
-                        child: DropdownButtonFormField<PaymentMode>(
-                          value: _paymentMode,
-                          isExpanded: true,
-                          decoration: const InputDecoration(labelText: 'Payment Mode'),
-                          items: PaymentMode.values.map((mode) {
-                            return DropdownMenuItem(
-                              value: mode,
-                              child: Text(mode.toString().split('.').last.toUpperCase()),
-                            );
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) setState(() => _paymentMode = val);
-                          },
-                        ),
-                      ),
-                    ],
+                          const DropdownMenuItem<String?>(
+                            enabled: false,
+                            value: '__DIVIDER_PROJECT__',
+                            child: Divider(height: 1),
+                          ),
+                          const DropdownMenuItem<String?>(value: null, child: Text('None (Direct Site)')),
+                          ...db.projects.map((p) => DropdownMenuItem<String?>(value: p.id, child: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                        ],
+                        onChanged: (val) {
+                          if (val == '__ADD_PROJECT__') {
+                            _openQuickAddProjectDialog();
+                            return;
+                          }
+                          if (val == '__DIVIDER_PROJECT__') return;
+                          setState(() {
+                            _selectedProjectId = val;
+                            _resolveTaxClassification();
+                          });
+                        },
+                      );
+
+                      final paymentModeField = DropdownButtonFormField<PaymentMode>(
+                        value: _paymentMode,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Payment Mode'),
+                        items: PaymentMode.values.map((mode) {
+                          return DropdownMenuItem(
+                            value: mode,
+                            child: Text(mode.toString().split('.').last.toUpperCase()),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _paymentMode = val);
+                        },
+                      );
+
+                      if (_partyType == PartyType.architect) {
+                        if (isMobileParty) {
+                          return Column(
+                            children: [
+                              projectField,
+                              const SizedBox(height: 12),
+                              paymentModeField,
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(child: projectField),
+                            const SizedBox(width: 16),
+                            Expanded(child: paymentModeField),
+                          ],
+                        );
+                      }
+
+                      return paymentModeField;
+                    },
                   ),
                 ],
               ),
@@ -1024,18 +1367,21 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                 children: [
                   LayoutBuilder(
                     builder: (context, headerConstraints) {
-                      final isNarrow = headerConstraints.maxWidth < 420;
+                      final isNarrow = headerConstraints.maxWidth < 520;
                       if (isNarrow) {
                         return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Text('Finished Products Invoiced', style: AppTextStyles.h3),
-                            const SizedBox(height: 8),
-                            ErpButton(
-                              text: 'Add Product',
-                              icon: Icons.add,
-                              isOutlined: true,
-                              onPressed: _addNewLineItem,
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ErpButton(
+                                text: 'Add Product',
+                                icon: Icons.add,
+                                isOutlined: true,
+                                onPressed: _showAddProductDialog,
+                              ),
                             ),
                           ],
                         );
@@ -1049,36 +1395,84 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                             text: 'Add Product',
                             icon: Icons.add,
                             isOutlined: true,
-                            onPressed: _addNewLineItem,
+                            onPressed: _showAddProductDialog,
                           ),
                         ],
                       );
                     },
                   ),
                   const SizedBox(height: 16),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: MediaQuery.of(context).size.width < 1100 ? 980 : MediaQuery.of(context).size.width - 320,
-                      ),
-                      child: Column(
-                        children: List.generate(_items.length, (index) {
-                          final item = _items[index];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceMuted,
-                              borderRadius: AppRadius.smBorderRadius,
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Row(
-                              children: [
-                                // Product dropdown
-                                SizedBox(
-                                  width: 280,
-                                  child: DropdownButtonFormField<String>(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (_items.isEmpty) {
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceMuted,
+                            borderRadius: AppRadius.smBorderRadius,
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(Icons.inventory_2_outlined, size: 40, color: AppColors.textMuted),
+                              const SizedBox(height: 8),
+                              Text('No products added to this invoice yet.', style: AppTextStyles.subtitle),
+                              const SizedBox(height: 12),
+                              ErpButton(
+                                text: 'Add First Product',
+                                icon: Icons.add,
+                                isOutlined: true,
+                                onPressed: _showAddProductDialog,
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      final isMobileItems = constraints.maxWidth < 750;
+
+                      if (isMobileItems) {
+                        return Column(
+                          children: List.generate(_items.length, (index) {
+                            final item = _items[index];
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceMuted,
+                                borderRadius: AppRadius.mdBorderRadius,
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary.withValues(alpha: 0.1),
+                                          borderRadius: AppRadius.smBorderRadius,
+                                        ),
+                                        child: Text(
+                                          'Item #${index + 1}',
+                                          style: AppTextStyles.caption.copyWith(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: () => _removeLineItem(index),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  DropdownButtonFormField<String>(
                                     value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
                                         ? item.finishedProductId
                                         : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
@@ -1108,100 +1502,244 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                       }
                                     },
                                   ),
-                                ),
-                                const SizedBox(width: 10),
-
-                                // Quantity
-                                SizedBox(
-                                  width: 110,
-                                  child: TextFormField(
-                                    initialValue: item.quantity.toString(),
-                                    keyboardType: TextInputType.number,
-                                    validator: Validators.positiveNumber,
-                                    decoration: InputDecoration(labelText: 'Qty (${item.unit})'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.quantity = num);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-
-                                // Rate
-                                SizedBox(
-                                  width: 110,
-                                  child: TextFormField(
-                                    initialValue: item.rate.toString(),
-                                    keyboardType: TextInputType.number,
-                                    validator: Validators.positiveNumber,
-                                    decoration: const InputDecoration(labelText: 'Rate (₹)'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.rate = num);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-
-                                // Discount
-                                SizedBox(
-                                  width: 110,
-                                  child: TextFormField(
-                                    initialValue: item.discount.toString(),
-                                    keyboardType: TextInputType.number,
-                                    validator: Validators.nonNegativeNumber,
-                                    decoration: const InputDecoration(labelText: 'Discount (₹)'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.discount = num);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-
-                                // GST %
-                                SizedBox(
-                                  width: 80,
-                                  child: TextFormField(
-                                    initialValue: item.gstPercent.toString(),
-                                    keyboardType: TextInputType.number,
-                                    validator: Validators.nonNegativeNumber,
-                                    decoration: const InputDecoration(labelText: 'GST %'),
-                                    onChanged: (v) {
-                                      final num = double.tryParse(v) ?? 0.0;
-                                      setState(() => item.gstPercent = num);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-
-                                // Line Total
-                                SizedBox(
-                                  width: 120,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                  const SizedBox(height: 10),
+                                  Row(
                                     children: [
-                                      Text('Line Total', style: AppTextStyles.bodySmall),
-                                      Text(
-                                        Formatters.formatCurrency(item.lineTotal),
-                                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                                      Expanded(
+                                        child: TextFormField(
+                                          initialValue: item.quantity.toString(),
+                                          keyboardType: TextInputType.number,
+                                          validator: Validators.positiveNumber,
+                                          decoration: InputDecoration(labelText: 'Qty (${item.unit})'),
+                                          onChanged: (v) {
+                                            final num = double.tryParse(v) ?? 0.0;
+                                            setState(() => item.quantity = num);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: TextFormField(
+                                          initialValue: item.rate.toString(),
+                                          keyboardType: TextInputType.number,
+                                          validator: Validators.positiveNumber,
+                                          decoration: const InputDecoration(labelText: 'Rate (₹)'),
+                                          onChanged: (v) {
+                                            final num = double.tryParse(v) ?? 0.0;
+                                            setState(() => item.rate = num);
+                                          },
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                const SizedBox(width: 8),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextFormField(
+                                          initialValue: item.discount.toString(),
+                                          keyboardType: TextInputType.number,
+                                          validator: Validators.nonNegativeNumber,
+                                          decoration: const InputDecoration(labelText: 'Discount (₹)'),
+                                          onChanged: (v) {
+                                            final num = double.tryParse(v) ?? 0.0;
+                                            setState(() => item.discount = num);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: TextFormField(
+                                          initialValue: item.gstPercent.toString(),
+                                          keyboardType: TextInputType.number,
+                                          validator: Validators.nonNegativeNumber,
+                                          decoration: const InputDecoration(labelText: 'GST %'),
+                                          onChanged: (v) {
+                                            final num = double.tryParse(v) ?? 0.0;
+                                            setState(() => item.gstPercent = num);
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surface,
+                                      borderRadius: AppRadius.smBorderRadius,
+                                      border: Border.all(color: AppColors.border),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text('Line Total', style: AppTextStyles.bodySmall),
+                                        Text(
+                                          Formatters.formatCurrency(item.lineTotal),
+                                          style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        );
+                      }
 
-                                // Delete
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
-                                  onPressed: () => _removeLineItem(index),
+                      const minTableWidth = 950.0;
+                      final effectiveWidth = math.max(constraints.maxWidth, minTableWidth);
+
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: effectiveWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: List.generate(_items.length, (index) {
+                              final item = _items[index];
+                              return Container(
+                                width: effectiveWidth,
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceMuted,
+                                  borderRadius: AppRadius.smBorderRadius,
+                                  border: Border.all(color: AppColors.border),
                                 ),
-                              ],
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // Product dropdown
+                                    SizedBox(
+                                      width: 280,
+                                      child: DropdownButtonFormField<String>(
+                                        value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
+                                            ? item.finishedProductId
+                                            : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                                        isExpanded: true,
+                                        decoration: const InputDecoration(labelText: 'Product'),
+                                        items: db.finishedProducts.map((fp) {
+                                          return DropdownMenuItem(
+                                            value: fp.id,
+                                            child: Text(
+                                              '${fp.itemCode} - ${fp.name}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            final fp = db.finishedProducts.firstWhere((p) => p.id == val);
+                                            setState(() {
+                                              item.finishedProductId = fp.id;
+                                              item.finishedProductName = fp.name;
+                                              item.finishedProductCode = fp.itemCode;
+                                              item.unit = fp.unit;
+                                              item.rate = _partyType == PartyType.customer ? fp.customerSellingPrice : fp.dealerSellingPrice;
+                                              item.gstPercent = fp.gstPercent;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+
+                                    // Quantity
+                                    SizedBox(
+                                      width: 110,
+                                      child: TextFormField(
+                                        initialValue: item.quantity.toString(),
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.positiveNumber,
+                                        decoration: InputDecoration(labelText: 'Qty (${item.unit})'),
+                                        onChanged: (v) {
+                                          final num = double.tryParse(v) ?? 0.0;
+                                          setState(() => item.quantity = num);
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+
+                                    // Rate
+                                    SizedBox(
+                                      width: 110,
+                                      child: TextFormField(
+                                        initialValue: item.rate.toString(),
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.positiveNumber,
+                                        decoration: const InputDecoration(labelText: 'Rate (₹)'),
+                                        onChanged: (v) {
+                                          final num = double.tryParse(v) ?? 0.0;
+                                          setState(() => item.rate = num);
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+
+                                    // Discount
+                                    SizedBox(
+                                      width: 110,
+                                      child: TextFormField(
+                                        initialValue: item.discount.toString(),
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: const InputDecoration(labelText: 'Discount (₹)'),
+                                        onChanged: (v) {
+                                          final num = double.tryParse(v) ?? 0.0;
+                                          setState(() => item.discount = num);
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+
+                                    // GST %
+                                    SizedBox(
+                                      width: 80,
+                                      child: TextFormField(
+                                        initialValue: item.gstPercent.toString(),
+                                        keyboardType: TextInputType.number,
+                                        validator: Validators.nonNegativeNumber,
+                                        decoration: const InputDecoration(labelText: 'GST %'),
+                                        onChanged: (v) {
+                                          final num = double.tryParse(v) ?? 0.0;
+                                          setState(() => item.gstPercent = num);
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+
+                                    // Line Total
+                                    SizedBox(
+                                      width: 120,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text('Line Total', style: AppTextStyles.bodySmall),
+                                          Text(
+                                            Formatters.formatCurrency(item.lineTotal),
+                                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    // Delete
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                                      onPressed: () => _removeLineItem(index),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -1286,14 +1824,34 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(child: Text('GST Tax (18%):', style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          const SizedBox(width: 8),
-                          Text(Formatters.formatCurrency(_totalGst), style: AppTextStyles.bodySmall),
-                        ],
-                      ),
+                      if (!_isInterStateTax) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(child: Text('CGST (9%):', style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: 8),
+                            Text(Formatters.formatCurrency(_totalGst / 2), style: AppTextStyles.bodySmall),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(child: Text('SGST (9%):', style: AppTextStyles.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: 8),
+                            Text(Formatters.formatCurrency(_totalGst / 2), style: AppTextStyles.bodySmall),
+                          ],
+                        ),
+                      ] else ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(child: Text('IGST (18%):', style: AppTextStyles.bodyMedium.copyWith(color: Colors.purple), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: 8),
+                            Text(Formatters.formatCurrency(_totalGst), style: AppTextStyles.bodySmall.copyWith(color: Colors.purple, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
                       const Divider(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

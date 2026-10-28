@@ -111,7 +111,7 @@ class ProductionOrder {
   String get statusLabel {
     switch (status) {
       case ProductionStatus.planned:
-        return 'Planned';
+        return 'Waiting Approval';
       case ProductionStatus.inProgress:
         return 'In Progress';
       case ProductionStatus.completed:

@@ -3,7 +3,7 @@ import { AuditService } from '../../../core/audit/audit.service';
 import { DatabasePool } from '../../../core/database/connection';
 import { ConflictError } from '../../../core/errors/conflict.error';
 import { NotFoundError } from '../../../core/errors/not-found.error';
-import { CreateUnitDto } from '../dto/unit.dto';
+import { CreateUnitDto, UpdateUnitDto } from '../dto/unit.dto';
 
 export interface MeasurementUnitRecord {
   id: string;
@@ -99,6 +99,60 @@ export class UnitsService {
       symbol: record.symbol,
       createdAt: record.created_at,
     };
+  }
+
+  async update(
+    id: string,
+    dto: UpdateUnitDto,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<MeasurementUnitRecord> {
+    await this.findById(id);
+
+    if (dto.symbol) {
+      const existing = await this.db.query(
+        'SELECT 1 FROM measurement_units WHERE UPPER(symbol) = UPPER($1) AND id <> $2',
+        [dto.symbol.trim(), id],
+      );
+      if (existing.rowCount && existing.rowCount > 0) {
+        throw new ConflictError(`Unit symbol "${dto.symbol}" already exists`);
+      }
+    }
+
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
+
+    if (dto.name !== undefined) {
+      updates.push(`name = $${idx++}`);
+      values.push(dto.name.trim());
+    }
+    if (dto.symbol !== undefined) {
+      updates.push(`symbol = $${idx++}`);
+      values.push(dto.symbol.trim().toUpperCase());
+    }
+
+    if (updates.length > 0) {
+      values.push(id);
+      await this.db.query(
+        `UPDATE measurement_units SET ${updates.join(', ')} WHERE id = $${idx}`,
+        values,
+      );
+    }
+
+    const record = await this.findById(id);
+
+    await this.auditService.log({
+      userId,
+      userName: 'User',
+      action: 'UNIT_UPDATE',
+      entityType: 'UNIT',
+      entityId: id,
+      afterSnapshot: { ...dto },
+      correlationId,
+    });
+
+    return record;
   }
 
   async delete(

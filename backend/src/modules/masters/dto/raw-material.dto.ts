@@ -1,11 +1,28 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class BulkImportRawMaterialsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateRawMaterialDto)
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  items!: CreateRawMaterialDto[];
+
+  @IsString()
+  @IsOptional()
+  duplicatePolicy?: 'SKIP' = 'SKIP';
+}
 
 export class CreateRawMaterialDto {
   @IsString()
@@ -51,6 +68,11 @@ export class CreateRawMaterialDto {
   @IsNumber()
   @Min(0)
   @IsOptional()
+  transportationCharge?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
   gstPercent?: number;
 
   @IsArray()
@@ -66,7 +88,15 @@ export class UpdateRawMaterialDto {
 
   @IsString()
   @IsOptional()
+  itemCode?: string;
+
+  @IsString()
+  @IsOptional()
   categoryId?: string;
+
+  @IsString()
+  @IsOptional()
+  categoryName?: string;
 
   @IsString()
   @IsOptional()
@@ -74,7 +104,21 @@ export class UpdateRawMaterialDto {
 
   @IsString()
   @IsOptional()
+  unit?: string;
+
+  @IsString()
+  @IsOptional()
   hsnSacCode?: string;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  openingStock?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  currentStock?: number;
 
   @IsNumber()
   @Min(0)
@@ -94,10 +138,20 @@ export class UpdateRawMaterialDto {
   @IsNumber()
   @Min(0)
   @IsOptional()
+  transportationCharge?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
   gstPercent?: number;
 
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
   preferredVendorIds?: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  preferredVendorNames?: string[];
 }

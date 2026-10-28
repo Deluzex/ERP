@@ -69,6 +69,35 @@ class AppTheme {
         thickness: 1,
         space: 1,
       ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          textStyle: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w600,
+            fontSize: 13.5,
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textPrimary,
+          side: const BorderSide(color: Color(0xFFD9D9D9), width: 1.2),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          textStyle: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w500,
+            fontSize: 13.5,
+          ),
+        ),
+      ),
     );
   }
 }

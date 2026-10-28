@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
@@ -6,7 +7,13 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/stock_movement_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
+import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/stock_movement_icons.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 enum StockLedgerCategory {
@@ -26,6 +33,10 @@ class StockMovementScreen extends ConsumerStatefulWidget {
 class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
   String _searchQuery = '';
   StockLedgerCategory _selectedCategory = StockLedgerCategory.all;
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -70,6 +81,15 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
           break;
       }
 
+      if (_startDate != null &&
+          m.date.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) {
+        return false;
+      }
+      if (_endDate != null &&
+          m.date.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) {
+        return false;
+      }
+
       return matchesSearch && matchesCategory;
     }).toList();
 
@@ -78,117 +98,372 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Stock Movement Ledger', style: AppTextStyles.h1),
-          const SizedBox(height: 4),
-          Text(
-            'Immutable audit trail of all inventory inward, outward, consumption and adjustment events',
-            style: AppTextStyles.subtitle,
+          ErpSectionHeaderCard(
+            icon: Icons.swap_horiz_rounded,
+            title: 'Stock Movement Ledger',
+            badgeText: 'AUDIT TRAIL',
+            subtitle: 'Immutable audit trail of all inventory inward, outward, consumption and adjustment events',
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobile = actionBox.maxWidth < 520;
+                return SizedBox(
+                  width: isMobile ? double.infinity : null,
+                  child: ErpButton(
+                    text: 'Refresh Ledger',
+                    icon: Icons.refresh,
+                    isOutlined: true,
+                    onPressed: () => db.loadStockMovements(forceRefresh: true),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 4 Key Metrics
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.swap_horiz_rounded,
+                      iconColor: AppColors.primary,
+                      title: 'Total Movements',
+                      value: '${allMovements.length}',
+                      subtext: 'Audited Ledger Entries',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      iconWidget: const StockInIcon(size: 16, color: Color(0xFF16A34A)),
+                      title: 'Stock In Events',
+                      value: '$inCount',
+                      subtext: 'Inward Receipts',
+                      subtextColor: const Color(0xFF16A34A),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      iconWidget: const StockOutIcon(size: 16, color: Color(0xFFEF4444)),
+                      title: 'Stock Out Events',
+                      value: '$outCount',
+                      subtext: 'Dispatch & Usage',
+                      subtextColor: const Color(0xFFEF4444),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.tune_rounded,
+                      iconColor: AppColors.primary,
+                      title: 'Stock Adjustments',
+                      value: '$adjCount',
+                      subtext: 'Audited Discrepancies',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Primary Filter Tabs (Responsive: vertical stack on mobile, horizontal wrap on desktop)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 650;
+              if (isMobile) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildCategoryTab(
+                      label: 'All Movements',
+                      count: allMovements.length,
+                      category: StockLedgerCategory.all,
+                      icon: Icons.all_inclusive,
+                      isFullWidth: true,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCategoryTab(
+                      label: 'Stock In',
+                      count: inCount,
+                      category: StockLedgerCategory.stockIn,
+                      iconWidget: StockInIcon(
+                        size: 16,
+                        color: _selectedCategory == StockLedgerCategory.stockIn
+                            ? const Color(0xFF16A34A)
+                            : AppColors.textSecondary,
+                      ),
+                      activeColor: AppColors.successText,
+                      badgeBg: AppColors.successLight,
+                      isFullWidth: true,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCategoryTab(
+                      label: 'Stock Out',
+                      count: outCount,
+                      category: StockLedgerCategory.stockOut,
+                      iconWidget: StockOutIcon(
+                        size: 16,
+                        color: _selectedCategory == StockLedgerCategory.stockOut
+                            ? const Color(0xFFEF4444)
+                            : AppColors.textSecondary,
+                      ),
+                      activeColor: AppColors.dangerText,
+                      badgeBg: AppColors.dangerLight,
+                      isFullWidth: true,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCategoryTab(
+                      label: 'Stock Adjustments',
+                      count: adjCount,
+                      category: StockLedgerCategory.stockAdjustments,
+                      icon: Icons.tune_rounded,
+                      activeColor: AppColors.primary,
+                      badgeBg: AppColors.primaryLight,
+                      isFullWidth: true,
+                    ),
+                  ],
+                );
+              }
+
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildCategoryTab(
+                    label: 'All Movements',
+                    count: allMovements.length,
+                    category: StockLedgerCategory.all,
+                    icon: Icons.all_inclusive,
+                  ),
+                  _buildCategoryTab(
+                    label: 'Stock In',
+                    count: inCount,
+                    category: StockLedgerCategory.stockIn,
+                    iconWidget: StockInIcon(
+                      size: 16,
+                      color: _selectedCategory == StockLedgerCategory.stockIn
+                          ? const Color(0xFF16A34A)
+                          : AppColors.textSecondary,
+                    ),
+                    activeColor: AppColors.successText,
+                    badgeBg: AppColors.successLight,
+                  ),
+                  _buildCategoryTab(
+                    label: 'Stock Out',
+                    count: outCount,
+                    category: StockLedgerCategory.stockOut,
+                    iconWidget: StockOutIcon(
+                      size: 16,
+                      color: _selectedCategory == StockLedgerCategory.stockOut
+                          ? const Color(0xFFEF4444)
+                          : AppColors.textSecondary,
+                    ),
+                    activeColor: AppColors.dangerText,
+                    badgeBg: AppColors.dangerLight,
+                  ),
+                  _buildCategoryTab(
+                    label: 'Stock Adjustments',
+                    count: adjCount,
+                    category: StockLedgerCategory.stockAdjustments,
+                    icon: Icons.tune_rounded,
+                    activeColor: AppColors.primary,
+                    badgeBg: AppColors.primaryLight,
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
-          // Primary Filter Tabs
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+          // Table enclosed in card container
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildCategoryTab(
-                  label: 'All Movements',
-                  count: allMovements.length,
-                  category: StockLedgerCategory.all,
-                  icon: Icons.all_inclusive,
+                // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 650;
+                    if (isMobile) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ErpSearchInput(
+                            hintText: 'Search by item code, name, ref no...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                          const SizedBox(height: 10),
+                          ErpDateFilterBox(
+                            startDate: _startDate,
+                            endDate: _endDate,
+                            width: double.infinity,
+                            onDateRangeSelected: (start, end) {
+                              setState(() {
+                                _startDate = start;
+                                _endDate = end;
+                                _currentPage = 0;
+                              });
+                            },
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 320,
+                          child: ErpSearchInput(
+                            hintText: 'Search by item code, name, ref no...',
+                            value: _searchQuery,
+                            onChanged: (val) => setState(() {
+                              _searchQuery = val;
+                              _currentPage = 0;
+                            }),
+                          ),
+                        ),
+                        ErpDateFilterBox(
+                          startDate: _startDate,
+                          endDate: _endDate,
+                          onDateRangeSelected: (start, end) {
+                            setState(() {
+                              _startDate = start;
+                              _endDate = end;
+                              _currentPage = 0;
+                            });
+                          },
+                        ),
+                      ],
+                    );
+                  },
                 ),
-                const SizedBox(width: 8),
-                _buildCategoryTab(
-                  label: 'Stock In',
-                  count: inCount,
-                  category: StockLedgerCategory.stockIn,
-                  icon: Icons.arrow_downward_rounded,
-                  activeColor: AppColors.successText,
-                  badgeBg: AppColors.successLight,
-                ),
-                const SizedBox(width: 8),
-                _buildCategoryTab(
-                  label: 'Stock Out',
-                  count: outCount,
-                  category: StockLedgerCategory.stockOut,
-                  icon: Icons.arrow_upward_rounded,
-                  activeColor: AppColors.dangerText,
-                  badgeBg: AppColors.dangerLight,
-                ),
-                const SizedBox(width: 8),
-                _buildCategoryTab(
-                  label: 'Stock Adjustments',
-                  count: adjCount,
-                  category: StockLedgerCategory.stockAdjustments,
-                  icon: Icons.tune_rounded,
-                  activeColor: AppColors.primary,
-                  badgeBg: AppColors.primaryLight,
+                const SizedBox(height: 16),
+
+                // Data Table
+                Builder(
+                  builder: (context) {
+                    final totalRecords = movements.length;
+                    final startIndex = _currentPage * _pageSize;
+                    final pageMovements = (startIndex < totalRecords)
+                        ? movements.sublist(startIndex, min(startIndex + _pageSize, totalRecords))
+                        : <StockMovement>[];
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ErpDataTable(
+                          columns: const [
+                            ErpColumn(title: 'Date & Time'),
+                            ErpColumn(title: 'Item Details'),
+                            ErpColumn(title: 'Item Type'),
+                            ErpColumn(title: 'Transaction Type'),
+                            ErpColumn(title: 'Reference No'),
+                            ErpColumn(title: 'Stock In', isNumeric: true),
+                            ErpColumn(title: 'Stock Out', isNumeric: true),
+                            ErpColumn(title: 'Balance After', isNumeric: true),
+                            ErpColumn(title: 'User'),
+                          ],
+                          rows: pageMovements.map((m) {
+                            return [
+                              Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(m.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
+                                  Text(m.itemName, style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                              Text(
+                                m.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product',
+                                style: AppTextStyles.bodySmall,
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  m.stockIn > 0
+                                      ? const StockInIcon(size: 16, color: Color(0xFF16A34A))
+                                      : const StockOutIcon(size: 16, color: Color(0xFFEF4444)),
+                                  const SizedBox(width: 6),
+                                  ErpStatusBadge(
+                                    label: m.transactionTypeLabel,
+                                    backgroundColor: m.stockIn > 0 ? AppColors.successLight : AppColors.dangerLight,
+                                    textColor: m.stockIn > 0 ? AppColors.successText : AppColors.dangerText,
+                                  ),
+                                ],
+                              ),
+                              Text(m.referenceNumber.isNotEmpty ? m.referenceNumber : (m.notes ?? '-'), style: AppTextStyles.bodySmall),
+                              Text(
+                                m.stockIn > 0 ? '+${Formatters.formatNumber(m.stockIn)} ${m.unit}' : '-',
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  color: m.stockIn > 0 ? const Color(0xFF16A34A) : AppColors.textSecondary,
+                                ),
+                              ),
+                              Text(
+                                m.stockOut > 0 ? '-${Formatters.formatNumber(m.stockOut)} ${m.unit}' : '-',
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  color: m.stockOut > 0 ? const Color(0xFFEF4444) : AppColors.textSecondary,
+                                ),
+                              ),
+                              Text(
+                                '${Formatters.formatNumber(m.currentBalance)} ${m.unit}',
+                                style: AppTextStyles.bodyBold,
+                              ),
+                              Text(m.performedBy, style: AppTextStyles.bodySmall),
+                            ];
+                          }).toList(),
+                        ),
+                        if (totalRecords > 0) ...[
+                          const SizedBox(height: 16),
+                          ErpPaginationBar(
+                            currentPage: _currentPage,
+                            pageSize: _pageSize,
+                            totalRecords: totalRecords,
+                            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                            onPageSizeChanged: (newSize) => setState(() {
+                              _pageSize = newSize;
+                              _currentPage = 0;
+                            }),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-
-          // Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search by item code, name, reference number, notes, or user...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Data Table
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Date & Time'),
-              ErpColumn(title: 'Item Details'),
-              ErpColumn(title: 'Item Type'),
-              ErpColumn(title: 'Transaction Type'),
-              ErpColumn(title: 'Reference No'),
-              ErpColumn(title: 'Stock In', isNumeric: true),
-              ErpColumn(title: 'Stock Out', isNumeric: true),
-              ErpColumn(title: 'Balance After', isNumeric: true),
-              ErpColumn(title: 'User'),
-            ],
-            rows: movements.map((m) {
-              return [
-                Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(m.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                    Text(m.itemName, style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-                Text(
-                  m.itemType == ItemType.rawMaterial ? 'Raw Material' : 'Finished Product',
-                  style: AppTextStyles.bodySmall,
-                ),
-                ErpStatusBadge(
-                  label: m.transactionTypeLabel,
-                  backgroundColor: m.stockIn > 0 ? AppColors.successLight : AppColors.dangerLight,
-                  textColor: m.stockIn > 0 ? AppColors.successText : AppColors.dangerText,
-                ),
-                Text(m.referenceNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                Text(
-                  m.stockIn > 0 ? '+${Formatters.formatNumber(m.stockIn)} ${m.unit}' : '-',
-                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText),
-                ),
-                Text(
-                  m.stockOut > 0 ? '-${Formatters.formatNumber(m.stockOut)} ${m.unit}' : '-',
-                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
-                ),
-                Text(
-                  '${Formatters.formatNumber(m.currentBalance)} ${m.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.textPrimary),
-                ),
-                Text(m.performedBy, style: AppTextStyles.bodySmall),
-              ];
-            }).toList(),
-          ),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -198,21 +473,27 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
     required String label,
     required int count,
     required StockLedgerCategory category,
-    required IconData icon,
+    IconData? icon,
+    Widget? iconWidget,
     Color? activeColor,
     Color? badgeBg,
+    bool isFullWidth = false,
   }) {
     final isSelected = _selectedCategory == category;
     final color = activeColor ?? AppColors.primary;
     final bg = badgeBg ?? AppColors.primaryLight;
 
     return InkWell(
-      onTap: () => setState(() => _selectedCategory = category),
+      onTap: () => setState(() {
+        _selectedCategory = category;
+        _currentPage = 0;
+      }),
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        width: isFullWidth ? double.infinity : null,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.08) : Colors.transparent,
+          color: isSelected ? color.withValues(alpha: 0.08) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? color : AppColors.border,
@@ -220,18 +501,27 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
           ),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: isFullWidth ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(icon, size: 16, color: isSelected ? color : AppColors.textSecondary),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: isSelected ? color : AppColors.textPrimary,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (iconWidget != null)
+                  iconWidget
+                else if (icon != null)
+                  Icon(icon, size: 16, color: isSelected ? color : AppColors.textSecondary),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: isSelected ? color : AppColors.textPrimary,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
+            if (!isFullWidth) const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(

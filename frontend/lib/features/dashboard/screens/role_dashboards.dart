@@ -5,25 +5,37 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/models/production_model.dart';
 import '../../../core/models/purchase_model.dart';
-import '../../../core/models/stock_movement_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 // =====================================================================
 // 1. INVENTORY ROLE DASHBOARD
 // =====================================================================
-class InventoryRoleDashboard extends ConsumerWidget {
+class InventoryRoleDashboard extends ConsumerStatefulWidget {
   const InventoryRoleDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InventoryRoleDashboard> createState() => _InventoryRoleDashboardState();
+}
+
+class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard> {
+  DateTime? _movementsStartDate;
+  DateTime? _movementsEndDate;
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final lowStockRM = db.lowStockRawMaterials;
     final lowStockFP = db.lowStockFinishedProducts;
+    final activeRawMaterials = db.rawMaterials.where((r) => !r.isDeleted).toList();
+    final activeFinishedProducts = db.finishedProducts.where((p) => !p.isDeleted).toList();
     final recentMovements = db.stockMovements.take(6).toList();
 
     return SingleChildScrollView(
@@ -31,33 +43,67 @@ class InventoryRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.inventory_2_rounded,
             title: 'Inventory & Warehouse Dashboard',
-            subtitle: 'Real-time stock valuation, inventory balances, low stock alerts, and warehouse movements',
             badgeText: 'INVENTORY MANAGER',
-            badgeColor: Colors.blue,
-          ),
-          const SizedBox(height: 20),
-
-          // Quick Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('Quick Inventory Actions:', style: AppTextStyles.bodyBold),
-                Wrap(
-                  spacing: 10,
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobileHeader = actionBox.maxWidth < 520;
+                if (isMobileHeader) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'New Stock Adjustment',
+                          icon: Icons.tune_rounded,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Raw Material Stock',
+                          icon: Icons.category_outlined,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Finished Product Stock',
+                          icon: Icons.inventory_2_outlined,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProductStock,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Stock Movement Ledger',
+                          icon: Icons.swap_horiz_rounded,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Wrap(
+                  spacing: 8,
                   runSpacing: 8,
                   children: [
+                    ErpButton(
+                      text: 'New Stock Adjustment',
+                      icon: Icons.tune_rounded,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
+                    ),
                     ErpButton(
                       text: 'Raw Material Stock',
                       icon: Icons.category_outlined,
@@ -76,14 +122,9 @@ class InventoryRoleDashboard extends ConsumerWidget {
                       isOutlined: true,
                       onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
                     ),
-                    ErpButton(
-                      text: 'New Stock Adjustment',
-                      icon: Icons.tune_rounded,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
-                    ),
                   ],
-                ),
-              ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 24),
@@ -93,14 +134,14 @@ class InventoryRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Raw Material Valuation',
               value: Formatters.formatCurrency(db.rawMaterialStockValue),
-              subtitle: '${db.rawMaterials.length} Unique items',
+              subtitle: '${activeRawMaterials.length} Unique items',
               icon: Icons.view_in_ar_rounded,
               color: Colors.blue,
             ),
             _buildMetricCard(
               title: 'Finished Goods Valuation',
               value: Formatters.formatCurrency(db.finishedProductStockValue),
-              subtitle: '${db.finishedProducts.length} Product SKUs',
+              subtitle: '${activeFinishedProducts.length} Product SKUs',
               icon: Icons.inventory_outlined,
               color: Colors.teal,
             ),
@@ -257,37 +298,146 @@ class InventoryRoleDashboard extends ConsumerWidget {
           ),
           const SizedBox(height: 28),
 
-          // Recent Stock Movements
-          Text('Recent Stock Movements (Ledger)', style: AppTextStyles.h2),
-          const SizedBox(height: 12),
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Date & Time'),
-              ErpColumn(title: 'Item / SKU'),
-              ErpColumn(title: 'Movement Type'),
-              ErpColumn(title: 'Quantity Changed', isNumeric: true),
-              ErpColumn(title: 'Balance After', isNumeric: true),
-              ErpColumn(title: 'Reference / Source'),
-            ],
-            rows: recentMovements.map((m) {
-              final isPositive = m.stockIn > 0;
+          // Recent Stock Movements (Transaction History: Date filter only)
+          Builder(
+            builder: (context) {
+              final filteredMovements = db.stockMovements.where((m) {
+                if (_movementsStartDate != null &&
+                    m.date.isBefore(DateTime(_movementsStartDate!.year, _movementsStartDate!.month, _movementsStartDate!.day))) {
+                  return false;
+                }
+                if (_movementsEndDate != null &&
+                    m.date.isAfter(DateTime(_movementsEndDate!.year, _movementsEndDate!.month, _movementsEndDate!.day, 23, 59, 59))) {
+                  return false;
+                }
+                return true;
+              }).toList();
 
-              return [
-                Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
-                Text(m.itemName, style: AppTextStyles.bodyBold),
-                ErpStatusBadge(
-                  label: m.transactionTypeLabel,
-                  backgroundColor: isPositive ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
-                  textColor: isPositive ? Colors.green.shade800 : Colors.orange.shade900,
+              return Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: AppRadius.lgBorderRadius,
+                  border: Border.all(color: AppColors.border, width: 1),
                 ),
-                Text(
-                  '${isPositive ? "+" : "-"}${isPositive ? m.stockIn : m.stockOut} ${m.unit}',
-                  style: AppTextStyles.bodyBold.copyWith(color: isPositive ? Colors.green : Colors.red),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isNarrow = constraints.maxWidth < 650;
+                          final headerText = Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Recent Stock Movements (Ledger)', style: AppTextStyles.h3),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Real-time immutable stock ledger transactions',
+                                style: AppTextStyles.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          );
+                          final dateFilter = ErpDateFilterBox(
+                            startDate: _movementsStartDate,
+                            endDate: _movementsEndDate,
+                            onDateRangeSelected: (start, end) {
+                              setState(() {
+                                _movementsStartDate = start;
+                                _movementsEndDate = end;
+                              });
+                            },
+                          );
+                          final button = OutlinedButton(
+                            onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppColors.border, width: 1),
+                              foregroundColor: AppColors.textPrimary,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                            child: Text('View Full Ledger', style: AppTextStyles.button.copyWith(fontSize: 12)),
+                          );
+
+                          if (isNarrow) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                headerText,
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    dateFilter,
+                                    button,
+                                  ],
+                                ),
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              headerText,
+                              Row(
+                                children: [
+                                  dateFilter,
+                                  const SizedBox(width: 8),
+                                  button,
+                                ],
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                    const Divider(height: 1, color: AppColors.border),
+                    if (filteredMovements.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Center(
+                          child: Text('No movements recorded for the selected date range.', style: AppTextStyles.bodyMedium),
+                        ),
+                      )
+                    else
+                      ErpDataTable(
+                        columns: const [
+                          ErpColumn(title: 'Date & Time'),
+                          ErpColumn(title: 'Item / SKU'),
+                          ErpColumn(title: 'Movement Type'),
+                          ErpColumn(title: 'Quantity Changed', isNumeric: true),
+                          ErpColumn(title: 'Balance After', isNumeric: true),
+                          ErpColumn(title: 'Reference / Source'),
+                        ],
+                        rows: filteredMovements.take(10).map((m) {
+                          final isPositive = m.stockIn > 0;
+
+                          return [
+                            Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
+                            Text(m.itemName, style: AppTextStyles.bodyBold),
+                            ErpStatusBadge(
+                              label: m.transactionTypeLabel,
+                              backgroundColor: isPositive ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                              textColor: isPositive ? Colors.green.shade800 : Colors.orange.shade900,
+                            ),
+                            Text(
+                              '${isPositive ? "+" : "-"}${isPositive ? m.stockIn : m.stockOut} ${m.unit}',
+                              style: AppTextStyles.bodyBold.copyWith(color: isPositive ? Colors.green : Colors.red),
+                            ),
+                            Text('${m.currentBalance} ${m.unit}', style: AppTextStyles.bodySmall),
+                            Text(m.referenceNumber.isNotEmpty ? m.referenceNumber : (m.notes ?? '-'), style: AppTextStyles.bodySmall),
+                          ];
+                        }).toList(),
+                      ),
+                  ],
                 ),
-                Text('${m.currentBalance} ${m.unit}', style: AppTextStyles.bodySmall),
-                Text(m.referenceNumber.isNotEmpty ? m.referenceNumber : (m.notes ?? '-'), style: AppTextStyles.bodySmall),
-              ];
-            }).toList(),
+              );
+            },
           ),
         ],
       ),
@@ -312,60 +462,35 @@ class PurchaseRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.shopping_bag_outlined,
             title: 'Procurement & Purchase Hub',
-            subtitle: 'Purchase orders, vendor relations, raw material supplies, and delivery tracking',
             badgeText: 'PURCHASE MANAGER',
-            badgeColor: Colors.purple,
-          ),
-          const SizedBox(height: 20),
-
-          // Quick Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('Purchase Actions:', style: AppTextStyles.bodyBold),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Create Purchase Order',
-                      icon: Icons.add_shopping_cart,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
-                    ),
-                    ErpButton(
-                      text: 'Purchase List',
-                      icon: Icons.list_alt_rounded,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
-                    ),
-                    ErpButton(
-                      text: 'Vendors Directory',
-                      icon: Icons.storefront_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendors,
-                    ),
-                    ErpButton(
-                      text: 'Vendor Settlements',
-                      icon: Icons.payments_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'Create Direct Purchase',
+                icon: Icons.add_shopping_cart,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+              ),
+              ErpButton(
+                text: 'Purchase Invoices',
+                icon: Icons.list_alt_rounded,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
+              ),
+              ErpButton(
+                text: 'Vendors Directory',
+                icon: Icons.storefront_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendors,
+              ),
+              ErpButton(
+                text: 'Vendor Settlements',
+                icon: Icons.payments_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
@@ -374,7 +499,7 @@ class PurchaseRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Total Purchases Placed',
               value: Formatters.formatCurrency(db.totalPurchaseAmount),
-              subtitle: '${db.purchases.length} Purchase Orders',
+              subtitle: '${db.purchases.length} Purchase Invoices',
               icon: Icons.shopping_bag_outlined,
               color: Colors.purple,
             ),
@@ -395,7 +520,7 @@ class PurchaseRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Vendor Payables Due',
               value: Formatters.formatCurrency(db.pendingVendorPayments),
-              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} Vendors pending payment',
+              subtitle: '${db.vendors.where((v) => !v.isDeleted && v.outstandingBalance > 0).length} Vendors pending payment',
               icon: Icons.account_balance_outlined,
               color: Colors.red,
             ),
@@ -403,12 +528,12 @@ class PurchaseRoleDashboard extends ConsumerWidget {
           const SizedBox(height: 28),
 
           // Recent Purchase Orders Table
-          Text('Recent Purchase Orders', style: AppTextStyles.h2),
+          Text('Recent Purchase Invoices', style: AppTextStyles.h2),
           const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
-              ErpColumn(title: 'PO Number'),
-              ErpColumn(title: 'PO Date'),
+              ErpColumn(title: 'Invoice Number'),
+              ErpColumn(title: 'Invoice Date'),
               ErpColumn(title: 'Vendor Name'),
               ErpColumn(title: 'Project Tag'),
               ErpColumn(title: 'Items Count', isNumeric: true),
@@ -426,7 +551,7 @@ class PurchaseRoleDashboard extends ConsumerWidget {
                 Text(p.projectName ?? 'Warehouse Stock', style: AppTextStyles.bodySmall),
                 Text('${p.items.length}', style: AppTextStyles.bodySmall),
                 Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
-                ErpStatusBadge.info(p.statusLabel),
+                _buildPurchaseStatusBadge(p.status, p.statusLabel),
               ];
             }).toList(),
           ),
@@ -434,81 +559,88 @@ class PurchaseRoleDashboard extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _buildPurchaseStatusBadge(PurchaseStatus status, String label) {
+    switch (status) {
+      case PurchaseStatus.paid:
+        return ErpStatusBadge.success(label);
+      case PurchaseStatus.partialPaid:
+        return ErpStatusBadge.warning(label);
+      case PurchaseStatus.saved:
+        return ErpStatusBadge.info(label);
+      case PurchaseStatus.draft:
+        return ErpStatusBadge.neutral(label);
+      case PurchaseStatus.cancelled:
+        return ErpStatusBadge.danger(label);
+    }
+  }
 }
 
 // =====================================================================
 // 3. PRODUCTION ROLE DASHBOARD
 // =====================================================================
-class ProductionRoleDashboard extends ConsumerWidget {
+class ProductionRoleDashboard extends ConsumerStatefulWidget {
   const ProductionRoleDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductionRoleDashboard> createState() => _ProductionRoleDashboardState();
+}
+
+class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final db = ref.read(databaseServiceProvider);
+      db.loadProductionOrders(forceRefresh: true);
+      db.loadRawMaterials(forceRefresh: true);
+      db.loadFinishedProducts(forceRefresh: true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
-    final pendingOrders = db.productionOrders.where((po) => po.status.name == 'planned' || po.status.name == 'inProgress').toList();
-    final completedOrders = db.productionOrders.where((po) => po.status.name == 'completed').toList();
+    final activeOrders = db.productionOrders.where((po) => !po.isDeleted).toList();
+    final pendingOrders = activeOrders.where((po) => po.status.name == 'planned' || po.status.name == 'inProgress').toList();
+    final completedOrders = activeOrders.where((po) => po.status.name == 'completed').toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.precision_manufacturing_rounded,
             title: 'Factory & Production Dashboard',
-            subtitle: 'Manufacturing work orders, shopfloor assembly batches, BOM consumption, and output yields',
             badgeText: 'PRODUCTION MANAGER',
-            badgeColor: Colors.indigo,
-          ),
-          const SizedBox(height: 20),
-
-          // Quick Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('Production Actions:', style: AppTextStyles.bodyBold),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Create Work Order',
-                      icon: Icons.add_circle_outline,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
-                    ),
-                    ErpButton(
-                      text: 'Production Orders List',
-                      icon: Icons.precision_manufacturing_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
-                    ),
-                    ErpButton(
-                      text: 'Raw Material Buffer',
-                      icon: Icons.inventory_2_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'Create Production Order',
+                icon: Icons.add_circle_outline,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
+              ),
+              ErpButton(
+                text: 'Production Orders',
+                icon: Icons.precision_manufacturing_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
+              ),
+              ErpButton(
+                text: 'Raw Material Buffer',
+                icon: Icons.inventory_2_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
           // 4 Key Metrics
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
-              title: 'Total Work Orders',
-              value: '${db.productionOrders.length}',
+              title: 'Total Production Orders',
+              value: '${activeOrders.length}',
               subtitle: 'All-time production jobs',
               icon: Icons.precision_manufacturing_outlined,
               color: Colors.indigo,
@@ -542,7 +674,7 @@ class ProductionRoleDashboard extends ConsumerWidget {
           const SizedBox(height: 12),
           ErpDataTable(
             columns: const [
-              ErpColumn(title: 'Work Order No'),
+              ErpColumn(title: 'Order No'),
               ErpColumn(title: 'Start Date'),
               ErpColumn(title: 'Product to Produce'),
               ErpColumn(title: 'Target Qty', isNumeric: true),
@@ -550,7 +682,7 @@ class ProductionRoleDashboard extends ConsumerWidget {
               ErpColumn(title: 'Estimated Cost (₹)', isNumeric: true),
               ErpColumn(title: 'Status'),
             ],
-            rows: db.productionOrders.take(7).map((po) {
+            rows: activeOrders.take(7).map((po) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(po.id, 'production', ErpNavSection.productionOrders),
@@ -561,7 +693,7 @@ class ProductionRoleDashboard extends ConsumerWidget {
                 Text('${po.plannedQuantity} ${po.unit}', style: AppTextStyles.bodySmall),
                 Text(po.projectName ?? 'General Stock', style: AppTextStyles.bodySmall),
                 Text(Formatters.formatCurrency(po.totalProductionCost), style: AppTextStyles.bodyBold),
-                ErpStatusBadge.info(po.statusLabel),
+                _buildProductionStatusBadge(po.status, po.statusLabel),
               ];
             }).toList(),
           ),
@@ -569,78 +701,73 @@ class ProductionRoleDashboard extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _buildProductionStatusBadge(ProductionStatus status, String label) {
+    switch (status) {
+      case ProductionStatus.planned:
+        return ErpStatusBadge.warning('WAITING APPROVAL');
+      case ProductionStatus.inProgress:
+        return ErpStatusBadge.info(label);
+      case ProductionStatus.completed:
+        return ErpStatusBadge.success(label);
+      case ProductionStatus.cancelled:
+        return ErpStatusBadge.danger(label);
+    }
+  }
 }
 
 // =====================================================================
 // 4. ACCOUNTS / PAYMENT ROLE DASHBOARD
 // =====================================================================
-class AccountsPaymentRoleDashboard extends ConsumerWidget {
+class AccountsPaymentRoleDashboard extends ConsumerStatefulWidget {
   const AccountsPaymentRoleDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AccountsPaymentRoleDashboard> createState() => _AccountsPaymentRoleDashboardState();
+}
+
+class _AccountsPaymentRoleDashboardState extends ConsumerState<AccountsPaymentRoleDashboard> {
+  DateTime? _paymentStartDate;
+  DateTime? _paymentEndDate;
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
-    final recentPayments = db.payments.take(8).toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.payments_rounded,
             title: 'Finance, Accounts & Payment Control',
-            subtitle: 'Customer receivables, dealer ledgers, vendor disbursements, expense vouchers, and partner commissions',
             badgeText: 'ACCOUNTS & FINANCE',
-            badgeColor: Colors.teal,
-          ),
-          const SizedBox(height: 20),
-
-          // Quick Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('Finance Actions:', style: AppTextStyles.bodyBold),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Customer Collections',
-                      icon: Icons.receipt_long_outlined,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments,
-                    ),
-                    ErpButton(
-                      text: 'Vendor Disbursements',
-                      icon: Icons.payments_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
-                    ),
-                    ErpButton(
-                      text: 'Commission Payouts',
-                      icon: Icons.monetization_on_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.commissionPayments,
-                    ),
-                    ErpButton(
-                      text: 'Expense Voucher Log',
-                      icon: Icons.receipt_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.expenseList,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'Customer Payments',
+                icon: Icons.receipt_long_outlined,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customerPayments,
+              ),
+              ErpButton(
+                text: 'Vendor Payments',
+                icon: Icons.payments_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
+              ),
+              ErpButton(
+                text: 'Commission Payouts',
+                icon: Icons.monetization_on_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.commissionPayments,
+              ),
+              ErpButton(
+                text: 'Expense Voucher Log',
+                icon: Icons.receipt_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.expenseList,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
@@ -649,14 +776,14 @@ class AccountsPaymentRoleDashboard extends ConsumerWidget {
             _buildMetricCard(
               title: 'Customer Receivables',
               value: Formatters.formatCurrency(db.pendingCustomerPayments),
-              subtitle: '${db.customers.where((c) => c.outstandingAmount > 0).length} Clients pending dues',
+              subtitle: '${db.customers.where((c) => !c.isDeleted && c.outstandingAmount > 0).length} Clients pending dues',
               icon: Icons.account_balance_wallet_outlined,
               color: Colors.teal,
             ),
             _buildMetricCard(
               title: 'Vendor Payables Due',
               value: Formatters.formatCurrency(db.pendingVendorPayments),
-              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} Suppliers awaiting payment',
+              subtitle: '${db.vendors.where((v) => !v.isDeleted && v.outstandingBalance > 0).length} Suppliers awaiting payment',
               icon: Icons.payment_outlined,
               color: Colors.red,
             ),
@@ -677,33 +804,84 @@ class AccountsPaymentRoleDashboard extends ConsumerWidget {
           ]),
           const SizedBox(height: 28),
 
-          // Recent Payment Transactions Table
-          Text('Recent Payment & Disbursement Transactions', style: AppTextStyles.h2),
-          const SizedBox(height: 12),
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Voucher No'),
-              ErpColumn(title: 'Date'),
-              ErpColumn(title: 'Payment Type'),
-              ErpColumn(title: 'Party Name'),
-              ErpColumn(title: 'Reference / UTR'),
-              ErpColumn(title: 'Amount (₹)', isNumeric: true),
-              ErpColumn(title: 'Mode'),
-            ],
-            rows: recentPayments.map((p) {
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', ErpNavSection.customerPayments),
-                  child: Text(p.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                ),
-                Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
-                Text(p.typeLabel, style: AppTextStyles.bodyBold),
-                Text(p.partyName, style: AppTextStyles.bodyMedium),
-                Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
-                Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: Colors.green.shade800)),
-                ErpStatusBadge.neutral(p.paymentMode.name.toUpperCase()),
-              ];
-            }).toList(),
+          // Recent Payment Transactions Table (Transaction History: Date filter only)
+          Builder(
+            builder: (context) {
+              final filteredPayments = db.payments.where((p) {
+                if (_paymentStartDate != null &&
+                    p.paymentDate.isBefore(DateTime(_paymentStartDate!.year, _paymentStartDate!.month, _paymentStartDate!.day))) {
+                  return false;
+                }
+                if (_paymentEndDate != null &&
+                    p.paymentDate.isAfter(DateTime(_paymentEndDate!.year, _paymentEndDate!.month, _paymentEndDate!.day, 23, 59, 59))) {
+                  return false;
+                }
+                return true;
+              }).toList();
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text('Recent Payment & Disbursement Transactions', style: AppTextStyles.h2),
+                      ErpDateFilterBox(
+                        startDate: _paymentStartDate,
+                        endDate: _paymentEndDate,
+                        onDateRangeSelected: (start, end) {
+                          setState(() {
+                            _paymentStartDate = start;
+                            _paymentEndDate = end;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (filteredPayments.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(32),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Text('No payment transactions recorded for the selected date range.', style: AppTextStyles.bodyMedium),
+                    )
+                  else
+                    ErpDataTable(
+                      columns: const [
+                        ErpColumn(title: 'Voucher No'),
+                        ErpColumn(title: 'Date'),
+                        ErpColumn(title: 'Payment Type'),
+                        ErpColumn(title: 'Party Name'),
+                        ErpColumn(title: 'Reference / UTR'),
+                        ErpColumn(title: 'Amount (₹)', isNumeric: true),
+                        ErpColumn(title: 'Mode'),
+                      ],
+                      rows: filteredPayments.take(10).map((p) {
+                        return [
+                          InkWell(
+                            onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', ErpNavSection.customerPayments),
+                            child: Text(p.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                          ),
+                          Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
+                          Text(p.typeLabel, style: AppTextStyles.bodyBold),
+                          Text(p.partyName, style: AppTextStyles.bodyMedium),
+                          Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
+                          Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: Colors.green.shade800)),
+                          ErpStatusBadge.neutral(p.paymentMode.name.toUpperCase()),
+                        ];
+                      }).toList(),
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -720,68 +898,45 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
-    final activeProjects = db.projects.where((p) => p.status.name == 'inProgress' || p.status.name == 'planning').toList();
-    final completedProjects = db.projects.where((p) => p.status.name == 'completed').toList();
+    final nonDeletedProjects = db.projects.where((p) => !p.isDeleted).toList();
+    final activeProjects = nonDeletedProjects.where((p) => p.status.name == 'inProgress' || p.status.name == 'planning' || p.status.name == 'active').toList();
+    final completedProjects = nonDeletedProjects.where((p) => p.status.name == 'completed').toList();
+    final activeArchitects = db.architects.where((a) => !a.isDeleted).toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.apartment_rounded,
             title: 'Architectural Projects Portfolio',
-            subtitle: 'Commercial project milestones, site deliverables, client scopes, and material budget consumption',
             badgeText: 'PROJECT MANAGER',
-            badgeColor: Colors.deepPurple,
-          ),
-          const SizedBox(height: 20),
-
-          // Quick Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.mdBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('Project Actions:', style: AppTextStyles.bodyBold),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'Projects Directory',
-                      icon: Icons.apartment_rounded,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectList,
-                    ),
-                    ErpButton(
-                      text: 'Architect Partners',
-                      icon: Icons.architecture_rounded,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
-                    ),
-                    ErpButton(
-                      text: 'Client Masters',
-                      icon: Icons.people_outline,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customers,
-                    ),
-                    ErpButton(
-                      text: 'Project Reports Hub',
-                      icon: Icons.analytics_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectReports,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'Projects Directory',
+                icon: Icons.apartment_rounded,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectList,
+              ),
+              ErpButton(
+                text: 'Architect Partners',
+                icon: Icons.architecture_rounded,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.architects,
+              ),
+              ErpButton(
+                text: 'Client Masters',
+                icon: Icons.people_outline,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.customers,
+              ),
+              ErpButton(
+                text: 'Project Reports Hub',
+                icon: Icons.analytics_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.projectReports,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
@@ -789,8 +944,8 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
               title: 'Total Projects',
-              value: '${db.projects.length}',
-              subtitle: Formatters.formatCurrency(db.projects.fold(0.0, (sum, p) => sum + p.totalSalesAmount)),
+              value: '${nonDeletedProjects.length}',
+              subtitle: Formatters.formatCurrency(nonDeletedProjects.fold(0.0, (sum, p) => sum + p.totalSalesAmount)),
               icon: Icons.apartment_rounded,
               color: Colors.deepPurple,
             ),
@@ -810,7 +965,7 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
             ),
             _buildMetricCard(
               title: 'Architect Partners',
-              value: '${db.architects.length}',
+              value: '${activeArchitects.length}',
               subtitle: 'Registered Specifiers',
               icon: Icons.architecture_rounded,
               color: Colors.purple,
@@ -830,7 +985,7 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
               ErpColumn(title: 'Billed (₹)', isNumeric: true),
               ErpColumn(title: 'Status'),
             ],
-            rows: db.projects.take(7).map((prj) {
+            rows: nonDeletedProjects.take(7).map((prj) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(prj.id, 'project', ErpNavSection.projectList),
@@ -853,24 +1008,55 @@ class ProjectManagerRoleDashboard extends ConsumerWidget {
 // =====================================================================
 // 5.1. MASTERS ROLE DASHBOARD
 // =====================================================================
-class MastersRoleDashboard extends ConsumerWidget {
+class MastersRoleDashboard extends ConsumerStatefulWidget {
   const MastersRoleDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MastersRoleDashboard> createState() => _MastersRoleDashboardState();
+}
+
+class _MastersRoleDashboardState extends ConsumerState<MastersRoleDashboard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final db = ref.read(databaseServiceProvider);
+      db.loadProjects();
+      db.loadVendors();
+      db.loadArchitects();
+      db.loadCustomers();
+      db.loadDealers();
+      db.loadPurchases();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+
+    final activeCustomers = db.customers.where((c) => !c.isDeleted).toList();
+    final activeVendors = db.vendors.where((v) => !v.isDeleted).toList();
+    final activeDealers = db.dealers.where((d) => !d.isDeleted).toList();
+    final activeArchitects = db.architects.where((a) => !a.isDeleted).toList();
+    final activeProjects = db.projects.where((p) => !p.isDeleted).toList();
+    final activeRawMaterials = db.rawMaterials.where((r) => !r.isDeleted).toList();
+    final activeFinishedProducts = db.finishedProducts.where((p) => !p.isDeleted).toList();
+
+    // Dynamically calculate projects linked to architects
+    final linkedProjectsCount = activeProjects
+        .where((p) => p.architectId != null && p.architectId!.isNotEmpty)
+        .length;
+    final displayProjectsCount = linkedProjectsCount > 0 ? linkedProjectsCount : activeProjects.length;
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.dataset_rounded,
             title: 'Master Data & Entity Registry',
-            subtitle: 'Centralized repository of commercial counterparties, architectural specifiers, SKUs, and units',
             badgeText: 'MASTER DATA MANAGER',
-            badgeColor: Colors.deepOrange,
           ),
           const SizedBox(height: 20),
 
@@ -878,29 +1064,29 @@ class MastersRoleDashboard extends ConsumerWidget {
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
               title: 'Customers Master',
-              value: '${db.customers.length} Clients',
-              subtitle: '${db.customers.where((c) => c.outstandingAmount > 0).length} with active balances',
+              value: '${activeCustomers.length} Clients',
+              subtitle: '${activeCustomers.where((c) => c.outstandingAmount > 0).length} with active balances',
               icon: Icons.people_outline,
               color: Colors.blue,
             ),
             _buildMetricCard(
               title: 'Vendors Master',
-              value: '${db.vendors.length} Suppliers',
-              subtitle: '${db.vendors.where((v) => v.outstandingBalance > 0).length} with active payables',
+              value: '${activeVendors.length} Suppliers',
+              subtitle: '${activeVendors.where((v) => v.outstandingBalance > 0).length} with active payables',
               icon: Icons.storefront_outlined,
               color: Colors.purple,
             ),
             _buildMetricCard(
               title: 'Dealers Master',
-              value: '${db.dealers.length} Retailers',
+              value: '${activeDealers.length} Retailers',
               subtitle: 'Active distribution network',
               icon: Icons.store_mall_directory_outlined,
               color: Colors.teal,
             ),
             _buildMetricCard(
               title: 'Architect Partners',
-              value: '${db.architects.length} Specifiers',
-              subtitle: '${db.projects.length} linked projects',
+              value: '${activeArchitects.length} Specifiers',
+              subtitle: '$displayProjectsCount linked projects',
               icon: Icons.architecture_rounded,
               color: Colors.deepPurple,
             ),
@@ -909,15 +1095,15 @@ class MastersRoleDashboard extends ConsumerWidget {
           _buildResponsiveMetricGrid(context, [
             _buildMetricCard(
               title: 'Raw Material Items',
-              value: '${db.rawMaterials.length} Items',
-              subtitle: '${db.lowStockRawMaterials.length} below buffer level',
+              value: '${activeRawMaterials.length} Items',
+              subtitle: '${activeRawMaterials.where((rm) => rm.isLowStock).length} below buffer level',
               icon: Icons.view_in_ar_outlined,
               color: Colors.indigo,
             ),
             _buildMetricCard(
               title: 'Finished Product SKUs',
-              value: '${db.finishedProducts.length} Products',
-              subtitle: '${db.lowStockFinishedProducts.length} below buffer level',
+              value: '${activeFinishedProducts.length} Products',
+              subtitle: '${activeFinishedProducts.where((fp) => fp.isLowStock).length} below buffer level',
               icon: Icons.inventory_2_outlined,
               color: Colors.green,
             ),
@@ -1000,8 +1186,8 @@ class MastersRoleDashboard extends ConsumerWidget {
                     onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProducts,
                   ),
                   _buildMasterShortcutCard(
-                    title: 'Categories & Units',
-                    subtitle: 'Tax rates & measurement symbols',
+                    title: 'Category Master',
+                    subtitle: 'Item, expense & payment categories',
                     icon: Icons.category_outlined,
                     color: Colors.amber.shade800,
                     onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.categoriesUnits,
@@ -1017,6 +1203,8 @@ class MastersRoleDashboard extends ConsumerWidget {
               );
             },
           ),
+          /*
+          // NOTE: Temporarily commented out pending final decision on removal
           const SizedBox(height: 28),
 
           // Architect & Partner Overview Table
@@ -1031,7 +1219,7 @@ class MastersRoleDashboard extends ConsumerWidget {
               ErpColumn(title: 'Approved Commission', isNumeric: true),
               ErpColumn(title: 'Commission Earned', isNumeric: true),
             ],
-            rows: db.architects.take(6).map((arc) {
+            rows: (activeArchitects.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt))).take(6).map((arc) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(arc.id, 'architect', ErpNavSection.architects),
@@ -1045,6 +1233,7 @@ class MastersRoleDashboard extends ConsumerWidget {
               ];
             }).toList(),
           ),
+          */
         ],
       ),
     );
@@ -1057,39 +1246,107 @@ class MastersRoleDashboard extends ConsumerWidget {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return _ModernMasterShortcutCard(
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      color: color,
       onTap: onTap,
-      borderRadius: AppRadius.mdBorderRadius,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: AppRadius.mdBorderRadius,
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: color, size: 20),
+    );
+  }
+}
+
+class _ModernMasterShortcutCard extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ModernMasterShortcutCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_ModernMasterShortcutCard> createState() => _ModernMasterShortcutCardState();
+}
+
+class _ModernMasterShortcutCardState extends State<_ModernMasterShortcutCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        onHover: (hovering) {
+          if (mounted && _isHovered != hovering) {
+            setState(() => _isHovered = hovering);
+          }
+        },
+        borderRadius: AppRadius.mdBorderRadius,
+        hoverColor: Colors.transparent,
+        splashColor: AppColors.primary.withValues(alpha: 0.08),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: AppRadius.mdBorderRadius,
+            border: Border.all(
+              color: _isHovered ? AppColors.primary : AppColors.border,
+              width: 1.0,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(title, style: AppTextStyles.bodyBold.copyWith(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(subtitle, style: AppTextStyles.caption.copyWith(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
+            boxShadow: [
+              if (_isHovered)
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.16),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 2),
+                )
+              else
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: widget.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(widget.icon, color: widget.color, size: 20),
               ),
-            ),
-            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textMuted),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(widget.title, style: AppTextStyles.bodyBold.copyWith(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(widget.subtitle, style: AppTextStyles.caption.copyWith(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: _isHovered ? AppColors.primary : AppColors.textMuted,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1104,30 +1361,85 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseServiceProvider);
+
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
-            title: 'Analytics & Reporting Hub (Read-Only)',
-            subtitle: 'Comprehensive audit trails, financial ledgers, stock reconciliations, and cross-department analytics',
+          ErpSectionHeaderCard(
+            icon: Icons.analytics_outlined,
+            title: 'Executive Financial Reports & Audit Hub',
             badgeText: 'AUDITOR & REPORT ANALYST',
-            badgeColor: Colors.amber.shade900,
+            actions: [
+              ErpButton(
+                text: 'All ERP Statements',
+                icon: Icons.bar_chart_rounded,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.reportsDashboard,
+              ),
+              ErpButton(
+                text: 'Inventory Reports',
+                icon: Icons.inventory_2_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.inventoryReports,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
+
+          // 4 Executive Audit KPI Metrics
+          _buildResponsiveMetricGrid(context, [
+            _buildMetricCard(
+              title: 'Total Stock Valuation',
+              value: Formatters.formatCurrency(db.totalStockValue),
+              subtitle: 'Raw Materials & Finished Goods',
+              icon: Icons.inventory_2_outlined,
+              color: Colors.blue,
+            ),
+            _buildMetricCard(
+              title: 'Gross Invoiced Revenue',
+              value: Formatters.formatCurrency(db.totalInvoicedRevenue),
+              subtitle: '${db.sales.length} Invoices Generated',
+              icon: Icons.point_of_sale_outlined,
+              color: Colors.green,
+            ),
+            _buildMetricCard(
+              title: 'Procurement Spending',
+              value: Formatters.formatCurrency(db.purchases.fold(0.0, (s, p) => s + p.totalAmount)),
+              subtitle: '${db.purchases.length} Purchase Orders',
+              icon: Icons.shopping_bag_outlined,
+              color: Colors.purple,
+            ),
+            _buildMetricCard(
+              title: 'Total Business Assets',
+              value: Formatters.formatCurrency(db.totalStockValue + db.pendingCustomerPayments),
+              subtitle: 'Inventory + Receivables',
+              icon: Icons.account_balance_outlined,
+              color: Colors.teal,
+            ),
+          ]),
+          const SizedBox(height: 28),
 
           Text('Available ERP Analytical Reports', style: AppTextStyles.h2),
           const SizedBox(height: 16),
 
           LayoutBuilder(
             builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth >= 1100
+              final width = constraints.maxWidth;
+              final crossAxisCount = width >= 1100
                   ? 3
-                  : constraints.maxWidth >= 650
+                  : width >= 650
                       ? 2
                       : 1;
+
+              final aspectRatio = width >= 1400
+                  ? 2.35
+                  : width >= 1100
+                      ? 2.1
+                      : width >= 650
+                          ? 2.15
+                          : 2.4;
 
               return GridView.count(
                 crossAxisCount: crossAxisCount,
@@ -1135,7 +1447,7 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
                 mainAxisSpacing: 16,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: crossAxisCount == 1 ? 1.5 : (crossAxisCount == 2 ? 1.25 : 1.35),
+                childAspectRatio: aspectRatio,
                 children: [
                   _buildReportHubCard(
                     title: 'Inventory & Stock Valuation',
@@ -1195,43 +1507,116 @@ class ReportViewerRoleDashboard extends ConsumerWidget {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return _ModernReportHubCard(
+      title: title,
+      description: description,
+      icon: icon,
+      color: color,
       onTap: onTap,
-      borderRadius: AppRadius.lgBorderRadius,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: AppRadius.lgBorderRadius,
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 22),
+    );
+  }
+}
+
+class _ModernReportHubCard extends StatefulWidget {
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ModernReportHubCard({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_ModernReportHubCard> createState() => _ModernReportHubCardState();
+}
+
+class _ModernReportHubCardState extends State<_ModernReportHubCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        onHover: (hovering) {
+          if (mounted && _isHovered != hovering) {
+            setState(() => _isHovered = hovering);
+          }
+        },
+        borderRadius: AppRadius.lgBorderRadius,
+        hoverColor: Colors.transparent,
+        splashColor: AppColors.primary.withValues(alpha: 0.08),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: AppRadius.lgBorderRadius,
+            border: Border.all(
+              color: _isHovered ? AppColors.primary : AppColors.border,
+              width: 1.0,
             ),
-            const SizedBox(height: 12),
-            Text(title, style: AppTextStyles.h3, maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Text(
-              description,
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                Text('Open Report', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12.5)),
-                const SizedBox(width: 4),
-                Icon(Icons.arrow_forward_rounded, color: color, size: 14),
-              ],
-            ),
-          ],
+            boxShadow: [
+              if (_isHovered)
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.16),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 2),
+                )
+              else
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: widget.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                    child: Icon(widget.icon, color: widget.color, size: 22),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: _isHovered ? AppColors.primary : widget.color.withValues(alpha: 0.6),
+                    size: 16,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(widget.title, style: AppTextStyles.h3, maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 4),
+              Text(
+                widget.description,
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.3),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  Text('Open Report', style: TextStyle(color: _isHovered ? AppColors.primary : widget.color, fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_rounded, color: _isHovered ? AppColors.primary : widget.color, size: 14),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1253,12 +1638,10 @@ class DataEntryRoleDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRoleHeader(
-            context: context,
+          ErpSectionHeaderCard(
+            icon: Icons.edit_note_rounded,
             title: 'Data Entry Workspace',
-            subtitle: 'Direct data input shortcuts, draft creation queues, and recent document submissions',
             badgeText: 'DATA ENTRY OPERATOR',
-            badgeColor: Colors.blueGrey,
           ),
           const SizedBox(height: 24),
 
@@ -1329,34 +1712,103 @@ class DataEntryRoleDashboard extends ConsumerWidget {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return _ModernActionShortcutTile(
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      color: color,
       onTap: onTap,
-      borderRadius: AppRadius.mdBorderRadius,
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: AppRadius.mdBorderRadius,
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, color: color, size: 22),
+    );
+  }
+}
+
+class _ModernActionShortcutTile extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ModernActionShortcutTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_ModernActionShortcutTile> createState() => _ModernActionShortcutTileState();
+}
+
+class _ModernActionShortcutTileState extends State<_ModernActionShortcutTile> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        onHover: (hovering) {
+          if (mounted && _isHovered != hovering) {
+            setState(() => _isHovered = hovering);
+          }
+        },
+        borderRadius: AppRadius.mdBorderRadius,
+        hoverColor: Colors.transparent,
+        splashColor: AppColors.primary.withValues(alpha: 0.08),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: AppRadius.mdBorderRadius,
+            border: Border.all(
+              color: _isHovered ? AppColors.primary : AppColors.border,
+              width: 1.0,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(subtitle, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
+            boxShadow: [
+              if (_isHovered)
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.16),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 2),
+                )
+              else
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: widget.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                child: Icon(widget.icon, color: widget.color, size: 22),
               ),
-            ),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.title, style: AppTextStyles.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(widget.subtitle, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: _isHovered ? AppColors.primary : AppColors.textMuted,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1366,56 +1818,6 @@ class DataEntryRoleDashboard extends ConsumerWidget {
 // =====================================================================
 // SHARED RESPONSIVE HELPER WIDGETS
 // =====================================================================
-Widget _buildRoleHeader({
-  required BuildContext context,
-  required String title,
-  required String subtitle,
-  required String badgeText,
-  required Color badgeColor,
-}) {
-  return Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: AppColors.surface,
-      borderRadius: AppRadius.lgBorderRadius,
-      border: Border.all(color: AppColors.border),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(title, style: AppTextStyles.h1),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: badgeColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      badgeText,
-                      style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(subtitle, style: AppTextStyles.subtitle),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 Widget _buildMetricCard({
   required String title,
   required String value,

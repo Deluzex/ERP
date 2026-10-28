@@ -7,6 +7,9 @@ class Dealer {
   final String email;
   final String gstNumber;
   final String address;
+  final String state;
+  final String pincode;
+  final String stateCode;
   final double outstandingAmount;
   final bool isDeleted;
   final DateTime? deletedAt;
@@ -21,6 +24,9 @@ class Dealer {
     required this.email,
     required this.gstNumber,
     required this.address,
+    this.state = '',
+    this.pincode = '',
+    this.stateCode = '24',
     this.outstandingAmount = 0.0,
     this.isDeleted = false,
     this.deletedAt,
@@ -36,6 +42,9 @@ class Dealer {
     String? email,
     String? gstNumber,
     String? address,
+    String? state,
+    String? pincode,
+    String? stateCode,
     double? outstandingAmount,
     bool? isDeleted,
     DateTime? deletedAt,
@@ -50,6 +59,9 @@ class Dealer {
       email: email ?? this.email,
       gstNumber: gstNumber ?? this.gstNumber,
       address: address ?? this.address,
+      state: state ?? this.state,
+      pincode: pincode ?? this.pincode,
+      stateCode: stateCode ?? this.stateCode,
       outstandingAmount: outstandingAmount ?? this.outstandingAmount,
       isDeleted: isDeleted ?? this.isDeleted,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -67,6 +79,9 @@ class Dealer {
       email: json['email']?.toString() ?? '',
       gstNumber: json['gstNumber']?.toString() ?? json['gst_number']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
+      state: json['state']?.toString() ?? '',
+      pincode: json['pincode']?.toString() ?? '',
+      stateCode: json['stateCode']?.toString() ?? json['state_code']?.toString() ?? '24',
       outstandingAmount: double.tryParse(json['outstandingAmount']?.toString() ?? json['outstanding_amount']?.toString() ?? '0') ?? 0.0,
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
       deletedAt: json['deletedAt'] != null ? DateTime.tryParse(json['deletedAt'].toString()) : null,
@@ -81,8 +96,11 @@ class Dealer {
       'mobile': mobile,
       'companyName': companyName.isNotEmpty ? companyName : name,
       'email': email,
-      'gstNumber': gstNumber,
+      if (gstNumber.trim().isNotEmpty) 'gstNumber': gstNumber.trim(),
       'address': address,
+      if (state.trim().isNotEmpty) 'state': state.trim(),
+      if (pincode.trim().isNotEmpty) 'pincode': pincode.trim(),
+      if (stateCode.trim().isNotEmpty) 'stateCode': stateCode.trim(),
     };
   }
 }

@@ -37,6 +37,8 @@ class PurchaseLineItem {
   final double cgstAmount;
   final double sgstAmount;
   final double igstAmount;
+  final double transportationCost;
+  final double landedRate;
   final double lineTotal;
 
   PurchaseLineItem({
@@ -56,11 +58,20 @@ class PurchaseLineItem {
     double? cgstAmount,
     double? sgstAmount,
     double? igstAmount,
+    this.transportationCost = 0.0,
+    double? landedRate,
     required this.lineTotal,
-  })  : taxableAmount = taxableAmount ?? ((quantity * rate) - discountAmount).clamp(0.0, double.infinity),
-        cgstAmount = cgstAmount ?? ((((quantity * rate) - discountAmount) * (gstPercent / 2)) / 100.0),
-        sgstAmount = sgstAmount ?? ((((quantity * rate) - discountAmount) * (gstPercent / 2)) / 100.0),
-        igstAmount = igstAmount ?? 0.0;
+  })  : taxableAmount = (taxableAmount != null && taxableAmount > 0)
+            ? taxableAmount
+            : ((quantity * rate) - discountAmount).clamp(0.0, double.infinity),
+        cgstAmount = cgstAmount ?? (((((quantity * rate) - discountAmount).clamp(0.0, double.infinity)) * (gstPercent / 2)) / 100.0),
+        sgstAmount = sgstAmount ?? (((((quantity * rate) - discountAmount).clamp(0.0, double.infinity)) * (gstPercent / 2)) / 100.0),
+        igstAmount = igstAmount ?? 0.0,
+        landedRate = (landedRate != null && landedRate > 0)
+            ? landedRate
+            : (quantity > 0
+                ? (((((taxableAmount != null && taxableAmount > 0) ? taxableAmount : ((quantity * rate) - discountAmount).clamp(0.0, double.infinity)) + transportationCost) / quantity * 100).round() / 100)
+                : rate);
 
   String get displayName => itemType == PurchaseItemType.finishedProduct
       ? (finishedProductName ?? 'Finished Product')
@@ -80,9 +91,71 @@ class PurchaseLineItem {
     double discountAmount = 0.0,
     double gstPercent = 18.0,
   }) {
-    final subtotal = (quantity * rate) - discountAmount;
+    final gross = (quantity * rate).clamp(0.0, double.infinity);
+    final clampedDiscount = discountAmount.clamp(0.0, gross);
+    final subtotal = gross - clampedDiscount;
     final gstAmount = (subtotal * gstPercent) / 100.0;
     return subtotal + gstAmount;
+  }
+
+  static List<PurchaseLineItem> allocateTransportation({
+    required List<PurchaseLineItem> items,
+    required double transportationCharges,
+  }) {
+    if (items.isEmpty) return [];
+    if (transportationCharges <= 0) {
+      return items.map((it) {
+        final lineVal = ((it.quantity * it.rate) - it.discountAmount).clamp(0.0, double.infinity);
+        final landed = it.quantity > 0 ? ((lineVal / it.quantity) * 100).round() / 100 : it.rate;
+        return it.copyWith(transportationCost: 0.0, landedRate: landed);
+      }).toList();
+    }
+
+    final lineValues = items.map((it) {
+      return ((it.quantity * it.rate) - it.discountAmount).clamp(0.0, double.infinity);
+    }).toList();
+
+    final orderSubtotal = lineValues.fold<double>(0.0, (sum, val) => sum + val);
+    List<double> allocatedCosts;
+
+    if (orderSubtotal > 0) {
+      allocatedCosts = lineValues.map((val) {
+        return ((val / orderSubtotal) * transportationCharges * 100).round() / 100;
+      }).toList();
+
+      final sumAllocated = allocatedCosts.fold<double>(0.0, (sum, val) => sum + val);
+      final delta = ((transportationCharges - sumAllocated) * 100).round() / 100;
+      if (delta != 0) {
+        int maxIdx = 0;
+        for (int i = 1; i < lineValues.length; i++) {
+          if (lineValues[i] > lineValues[maxIdx]) {
+            maxIdx = i;
+          }
+        }
+        allocatedCosts[maxIdx] = ((allocatedCosts[maxIdx] + delta) * 100).round() / 100;
+      }
+    } else {
+      final share = ((transportationCharges / items.length) * 100).round() / 100;
+      allocatedCosts = List.filled(items.length, share);
+      final sumAllocated = allocatedCosts.fold<double>(0.0, (sum, val) => sum + val);
+      final delta = ((transportationCharges - sumAllocated) * 100).round() / 100;
+      allocatedCosts[0] = ((allocatedCosts[0] + delta) * 100).round() / 100;
+    }
+
+    final result = <PurchaseLineItem>[];
+    for (int i = 0; i < items.length; i++) {
+      final it = items[i];
+      final transCost = allocatedCosts[i];
+      final lineVal = lineValues[i];
+      final landed = it.quantity > 0
+          ? (((lineVal + transCost) / it.quantity) * 100).round() / 100
+          : it.rate;
+      result.add(it.copyWith(
+        transportationCost: transCost,
+        landedRate: landed,
+      ));
+    }
+    return result;
   }
 
   PurchaseLineItem copyWith({
@@ -102,6 +175,8 @@ class PurchaseLineItem {
     double? cgstAmount,
     double? sgstAmount,
     double? igstAmount,
+    double? transportationCost,
+    double? landedRate,
     double? lineTotal,
   }) {
     return PurchaseLineItem(
@@ -121,6 +196,8 @@ class PurchaseLineItem {
       cgstAmount: cgstAmount ?? this.cgstAmount,
       sgstAmount: sgstAmount ?? this.sgstAmount,
       igstAmount: igstAmount ?? this.igstAmount,
+      transportationCost: transportationCost ?? this.transportationCost,
+      landedRate: landedRate ?? this.landedRate,
       lineTotal: lineTotal ?? this.lineTotal,
     );
   }
@@ -139,10 +216,16 @@ class PurchaseLineItem {
       rate: double.tryParse(json['rate']?.toString() ?? '0') ?? 0.0,
       discountAmount: double.tryParse(json['discountAmount']?.toString() ?? json['discount_amount']?.toString() ?? '0') ?? 0.0,
       gstPercent: double.tryParse(json['gstPercent']?.toString() ?? json['gst_percent']?.toString() ?? '18') ?? 18.0,
-      taxableAmount: double.tryParse(json['taxableAmount']?.toString() ?? json['taxable_amount']?.toString() ?? '0'),
+      taxableAmount: (json['taxableAmount'] != null || json['taxable_amount'] != null)
+          ? double.tryParse(json['taxableAmount']?.toString() ?? json['taxable_amount']?.toString() ?? '')
+          : null,
       cgstAmount: double.tryParse(json['cgstAmount']?.toString() ?? json['cgst_amount']?.toString() ?? '0'),
       sgstAmount: double.tryParse(json['sgstAmount']?.toString() ?? json['sgst_amount']?.toString() ?? '0'),
       igstAmount: double.tryParse(json['igstAmount']?.toString() ?? json['igst_amount']?.toString() ?? '0'),
+      transportationCost: double.tryParse(json['transportationCost']?.toString() ?? json['transportation_cost']?.toString() ?? '0') ?? 0.0,
+      landedRate: (json['landedRate'] != null || json['landed_rate'] != null)
+          ? double.tryParse(json['landedRate']?.toString() ?? json['landed_rate']?.toString() ?? '')
+          : null,
       lineTotal: double.tryParse(json['lineTotal']?.toString() ?? json['line_total']?.toString() ?? '0') ?? 0.0,
     );
   }
@@ -165,6 +248,8 @@ class PurchaseLineItem {
       'cgstAmount': cgstAmount,
       'sgstAmount': sgstAmount,
       'igstAmount': igstAmount,
+      'transportationCost': transportationCost,
+      'landedRate': landedRate,
       'lineTotal': lineTotal,
     };
   }
@@ -188,6 +273,7 @@ class Purchase {
   final double sgstAmount;
   final double igstAmount;
   final double gstAmount;
+  final double transportationCharges;
   final double totalAmount;
   final double paidAmount;
   final double pendingAmount;
@@ -217,6 +303,7 @@ class Purchase {
     double? sgstAmount,
     double? igstAmount,
     double? gstAmount,
+    this.transportationCharges = 0.0,
     required this.totalAmount,
     required this.paidAmount,
     required this.pendingAmount,
@@ -274,6 +361,7 @@ class Purchase {
     double? sgstAmount,
     double? igstAmount,
     double? gstAmount,
+    double? transportationCharges,
     double? totalAmount,
     double? paidAmount,
     double? pendingAmount,
@@ -303,6 +391,7 @@ class Purchase {
       sgstAmount: sgstAmount ?? this.sgstAmount,
       igstAmount: igstAmount ?? this.igstAmount,
       gstAmount: gstAmount ?? this.gstAmount,
+      transportationCharges: transportationCharges ?? this.transportationCharges,
       totalAmount: totalAmount ?? this.totalAmount,
       paidAmount: paidAmount ?? this.paidAmount,
       pendingAmount: pendingAmount ?? this.pendingAmount,
@@ -344,6 +433,7 @@ class Purchase {
       sgstAmount: double.tryParse(json['sgstAmount']?.toString() ?? json['sgst_amount']?.toString() ?? '0'),
       igstAmount: double.tryParse(json['igstAmount']?.toString() ?? json['igst_amount']?.toString() ?? '0'),
       gstAmount: double.tryParse(json['gstAmount']?.toString() ?? json['gst_amount']?.toString() ?? '0'),
+      transportationCharges: double.tryParse(json['transportationCharges']?.toString() ?? json['transportation_charges']?.toString() ?? '0') ?? 0.0,
       totalAmount: double.tryParse(json['totalAmount']?.toString() ?? json['total_amount']?.toString() ?? '0') ?? 0.0,
       paidAmount: double.tryParse(json['paidAmount']?.toString() ?? json['paid_amount']?.toString() ?? '0') ?? 0.0,
       pendingAmount: double.tryParse(json['pendingAmount']?.toString() ?? json['pending_amount']?.toString() ?? '0') ?? 0.0,
@@ -375,6 +465,7 @@ class Purchase {
       'sgstAmount': sgstAmount,
       'igstAmount': igstAmount,
       'gstAmount': gstAmount,
+      'transportationCharges': transportationCharges,
       'totalAmount': totalAmount,
       'paidAmount': paidAmount,
       'pendingAmount': pendingAmount,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../core/models/sale_model.dart';
@@ -156,29 +157,40 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'd',
-                                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 22),
+                        SvgPicture.asset(
+                          'assets/images/logo_dark.svg',
+                          height: 34,
+                          fit: BoxFit.contain,
+                          alignment: Alignment.centerLeft,
+                          placeholderBuilder: (context) => Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Center(
+                                  child: Text(
+                                    'd',
+                                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 22),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            const Text(
-                              'DELUZEX LIGHTING PVT. LTD.',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: 0.5),
-                            ),
-                          ],
+                              const SizedBox(width: 10),
+                              const Text(
+                                'DELUZEX LIGHTING PVT. LTD.',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: 0.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'DELUZEX LIGHTING PVT. LTD.',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: 0.5),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -342,11 +354,11 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                             Padding(padding: EdgeInsets.all(7), child: Text('Sr.', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
                             Padding(padding: EdgeInsets.all(7), child: Text('Item Code', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
                             Padding(padding: EdgeInsets.all(7), child: Text('Description', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
-                            Padding(padding: EdgeInsets.all(7), child: Text('Qty', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                            Padding(padding: EdgeInsets.all(7), child: Text('Rate (₹)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                            Padding(padding: EdgeInsets.all(7), child: Text('Disc.', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                            Padding(padding: EdgeInsets.all(7), child: Text('GST %', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                            Padding(padding: EdgeInsets.all(7), child: Text('Amount (₹)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                            Padding(padding: EdgeInsets.all(7), child: Text('Qty', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
+                            Padding(padding: EdgeInsets.all(7), child: Text('Rate (₹)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
+                            Padding(padding: EdgeInsets.all(7), child: Text('Disc.', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
+                            Padding(padding: EdgeInsets.all(7), child: Text('GST %', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
+                            Padding(padding: EdgeInsets.all(7), child: Text('Amount (₹)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
                           ],
                         ),
                         ...List.generate(quotation.items.length, (idx) {
@@ -359,11 +371,11 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                               Padding(padding: const EdgeInsets.all(6.5), child: Text('${idx + 1}', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.center)),
                               Padding(padding: const EdgeInsets.all(6.5), child: Text(item.finishedProductCode, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600))),
                               Padding(padding: const EdgeInsets.all(6.5), child: Text(item.finishedProductName, style: const TextStyle(fontSize: 9.5))),
-                              Padding(padding: const EdgeInsets.all(6.5), child: Text('${item.quantity.toInt()} ${item.unit}', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
-                              Padding(padding: const EdgeInsets.all(6.5), child: Text(Formatters.formatCurrency(item.rate).replaceAll('₹', ''), style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
-                              Padding(padding: const EdgeInsets.all(6.5), child: Text(item.discountAmount > 0 ? Formatters.formatCurrency(item.discountAmount).replaceAll('₹', '') : '-', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
-                              Padding(padding: const EdgeInsets.all(6.5), child: Text('${item.gstPercent.toInt()}%', style: const TextStyle(fontSize: 9.5), textAlign: TextAlign.right)),
-                              Padding(padding: const EdgeInsets.all(6.5), child: Text(Formatters.formatCurrency(item.lineTotal).replaceAll('₹', ''), style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text('${item.quantity.toInt()} ${item.unit}', style: const TextStyle(fontSize: 9.5))),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text(Formatters.formatCurrency(item.rate).replaceAll('₹', ''), style: const TextStyle(fontSize: 9.5))),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text(item.discountAmount > 0 ? Formatters.formatCurrency(item.discountAmount).replaceAll('₹', '') : '-', style: const TextStyle(fontSize: 9.5))),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text('${item.gstPercent.toInt()}%', style: const TextStyle(fontSize: 9.5))),
+                              Padding(padding: const EdgeInsets.all(6.5), child: Text(Formatters.formatCurrency(item.lineTotal).replaceAll('₹', ''), style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold))),
                             ],
                           );
                         }),

@@ -196,8 +196,45 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
-    final lowRM = db.lowStockRawMaterials;
-    final lowFP = db.lowStockFinishedProducts;
+    final user = ref.watch(currentUserProvider) ?? db.currentUser;
+    if (!db.canViewLowStockAlerts(user)) {
+      return Dialog(
+        backgroundColor: AppColors.surface,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 480),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline_rounded, size: 48, color: AppColors.danger),
+              const SizedBox(height: 16),
+              Text('Access Restricted', style: AppTextStyles.h2),
+              const SizedBox(height: 8),
+              Text(
+                'Low Stock and Buffer Alerts are restricted to Inventory, Procurement, Production, and Administrative roles.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final role = user.primaryRoleId.toLowerCase().trim();
+    final isPurchase = role.contains('purchase');
+    final isProduction = role.contains('production');
+
+    final effectiveLowRM = isProduction ? <RawMaterial>[] : db.lowStockRawMaterials;
+    final effectiveLowFP = isPurchase ? <FinishedProduct>[] : db.lowStockFinishedProducts;
+    final activeCount = effectiveLowRM.length + effectiveLowFP.length;
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 650;
 
@@ -205,6 +242,7 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
       backgroundColor: AppColors.surface,
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorderRadius),
+
       child: Container(
         constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
         width: double.infinity,
@@ -234,9 +272,23 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Low Stock WhatsApp Alerts & Production Warning System', style: AppTextStyles.h2),
+                            Text(
+                              isPurchase
+                                  ? 'Raw Material Shortages & Procurement Alerts'
+                                  : isProduction
+                                      ? 'Finished Goods Shortages & Production Alerts'
+                                      : 'Low Stock WhatsApp Alerts & Production Warning System',
+                              style: AppTextStyles.h2,
+                            ),
                             const SizedBox(height: 2),
-                            Text('Real-time buffer monitoring, production team notification & alert history', style: AppTextStyles.bodySmall),
+                            Text(
+                              isPurchase
+                                  ? 'Real-time vendor supply buffer monitoring & reorder levels'
+                                  : isProduction
+                                      ? 'Real-time assembly buffers, shopfloor production & shortages'
+                                      : 'Real-time buffer monitoring, production team notification & alert history',
+                              style: AppTextStyles.bodySmall,
+                            ),
                           ],
                         ),
                       ),
@@ -253,7 +305,13 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
               controller: _tabController,
               isScrollable: isMobile,
               tabs: [
-                Tab(text: 'Active Low Stock (${lowRM.length + lowFP.length})'),
+                Tab(
+                  text: isPurchase
+                      ? 'Active Raw Materials ($activeCount)'
+                      : isProduction
+                          ? 'Active Finished Goods ($activeCount)'
+                          : 'Active Low Stock ($activeCount)',
+                ),
                 Tab(text: 'Alert Recipients (${db.alertRecipients.length})'),
                 Tab(text: 'Alert Logs & History (${db.alertHistory.length})'),
               ],
@@ -266,7 +324,7 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
                 controller: _tabController,
                 children: [
                   // Tab 1: Active Low Stock Items
-                  _buildActiveLowStockTab(context, db, lowRM, lowFP),
+                  _buildActiveLowStockTab(context, db, effectiveLowRM, effectiveLowFP),
 
                   // Tab 2: Configured Recipients
                   _buildRecipientsTab(context, db),

@@ -7,19 +7,29 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
-import '../../../core/widgets/stat_card.dart';
+import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
 
-class SalesDashboardScreen extends ConsumerWidget {
+class SalesDashboardScreen extends ConsumerStatefulWidget {
   const SalesDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SalesDashboardScreen> createState() => _SalesDashboardScreenState();
+}
+
+class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
+  DateTime? _invoiceStartDate;
+  DateTime? _invoiceEndDate;
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final isDesktop = MediaQuery.of(context).size.width >= 1100;
 
@@ -28,234 +38,134 @@ class SalesDashboardScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Header & Quick Action Buttons
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 750;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Sales Operations Dashboard', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Pipeline tracking: Quotations, Proformas, Orders, Dispatch & Revenue',
-                    style: AppTextStyles.subtitle,
-                  ),
-                ],
-              );
+          // 1. Header & Quick Action Buttons (Figma Section Header Card)
+          ErpSectionHeaderCard(
+            icon: Icons.point_of_sale_rounded,
+            title: 'Sales Operations Dashboard',
+            badgeText: 'SALES PIPELINE',
+            action: LayoutBuilder(
+              builder: (context, actionBox) {
+                final isMobile = actionBox.maxWidth < 600;
+                if (isMobile) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'New Quotation',
+                          icon: Icons.request_quote_outlined,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Create Sales Order',
+                          icon: Icons.shopping_cart_outlined,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesOrder,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ErpButton(
+                          text: 'Direct Sale',
+                          icon: Icons.point_of_sale_outlined,
+                          isOutlined: true,
+                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                        ),
+                      ),
+                    ],
+                  );
+                }
 
-              final actionButtons = Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ErpButton(
-                    text: 'New Quotation',
-                    icon: Icons.request_quote_outlined,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation,
-                  ),
-                  ErpButton(
-                    text: 'Create Sales Order',
-                    icon: Icons.shopping_cart_outlined,
-                    isOutlined: true,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesOrder,
-                  ),
-                  ErpButton(
-                    text: 'Direct Sale',
-                    icon: Icons.point_of_sale_outlined,
-                    isOutlined: true,
-                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
-                  ),
-                ],
-              );
-
-              if (isStacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.end,
                   children: [
-                    titleBlock,
-                    const SizedBox(height: 16),
-                    actionButtons,
+                    ErpButton(
+                      text: 'New Quotation',
+                      icon: Icons.request_quote_outlined,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation,
+                    ),
+                    ErpButton(
+                      text: 'Create Sales Order',
+                      icon: Icons.shopping_cart_outlined,
+                      isOutlined: true,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesOrder,
+                    ),
+                    ErpButton(
+                      text: 'Direct Sale',
+                      icon: Icons.point_of_sale_outlined,
+                      isOutlined: true,
+                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+                    ),
                   ],
                 );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: titleBlock),
-                  const SizedBox(width: 12),
-                  actionButtons,
-                ],
-              );
-            },
+              },
+            ),
           ),
           const SizedBox(height: 24),
 
           // 2. Sales Funnel Workflow Stage Indicator Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: AppRadius.lgBorderRadius,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isNarrow = constraints.maxWidth < 450;
-                    final titleText = Text('Sales Workflow Stages', style: AppTextStyles.h3.copyWith(fontSize: 15));
-                    final subtitleText = Text(
-                      'Seamless End-to-End Enterprise Flow',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    );
-
-                    if (isNarrow) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          titleText,
-                          const SizedBox(height: 2),
-                          subtitleText,
-                        ],
-                      );
-                    }
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        titleText,
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: subtitleText,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildWorkflowStep(
-                        context,
-                        ref,
-                        icon: Icons.request_quote_outlined,
-                        title: '1. Quotations',
-                        count: '${db.pendingQuotationsCount} Pending',
-                        activeCount: '${db.quotations.length} Total',
-                        color: AppColors.primary,
-                        section: ErpNavSection.quotations,
-                      ),
-                      _buildStepArrow(),
-                      _buildWorkflowStep(
-                        context,
-                        ref,
-                        icon: Icons.receipt_outlined,
-                        title: '2. Proforma Invoices',
-                        count: '${db.proformaInvoices.length} Issued',
-                        activeCount: 'Advance Tracking',
-                        color: AppColors.purple,
-                        section: ErpNavSection.proformaInvoices,
-                      ),
-                      _buildStepArrow(),
-                      _buildWorkflowStep(
-                        context,
-                        ref,
-                        icon: Icons.inventory_2_outlined,
-                        title: '3. Stock & Production',
-                        count: '${db.ordersPendingProductionCount} In Production',
-                        activeCount: '${db.ordersReadyForDispatchCount} Ready',
-                        color: AppColors.warning,
-                        section: ErpNavSection.salesOrders,
-                      ),
-                      _buildStepArrow(),
-                      _buildWorkflowStep(
-                        context,
-                        ref,
-                        icon: Icons.local_shipping_outlined,
-                        title: '4. Delivery / Dispatch',
-                        count: '${db.deliveries.length} Dispatched',
-                        activeCount: 'Stock Out Movement',
-                        color: AppColors.info,
-                        section: ErpNavSection.salesDeliveries,
-                      ),
-                      _buildStepArrow(),
-                      _buildWorkflowStep(
-                        context,
-                        ref,
-                        icon: Icons.receipt_long_outlined,
-                        title: '5. Sales Invoices',
-                        count: '${db.salesInvoices.length} Invoiced',
-                        activeCount: Formatters.formatCurrency(db.totalInvoicedRevenue),
-                        color: AppColors.success,
-                        section: ErpNavSection.salesInvoiceList,
-                      ),
-                      _buildStepArrow(),
-                      _buildWorkflowStep(
-                        context,
-                        ref,
-                        icon: Icons.assignment_return_outlined,
-                        title: '6. Sales Returns',
-                        count: '${db.salesReturns.length} Returned',
-                        activeCount: 'Restock & Credit Note',
-                        color: AppColors.danger,
-                        section: ErpNavSection.salesReturns,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildSalesWorkflowSection(context, ref, db),
           const SizedBox(height: 20),
 
-          // 3. KPI Stat Cards Grid
+
+          // 3. KPI Metric Cards (Project Theme)
           LayoutBuilder(
             builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth >= 1200
-                  ? 4
-                  : constraints.maxWidth >= 750
-                      ? 2
-                      : 1;
-
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 2.1,
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  StatCard(
-                    title: 'Net Sales Revenue',
-                    value: Formatters.formatCurrency(db.netSalesRevenue),
-                    trendText: 'Gross: ${Formatters.formatCurrency(db.totalInvoicedRevenue)}',
-                    icon: const Icon(Icons.point_of_sale_outlined, color: AppColors.primary, size: 20),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.point_of_sale_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Net Sales Revenue',
+                      value: Formatters.formatCurrency(db.netSalesRevenue),
+                      subtext: 'Gross: ${Formatters.formatCurrency(db.totalInvoicedRevenue)}',
+                    ),
                   ),
-                  StatCard(
-                    title: 'Sales Returns & Rate',
-                    value: Formatters.formatCurrency(db.totalSalesReturnsAmount),
-                    trendText: '${db.salesReturnRatePercentage.toStringAsFixed(1)}% Return Rate (${db.salesReturns.length} Returns)',
-                    icon: const Icon(Icons.assignment_return_outlined, color: AppColors.danger, size: 20),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.assignment_return_outlined,
+                      iconColor: AppColors.danger,
+                      title: 'Sales Returns & Rate',
+                      value: Formatters.formatCurrency(db.totalSalesReturnsAmount),
+                      subtext: '${db.salesReturnRatePercentage.toStringAsFixed(1)}% Return Rate (${db.salesReturns.length})',
+                      subtextColor: AppColors.danger,
+                    ),
                   ),
-                  StatCard(
-                    title: 'Ready for Dispatch',
-                    value: '${db.ordersReadyForDispatchCount}',
-                    trendText: '${db.ordersPendingProductionCount} Orders in production',
-                    icon: const Icon(Icons.local_shipping_outlined, color: AppColors.info, size: 20),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.local_shipping_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Ready for Dispatch',
+                      value: '${db.ordersReadyForDispatchCount} Orders',
+                      subtext: '${db.ordersPendingProductionCount} Orders in production',
+                    ),
                   ),
-                  StatCard(
-                    title: 'Pending Customer Due',
-                    value: Formatters.formatCurrency(db.pendingCustomerPayments),
-                    trendText: '${db.pendingRefundsCount} pending refund settlements',
-                    icon: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.warning, size: 20),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Pending Customer Due',
+                      value: Formatters.formatCurrency(db.pendingCustomerPayments),
+                      subtext: '${db.pendingRefundsCount} pending refund settlements',
+                    ),
                   ),
                 ],
               );
@@ -285,58 +195,237 @@ class SalesDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildWorkflowStep(
-    BuildContext context,
-    WidgetRef ref, {
-    required IconData icon,
-    required String title,
-    required String count,
-    required String activeCount,
-    required Color color,
-    required ErpNavSection section,
-  }) {
-    return InkWell(
-      onTap: () => ref.read(currentNavSectionProvider.notifier).state = section,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.2)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5)),
-                const SizedBox(height: 2),
-                Text(count, style: AppTextStyles.bodySmall.copyWith(color: color, fontWeight: FontWeight.bold)),
-                Text(activeCount, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 10.5)),
-              ],
-            ),
-          ],
-        ),
+  Widget _buildSalesWorkflowSection(BuildContext context, WidgetRef ref, MockDatabaseService db) {
+    final steps = [
+      _SalesWorkflowStepData(
+        title: 'Quotations',
+        count: '${db.pendingQuotationsCount} Pending',
+        activeCount: '${db.quotations.length} Total',
+        icon: Icons.request_quote_outlined,
+        color: AppColors.primary,
+        section: ErpNavSection.quotations,
+      ),
+      _SalesWorkflowStepData(
+        title: 'Proforma Invoices',
+        count: '${db.proformaInvoices.length} Issued',
+        activeCount: 'Advance Tracking',
+        icon: Icons.receipt_outlined,
+        color: AppColors.primary,
+        section: ErpNavSection.proformaInvoices,
+      ),
+      _SalesWorkflowStepData(
+        title: 'Stock & Production',
+        count: '${db.ordersPendingProductionCount} In Production',
+        activeCount: '${db.ordersReadyForDispatchCount} Ready',
+        icon: Icons.inventory_2_outlined,
+        color: AppColors.primary,
+        section: ErpNavSection.salesOrders,
+      ),
+      _SalesWorkflowStepData(
+        title: 'Delivery / Dispatch',
+        count: '${db.deliveries.length} Dispatched',
+        activeCount: 'Stock Out Movement',
+        icon: Icons.local_shipping_outlined,
+        color: AppColors.primary,
+        section: ErpNavSection.salesDeliveries,
+      ),
+      _SalesWorkflowStepData(
+        title: 'Sales Invoices',
+        count: '${db.salesInvoices.length} Invoiced',
+        activeCount: Formatters.formatCurrency(db.totalInvoicedRevenue),
+        icon: Icons.receipt_long_outlined,
+        color: AppColors.primary,
+        section: ErpNavSection.salesInvoiceList,
+      ),
+      _SalesWorkflowStepData(
+        title: 'Sales Returns',
+        count: '${db.salesReturns.length} Returned',
+        activeCount: 'Restock & Credit Note',
+        icon: Icons.assignment_return_outlined,
+        color: AppColors.primary,
+        section: ErpNavSection.salesReturns,
+      ),
+    ];
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: MediaQuery.of(context).size.width < 500 ? 12 : 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgBorderRadius,
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x05000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 800;
+              final titleGroup = Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.alt_route_rounded,
+                          size: 17,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Text(
+                          'Sales Workflow Stages',
+                          style: AppTextStyles.h3.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                    ),
+                    child: const Text(
+                      '6 Stages Active',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+
+              final subtitleText = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.sync_alt_rounded, size: 14, color: AppColors.textMuted),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      'Seamless End-to-End Enterprise Flow',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              );
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleGroup,
+                    const SizedBox(height: 6),
+                    subtitleText,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  titleGroup,
+                  const SizedBox(width: 12),
+                  subtitleText,
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth >= 1050) {
+                final rowChildren = <Widget>[];
+                for (int i = 0; i < steps.length; i++) {
+                  rowChildren.add(
+                    Expanded(
+                      child: _buildWorkflowCard(context, ref, steps[i]),
+                    ),
+                  );
+                  if (i < steps.length - 1) {
+                    rowChildren.add(const SizedBox(width: 10));
+                  }
+                }
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: rowChildren,
+                  ),
+                );
+              } else if (constraints.maxWidth >= 640) {
+                final itemWidth = (constraints.maxWidth - 16) / 3;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 10,
+                  children: steps
+                      .map((s) => SizedBox(
+                            width: itemWidth,
+                            child: _buildWorkflowCard(context, ref, s),
+                          ))
+                      .toList(),
+                );
+              } else {
+                final isSingleColumn = constraints.maxWidth < 360;
+                final itemWidth = isSingleColumn ? double.infinity : (constraints.maxWidth - 8) / 2;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: steps
+                      .map((s) => SizedBox(
+                            width: itemWidth,
+                            child: _buildWorkflowCard(context, ref, s),
+                          ))
+                      .toList(),
+                );
+              }
+            },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildStepArrow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: Icon(Icons.arrow_forward_ios, size: 13, color: Colors.grey.shade400),
+  Widget _buildWorkflowCard(
+    BuildContext context,
+    WidgetRef ref,
+    _SalesWorkflowStepData step,
+  ) {
+    return _SalesWorkflowCardItem(
+      step: step,
+      onTap: () => ref.read(currentNavSectionProvider.notifier).state = step.section,
     );
   }
+
+
+
+
+
 
   Widget _buildRecentOrdersCard(BuildContext context, WidgetRef ref, MockDatabaseService db) {
     final recentOrders = db.salesOrders.take(5).toList();
@@ -378,10 +467,10 @@ class SalesDashboardScreen extends ConsumerWidget {
           else
             ErpDataTable(
               columns: const [
-                ErpColumn(title: 'SO Number'),
-                ErpColumn(title: 'Customer'),
-                ErpColumn(title: 'Total', isNumeric: true),
-                ErpColumn(title: 'Status'),
+                ErpColumn(title: 'SO Number', width: 130),
+                ErpColumn(title: 'Customer', width: 150),
+                ErpColumn(title: 'Total', width: 110, isNumeric: true),
+                ErpColumn(title: 'Status', width: 110),
               ],
               rows: recentOrders.map((so) {
                 ErpStatusBadge badge;
@@ -419,7 +508,12 @@ class SalesDashboardScreen extends ConsumerWidget {
   }
 
   Widget _buildRecentInvoicesCard(BuildContext context, WidgetRef ref, MockDatabaseService db) {
-    final recentInvoices = db.salesInvoices.take(5).toList();
+    final filteredInvoices = db.salesInvoices.where((inv) {
+      if (_invoiceStartDate != null && inv.saleDate.isBefore(DateTime(_invoiceStartDate!.year, _invoiceStartDate!.month, _invoiceStartDate!.day))) return false;
+      if (_invoiceEndDate != null && inv.saleDate.isAfter(DateTime(_invoiceEndDate!.year, _invoiceEndDate!.month, _invoiceEndDate!.day, 23, 59, 59))) return false;
+      return true;
+    }).toList();
+    final recentInvoices = filteredInvoices.take(5).toList();
 
     return Container(
       padding: AppSpacing.cardPadding,
@@ -431,21 +525,36 @@ class SalesDashboardScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Expanded(
-                child: Text(
-                  'Recent Sales Invoices',
-                  style: AppTextStyles.h3,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              Text(
+                'Recent Sales Invoices',
+                style: AppTextStyles.h3,
               ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
-                child: const Text('View All'),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ErpDateFilterBox(
+                    startDate: _invoiceStartDate,
+                    endDate: _invoiceEndDate,
+                    onDateRangeSelected: (start, end) {
+                      setState(() {
+                        _invoiceStartDate = start;
+                        _invoiceEndDate = end;
+                      });
+                    },
+                  ),
+                  TextButton(
+                    onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
+                    child: const Text('View All'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -453,15 +562,15 @@ class SalesDashboardScreen extends ConsumerWidget {
           if (recentInvoices.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('No sales invoices found.')),
+              child: Center(child: Text('No sales invoices found for selected range.')),
             )
           else
             ErpDataTable(
               columns: const [
-                ErpColumn(title: 'Invoice No'),
-                ErpColumn(title: 'Party'),
-                ErpColumn(title: 'Amount', isNumeric: true),
-                ErpColumn(title: 'Action'),
+                ErpColumn(title: 'Invoice No', width: 130),
+                ErpColumn(title: 'Party', width: 150),
+                ErpColumn(title: 'Amount', width: 110, isNumeric: true),
+                ErpColumn(title: 'Action', width: 80, alignment: Alignment.center),
               ],
               rows: recentInvoices.map((inv) {
                 return [
@@ -481,3 +590,166 @@ class SalesDashboardScreen extends ConsumerWidget {
     );
   }
 }
+
+class _SalesWorkflowStepData {
+  final String title;
+  final String count;
+  final String activeCount;
+  final IconData icon;
+  final Color color;
+  final ErpNavSection section;
+
+  const _SalesWorkflowStepData({
+    required this.title,
+    required this.count,
+    required this.activeCount,
+    required this.icon,
+    this.color = AppColors.primary,
+    required this.section,
+  });
+}
+
+class _SalesWorkflowCardItem extends StatefulWidget {
+  final _SalesWorkflowStepData step;
+  final VoidCallback onTap;
+
+  const _SalesWorkflowCardItem({
+    required this.step,
+    required this.onTap,
+  });
+
+  @override
+  State<_SalesWorkflowCardItem> createState() => _SalesWorkflowCardItemState();
+}
+
+class _SalesWorkflowCardItemState extends State<_SalesWorkflowCardItem> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final step = widget.step;
+    final color = step.color;
+
+    return Tooltip(
+      message: 'Navigate to ${step.title}',
+      waitDuration: const Duration(milliseconds: 400),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          onHover: (hovering) {
+            if (mounted && _isHovered != hovering) {
+              setState(() => _isHovered = hovering);
+            }
+          },
+          borderRadius: BorderRadius.circular(12),
+          hoverColor: Colors.transparent,
+          splashColor: AppColors.primary.withValues(alpha: 0.08),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _isHovered ? AppColors.primary : const Color(0xFFE5E7EB),
+                width: 1.0,
+              ),
+              boxShadow: [
+                if (_isHovered)
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.16),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 2),
+                  )
+                else
+                  const BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 14,
+                  right: 14,
+                  child: Container(
+                    height: 2.5,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(2)),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(step.icon, color: color, size: 16),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          step.title,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 12.5,
+                            color: AppColors.textPrimary,
+                            height: 1.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          step.count,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                            height: 1.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          step.activeCount,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textMuted,
+                            height: 1.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

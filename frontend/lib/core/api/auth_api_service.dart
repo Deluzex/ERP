@@ -5,6 +5,7 @@ import 'token_storage.dart';
 class AuthResponse {
   final String accessToken;
   final String refreshToken;
+  final String? sessionId;
   final int expiresIn;
   final AppUser user;
   final List<String> permissions;
@@ -12,6 +13,7 @@ class AuthResponse {
   const AuthResponse({
     required this.accessToken,
     required this.refreshToken,
+    this.sessionId,
     required this.expiresIn,
     required this.user,
     required this.permissions,
@@ -37,9 +39,13 @@ class AuthApiService {
       final expiresIn = (data['expiresIn'] as num?)?.toInt() ?? 900;
       final userJson = data['user'] as Map<String, dynamic>;
 
+      final sessionId = data['sessionId']?.toString() ??
+          (userJson['id'] != null ? 'sess_${userJson['id']}_${DateTime.now().millisecondsSinceEpoch}' : null);
+
       TokenStorage.instance.saveTokens(
         accessToken: accessToken,
         refreshToken: refreshToken,
+        sessionId: sessionId,
       );
 
       final permissionsList = (userJson['permissions'] as List?)?.map((p) => p.toString()).toList() ?? [];
@@ -48,6 +54,7 @@ class AuthApiService {
       return AuthResponse(
         accessToken: accessToken,
         refreshToken: refreshToken,
+        sessionId: sessionId,
         expiresIn: expiresIn,
         user: appUser,
         permissions: permissionsList,

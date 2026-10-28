@@ -23,6 +23,11 @@ class Project {
   final double budgetAmount;
   final double totalSalesAmount;
   final double totalCommissionAmount;
+  final String? siteState;
+  final String? siteStateCode;
+  final String? siteAddress;
+  final String? sitePincode;
+  final bool posVerified;
   final String? notes;
   final bool isDeleted;
   final String? deleteReason;
@@ -46,6 +51,11 @@ class Project {
     this.budgetAmount = 0.0,
     this.totalSalesAmount = 0.0,
     this.totalCommissionAmount = 0.0,
+    this.siteState,
+    this.siteStateCode,
+    this.siteAddress,
+    this.sitePincode,
+    this.posVerified = false,
     this.notes,
     this.isDeleted = false,
     this.deleteReason,
@@ -121,6 +131,11 @@ class Project {
       budgetAmount: parseNum(json['budgetAmount'] ?? json['budget_amount']),
       totalSalesAmount: parseNum(json['totalSalesAmount'] ?? json['total_sales_amount']),
       totalCommissionAmount: parseNum(json['totalCommissionAmount'] ?? json['total_commission_amount']),
+      siteState: json['siteState']?.toString() ?? json['site_state']?.toString(),
+      siteStateCode: json['siteStateCode']?.toString() ?? json['site_state_code']?.toString(),
+      siteAddress: json['siteAddress']?.toString() ?? json['site_address']?.toString(),
+      sitePincode: json['sitePincode']?.toString() ?? json['site_pincode']?.toString(),
+      posVerified: json['posVerified'] == true || json['pos_verified'] == true,
       notes: json['notes']?.toString(),
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
       deleteReason: json['deleteReason']?.toString() ?? json['delete_reason']?.toString(),
@@ -142,6 +157,11 @@ class Project {
         'actualCompletionDate': actualCompletionDate!.toIso8601String().split('T')[0],
       'status': status.name,
       'budgetAmount': budgetAmount,
+      if (siteState != null) 'siteState': siteState,
+      if (siteStateCode != null) 'siteStateCode': siteStateCode,
+      if (siteAddress != null) 'siteAddress': siteAddress,
+      if (sitePincode != null) 'sitePincode': sitePincode,
+      'posVerified': posVerified,
       if (notes != null) 'notes': notes,
     };
   }
@@ -163,6 +183,11 @@ class Project {
     double? budgetAmount,
     double? totalSalesAmount,
     double? totalCommissionAmount,
+    String? siteState,
+    String? siteStateCode,
+    String? siteAddress,
+    String? sitePincode,
+    bool? posVerified,
     String? notes,
     bool? isDeleted,
     String? deleteReason,
@@ -186,6 +211,11 @@ class Project {
       budgetAmount: budgetAmount ?? this.budgetAmount,
       totalSalesAmount: totalSalesAmount ?? this.totalSalesAmount,
       totalCommissionAmount: totalCommissionAmount ?? this.totalCommissionAmount,
+      siteState: siteState ?? this.siteState,
+      siteStateCode: siteStateCode ?? this.siteStateCode,
+      siteAddress: siteAddress ?? this.siteAddress,
+      sitePincode: sitePincode ?? this.sitePincode,
+      posVerified: posVerified ?? this.posVerified,
       notes: notes ?? this.notes,
       isDeleted: isDeleted ?? this.isDeleted,
       deleteReason: deleteReason ?? this.deleteReason,

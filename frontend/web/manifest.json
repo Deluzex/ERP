@@ -1,11 +1,11 @@
 {
-    "name": "frontend",
-    "short_name": "frontend",
+    "name": "Deluzex ERP",
+    "short_name": "Deluzex ERP",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Deluzex ERP - Enterprise Manufacturing & Inventory Management",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

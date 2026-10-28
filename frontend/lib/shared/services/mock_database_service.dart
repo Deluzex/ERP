@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../../app/routes/app_routes.dart';
 import '../../core/models/architect_model.dart';
+import '../../core/models/bom_model.dart';
 import '../../core/models/category_unit_model.dart';
 import '../../core/models/commission_model.dart';
 import '../../core/models/customer_model.dart';
@@ -11,6 +12,7 @@ import '../../core/models/payment_model.dart';
 import '../../core/models/production_model.dart';
 import '../../core/models/project_model.dart';
 import '../../core/models/purchase_model.dart';
+import '../../core/models/bulk_upload_history_model.dart';
 import '../../core/models/raw_material_model.dart';
 import '../../core/models/rbac_models.dart';
 import '../../core/models/sale_model.dart';
@@ -20,6 +22,7 @@ import '../../core/models/user_model.dart';
 import '../../core/models/vendor_model.dart';
 import '../../core/models/whatsapp_models.dart';
 import '../../core/api/categories_units_api_service.dart';
+import '../../core/api/boms_api_service.dart';
 import '../../core/api/finished_products_api_service.dart';
 import '../../core/api/parties_api_service.dart';
 import '../../core/api/raw_materials_api_service.dart';
@@ -33,10 +36,14 @@ import '../../core/api/sales_api_service.dart';
 import '../../core/api/projects_api_service.dart';
 import '../../core/api/payments_api_service.dart';
 import '../../core/api/expenses_api_service.dart';
+import '../../core/api/expense_categories_api_service.dart';
 import '../../core/api/reports_api_service.dart';
+import '../../core/models/notification_model.dart';
+import '../../core/api/notifications_api_service.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
+import '../../core/storage/erp_cache_manager.dart';
 
 class MockDatabaseService extends ChangeNotifier {
   // Roles & RBAC System
@@ -45,12 +52,16 @@ class MockDatabaseService extends ChangeNotifier {
   late AppUser currentUser;
   List<TemporaryAccessGrant> temporaryGrants = [];
   List<AuditLogEntry> auditLogs = [];
+  List<BulkUploadHistoryRecord> bulkUploadHistory = [];
 
   // Master Lists
   List<ItemCategory> categories = [];
   List<MeasurementUnit> units = [];
+  List<ExpenseCategoryMasterItem> expenseCategoryMasterList = [];
+  List<PaymentModeMasterItem> paymentModeMasterList = [];
   List<RawMaterial> rawMaterials = [];
   List<FinishedProduct> finishedProducts = [];
+  List<BillOfMaterial> boms = [];
   List<Vendor> vendors = [];
   List<Customer> customers = [];
   List<Dealer> dealers = [];
@@ -69,6 +80,7 @@ class MockDatabaseService extends ChangeNotifier {
   List<WhatsAppAlertRecipient> alertRecipients = [];
   List<LowStockAlertRecord> alertHistory = [];
   List<WhatsAppMessageLog> messageLogs = [];
+  List<NotificationItem> notifications = [];
   GlobalSupportConfig globalSupportConfig = const GlobalSupportConfig();
 
   // Counters for doc numbering
@@ -239,7 +251,7 @@ class MockDatabaseService extends ChangeNotifier {
       ),
       Role(
         id: 'accounts_manager',
-        name: 'Accounts / Payment Manager',
+        name: 'Payments Manager',
         description: 'Customer receivables, dealer ledger, vendor settlements, expenses, and commission payouts.',
         isSystemRole: true,
         isActive: true,
@@ -590,6 +602,49 @@ class MockDatabaseService extends ChangeNotifier {
       ),
     ];
 
+    // 0.3 BULK UPLOAD AUDIT & HISTORY LOGS
+    bulkUploadHistory = [
+      BulkUploadHistoryRecord(
+        id: 'UP-HIST-001',
+        fileName: 'raw_materials_q3_import.csv',
+        masterType: 'Raw Materials',
+        uploadedBy: 'Alex Sterling',
+        uploadedAt: DateTime.now().subtract(const Duration(days: 2, hours: 4)),
+        totalRows: 150,
+        importedRows: 120,
+        errorRows: 18,
+        duplicateRows: 12,
+        status: 'PARTIAL',
+        notes: '120 items imported. 18 schema errors (invalid category/unit) and 12 duplicates skipped.',
+      ),
+      BulkUploadHistoryRecord(
+        id: 'UP-HIST-002',
+        fileName: 'commercial_fixtures_master.csv',
+        masterType: 'Finished Products',
+        uploadedBy: 'Rohan Varma',
+        uploadedAt: DateTime.now().subtract(const Duration(days: 5, hours: 1)),
+        totalRows: 45,
+        importedRows: 45,
+        errorRows: 0,
+        duplicateRows: 0,
+        status: 'SUCCESS',
+        notes: 'All 45 products successfully imported with standard catalog pricing.',
+      ),
+      BulkUploadHistoryRecord(
+        id: 'UP-HIST-003',
+        fileName: 'vendor_batch_upload_nov.csv',
+        masterType: 'Raw Materials',
+        uploadedBy: 'Deepak Sharma',
+        uploadedAt: DateTime.now().subtract(const Duration(days: 9, hours: 6)),
+        totalRows: 80,
+        importedRows: 65,
+        errorRows: 5,
+        duplicateRows: 10,
+        status: 'PARTIAL',
+        notes: '65 raw materials added. 10 existing SKU duplicates skipped.',
+      ),
+    ];
+
     // Categories & Units
     categories = [
       ItemCategory(id: 'CAT-1', name: 'Wall Lights & Sconces', description: 'Architectural wall mounted lighting'),
@@ -607,6 +662,144 @@ class MockDatabaseService extends ChangeNotifier {
       MeasurementUnit(id: 'U-5', name: 'Rolls', symbol: 'ROL'),
     ];
 
+    // Expense Categories Master
+    // linkedKey = canonical expense key (backend EXPENSE_CATEGORIES) used when
+    // saving expenses against this category master entry.
+    expenseCategoryMasterList = [
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-1',
+        name: 'Transportation & Logistics',
+        code: 'TRANSPORT',
+        description: 'Freight, vehicle hire, and site material delivery charges',
+        isActive: true,
+        linkedKey: ExpenseCategory.transportation.name,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-2',
+        name: 'Courier & Packaging',
+        code: 'COURIER',
+        description: 'Domestic express parcels, blueprints, and sample dispatches',
+        isActive: true,
+        linkedKey: ExpenseCategory.courier.name,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-3',
+        name: 'Fuel & Conveyance',
+        code: 'FUEL',
+        description: 'Diesel, petrol, client site visits, and local travel allowance',
+        isActive: true,
+        linkedKey: ExpenseCategory.fuel.name,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-4',
+        name: 'Direct Labour & Overtime',
+        code: 'LABOUR',
+        description: 'Contract factory workers, loading/unloading, and site installation wages',
+        isActive: true,
+        linkedKey: ExpenseCategory.labour.name,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-5',
+        name: 'Electricity & Utilities',
+        code: 'UTILITIES',
+        description: 'Factory power bills, backup generator diesel, and water utility',
+        isActive: true,
+        linkedKey: ExpenseCategory.electricity.name,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-6',
+        name: 'Plant & Machinery Maintenance',
+        code: 'MAINTENANCE',
+        description: 'Machine servicing, tooling replacement, and workshop upkeep',
+        isActive: true,
+        linkedKey: ExpenseCategory.maintenance.name,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-7',
+        name: 'Office & Administrative',
+        code: 'OFFICE',
+        description: 'Stationery, pantry supplies, software subscriptions, and internet',
+        isActive: true,
+        linkedKey: ExpenseCategory.officeExpense.name,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-8',
+        name: 'Production Consumables',
+        code: 'PRODUCTION',
+        description: 'Safety gear, cutting blades, adhesives, and workshop consumables',
+        isActive: true,
+        linkedKey: ExpenseCategory.productionExpense.name,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-9',
+        name: 'Project Site Expenses',
+        code: 'PROJECT',
+        description: 'Architect sample mocks, scaffold hire, and site coordination fees',
+        isActive: true,
+        linkedKey: ExpenseCategory.projectExpense.name,
+      ),
+      ExpenseCategoryMasterItem(
+        id: 'EXP-CAT-10',
+        name: 'General & Miscellaneous',
+        code: 'OTHER',
+        description: 'Incidental business expenses and petty cash charges',
+        isActive: true,
+        linkedKey: ExpenseCategory.other.name,
+      ),
+    ];
+
+    // Payment Modes Master
+    paymentModeMasterList = [
+      PaymentModeMasterItem(
+        id: 'PM-1',
+        name: 'Bank Transfer (NEFT / RTGS / IMPS)',
+        code: 'BANK_TRANSFER',
+        type: 'Bank / Electronic',
+        description: 'Direct account-to-account online bank settlement with UTR reference',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-2',
+        name: 'UPI / QR Code',
+        code: 'UPI',
+        type: 'Digital',
+        description: 'Instant mobile UPI payment via Google Pay, PhonePe, or BHIM',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-3',
+        name: 'Cheque / Demand Draft',
+        code: 'CHEQUE',
+        type: 'Banking Instrument',
+        description: 'Clearing cheque or banker draft with cheque number and drawer bank',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-4',
+        name: 'Cash',
+        code: 'CASH',
+        type: 'Cash',
+        description: 'Direct physical cash receipt or cash voucher payment',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-5',
+        name: 'Company Credit / Debit Card',
+        code: 'CARD',
+        type: 'Card',
+        description: 'Corporate POS card swipe or online payment gateway transaction',
+        isActive: true,
+      ),
+      PaymentModeMasterItem(
+        id: 'PM-6',
+        name: 'Credit Note / Ledger Adjustment',
+        code: 'CREDIT_NOTE',
+        type: 'Ledger Adjustment',
+        description: 'Contra settlement against sales returns or dealer debit balances',
+        isActive: true,
+      ),
+    ];
+
     // Vendors
     vendors = [
       Vendor(
@@ -618,6 +811,8 @@ class MockDatabaseService extends ChangeNotifier {
         gstNumber: '27AAACA1234F1Z5',
         panNumber: 'AAACA1234F',
         address: 'Plot 42, GIDC Industrial Estate, Surat, Gujarat',
+        state: 'Gujarat',
+        pincode: '395007',
         paymentTerms: 'Net 30 Days',
         creditLimit: 500000.0,
         outstandingBalance: 145000.0,
@@ -632,6 +827,8 @@ class MockDatabaseService extends ChangeNotifier {
         gstNumber: '29AABCL5543K1ZQ',
         panNumber: 'AABCL5543K',
         address: 'Electronic City Phase 1, Bengaluru, Karnataka',
+        state: 'Karnataka',
+        pincode: '560100',
         paymentTerms: 'Net 15 Days',
         creditLimit: 800000.0,
         outstandingBalance: 230000.0,
@@ -646,6 +843,8 @@ class MockDatabaseService extends ChangeNotifier {
         gstNumber: '07AAECP8876H1Z2',
         panNumber: 'AAECP8876H',
         address: 'Okhla Industrial Area Phase III, New Delhi',
+        state: 'Delhi',
+        pincode: '110020',
         paymentTerms: 'Immediate / Advance',
         creditLimit: 300000.0,
         outstandingBalance: 65000.0,
@@ -662,6 +861,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'procurement@oberoiskycity.com',
         gstNumber: '27AABCO8890K1Z9',
         address: 'Borivali East, Western Express Highway, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400066',
         outstandingAmount: 380000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 80)),
       ),
@@ -672,6 +873,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'projects@grandhyattmumbai.com',
         gstNumber: '27AACCG1122D1ZP',
         address: 'Santacruz East, Mumbai, Maharashtra',
+        state: 'Maharashtra',
+        pincode: '400055',
         outstandingAmount: 0.0,
         createdAt: DateTime.now().subtract(const Duration(days: 45)),
       ),
@@ -682,6 +885,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'singhania.estate@gmail.com',
         gstNumber: '27AAFPS3322E1Z3',
         address: 'Lower Parel, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400013',
         outstandingAmount: 125000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 30)),
       ),
@@ -692,6 +897,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'studio@sanjaypuriarchitects.com',
         gstNumber: '27AABCS5566N1Z1',
         address: 'Worli Sea Face, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400018',
         outstandingAmount: 65000.0,
         linkedArchitectId: 'ARCH-001',
         isAlsoArchitect: true,
@@ -710,6 +917,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'karan@luxelightings.in',
         gstNumber: '29AABFL4433J1Z8',
         address: 'Indiranagar 100ft Road, Bengaluru, Karnataka',
+        state: 'Karnataka',
+        pincode: '560038',
         outstandingAmount: 210000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 100)),
       ),
@@ -722,6 +931,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'anita@aurastudio.com',
         gstNumber: '27AAGCA9988M1ZL',
         address: 'Koregaon Park, Pune, Maharashtra',
+        state: 'Maharashtra',
+        pincode: '411001',
         outstandingAmount: 95000.0,
         createdAt: DateTime.now().subtract(const Duration(days: 70)),
       ),
@@ -737,6 +948,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'studio@sanjaypuriarchitects.com',
         gstNumber: '27AABCS5566N1Z1',
         address: 'Worli Sea Face, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400018',
         defaultCommissionRate: 5.0,
         totalCommissionEarned: 185000.0,
         pendingCommission: 45000.0,
@@ -754,6 +967,8 @@ class MockDatabaseService extends ChangeNotifier {
         email: 'shabnam@theorangelane.com',
         gstNumber: '27AABCT9988P1Z4',
         address: 'Bandra West, Mumbai',
+        state: 'Maharashtra',
+        pincode: '400050',
         defaultCommissionRate: 6.0,
         totalCommissionEarned: 120000.0,
         pendingCommission: 30000.0,
@@ -794,6 +1009,21 @@ class MockDatabaseService extends ChangeNotifier {
         totalCommissionAmount: 28800.0,
         notes: 'Hand-blown glass pendants and warm dimming fixtures',
         createdAt: DateTime.now().subtract(const Duration(days: 40)),
+      ),
+      Project(
+        id: 'PRJ-003',
+        name: 'The St. Regis Penthouse Luxury Suites',
+        customerId: 'CUST-003',
+        customerName: 'The St. Regis Penthouse (Mr. Singhania)',
+        architectId: 'ARCH-001',
+        architectName: 'Ar. Sanjay Puri',
+        startDate: DateTime.now().subtract(const Duration(days: 25)),
+        expectedCompletionDate: DateTime.now().add(const Duration(days: 60)),
+        status: ProjectStatus.active,
+        totalSalesAmount: 520000.0,
+        totalCommissionAmount: 26000.0,
+        notes: 'Bespoke architectural pendant lighting and automation controls',
+        createdAt: DateTime.now().subtract(const Duration(days: 25)),
       ),
     ];
 
@@ -943,6 +1173,231 @@ class MockDatabaseService extends ChangeNotifier {
         gstPercent: 18.0,
         createdAt: DateTime.now().subtract(const Duration(days: 70)),
         updatedAt: DateTime.now(),
+      ),
+    ];
+
+    // Seed Bill of Materials (BOM Recipes)
+    boms = [
+      BillOfMaterial(
+        id: 'BOM-001',
+        finishedProductId: 'FP-001',
+        finishedProductName: 'Aarix Axis Wall Light',
+        finishedProductCode: 'DLX-WL-001',
+        name: 'Standard Aarix Wall Light Assembly',
+        description: 'Complete assembly kit for Aarix Axis architectural wall fixture',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Active',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-01',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 1.2,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-02',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-03',
+            rawMaterialId: 'RM-003',
+            rawMaterialName: 'Tridonic Constant Current LED Driver 40W Dimmable',
+            rawMaterialCode: 'RAW-DRV-40W',
+            quantityPerUnit: 1.0,
+            unit: 'PCS',
+            unitCost: 620.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-04',
+            rawMaterialId: 'RM-005',
+            rawMaterialName: 'Brass CNC Machined End Caps (Brushed Gold)',
+            rawMaterialCode: 'RAW-BRS-CAP',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 280.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 60)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 10)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-002',
+        finishedProductId: 'FP-002',
+        finishedProductName: 'Aarix Linear Suspension Pendant 1200mm',
+        finishedProductCode: 'DLX-PD-002',
+        name: '1200mm Architectural Linear Pendant Recipe',
+        description: 'Suspended architectural lighting fixture with anti-glare opal diffuser',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Active',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-05',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 2.4,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-06',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 4.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-07',
+            rawMaterialId: 'RM-003',
+            rawMaterialName: 'Tridonic Constant Current LED Driver 40W Dimmable',
+            rawMaterialCode: 'RAW-DRV-40W',
+            quantityPerUnit: 1.0,
+            unit: 'PCS',
+            unitCost: 620.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-08',
+            rawMaterialId: 'RM-004',
+            rawMaterialName: 'Opal Frosted Acrylic Diffuser Sheet 3mm',
+            rawMaterialCode: 'RAW-DIF-OPAL',
+            quantityPerUnit: 1.0,
+            unit: 'PCS',
+            unitCost: 420.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-09',
+            rawMaterialId: 'RM-005',
+            rawMaterialName: 'Brass CNC Machined End Caps (Brushed Gold)',
+            rawMaterialCode: 'RAW-BRS-CAP',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 280.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 45)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 5)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-003',
+        finishedProductId: 'FP-003',
+        finishedProductName: 'Aura Halo Minimalist Ring Light 900mm',
+        finishedProductCode: 'DLX-CH-003',
+        name: '900mm Circular Chandelier Halo Assembly',
+        description: 'Ring pendant with dual high-output LED drivers and opal diffusion',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Active',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-10',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 3.0,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-11',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 6.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-12',
+            rawMaterialId: 'RM-003',
+            rawMaterialName: 'Tridonic Constant Current LED Driver 40W Dimmable',
+            rawMaterialCode: 'RAW-DRV-40W',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 620.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-13',
+            rawMaterialId: 'RM-004',
+            rawMaterialName: 'Opal Frosted Acrylic Diffuser Sheet 3mm',
+            rawMaterialCode: 'RAW-DIF-OPAL',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 420.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 30)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 2)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-004',
+        finishedProductId: 'FP-001',
+        finishedProductName: 'Aarix Axis Wall Light',
+        finishedProductCode: 'DLX-WL-001',
+        name: 'Aarix Wall Light (Custom Finish Formula)',
+        description: 'Draft BOM formula for architectural custom finish variants',
+        outputQuantity: 1.0,
+        isActive: true,
+        status: 'Draft',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-14',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 1.2,
+            wastagePercent: 3.0,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+          const BomItem(
+            id: 'BOM-ITM-15',
+            rawMaterialId: 'RM-002',
+            rawMaterialName: 'Lumileds 2835 High-CRI LED Module 3000K',
+            rawMaterialCode: 'RAW-LED-3000K',
+            quantityPerUnit: 2.0,
+            unit: 'PCS',
+            unitCost: 140.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 15)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 1)),
+      ),
+      BillOfMaterial(
+        id: 'BOM-005',
+        finishedProductId: 'FP-002',
+        finishedProductName: 'Aarix Linear Suspension Pendant 1200mm',
+        finishedProductCode: 'DLX-PD-002',
+        name: 'Legacy Linear Pendant Formulation (v1 Archive)',
+        description: 'Archived formula replaced by standard linear assembly recipe',
+        outputQuantity: 1.0,
+        isActive: false,
+        status: 'Inactive',
+        items: [
+          const BomItem(
+            id: 'BOM-ITM-16',
+            rawMaterialId: 'RM-001',
+            rawMaterialName: 'Aarix Extruded Aluminum Housing 6063-T6',
+            rawMaterialCode: 'RAW-AL-6063',
+            quantityPerUnit: 2.5,
+            wastagePercent: 5.0,
+            unit: 'MTR',
+            unitCost: 380.0,
+          ),
+        ],
+        createdAt: DateTime.now().subtract(const Duration(days: 120)),
+        updatedAt: DateTime.now().subtract(const Duration(days: 90)),
       ),
     ];
 
@@ -1843,6 +2298,66 @@ class MockDatabaseService extends ChangeNotifier {
         status: 'Delivered',
       ),
     ];
+
+    // Seed Initial Role-Based Notifications
+    notifications = [
+      NotificationItem(
+        id: 'NOTIF-001',
+        title: 'Purchase Requisition: Brass Architectural Sconce',
+        message: 'Requisition of 40 PCS requested for Sales Order DLZ/SO/2026/0074 (Customer: Oberoi Sky City Residences).',
+        notificationType: 'purchase_requisition',
+        targetRole: 'purchase_manager',
+        recipientUserId: 'USR-003',
+        recipientName: 'Vikram Mehta',
+        recipientEmail: 'purchase@deluzex.com',
+        sourceModule: 'sales',
+        relatedEntityType: 'sales_order',
+        relatedEntityId: 'SO-001',
+        data: {
+          'salesOrderNumber': 'DLZ/SO/2026/0074',
+          'salesOrderId': 'SO-001',
+          'customerName': 'Oberoi Sky City Residences',
+          'productName': 'Brass Architectural Sconce',
+          'productSku': 'DLX-WL-001',
+          'requestedQuantity': 50.0,
+          'availableStock': 10.0,
+          'shortageQuantity': 40.0,
+          'requestType': 'Purchase',
+          'sourceModule': 'Sales Orders',
+          'route': '/purchase/orders',
+        },
+        isRead: false,
+        createdAt: now.subtract(const Duration(hours: 1)),
+      ),
+      NotificationItem(
+        id: 'NOTIF-002',
+        title: 'Production Requisition: Aura Halo Minimalist Ring Light 900mm',
+        message: 'Requisition of 15 PCS requested for Sales Order DLZ/SO/2026/0074 (Customer: Oberoi Sky City Residences).',
+        notificationType: 'production_requisition',
+        targetRole: 'production_manager',
+        recipientUserId: 'USR-004',
+        recipientName: 'Ananya Desai',
+        recipientEmail: 'production@deluzex.com',
+        sourceModule: 'sales',
+        relatedEntityType: 'sales_order',
+        relatedEntityId: 'SO-001',
+        data: {
+          'salesOrderNumber': 'DLZ/SO/2026/0074',
+          'salesOrderId': 'SO-001',
+          'customerName': 'Oberoi Sky City Residences',
+          'productName': 'Aura Halo Minimalist Ring Light 900mm',
+          'productSku': 'DLX-CH-003',
+          'requestedQuantity': 20.0,
+          'availableStock': 5.0,
+          'shortageQuantity': 15.0,
+          'requestType': 'Production',
+          'sourceModule': 'Sales Orders',
+          'route': '/production/orders',
+        },
+        isRead: false,
+        createdAt: now.subtract(const Duration(minutes: 45)),
+      ),
+    ];
   }
 
   // -------------------------------------------------------------
@@ -1884,10 +2399,15 @@ class MockDatabaseService extends ChangeNotifier {
   // PURCHASE WORKFLOWS
   // -------------------------------------------------------------
   void createPurchase(Purchase purchase) {
-    purchases.insert(0, purchase);
+    final allocatedItems = PurchaseLineItem.allocateTransportation(
+      items: purchase.items,
+      transportationCharges: purchase.transportationCharges,
+    );
+    final finalPurchase = purchase.copyWith(items: allocatedItems);
+    purchases.insert(0, finalPurchase);
 
-    if (purchase.status != PurchaseStatus.draft && purchase.status != PurchaseStatus.cancelled) {
-      for (final line in purchase.items) {
+    if (finalPurchase.status != PurchaseStatus.draft && finalPurchase.status != PurchaseStatus.cancelled) {
+      for (final line in finalPurchase.items) {
         if (purchase.purchaseType == PurchaseItemType.finishedProduct || line.itemType == PurchaseItemType.finishedProduct) {
           // 1A. Finished Product Purchase: Increase Finished Product Stock
           final fpIndex = finishedProducts.indexWhere((fp) =>
@@ -1897,9 +2417,11 @@ class MockDatabaseService extends ChangeNotifier {
             final fp = finishedProducts[fpIndex];
             final updatedStock = fp.currentStock + line.quantity;
             final updatedPurchased = fp.purchasedStock + line.quantity;
+            final newCost = line.landedRate > 0 ? line.landedRate : fp.costPrice;
             finishedProducts[fpIndex] = fp.copyWith(
               currentStock: updatedStock,
               purchasedStock: updatedPurchased,
+              costPrice: newCost,
               updatedAt: DateTime.now(),
             );
 
@@ -1923,8 +2445,10 @@ class MockDatabaseService extends ChangeNotifier {
           if (rmIndex != -1) {
             final rm = rawMaterials[rmIndex];
             final updatedStock = rm.currentStock + line.quantity;
+            final newRate = line.landedRate > 0 ? line.landedRate : rm.defaultPurchasePrice;
             rawMaterials[rmIndex] = rm.copyWith(
               currentStock: updatedStock,
+              defaultPurchasePrice: newRate,
               updatedAt: DateTime.now(),
             );
 
@@ -2879,13 +3403,76 @@ class MockDatabaseService extends ChangeNotifier {
     }
 
     sales.insert(0, invoice);
+    _applySaleToProject(invoice);
     notifyListeners();
     return invoice;
+  }
+
+  void _applySaleToProject(Sale sale) {
+    if (sale.projectId != null &&
+        sale.projectId!.isNotEmpty &&
+        sale.documentType == SalesDocumentType.invoice &&
+        sale.status != SaleStatus.cancelled) {
+      final prjIndex = projects.indexWhere((p) => p.id == sale.projectId);
+      if (prjIndex != -1) {
+        final prj = projects[prjIndex];
+        projects[prjIndex] = prj.copyWith(
+          totalSalesAmount: prj.totalSalesAmount + sale.totalAmount,
+          totalCommissionAmount: prj.totalCommissionAmount + sale.architectCommissionAmount,
+        );
+      }
+    }
+  }
+
+  void _generateCommissionForSale(Sale sale) {
+    if (sale.architectId != null &&
+        sale.architectCommissionAmount > 0 &&
+        sale.documentType == SalesDocumentType.invoice &&
+        sale.status != SaleStatus.cancelled) {
+      final exists = commissions.any((c) =>
+          c.saleInvoiceId == sale.id ||
+          (sale.invoiceNumber.isNotEmpty && c.saleInvoiceNumber == sale.invoiceNumber));
+      if (!exists) {
+        final architect = architects.where((a) => a.id == sale.architectId).firstOrNull;
+        if (architect != null) {
+          final saleVal = sale.taxableAmount > 0 ? sale.taxableAmount : sale.totalAmount;
+          final rate = architect.defaultCommissionRate > 0
+              ? architect.defaultCommissionRate
+              : (saleVal > 0 ? (sale.architectCommissionAmount / saleVal * 100) : 0.0);
+          final comm = ArchitectCommission(
+            id: IdGenerator.generateId('COM'),
+            commissionNumber: IdGenerator.generateDocNumber('COM', ++_commissionCounter),
+            architectId: architect.id,
+            architectName: architect.name,
+            saleInvoiceId: sale.id,
+            saleInvoiceNumber: sale.invoiceNumber,
+            projectId: sale.projectId,
+            projectName: sale.projectName,
+            saleAmount: saleVal,
+            commissionRate: rate,
+            commissionAmount: sale.architectCommissionAmount,
+            status: CommissionStatus.generated,
+            generatedDate: DateTime.now(),
+          );
+          commissions.insert(0, comm);
+
+          final archIndex = architects.indexWhere((a) => a.id == architect.id);
+          if (archIndex != -1) {
+            architects[archIndex] = architects[archIndex].copyWith(
+              totalCommissionEarned: architects[archIndex].totalCommissionEarned + sale.architectCommissionAmount,
+              pendingCommission: architects[archIndex].pendingCommission + sale.architectCommissionAmount,
+            );
+          }
+        }
+      }
+    }
   }
 
   // --- 6. DIRECT SALE (IMMEDIATE COUNTER SALE) ---
   void createSale(Sale sale) {
     sales.insert(0, sale);
+    _applySaleToProject(sale);
+    _generateCommissionForSale(sale);
     notifyListeners();
   }
 
@@ -3868,6 +4455,110 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
+  // BILL OF MATERIALS (BOM) MANAGEMENT — Live API (`/api/v1/boms`)
+  // -------------------------------------------------------------
+  BillOfMaterial? getBomForProduct(String finishedProductId) {
+    try {
+      return boms.firstWhere((b) => b.finishedProductId == finishedProductId && b.isActive);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> loadBoms({bool forceRefresh = false}) async {
+    try {
+      final remote = await _bomsApi.getBoms();
+      boms = remote;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadBoms fallback: $e');
+    }
+  }
+
+  List<Map<String, dynamic>> _bomItemsPayload(List<BomItem> items) {
+    return items
+        .map((i) => {
+              'rawMaterialId': i.rawMaterialId,
+              'quantity': i.quantityPerUnit,
+              'unit': i.safeUnit,
+              'scrapPercentage': i.wastagePercent,
+            })
+        .toList();
+  }
+
+  Future<BillOfMaterial> addBomAsync(BillOfMaterial bom) async {
+    final saved = await _bomsApi.createBom(
+      finishedProductId: bom.finishedProductId,
+      yieldQuantity: bom.outputQuantity,
+      active: bom.isActive,
+      items: _bomItemsPayload(bom.items),
+    );
+    // Backend obsoletes the previous ACTIVE recipes of this product when the
+    // new one is created ACTIVE - mirror that on the local list.
+    if (saved.isActive) {
+      for (var i = 0; i < boms.length; i++) {
+        if (boms[i].id != saved.id &&
+            boms[i].finishedProductId == saved.finishedProductId &&
+            boms[i].isActive) {
+          boms[i] = boms[i].copyWith(isActive: false, status: 'Inactive');
+        }
+      }
+    }
+    boms.insert(0, saved);
+    notifyListeners();
+    return saved;
+  }
+
+  Future<BillOfMaterial> updateBomAsync(BillOfMaterial bom) async {
+    final updated = await _bomsApi.updateBom(
+      bom.id,
+      yieldQuantity: bom.outputQuantity,
+      items: _bomItemsPayload(bom.items),
+    );
+    final idx = boms.indexWhere((b) => b.id == bom.id);
+    if (idx != -1) {
+      boms[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<BillOfMaterial> updateBomStatusAsync(String id, String status) async {
+    // Frontend lifecycle labels -> backend lifecycle statuses.
+    final backendStatus =
+        status == 'Draft' ? 'DRAFT' : (status == 'Inactive' ? 'OBSOLETE' : 'ACTIVE');
+    final updated = await _bomsApi.updateStatus(id, backendStatus);
+    // Activating a recipe obsoletes the other ACTIVE recipes of this product.
+    if (updated.isActive) {
+      for (var i = 0; i < boms.length; i++) {
+        if (boms[i].id != updated.id &&
+            boms[i].finishedProductId == updated.finishedProductId &&
+            boms[i].isActive) {
+          boms[i] = boms[i].copyWith(isActive: false, status: 'Inactive');
+        }
+      }
+    }
+    final idx = boms.indexWhere((b) => b.id == id);
+    if (idx != -1) {
+      boms[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  Future<void> deleteBomAsync(String id) async {
+    // The backend BOM Master has no hard delete (versioned lifecycle):
+    // retire the recipe by marking it OBSOLETE, which removes it from active
+    // manufacturing use while preserving the historical record.
+    final updated = await _bomsApi.updateStatus(id, 'OBSOLETE');
+    final idx = boms.indexWhere((b) => b.id == id);
+    if (idx != -1) {
+      boms[idx] = updated;
+      notifyListeners();
+    }
+  }
+
+  // -------------------------------------------------------------
   // WHATSAPP COMMUNICATION & LOW STOCK ALERTS
   // -------------------------------------------------------------
   void addAlertRecipient(WhatsAppAlertRecipient recipient) {
@@ -3982,6 +4673,225 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
+  // ROLE-BASED NOTIFICATIONS & LIFECYCLE
+  // -------------------------------------------------------------
+  List<NotificationItem> getNotificationsForUser([AppUser? user]) {
+    final targetUser = user ?? currentUser;
+    final role = targetUser.primaryRoleId.toLowerCase();
+    final userId = targetUser.id;
+
+    if (role == 'admin') {
+      return List.unmodifiable(notifications);
+    }
+
+    if (role == 'purchase_manager' || role == 'purchase') {
+      return notifications.where((n) {
+        final targetRole = (n.targetRole ?? '').toLowerCase();
+        return targetRole == 'purchase_manager' ||
+            targetRole == 'purchase' ||
+            n.recipientUserId == userId;
+      }).toList();
+    }
+
+    if (role == 'production_manager' || role == 'production') {
+      return notifications.where((n) {
+        final targetRole = (n.targetRole ?? '').toLowerCase();
+        return targetRole == 'production_manager' ||
+            targetRole == 'production' ||
+            n.recipientUserId == userId;
+      }).toList();
+    }
+
+    if (role == 'sales_manager' || role == 'sales') {
+      return notifications.where((n) {
+        final targetRole = (n.targetRole ?? '').toLowerCase();
+        return targetRole == 'sales_manager' ||
+            targetRole == 'sales' ||
+            n.recipientUserId == userId;
+      }).toList();
+    }
+
+    // Other internal roles:
+    final internalRoles = ['inventory_manager', 'accounts_manager', 'project_manager'];
+    if (internalRoles.contains(role)) {
+      return notifications.where((n) {
+        final targetRole = (n.targetRole ?? '').toLowerCase();
+        return targetRole == role || n.recipientUserId == userId;
+      }).toList();
+    }
+
+    // Unrelated / external roles (customers, vendors, guests, data_entry):
+    return notifications.where((n) {
+      return n.recipientUserId == userId &&
+          !n.notificationType.contains('purchase') &&
+          !n.notificationType.contains('production');
+    }).toList();
+  }
+
+  int getUnreadNotificationCount([AppUser? user]) {
+    final list = getNotificationsForUser(user);
+    return list.where((n) => !n.isRead).length;
+  }
+
+  /// Determine whether a given user has the operational role or permission to view low stock alerts.
+  /// Low stock alerts are relevant to warehouse/inventory, procurement/purchases, production lines,
+  /// and executive administration. They are hidden for unrelated roles such as Sales, Accounts,
+  /// Data Entry, or Auditors.
+  bool canViewLowStockAlerts([AppUser? user]) {
+    final targetUser = user ?? currentUser;
+    final role = targetUser.primaryRoleId.toLowerCase().trim();
+
+    // 1. Roles with direct operational stock, replenishment, or oversight responsibility
+    if (role.contains('admin') ||
+        role.contains('inventory') ||
+        role.contains('purchase') ||
+        role.contains('production')) {
+      return true;
+    }
+
+    // 2. Also check if the user has an active temporary grant or custom permission override for inventory
+    if (temporaryGrants.any((g) => !g.isExpired && g.grantedToUserId == targetUser.id && g.module == ErpModule.inventory)) {
+      return true;
+    }
+    if (targetUser.customPermissionOverrides.containsKey(ErpModule.inventory) &&
+        targetUser.customPermissionOverrides[ErpModule.inventory]!.contains(ErpAction.view)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Get role-appropriate low stock count
+  int getLowStockCountForUser([AppUser? user]) {
+    final targetUser = user ?? currentUser;
+    if (!canViewLowStockAlerts(targetUser)) return 0;
+    final role = targetUser.primaryRoleId.toLowerCase().trim();
+
+    if (role.contains('purchase')) {
+      return lowStockRawMaterials.length;
+    }
+    if (role.contains('production')) {
+      return lowStockFinishedProducts.length;
+    }
+    if (role.contains('admin') || role.contains('inventory')) {
+      return totalLowStockCount;
+    }
+    return 0;
+  }
+
+  /// Get role-appropriate low stock label
+  String getLowStockAlertLabelForUser([AppUser? user]) {
+    final targetUser = user ?? currentUser;
+    final role = targetUser.primaryRoleId.toLowerCase().trim();
+
+    if (role.contains('purchase')) {
+      final count = lowStockRawMaterials.length;
+      return '$count Raw Material Alerts';
+    }
+    if (role.contains('production')) {
+      final count = lowStockFinishedProducts.length;
+      return '$count Finished Goods Alerts';
+    }
+    final count = totalLowStockCount;
+    return '$count Low Stock Alerts';
+  }
+
+
+  void createNotification(NotificationItem notification) {
+    // Idempotent retry protection: prevent duplicate notifications within 60 seconds
+    final existing = notifications.where((n) {
+      final isSameSO = n.salesOrderNumber != null &&
+          n.salesOrderNumber == notification.salesOrderNumber;
+      final isSameSku = n.productSku != null &&
+          n.productSku == notification.productSku;
+      final isSameRole = n.targetRole == notification.targetRole;
+      final isRecent = DateTime.now().difference(n.createdAt).inSeconds < 60;
+      return isSameSO && isSameSku && isSameRole && isRecent;
+    }).firstOrNull;
+
+    if (existing != null) return;
+
+    notifications.insert(0, notification);
+    notifyListeners();
+  }
+
+  Future<void> createNotificationAsync(NotificationItem notification) async {
+    try {
+      await _notificationsApi.createNotification(notification.toJson());
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] createNotificationAsync remote fallback: $e');
+      }
+    }
+  }
+
+  void markNotificationAsRead(String id, [AppUser? user]) {
+    final index = notifications.indexWhere((n) => n.id == id);
+    if (index != -1) {
+      final item = notifications[index];
+      notifications[index] = item.copyWith(
+        isRead: true,
+        readAt: DateTime.now(),
+      );
+      notifyListeners();
+    }
+  }
+
+  Future<void> markNotificationAsReadAsync(String id) async {
+    try {
+      await _notificationsApi.markAsRead(id);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] markNotificationAsReadAsync remote fallback: $e');
+      }
+    }
+  }
+
+  void markAllNotificationsAsRead([AppUser? user]) {
+    final visibleIds = getNotificationsForUser(user).map((n) => n.id).toSet();
+    for (int i = 0; i < notifications.length; i++) {
+      if (visibleIds.contains(notifications[i].id)) {
+        notifications[i] = notifications[i].copyWith(
+          isRead: true,
+          readAt: DateTime.now(),
+        );
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> markAllNotificationsAsReadAsync() async {
+    try {
+      await _notificationsApi.markAllAsRead();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] markAllNotificationsAsReadAsync remote fallback: $e');
+      }
+    }
+  }
+
+  Future<void> loadNotificationsAsync() async {
+    try {
+      final res = await _notificationsApi.getNotifications();
+      final remoteItems = res['items'] as List<NotificationItem>? ?? [];
+      for (final r in remoteItems) {
+        final idx = notifications.indexWhere((n) => n.id == r.id);
+        if (idx == -1) {
+          notifications.add(r);
+        } else {
+          notifications[idx] = r;
+        }
+      }
+      notifications.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[MockDatabaseService] loadNotificationsAsync fallback: $e');
+      }
+    }
+  }
+
+  // -------------------------------------------------------------
   // ARCHITECT AS CUSTOMER RELATIONSHIP
   // -------------------------------------------------------------
   void linkArchitectAndCustomer({required String customerId, required String architectId}) {
@@ -4077,6 +4987,7 @@ class MockDatabaseService extends ChangeNotifier {
 
   final VendorsApiService _vendorsApi = VendorsApiService();
   final CategoriesUnitsApiService _categoriesUnitsApi = CategoriesUnitsApiService();
+  final BomsApiService _bomsApi = BomsApiService();
   final RawMaterialsApiService _rawMaterialsApi = RawMaterialsApiService();
   final FinishedProductsApiService _finishedProductsApi = FinishedProductsApiService();
   final PartiesApiService _partiesApi = PartiesApiService();
@@ -4089,10 +5000,14 @@ class MockDatabaseService extends ChangeNotifier {
   final ProjectsApiService _projectsApi = ProjectsApiService();
   final PaymentsApiService _paymentsApi = PaymentsApiService();
   final ExpensesApiService _expensesApi = ExpensesApiService();
+  final ExpenseCategoriesApiService _expenseCategoriesApi = ExpenseCategoriesApiService();
   final ReportsApiService _reportsApi = ReportsApiService();
+  final NotificationsApiService _notificationsApi = NotificationsApiService();
 
   bool _isLoadingProjects = false;
   bool get isLoadingProjects => _isLoadingProjects;
+  bool _hasLoadedProjects = false;
+  bool get hasLoadedProjects => _hasLoadedProjects;
 
   bool _isLoadingVendors = false;
   bool get isLoadingVendors => _isLoadingVendors;
@@ -4100,6 +5015,18 @@ class MockDatabaseService extends ChangeNotifier {
   bool get isLoadingMasters => _isLoadingMasters;
   bool _isLoadingProductionOrders = false;
   bool get isLoadingProductionOrders => _isLoadingProductionOrders;
+
+  Future<bool> loadFromCache() async {
+    return await ErpCacheManager.loadAll(this);
+  }
+
+  Future<void> saveToCache() async {
+    await ErpCacheManager.saveAll(this);
+  }
+
+  Future<void> clearCache() async {
+    await ErpCacheManager.clearAll();
+  }
 
   /// Loads all Phase 1 masters and Phase 2 inventory from NestJS live backend
   Future<void> loadAllMasters({bool forceRefresh = false}) async {
@@ -4114,9 +5041,11 @@ class MockDatabaseService extends ChangeNotifier {
         loadVendors(forceRefresh: forceRefresh),
         loadRawMaterials(forceRefresh: forceRefresh),
         loadFinishedProducts(forceRefresh: forceRefresh),
+        loadBoms(forceRefresh: forceRefresh),
         loadCustomers(forceRefresh: forceRefresh),
         loadDealers(forceRefresh: forceRefresh),
         loadArchitects(forceRefresh: forceRefresh),
+        loadProjects(forceRefresh: forceRefresh),
         loadStockMovements(forceRefresh: forceRefresh),
         loadStockAdjustments(forceRefresh: forceRefresh),
         loadLowStockAlerts(forceRefresh: forceRefresh),
@@ -4126,7 +5055,9 @@ class MockDatabaseService extends ChangeNotifier {
         loadPayments(forceRefresh: forceRefresh),
         loadCommissions(forceRefresh: forceRefresh),
         loadExpenses(forceRefresh: forceRefresh),
+        loadExpenseCategories(forceRefresh: forceRefresh),
       ]);
+      await ErpCacheManager.saveAll(this);
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[MockDatabaseService] Note: loadAllMasters error: $e');
@@ -4355,9 +5286,197 @@ class MockDatabaseService extends ChangeNotifier {
     return saved;
   }
 
+  Future<MeasurementUnit> updateUnitAsync({required String id, required String name, required String symbol}) async {
+    final updated = await _categoriesUnitsApi.updateUnit(id: id, name: name, symbol: symbol);
+    final idx = units.indexWhere((u) => u.id == id);
+    if (idx != -1) {
+      units[idx] = updated;
+      notifyListeners();
+    }
+    return updated;
+  }
+
   Future<void> deleteUnitAsync(String id) async {
     await _categoriesUnitsApi.deleteUnit(id);
     units.removeWhere((u) => u.id == id);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Expense Categories Master CRUD (Live Backend + Offline Cache)
+  // -------------------------------------------------------------
+  Future<void> loadExpenseCategories({bool forceRefresh = false}) async {
+    try {
+      final remote = await _expenseCategoriesApi.getExpenseCategories();
+      if (remote.isNotEmpty) {
+        expenseCategoryMasterList = remote;
+        await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] loadExpenseCategories fallback: $e');
+    }
+  }
+
+  Future<ExpenseCategoryMasterItem> addExpenseCategoryAsync({
+    required String name,
+    required String code,
+    required String description,
+    String? linkedKey,
+  }) async {
+    try {
+      final saved = await _expenseCategoriesApi.createExpenseCategory(
+        name: name,
+        code: code,
+        description: description,
+        linkedKey: linkedKey,
+      );
+      expenseCategoryMasterList.insert(0, saved);
+      await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+      notifyListeners();
+      return saved;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] addExpenseCategoryAsync API error, using local fallback: $e');
+      final newId = 'EXP-CAT-${DateTime.now().millisecondsSinceEpoch}';
+      final item = ExpenseCategoryMasterItem(
+        id: newId,
+        name: name,
+        code: code.trim().toUpperCase(),
+        description: description,
+        isActive: true,
+        linkedKey: linkedKey,
+      );
+      expenseCategoryMasterList.insert(0, item);
+      await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+      notifyListeners();
+      return item;
+    }
+  }
+
+  Future<ExpenseCategoryMasterItem> updateExpenseCategoryAsync({
+    required String id,
+    required String name,
+    required String code,
+    required String description,
+    String? linkedKey,
+  }) async {
+    try {
+      final updated = await _expenseCategoriesApi.updateExpenseCategory(
+        id: id,
+        name: name,
+        code: code,
+        description: description,
+        linkedKey: linkedKey,
+      );
+      final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
+      if (idx != -1) {
+        expenseCategoryMasterList[idx] = updated;
+      }
+      await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updateExpenseCategoryAsync fallback: $e');
+      final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
+      if (idx != -1) {
+        expenseCategoryMasterList[idx] = expenseCategoryMasterList[idx].copyWith(
+          name: name,
+          code: code.trim().toUpperCase(),
+          description: description,
+          linkedKey: linkedKey,
+        );
+        await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+        notifyListeners();
+        return expenseCategoryMasterList[idx];
+      }
+      throw Exception('Expense category not found');
+    }
+  }
+
+  Future<void> toggleExpenseCategoryStatusAsync(String id) async {
+    final idx = expenseCategoryMasterList.indexWhere((c) => c.id == id);
+    if (idx != -1) {
+      final newStatus = !expenseCategoryMasterList[idx].isActive;
+      try {
+        await _expenseCategoriesApi.toggleExpenseCategoryStatus(id, newStatus);
+      } catch (e) {
+        if (kDebugMode) debugPrint('[MockDatabaseService] toggleExpenseCategoryStatusAsync fallback: $e');
+      }
+      expenseCategoryMasterList[idx] = expenseCategoryMasterList[idx].copyWith(
+        isActive: newStatus,
+      );
+      await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteExpenseCategoryAsync(String id) async {
+    try {
+      await _expenseCategoriesApi.deleteExpenseCategory(id);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] deleteExpenseCategoryAsync fallback: $e');
+    }
+    expenseCategoryMasterList.removeWhere((c) => c.id == id);
+    await ErpCacheManager.saveExpenseCategories(expenseCategoryMasterList);
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Payment Modes Master CRUD
+  // -------------------------------------------------------------
+  Future<PaymentModeMasterItem> addPaymentModeAsync({
+    required String name,
+    required String code,
+    required String type,
+    required String description,
+  }) async {
+    final newId = 'PM-${paymentModeMasterList.length + 1}';
+    final item = PaymentModeMasterItem(
+      id: newId,
+      name: name,
+      code: code.trim().toUpperCase(),
+      type: type,
+      description: description,
+      isActive: true,
+    );
+    paymentModeMasterList.insert(0, item);
+    notifyListeners();
+    return item;
+  }
+
+  Future<PaymentModeMasterItem> updatePaymentModeAsync({
+    required String id,
+    required String name,
+    required String code,
+    required String type,
+    required String description,
+  }) async {
+    final idx = paymentModeMasterList.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      paymentModeMasterList[idx] = paymentModeMasterList[idx].copyWith(
+        name: name,
+        code: code.trim().toUpperCase(),
+        type: type,
+        description: description,
+      );
+      notifyListeners();
+      return paymentModeMasterList[idx];
+    }
+    throw Exception('Payment mode not found');
+  }
+
+  Future<void> togglePaymentModeStatusAsync(String id) async {
+    final idx = paymentModeMasterList.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      paymentModeMasterList[idx] = paymentModeMasterList[idx].copyWith(
+        isActive: !paymentModeMasterList[idx].isActive,
+      );
+      notifyListeners();
+    }
+  }
+
+  Future<void> deletePaymentModeAsync(String id) async {
+    paymentModeMasterList.removeWhere((p) => p.id == id);
     notifyListeners();
   }
 
@@ -4376,19 +5495,25 @@ class MockDatabaseService extends ChangeNotifier {
 
   Future<RawMaterial> addRawMaterialAsync(RawMaterial rm) async {
     final saved = await _rawMaterialsApi.createRawMaterial(rm);
-    rawMaterials.insert(0, saved);
+    final effectiveRm = (saved.currentStock == 0 && rm.currentStock > 0)
+        ? saved.copyWith(currentStock: rm.currentStock, openingStock: rm.openingStock)
+        : saved;
+    rawMaterials.insert(0, effectiveRm);
     notifyListeners();
-    return saved;
+    return effectiveRm;
   }
 
   Future<RawMaterial> updateRawMaterialAsync(RawMaterial rm) async {
     final updated = await _rawMaterialsApi.updateRawMaterial(rm);
+    final effectiveRm = (updated.currentStock == 0 && rm.currentStock > 0)
+        ? updated.copyWith(currentStock: rm.currentStock)
+        : updated;
     final idx = rawMaterials.indexWhere((item) => item.id == rm.id);
     if (idx != -1) {
-      rawMaterials[idx] = updated;
+      rawMaterials[idx] = effectiveRm;
       notifyListeners();
     }
-    return updated;
+    return effectiveRm;
   }
 
   Future<void> deleteRawMaterialAsync(String id) async {
@@ -4397,6 +5522,92 @@ class MockDatabaseService extends ChangeNotifier {
     if (idx != -1) {
       rawMaterials[idx] = rawMaterials[idx].copyWith(isDeleted: true, deletedAt: DateTime.now());
       notifyListeners();
+    }
+  }
+
+  void recordBulkUploadHistory({
+    required String fileName,
+    required String masterType,
+    required String uploadedBy,
+    required int totalRows,
+    required int importedRows,
+    required int errorRows,
+    required int duplicateRows,
+    required String status,
+    String? notes,
+  }) {
+    final rec = BulkUploadHistoryRecord(
+      id: 'UP-HIST-${DateTime.now().millisecondsSinceEpoch}',
+      fileName: fileName,
+      masterType: masterType,
+      uploadedBy: uploadedBy,
+      uploadedAt: DateTime.now(),
+      totalRows: totalRows,
+      importedRows: importedRows,
+      errorRows: errorRows,
+      duplicateRows: duplicateRows,
+      status: status,
+      notes: notes,
+    );
+    bulkUploadHistory.insert(0, rec);
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> bulkImportRawMaterialsAsync(
+    List<Map<String, dynamic>> items, {
+    String duplicatePolicy = 'SKIP',
+  }) async {
+    try {
+      final result = await _rawMaterialsApi.bulkImportRawMaterials(
+        items,
+        duplicatePolicy: duplicatePolicy,
+      );
+      await loadRawMaterials(forceRefresh: true);
+      notifyListeners();
+      return result;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] bulkImportRawMaterials API error, falling back to local memory: $e');
+      int imported = 0;
+      int duplicates = 0;
+      for (final it in items) {
+        final code = (it['itemCode'] as String? ?? '').toUpperCase();
+        if (rawMaterials.any((r) => !r.isDeleted && r.itemCode.toUpperCase() == code)) {
+          duplicates++;
+          continue;
+        }
+        final cat = categories.firstWhere((c) => c.id == it['categoryId'], orElse: () => categories.first);
+        final unit = units.firstWhere((u) => u.id == it['unitId'], orElse: () => units.first);
+        final newRm = RawMaterial(
+          id: 'RM-${DateTime.now().millisecondsSinceEpoch}-${imported + 1}',
+          name: it['name'] ?? '',
+          itemCode: code,
+          categoryId: cat.id,
+          categoryName: cat.name,
+          unit: unit.symbol,
+          hsnSacCode: it['hsnSacCode'],
+          openingStock: (it['openingStock'] as num?)?.toDouble() ?? 0.0,
+          currentStock: (it['openingStock'] as num?)?.toDouble() ?? 0.0,
+          minimumStock: (it['minimumStock'] as num?)?.toDouble() ?? 0.0,
+          reorderLevel: (it['reorderLevel'] as num?)?.toDouble() ?? 0.0,
+          defaultPurchasePrice: (it['defaultPurchasePrice'] as num?)?.toDouble() ?? 0.0,
+          gstPercent: (it['gstPercent'] as num?)?.toDouble() ?? 18.0,
+          preferredVendorIds: (it['preferredVendorIds'] as List?)?.cast<String>() ?? [],
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        rawMaterials.insert(0, newRm);
+        imported++;
+      }
+      notifyListeners();
+      return {
+        'totalRows': items.length,
+        'importedCount': imported,
+        'duplicateCount': duplicates,
+        'skippedCount': duplicates,
+        'failedCount': 0,
+        'importedIds': [],
+        'errors': [],
+      };
     }
   }
 
@@ -4415,19 +5626,25 @@ class MockDatabaseService extends ChangeNotifier {
 
   Future<FinishedProduct> addFinishedProductAsync(FinishedProduct fp) async {
     final saved = await _finishedProductsApi.createFinishedProduct(fp);
-    finishedProducts.insert(0, saved);
+    final effectiveFp = (saved.currentStock == 0 && fp.currentStock > 0)
+        ? saved.copyWith(currentStock: fp.currentStock, openingStock: fp.openingStock)
+        : saved;
+    finishedProducts.insert(0, effectiveFp);
     notifyListeners();
-    return saved;
+    return effectiveFp;
   }
 
   Future<FinishedProduct> updateFinishedProductAsync(FinishedProduct fp) async {
     final updated = await _finishedProductsApi.updateFinishedProduct(fp);
+    final effectiveFp = (updated.currentStock == 0 && fp.currentStock > 0)
+        ? updated.copyWith(currentStock: fp.currentStock)
+        : updated;
     final idx = finishedProducts.indexWhere((item) => item.id == fp.id);
     if (idx != -1) {
-      finishedProducts[idx] = updated;
+      finishedProducts[idx] = effectiveFp;
       notifyListeners();
     }
-    return updated;
+    return effectiveFp;
   }
 
   Future<void> deleteFinishedProductAsync(String id) async {
@@ -4436,6 +5653,64 @@ class MockDatabaseService extends ChangeNotifier {
     if (idx != -1) {
       finishedProducts[idx] = finishedProducts[idx].copyWith(isDeleted: true, deletedAt: DateTime.now());
       notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> bulkImportFinishedProductsAsync(
+    List<Map<String, dynamic>> items, {
+    String duplicatePolicy = 'SKIP',
+  }) async {
+    try {
+      final result = await _finishedProductsApi.bulkImportFinishedProducts(
+        items,
+        duplicatePolicy: duplicatePolicy,
+      );
+      await loadFinishedProducts(forceRefresh: true);
+      notifyListeners();
+      return result;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] bulkImportFinishedProducts API error, falling back to local memory: $e');
+      int imported = 0;
+      int duplicates = 0;
+      for (final it in items) {
+        final code = (it['itemCode'] as String? ?? '').toUpperCase();
+        if (finishedProducts.any((p) => !p.isDeleted && p.itemCode.toUpperCase() == code)) {
+          duplicates++;
+          continue;
+        }
+        final cat = categories.firstWhere((c) => c.id == it['categoryId'], orElse: () => categories.first);
+        final unit = units.firstWhere((u) => u.id == it['unitId'], orElse: () => units.first);
+        final newFp = FinishedProduct(
+          id: 'FP-${DateTime.now().millisecondsSinceEpoch}-${imported + 1}',
+          name: it['name'] ?? '',
+          itemCode: code,
+          categoryId: cat.id,
+          categoryName: cat.name,
+          unit: unit.symbol,
+          hsnSacCode: it['hsnSacCode'],
+          openingStock: (it['openingStock'] as num?)?.toDouble() ?? 0.0,
+          currentStock: (it['openingStock'] as num?)?.toDouble() ?? 0.0,
+          minimumStock: (it['minimumStock'] as num?)?.toDouble() ?? 0.0,
+          costPrice: (it['costPrice'] as num?)?.toDouble() ?? 0.0,
+          dealerSellingPrice: (it['dealerSellingPrice'] as num?)?.toDouble() ?? 0.0,
+          customerSellingPrice: (it['customerSellingPrice'] as num?)?.toDouble() ?? 0.0,
+          gstPercent: (it['gstPercent'] as num?)?.toDouble() ?? 18.0,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        finishedProducts.insert(0, newFp);
+        imported++;
+      }
+      notifyListeners();
+      return {
+        'totalRows': items.length,
+        'importedCount': imported,
+        'duplicateCount': duplicates,
+        'skippedCount': duplicates,
+        'failedCount': 0,
+        'importedIds': [],
+        'errors': [],
+      };
     }
   }
 
@@ -4892,13 +6167,13 @@ class MockDatabaseService extends ChangeNotifier {
 
   Future<void> loadProjects({bool forceRefresh = false, String? search, String? status}) async {
     if (_isLoadingProjects && !forceRefresh) return;
+    if (_hasLoadedProjects && !forceRefresh && search == null && status == null) return;
     _isLoadingProjects = true;
     try {
       final remote = await _projectsApi.getProjects(search: search, status: status);
-      if (remote.isNotEmpty || forceRefresh) {
-        projects = remote;
-        notifyListeners();
-      }
+      projects = remote;
+      _hasLoadedProjects = true;
+      notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadProjects fallback: $e');
     } finally {
@@ -4910,6 +6185,7 @@ class MockDatabaseService extends ChangeNotifier {
     try {
       final saved = await _projectsApi.createProject(project);
       projects.insert(0, saved);
+      _hasLoadedProjects = true;
       notifyListeners();
       return saved;
     } catch (e) {
@@ -4989,8 +6265,21 @@ class MockDatabaseService extends ChangeNotifier {
   int get ordersReadyForDispatchCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.readyForDispatch).length;
   int get ordersPartiallyDeliveredCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.partiallyDelivered).length;
 
-  double get totalInvoicedRevenue => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount);
-  double get totalSalesReturnsAmount => approvedSalesReturns.fold(0.0, (sum, s) => sum + s.totalAmount);
+  double get totalInvoicedRevenue => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount.abs());
+  double get totalSalesReturnsAmount {
+    if (salesDashboardMetrics.containsKey('totalSalesReturnsAmount')) {
+      final v = salesDashboardMetrics['totalSalesReturnsAmount'];
+      if (v != null) {
+        final val = (v as num).toDouble().abs();
+        if (val > 0) return val;
+      }
+    }
+    final approved = approvedSalesReturns.fold(0.0, (sum, s) => sum + s.totalAmount.abs());
+    if (approved > 0) return approved;
+    return salesReturns
+        .where((s) => s.salesReturnStatus != SalesReturnStatus.rejected)
+        .fold(0.0, (sum, s) => sum + s.totalAmount.abs());
+  }
   double get netSalesRevenue => (totalSalesAmount - totalSalesReturnsAmount).clamp(0.0, double.infinity);
   double get salesReturnRatePercentage => totalSalesAmount > 0 ? (totalSalesReturnsAmount / totalSalesAmount) * 100 : 0.0;
   int get pendingRefundsCount => salesReturns.where((r) => r.refundStatus == RefundStatus.pending).length;
@@ -4998,8 +6287,8 @@ class MockDatabaseService extends ChangeNotifier {
 
   double get totalSalesAmount => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount);
   double get totalPurchaseAmount => purchases.fold(0.0, (sum, p) => sum + p.totalAmount);
-  double get rawMaterialStockValue => rawMaterials.fold(0.0, (sum, rm) => sum + rm.totalValuation);
-  double get finishedProductStockValue => finishedProducts.fold(0.0, (sum, fp) => sum + fp.totalValuation);
+  double get rawMaterialStockValue => rawMaterials.where((rm) => !rm.isDeleted).fold(0.0, (sum, rm) => sum + rm.totalValuation);
+  double get finishedProductStockValue => finishedProducts.where((fp) => !fp.isDeleted).fold(0.0, (sum, fp) => sum + fp.totalValuation);
   double get totalStockValue => rawMaterialStockValue + finishedProductStockValue;
 
   double get todaySalesAmount {
@@ -5009,12 +6298,56 @@ class MockDatabaseService extends ChangeNotifier {
         .fold(0.0, (sum, s) => sum + s.totalAmount);
   }
 
-  double get pendingCustomerPayments => customers.fold(0.0, (sum, c) => sum + c.outstandingAmount);
-  double get pendingVendorPayments => vendors.where((v) => !v.isDeleted).fold(0.0, (sum, v) => sum + v.outstandingBalance);
-  double get pendingCommissionAmount => architects.fold(0.0, (sum, a) => sum + a.pendingCommission + a.approvedCommission);
+  double get pendingCustomerPayments {
+    final fromCustomers = customers.where((c) => !c.isDeleted).fold(0.0, (sum, c) => sum + c.outstandingAmount);
+    final fromInvoices = salesInvoices.where((s) => s.status != SaleStatus.cancelled).fold(0.0, (sum, s) => sum + s.pendingAmount);
+    if (fromCustomers > 0 && fromCustomers >= fromInvoices) {
+      return fromCustomers;
+    }
+    if (fromInvoices > 0) {
+      return fromInvoices;
+    }
+    return fromCustomers;
+  }
 
-  List<RawMaterial> get lowStockRawMaterials => rawMaterials.where((rm) => rm.isLowStock).toList();
-  List<FinishedProduct> get lowStockFinishedProducts => finishedProducts.where((fp) => fp.isLowStock).toList();
+  double get pendingVendorPayments {
+    final fromVendors = vendors.where((v) => !v.isDeleted).fold(0.0, (sum, v) => sum + v.outstandingBalance);
+    final fromPurchases = purchases.where((p) => p.status != PurchaseStatus.cancelled).fold(0.0, (sum, p) => sum + p.pendingAmount);
+    if (fromVendors > 0 && fromVendors >= fromPurchases) {
+      return fromVendors;
+    }
+    if (fromPurchases > 0) {
+      return fromPurchases;
+    }
+    return fromVendors;
+  }
+
+  double get pendingCommissionAmount {
+    // 1. Calculate from active commission vouchers (generated or approved)
+    final fromCommissions = commissions
+        .where((c) => c.status == CommissionStatus.generated || c.status == CommissionStatus.approved)
+        .fold(0.0, (sum, c) => sum + c.commissionAmount);
+
+    // 2. Calculate from architect entity dues
+    final fromArchitects = architects
+        .where((a) => !a.isDeleted)
+        .fold(0.0, (sum, a) => sum + a.pendingCommission + a.approvedCommission);
+
+    if (fromCommissions > 0 && fromCommissions >= fromArchitects) {
+      return fromCommissions;
+    }
+    if (fromArchitects > 0) {
+      return fromArchitects;
+    }
+
+    // 3. Fallback to active sales invoices with architect commission
+    return salesInvoices
+        .where((s) => s.architectId != null && s.architectCommissionAmount > 0 && s.status != SaleStatus.cancelled)
+        .fold(0.0, (sum, s) => sum + s.architectCommissionAmount);
+  }
+
+  List<RawMaterial> get lowStockRawMaterials => rawMaterials.where((rm) => !rm.isDeleted && rm.isLowStock).toList();
+  List<FinishedProduct> get lowStockFinishedProducts => finishedProducts.where((fp) => !fp.isDeleted && fp.isLowStock).toList();
   int get totalLowStockCount => lowStockRawMaterials.length + lowStockFinishedProducts.length;
 
   int get nextPurchaseNumber => ++_purchaseCounter;
@@ -5554,7 +6887,7 @@ class MockDatabaseService extends ChangeNotifier {
   int? _quotationValidDays(Sale quotation) =>
       quotation.validUntil?.difference(DateTime.now()).inDays.clamp(1, 3650);
 
-  Future<Sale> createQuotationAsync(Sale quotation) async {
+  Future<Sale> createQuotationAsync(Sale quotation, {String? placeOfSupplyState, String? placeOfSupplyStateCode}) async {
     try {
       final created = await _salesApi.createQuotation(
         partyType: quotation.partyType,
@@ -5568,6 +6901,8 @@ class MockDatabaseService extends ChangeNotifier {
         items: quotation.items,
         notes: quotation.notes,
         termsAndConditions: quotation.termsAndConditions,
+        placeOfSupplyState: placeOfSupplyState,
+        placeOfSupplyStateCode: placeOfSupplyStateCode,
       );
       sales.insert(0, created);
       notifyListeners();
@@ -5615,14 +6950,18 @@ class MockDatabaseService extends ChangeNotifier {
   Future<Sale> convertQuotationToProformaAsync(String quotationId) async {
     try {
       final proforma = await _salesApi.convertQuotationToProforma(quotationId);
-      await loadQuotations(forceRefresh: true);
+      await Future.wait([
+        loadQuotations(forceRefresh: true),
+        loadProforma(forceRefresh: true),
+      ]);
       sales.removeWhere((s) => s.id == proforma.id);
       sales.insert(0, proforma);
       notifyListeners();
       return proforma;
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] convertQuotationToProformaAsync remote failed: $e');
-      rethrow;
+      final fallback = createProformaFromQuotation(quotationId);
+      return fallback;
     }
   }
 
@@ -5643,6 +6982,7 @@ class MockDatabaseService extends ChangeNotifier {
       );
       final idx = sales.indexWhere((s) => s.id == proformaId);
       if (idx != -1) sales[idx] = updated;
+      await loadProforma(forceRefresh: true);
       notifyListeners();
       return updated;
     } catch (e) {
@@ -5856,7 +7196,12 @@ class MockDatabaseService extends ChangeNotifier {
         notes: notes,
       );
       sales.insert(0, created);
-      await loadSalesDeliveries(forceRefresh: true);
+      _applySaleToProject(created);
+      _generateCommissionForSale(created);
+      await Future.wait([
+        loadSalesDeliveries(forceRefresh: true),
+        loadProjects(forceRefresh: true),
+      ]);
       notifyListeners();
       return created;
     } catch (e) {
@@ -5879,9 +7224,12 @@ class MockDatabaseService extends ChangeNotifier {
         notes: sale.notes,
       );
       sales.insert(0, created);
+      _applySaleToProject(created);
+      _generateCommissionForSale(created);
       await Future.wait([
         loadFinishedProducts(forceRefresh: true),
         loadStockMovements(forceRefresh: true),
+        loadProjects(forceRefresh: true),
       ]);
       notifyListeners();
       return created;
@@ -6291,6 +7639,26 @@ class MockDatabaseService extends ChangeNotifier {
       return updated;
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] approveCommissionAsync remote failed: $e');
+      approveCommission(commissionId);
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) return commissions[idx];
+      rethrow;
+    }
+  }
+
+  Future<ArchitectCommission> rejectCommissionAsync(String commissionId, {String? reason}) async {
+    try {
+      final updated = await _paymentsApi.rejectCommission(commissionId, reason: reason);
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) commissions[idx] = updated;
+      await loadArchitects(forceRefresh: true);
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] rejectCommissionAsync remote failed: $e');
+      rejectCommission(commissionId, reason);
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) return commissions[idx];
       rethrow;
     }
   }
@@ -6320,7 +7688,12 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return result;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] disburseCommissionAsync remote failed: $e');
+      if (kDebugMode) debugPrint('[MockDatabaseService] disburseCommissionAsync remote failed, fallback to local: $e');
+      disburseCommission(commissionId, paymentMode, transactionRef ?? 'TXN-DISB-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}');
+      final idx = commissions.indexWhere((c) => c.id == commissionId);
+      if (idx != -1) {
+        return {'commission': commissions[idx], 'payment': payments.first};
+      }
       rethrow;
     }
   }

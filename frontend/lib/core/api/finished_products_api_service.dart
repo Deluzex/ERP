@@ -68,7 +68,7 @@ class FinishedProductsApiService {
     try {
       final response = await _client.dio.put(
         '/masters/finished-products/${fp.id}',
-        data: fp.toJson(),
+        data: fp.toUpdateJson(),
       );
       final data = _client.unwrap<Map<String, dynamic>>(response);
       return FinishedProduct.fromJson(data);
@@ -80,6 +80,25 @@ class FinishedProductsApiService {
   Future<void> deleteFinishedProduct(String id) async {
     try {
       await _client.dio.delete('/masters/finished-products/$id');
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> bulkImportFinishedProducts(
+    List<Map<String, dynamic>> items, {
+    String duplicatePolicy = 'SKIP',
+  }) async {
+    try {
+      final response = await _client.dio.post(
+        '/masters/finished-products/bulk',
+        data: {
+          'items': items,
+          'duplicatePolicy': duplicatePolicy,
+        },
+      );
+      final data = _client.unwrap<Map<String, dynamic>>(response);
+      return data;
     } catch (e) {
       throw _client.handleDioError(e);
     }

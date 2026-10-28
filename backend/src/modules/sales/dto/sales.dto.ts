@@ -51,9 +51,20 @@ export enum ReturnFinancialAction {
 }
 
 export class SaleLineItemDto {
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  itemType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsUUID()
-  finishedProductId!: string;
+  finishedProductId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  rawMaterialId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -64,6 +75,16 @@ export class SaleLineItemDto {
   @IsOptional()
   @IsString()
   finishedProductCode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  rawMaterialName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  rawMaterialCode?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -92,6 +113,36 @@ export class SaleLineItemDto {
   @IsNumber()
   @Min(0)
   gstPercent?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  unit?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  lineTotal?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  taxableAmount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  cgstAmount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  sgstAmount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  igstAmount?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -132,6 +183,16 @@ export class CreateQuotationDto {
   @IsOptional()
   @IsBoolean()
   isInterStateTax?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  placeOfSupplyState?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  placeOfSupplyStateCode?: string;
 
   @ApiPropertyOptional({ default: false, description: 'Save as draft instead of marking sent to client' })
   @IsOptional()

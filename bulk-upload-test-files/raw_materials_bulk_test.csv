@@ -1,0 +1,7 @@
+Material Name*,Item Code / SKU*,Category*,Unit*,HSN / SAC Code,Opening Stock,Minimum Stock,Reorder Level,Purchase Price (INR),Transport Charge (INR),GST %,Preferred Vendor
+Copper Wire 2.5 Sq mm,RM-COP-250,Raw Metals & Aluminum,MTR,74081190,100.00,20.00,30.00,320.00,15.00,18.00,Apex Aluminum Extrusions Ltd
+Acrylic Diffuser Sheet 3mm,RM-ACR-003,Diffusers & Glassware,PCS,39205111,50.00,10.00,15.00,450.00,25.00,18.00,Apex Aluminum Extrusions Ltd
+Aarix Extruded Aluminum Housing 6063-T6,RAW-AL-6063,Raw Metals & Aluminum,MTR,76042100,200.00,100.00,150.00,380.00,10.00,18.00,Apex Aluminum Extrusions Ltd
+,RM-ERR-001,Electronics Invalid,PCS,85414020,-10.00,5.00,10.00,120.00,5.00,18.00,
+Silicon Thermal Pad 1mm,RM-ERR-002,Diffusers & Glassware,INVALID_UNIT,39199090,30.00,5.00,10.00,85.00,5.00,150.00,
+Copper Wire Duplicate Code,RM-COP-250,Raw Metals & Aluminum,MTR,74081190,40.00,10.00,15.00,320.00,15.00,18.00,

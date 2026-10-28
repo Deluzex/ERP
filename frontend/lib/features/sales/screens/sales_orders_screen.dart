@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -7,9 +8,14 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/sale_model.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../widgets/sales_pdf_generator.dart';
@@ -24,6 +30,11 @@ class SalesOrdersScreen extends ConsumerStatefulWidget {
 class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
+  String _selectedStatusFilter = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -62,7 +73,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: AppColors.info.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
                   child: const Icon(Icons.local_shipping_outlined, color: AppColors.info, size: 22),
                 ),
                 const SizedBox(width: 12),
@@ -231,7 +242,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
 
                     Container(
                       padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: AppColors.info.withOpacity(0.08), borderRadius: BorderRadius.circular(6)),
+                      decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(6)),
                       child: Row(
                         children: [
                           const Icon(Icons.info_outline, color: AppColors.info, size: 16),
@@ -266,21 +277,17 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                     final physicalStock = fp?.currentStock ?? 0.0;
 
                     if (qtyToDispatch > remainingToDeliver) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Dispatch quantity for ${item.finishedProductName} cannot exceed remaining order quantity (${remainingToDeliver.toInt()}).'),
-                          backgroundColor: AppColors.danger,
-                        ),
+                      ErpToast.showError(
+                        context,
+                        'Dispatch quantity for ${item.finishedProductName} cannot exceed remaining order quantity (${remainingToDeliver.toInt()}).',
                       );
                       return;
                     }
 
                     if (qtyToDispatch > physicalStock) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Cannot dispatch ${qtyToDispatch.toInt()} ${item.unit} of ${item.finishedProductName}. Only ${physicalStock.toInt()} ${item.unit} physically available in warehouse. Wait for production to finish or dispatch partial stock.'),
-                          backgroundColor: AppColors.danger,
-                        ),
+                      ErpToast.showError(
+                        context,
+                        'Cannot dispatch ${qtyToDispatch.toInt()} ${item.unit} of ${item.finishedProductName}. Only ${physicalStock.toInt()} available.',
                       );
                       return;
                     }
@@ -299,9 +306,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                   }
 
                   if (deliveryItems.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please specify a dispatch quantity greater than 0.'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showError(context, 'Please specify a dispatch quantity greater than 0.');
                     return;
                   }
 
@@ -316,16 +321,12 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                     );
 
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Delivery Challan ${deliveryDoc.invoiceNumber} generated! Physical stock deducted from finished goods.'),
-                        backgroundColor: AppColors.success,
-                      ),
+                    ErpToast.showSuccess(
+                      context,
+                      'Delivery challan ${deliveryDoc.invoiceNumber} created successfully. Physical stock deducted.',
                     );
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to create delivery: $e'), backgroundColor: AppColors.danger),
-                    );
+                    ErpToast.showError(context, 'Failed to create delivery: $e');
                   }
                 },
               ),
@@ -346,54 +347,84 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Header
+          ErpSectionHeaderCard(
+            icon: Icons.shopping_bag_outlined,
+            title: 'Sales Orders & Stock Allocation',
+            badgeText: 'SALES ORDERS',
+            action: ErpButton(
+              text: 'New Sales Order',
+              icon: Icons.add,
+              onPressed: () {
+                ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.salesOrder;
+                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesOrder;
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 2. Summary Metric Cards (Project Theme)
           LayoutBuilder(
             builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 650;
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              final cardWidth = constraints.maxWidth > 850
+                  ? (constraints.maxWidth - (3 * 12)) / 4
+                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              final readyCount = db.salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.readyForDispatch).length;
+              final prodCount = db.salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.inProduction || so.salesOrderStatus == SalesOrderStatus.productionPending).length;
+              final totalOrderValue = db.salesOrders.fold(0.0, (sum, so) => sum + so.totalAmount);
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Text('Sales Orders & Stock Allocation', style: AppTextStyles.h1),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Order execution, stock reservation, shortage production links & dispatch',
-                    style: AppTextStyles.subtitle,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.shopping_bag_outlined,
+                      iconColor: AppColors.primary,
+                      title: 'Total Sales Orders',
+                      value: '${db.salesOrders.length}',
+                      subtext: 'Confirmed Orders',
+                    ),
                   ),
-                ],
-              );
-
-              final actionBtn = ErpButton(
-                text: 'New Sales Order',
-                icon: Icons.add,
-                onPressed: () {
-                  ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.salesOrder;
-                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesOrder;
-                },
-              );
-
-              if (isStacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    titleBlock,
-                    const SizedBox(height: 12),
-                    actionBtn,
-                  ],
-                );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: titleBlock),
-                  const SizedBox(width: 12),
-                  actionBtn,
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.local_shipping_outlined,
+                      iconColor: AppColors.success,
+                      title: 'Ready for Dispatch',
+                      value: '$readyCount Orders',
+                      subtext: 'Stock Reserved & Packed',
+                      subtextColor: AppColors.success,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.precision_manufacturing_outlined,
+                      iconColor: AppColors.warning,
+                      title: 'In Production',
+                      value: '$prodCount Orders',
+                      subtext: 'Shortage Manufacturing',
+                      subtextColor: AppColors.warning,
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: FigmaMetricCard(
+                      icon: Icons.currency_rupee,
+                      iconColor: AppColors.primary,
+                      title: 'Order Book Value',
+                      value: Formatters.formatCurrency(totalOrderValue),
+                      subtext: 'Cumulative Order Book',
+                    ),
+                  ),
                 ],
               );
             },
           ),
           const SizedBox(height: 20),
 
-          // 2. Tabs: All, Ready for Dispatch, In Production, Partially Delivered, Completed
+          // 3. Tabs: All, Ready for Dispatch, In Production, Partially Delivered, Completed
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -407,7 +438,9 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textMuted,
               indicatorColor: AppColors.primary,
-              onTap: (_) => setState(() {}),
+              onTap: (_) => setState(() {
+                _currentPage = 0;
+              }),
               tabs: [
                 Tab(text: 'All Orders (${db.salesOrders.length})'),
                 Tab(text: 'Ready for Dispatch (${db.ordersReadyForDispatchCount})'),
@@ -420,13 +453,52 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
           ),
           const SizedBox(height: 16),
 
-          // 3. Search Bar
-          TextField(
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: const InputDecoration(
-              hintText: 'Search sales orders by number, customer, project or linked proforma/quotation...',
-              prefixIcon: Icon(Icons.search, size: 18),
-            ),
+          // 3. Search and Filter Bar
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 300,
+                child: ErpSearchInput(
+                  hintText: 'Search order no, customer, project...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
+              ),
+              ErpFilterDropdown<String>(
+                value: _selectedStatusFilter,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                  DropdownMenuItem(value: 'READY', child: Text('Ready for Dispatch')),
+                  DropdownMenuItem(value: 'PRODUCTION', child: Text('In Production / Shortage')),
+                  DropdownMenuItem(value: 'PARTIAL', child: Text('Partially Delivered')),
+                  DropdownMenuItem(value: 'DELIVERED', child: Text('Fully Delivered')),
+                  DropdownMenuItem(value: 'DRAFT', child: Text('Draft / Other')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedStatusFilter = val;
+                      _currentPage = 0;
+                    });
+                  }
+                },
+              ),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -461,6 +533,34 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
         break;
     }
 
+    // Filter by status dropdown
+    if (_selectedStatusFilter != 'ALL') {
+      filtered = filtered.where((so) {
+        switch (_selectedStatusFilter) {
+          case 'READY':
+            return so.salesOrderStatus == SalesOrderStatus.readyForDispatch;
+          case 'PRODUCTION':
+            return so.salesOrderStatus == SalesOrderStatus.productionPending || so.salesOrderStatus == SalesOrderStatus.inProduction;
+          case 'PARTIAL':
+            return so.salesOrderStatus == SalesOrderStatus.partiallyDelivered;
+          case 'DELIVERED':
+            return so.salesOrderStatus == SalesOrderStatus.delivered || so.salesOrderStatus == SalesOrderStatus.completed;
+          case 'DRAFT':
+            return so.salesOrderStatus == SalesOrderStatus.draft || so.salesOrderStatus == SalesOrderStatus.pending;
+          default:
+            return true;
+        }
+      }).toList();
+    }
+
+    // Filter by date range
+    if (_startDate != null) {
+      filtered = filtered.where((so) => !so.date.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))).toList();
+    }
+    if (_endDate != null) {
+      filtered = filtered.where((so) => !so.date.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))).toList();
+    }
+
     // Filter by search query
     if (_searchQuery.trim().isNotEmpty) {
       final qLower = _searchQuery.toLowerCase();
@@ -493,17 +593,31 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
       );
     }
 
-    return ErpDataTable(
-      columns: const [
-        ErpColumn(title: 'SO Number'),
-        ErpColumn(title: 'Customer / Party'),
-        ErpColumn(title: 'Delivery Due'),
-        ErpColumn(title: 'Ordered Items & Stock Status'),
-        ErpColumn(title: 'Order Value', isNumeric: true),
-        ErpColumn(title: 'Workflow Status'),
-        ErpColumn(title: 'Actions'),
+    final totalCount = filtered.length;
+    final maxPage = (totalCount / _pageSize).ceil();
+    final effectivePage = maxPage == 0 ? 0 : min(_currentPage, maxPage - 1);
+    final startIdx = effectivePage * _pageSize;
+    final endIdx = min(startIdx + _pageSize, totalCount);
+    final paginatedOrders = totalCount == 0 ? <Sale>[] : filtered.sublist(startIdx, endIdx);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ErpDataTable(
+          dataRowMinHeight: 60,
+          dataRowMaxHeight: 72,
+          columnSpacing: 16,
+          horizontalMargin: 16,
+          columns: const [
+        ErpColumn(title: 'SO Number', width: 130),
+        ErpColumn(title: 'Customer / Party', width: 190),
+        ErpColumn(title: 'Delivery Due', width: 120),
+        ErpColumn(title: 'Ordered Items & Stock Status', width: 280),
+        ErpColumn(title: 'Order Value', isNumeric: true, width: 130),
+        ErpColumn(title: 'Workflow Status', width: 155),
+        ErpColumn(title: 'Actions', width: 90),
       ],
-      rows: filtered.map((so) {
+      rows: paginatedOrders.map((so) {
         ErpStatusBadge badge;
         switch (so.salesOrderStatus) {
           case SalesOrderStatus.readyForDispatch:
@@ -525,56 +639,192 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
         }
 
         return [
+          // 1. SO Number
           InkWell(
             onTap: () {
               ref.read(activeRecordDetailsStackProvider.notifier).push(so.id, 'salesOrder', ErpNavSection.salesOrders);
             },
-            child: Text(
-              so.invoiceNumber,
-              style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary),
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                so.invoiceNumber,
+                style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5, color: AppColors.primary),
+              ),
             ),
           ),
+
+          // 2. Customer / Party
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 190),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  so.partyName,
+                  style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600, fontSize: 12.5),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (so.projectName != null && so.projectName!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    so.projectName!,
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // 3. Delivery Due
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(so.partyName, style: AppTextStyles.bodyMedium),
-              if (so.projectName != null) Text(so.projectName!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 10.5)),
+              Text(
+                so.deliveryDate != null ? Formatters.formatDate(so.deliveryDate!) : '-',
+                style: AppTextStyles.bodySmall.copyWith(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Ord: ${Formatters.formatDate(so.saleDate)}',
+                style: AppTextStyles.caption.copyWith(color: AppColors.textMuted, fontSize: 10.5),
+              ),
             ],
           ),
-          Text(so.deliveryDate != null ? Formatters.formatDate(so.deliveryDate!) : '-', style: AppTextStyles.bodySmall),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: so.items.map((i) {
-              return Text(
-                '• ${i.finishedProductName} (${i.quantity.toInt()} ${i.unit}) [Delivered: ${i.deliveredQuantity.toInt()}, Reserved: ${i.reservedQuantity.toInt()}]',
-                style: const TextStyle(fontSize: 11),
-              );
-            }).toList(),
+
+          // 4. Ordered Items & Stock Status
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: so.items.isEmpty
+                ? Text('No items', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              so.items.first.finishedProductName,
+                              style: AppTextStyles.bodyMedium.copyWith(fontSize: 12, fontWeight: FontWeight.w500),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceMuted,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: AppColors.border, width: 0.5),
+                            ),
+                            child: Text(
+                              '${so.items.first.quantity.toInt()} ${so.items.first.unit}',
+                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Delivered: ${so.items.first.deliveredQuantity.toInt()}',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w500,
+                              color: so.items.first.deliveredQuantity > 0 ? AppColors.successText : AppColors.textMuted,
+                            ),
+                          ),
+                          const Text(' • ', style: TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
+                          Text(
+                            'Reserved: ${so.items.first.reservedQuantity.toInt()}',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w500,
+                              color: so.items.first.reservedQuantity > 0 ? AppColors.infoText : AppColors.textMuted,
+                            ),
+                          ),
+                          if (so.items.length > 1) ...[
+                            const Text(' • ', style: TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
+                            Text(
+                              '+${so.items.length - 1} more',
+                              style: const TextStyle(fontSize: 10.5, color: AppColors.primary, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
           ),
-          Text(Formatters.formatCurrency(so.totalAmount), style: AppTextStyles.bodyBold),
+
+          // 5. Order Value
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              Formatters.formatCurrency(so.totalAmount),
+              style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5),
+            ),
+          ),
+
+          // 6. Workflow Status
           badge,
+
+          // 7. Actions
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 18),
+                icon: const Icon(Icons.picture_as_pdf_outlined, color: AppColors.primary, size: 18),
                 tooltip: 'Preview Sales Order PDF',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 onPressed: () => SalesPdfGeneratorDialog.show(context, so, db),
               ),
-              if (so.salesOrderStatus != SalesOrderStatus.delivered && so.salesOrderStatus != SalesOrderStatus.completed)
+              if (so.salesOrderStatus != SalesOrderStatus.delivered && so.salesOrderStatus != SalesOrderStatus.completed) ...[
+                const SizedBox(width: 4),
                 IconButton(
-                  icon: const Icon(Icons.local_shipping, color: AppColors.info, size: 18),
+                  icon: const Icon(Icons.local_shipping_outlined, color: AppColors.info, size: 18),
                   tooltip: 'Dispatch Delivery',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: () async {
                     final fullSo = await db.getSalesOrderDetailAsync(so.id);
                     if (!context.mounted) return;
                     _showDispatchDeliveryDialog(context, fullSo, db);
                   },
                 ),
+              ],
             ],
           ),
         ];
       }).toList(),
-    );
+    ),
+    if (filtered.isNotEmpty) ...[
+      const SizedBox(height: 12),
+      ErpPaginationBar(
+        totalRecords: totalCount,
+        currentPage: effectivePage,
+        pageSize: _pageSize,
+        onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+        onPageSizeChanged: (newSize) => setState(() {
+          _pageSize = newSize;
+          _currentPage = 0;
+        }),
+      ),
+    ],
+  ],
+);
   }
 }

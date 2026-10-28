@@ -258,6 +258,118 @@ describe('Purchases & Procurement Domain Lifecycle (E2E with Auto-Cleanup)', () 
       );
       expect(Number(venCheck.rows[0].outstanding_balance)).toBe(0.0);
     });
+
+    it('7.5 should create multi-item purchase with transportation charges, accurately prorate landed cost, and update master purchase cost', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/purchases')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          vendorId: testVendorId,
+          vendorName: 'Test Aluminum Extruder Ltd',
+          vendorInvoiceNumber: 'INV-2026-LND-01',
+          purchaseDate: new Date().toISOString(),
+          purchaseType: 'rawMaterial',
+          transportationCharges: 2000.0,
+          items: [
+            {
+              itemType: 'rawMaterial',
+              rawMaterialId: testRawMaterialId,
+              rawMaterialName: 'Test Extrusion Profile 6063',
+              rawMaterialCode: testRmCode,
+              quantity: 100.0,
+              unit: 'MTR',
+              rate: 300.0,
+              discountAmount: 0.0,
+              gstPercent: 18.0,
+              taxableAmount: 30000.0,
+              cgstAmount: 2700.0,
+              sgstAmount: 2700.0,
+              igstAmount: 0.0,
+              lineTotal: 35400.0,
+            },
+            {
+              itemType: 'finishedProduct',
+              finishedProductId: testFinishedProductId,
+              finishedProductName: 'Test Finished Pendant Light',
+              finishedProductCode: testFpCode,
+              quantity: 10.0,
+              unit: 'PCS',
+              rate: 1000.0,
+              discountAmount: 0.0,
+              gstPercent: 18.0,
+              taxableAmount: 10000.0,
+              cgstAmount: 900.0,
+              sgstAmount: 900.0,
+              igstAmount: 0.0,
+              lineTotal: 11800.0,
+            },
+          ],
+          subtotalAmount: 40000.0,
+          discountAmount: 0.0,
+          taxableAmount: 40000.0,
+          cgstAmount: 3600.0,
+          sgstAmount: 3600.0,
+          igstAmount: 0.0,
+          gstAmount: 7200.0,
+          totalAmount: 49200.0,
+          paidAmount: 0.0,
+          pendingAmount: 49200.0,
+          paymentMode: 'credit',
+          status: 'saved',
+          notes: 'Freight charged at 2000 INR',
+        });
+
+      expect(res.status).toBe(201);
+      const landedPoId = res.body.data.id;
+      createdPurchaseIds.push(landedPoId);
+
+      expect(res.body.data.transportationCharges).toBe(2000.0);
+      expect(res.body.data.totalAmount).toBe(49200.0);
+
+      // Verify line 1 (30,000 / 40,000 * 2000 = 1500, landed = (30000+1500)/100 = 315)
+      const line1 = res.body.data.items.find(
+        (it: any) => it.rawMaterialId === testRawMaterialId,
+      );
+      expect(line1).toBeDefined();
+      expect(line1.transportationCost).toBe(1500.0);
+      expect(line1.landedRate).toBe(315.0);
+
+      // Verify line 2 (10,000 / 40,000 * 2000 = 500, landed = (10000+500)/10 = 1050)
+      const line2 = res.body.data.items.find(
+        (it: any) => it.finishedProductId === testFinishedProductId,
+      );
+      expect(line2).toBeDefined();
+      expect(line2.transportationCost).toBe(500.0);
+      expect(line2.landedRate).toBe(1050.0);
+
+      // Verify findById returns exact fields
+      const getRes = await request(app.getHttpServer())
+        .get(`/api/v1/purchases/${landedPoId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid);
+
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.data.transportationCharges).toBe(2000.0);
+      const fetchedLine1 = getRes.body.data.items.find(
+        (it: any) => it.rawMaterialId === testRawMaterialId,
+      );
+      expect(fetchedLine1.transportationCost).toBe(1500.0);
+      expect(fetchedLine1.landedRate).toBe(315.0);
+
+      // Verify Product Master base prices were updated with landed purchase cost (including transportation)
+      const rmCheck = await db.query<{ default_purchase_price: string }>(
+        'SELECT default_purchase_price FROM raw_materials WHERE id = $1',
+        [testRawMaterialId],
+      );
+      expect(Number(rmCheck.rows[0].default_purchase_price)).toBe(315.0);
+
+      const fpCheck = await db.query<{ cost_price: string }>(
+        'SELECT cost_price FROM finished_products WHERE id = $1',
+        [testFinishedProductId],
+      );
+      expect(Number(fpCheck.rows[0].cost_price)).toBe(1050.0);
+    });
   });
 
   describe('Validation & Edge Cases', () => {
@@ -271,6 +383,39 @@ describe('Purchases & Procurement Domain Lifecycle (E2E with Auto-Cleanup)', () 
           purchaseType: 'rawMaterial',
           items: [],
           totalAmount: 1000,
+        });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('should reject purchase creation with negative transportation charges', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/purchases')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          vendorId: testVendorId,
+          vendorName: 'Test Vendor',
+          purchaseType: 'rawMaterial',
+          transportationCharges: -500,
+          items: [
+            {
+              itemType: 'rawMaterial',
+              rawMaterialId: testRawMaterialId,
+              rawMaterialName: 'Test Extrusion Profile 6063',
+              rawMaterialCode: testRmCode,
+              quantity: 10.0,
+              unit: 'MTR',
+              rate: 300.0,
+              discountAmount: 0.0,
+              gstPercent: 18.0,
+              taxableAmount: 3000.0,
+              cgstAmount: 270.0,
+              sgstAmount: 270.0,
+              igstAmount: 0.0,
+              lineTotal: 3540.0,
+            },
+          ],
+          totalAmount: 3540,
         });
 
       expect(res.status).toBe(400);

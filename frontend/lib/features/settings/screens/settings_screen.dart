@@ -7,6 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/rbac_models.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import 'user_management_screen.dart';
 
@@ -41,103 +42,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
 
     return Column(
       children: [
-        Container(
-          color: AppColors.surface,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isStacked = constraints.maxWidth < 850;
-
-              final titleBlock = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('System Configuration & Access Control', style: AppTextStyles.h1),
-                  const SizedBox(height: 2),
-                  Text('Configure company profile, security matrices, and user account credentials', style: AppTextStyles.subtitle),
-                ],
-              );
-
-
-              if (isStacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    titleBlock,
-                    if (isAdminOrManager) ...[
-                      const SizedBox(height: 12),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: TabBar(
-                          controller: _tabController,
-                          isScrollable: true,
-                          tabAlignment: TabAlignment.start,
-                          tabs: const [
-                            Tab(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.tune_rounded, size: 16),
-                                  SizedBox(width: 8),
-                                  Text('System & Company Preferences'),
-                                ],
-                              ),
-                            ),
-                            Tab(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.admin_panel_settings_outlined, size: 16),
-                                  SizedBox(width: 8),
-                                  Text('User Management & RBAC'),
-                                ],
-                              ),
-                            ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.pagePadding.left,
+            AppSpacing.pagePadding.top,
+            AppSpacing.pagePadding.right,
+            AppSpacing.md,
+          ),
+          child: ErpSectionHeaderCard(
+            icon: Icons.settings_outlined,
+            title: 'System Settings & Access Control',
+            badgeText: 'CONFIGURATION',
+            subtitle: 'Configure company profile, security matrices, and user account credentials',
+            action: isAdminOrManager
+                ? TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    labelColor: AppColors.primary,
+                    unselectedLabelColor: AppColors.textMuted,
+                    indicatorColor: AppColors.primary,
+                    tabs: const [
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.tune_rounded, size: 16),
+                            SizedBox(width: 8),
+                            Text('System & Company Preferences'),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.admin_panel_settings_outlined, size: 16),
+                            SizedBox(width: 8),
+                            Text('User Management & RBAC'),
                           ],
                         ),
                       ),
                     ],
-                  ],
-                );
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: titleBlock),
-                  if (isAdminOrManager)
-                    TabBar(
-                      controller: _tabController,
-                      isScrollable: true,
-                      tabAlignment: TabAlignment.start,
-                      tabs: const [
-                        Tab(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.tune_rounded, size: 16),
-                              SizedBox(width: 8),
-                              Text('System & Company Preferences'),
-                            ],
-                          ),
-                        ),
-                        Tab(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.admin_panel_settings_outlined, size: 16),
-                              SizedBox(width: 8),
-                              Text('User Management & RBAC'),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              );
-            },
+                  )
+                : null,
           ),
         ),
-        const Divider(height: 1),
         Expanded(
           child: isAdminOrManager
               ? TabBarView(

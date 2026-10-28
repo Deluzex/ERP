@@ -68,7 +68,7 @@ class RawMaterialsApiService {
     try {
       final response = await _client.dio.put(
         '/masters/raw-materials/${rm.id}',
-        data: rm.toJson(),
+        data: rm.toUpdateJson(),
       );
       final data = _client.unwrap<Map<String, dynamic>>(response);
       return RawMaterial.fromJson(data);
@@ -80,6 +80,25 @@ class RawMaterialsApiService {
   Future<void> deleteRawMaterial(String id) async {
     try {
       await _client.dio.delete('/masters/raw-materials/$id');
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> bulkImportRawMaterials(
+    List<Map<String, dynamic>> items, {
+    String duplicatePolicy = 'SKIP',
+  }) async {
+    try {
+      final response = await _client.dio.post(
+        '/masters/raw-materials/bulk',
+        data: {
+          'items': items,
+          'duplicatePolicy': duplicatePolicy,
+        },
+      );
+      final data = _client.unwrap<Map<String, dynamic>>(response);
+      return data;
     } catch (e) {
       throw _client.handleDioError(e);
     }

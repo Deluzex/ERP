@@ -7,9 +7,12 @@ class Vendor {
   final String gstNumber;
   final String panNumber;
   final String address;
+  final String state;
+  final String pincode;
   final String paymentTerms;
   final double creditLimit;
   final double outstandingBalance;
+  final double defaultTransportationCharges;
   final bool isDeleted;
   final String? deleteReason;
   final DateTime? deletedAt;
@@ -24,9 +27,12 @@ class Vendor {
     required this.gstNumber,
     required this.panNumber,
     required this.address,
-    required this.paymentTerms,
+    this.state = '',
+    this.pincode = '',
+    this.paymentTerms = 'Net 30 Days',
     required this.creditLimit,
     this.outstandingBalance = 0.0,
+    this.defaultTransportationCharges = 0.0,
     this.isDeleted = false,
     this.deleteReason,
     this.deletedAt,
@@ -42,9 +48,12 @@ class Vendor {
     String? gstNumber,
     String? panNumber,
     String? address,
+    String? state,
+    String? pincode,
     String? paymentTerms,
     double? creditLimit,
     double? outstandingBalance,
+    double? defaultTransportationCharges,
     bool? isDeleted,
     String? deleteReason,
     DateTime? deletedAt,
@@ -59,9 +68,12 @@ class Vendor {
       gstNumber: gstNumber ?? this.gstNumber,
       panNumber: panNumber ?? this.panNumber,
       address: address ?? this.address,
+      state: state ?? this.state,
+      pincode: pincode ?? this.pincode,
       paymentTerms: paymentTerms ?? this.paymentTerms,
       creditLimit: creditLimit ?? this.creditLimit,
       outstandingBalance: outstandingBalance ?? this.outstandingBalance,
+      defaultTransportationCharges: defaultTransportationCharges ?? this.defaultTransportationCharges,
       isDeleted: isDeleted ?? this.isDeleted,
       deleteReason: deleteReason ?? this.deleteReason,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -79,9 +91,12 @@ class Vendor {
       gstNumber: json['gstNumber']?.toString() ?? json['gst_number']?.toString() ?? '',
       panNumber: json['panNumber']?.toString() ?? json['pan_number']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
+      state: json['state']?.toString() ?? '',
+      pincode: json['pincode']?.toString() ?? '',
       paymentTerms: json['paymentTerms']?.toString() ?? json['payment_terms']?.toString() ?? 'Net 30 Days',
       creditLimit: double.tryParse(json['creditLimit']?.toString() ?? json['credit_limit']?.toString() ?? '0') ?? 0.0,
       outstandingBalance: double.tryParse(json['outstandingBalance']?.toString() ?? json['outstanding_balance']?.toString() ?? '0') ?? 0.0,
+      defaultTransportationCharges: double.tryParse(json['defaultTransportationCharges']?.toString() ?? json['default_transportation_charges']?.toString() ?? '0') ?? 0.0,
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
       deleteReason: json['deleteReason']?.toString() ?? json['delete_reason']?.toString(),
       deletedAt: json['deletedAt'] != null
@@ -102,8 +117,11 @@ class Vendor {
       'gstNumber': gstNumber,
       'panNumber': panNumber,
       'address': address,
+      'state': state,
+      'pincode': pincode,
       'paymentTerms': paymentTerms,
       'creditLimit': creditLimit,
+      'defaultTransportationCharges': defaultTransportationCharges,
     };
   }
 }

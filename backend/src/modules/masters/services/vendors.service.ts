@@ -19,6 +19,8 @@ export interface VendorRecord {
   gstNumber: string;
   panNumber: string;
   address: string;
+  state?: string | null;
+  pincode?: string | null;
   paymentTerms: string;
   creditLimit: string;
   outstandingBalance: string;
@@ -145,8 +147,8 @@ export class VendorsService {
     }>(
       `INSERT INTO vendors (
         name, contact_person, mobile, email, gst_number, pan_number,
-        address, payment_terms, credit_limit, outstanding_balance
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, '0.00')
+        address, state, pincode, payment_terms, credit_limit, outstanding_balance
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '0.00')
       RETURNING *`,
       [
         dto.name.trim(),
@@ -156,6 +158,8 @@ export class VendorsService {
         dto.gstNumber ? dto.gstNumber.trim().toUpperCase() : '',
         dto.panNumber ? dto.panNumber.trim().toUpperCase() : '',
         dto.address.trim(),
+        dto.state?.trim() || 'Gujarat',
+        dto.pincode?.trim() || null,
         dto.paymentTerms || 'Net 30 Days',
         creditLimit,
       ],
@@ -215,6 +219,14 @@ export class VendorsService {
     if (dto.address !== undefined) {
       updates.push(`address = $${idx++}`);
       values.push(dto.address.trim());
+    }
+    if (dto.state !== undefined) {
+      updates.push(`state = $${idx++}`);
+      values.push(dto.state.trim());
+    }
+    if (dto.pincode !== undefined) {
+      updates.push(`pincode = $${idx++}`);
+      values.push(dto.pincode.trim());
     }
     if (dto.paymentTerms !== undefined) {
       updates.push(`payment_terms = $${idx++}`);
@@ -289,6 +301,8 @@ export class VendorsService {
       gstNumber: r.gst_number,
       panNumber: r.pan_number,
       address: r.address,
+      state: r.state,
+      pincode: r.pincode,
       paymentTerms: r.payment_terms,
       creditLimit: Money.format(r.credit_limit),
       outstandingBalance: Money.format(r.outstanding_balance),

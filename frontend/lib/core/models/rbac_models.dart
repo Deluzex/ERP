@@ -266,6 +266,52 @@ class AppUser {
   /// Role title alias for backward compatibility
   String get role => primaryRoleId;
 
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'email': email,
+    'mobile': mobile,
+    'primaryRoleId': primaryRoleId,
+    'assignedRoleIds': assignedRoleIds,
+    'isActive': isActive,
+    'avatarUrl': avatarUrl,
+    'lastLoginAt': lastLoginAt?.toIso8601String(),
+    'createdAt': createdAt.toIso8601String(),
+    'permissions': customPermissionOverrides.entries.expand(
+      (e) => e.value.map((a) => '${e.key.name}.${a.name}')
+    ).toList(),
+  };
+
+  factory AppUser.fromJson(Map<String, dynamic> json) {
+    final permissionsList = (json['permissions'] as List?)?.map((p) => p.toString()).toList() ?? [];
+    final overrides = <ErpModule, Set<ErpAction>>{};
+    for (final p in permissionsList) {
+      final parts = p.split('.');
+      if (parts.length == 2) {
+        final mod = ErpModule.values.where((m) => m.name == parts[0]).firstOrNull;
+        final act = ErpAction.values.where((a) => a.name == parts[1]).firstOrNull;
+        if (mod != null && act != null) {
+          overrides.putIfAbsent(mod, () => <ErpAction>{}).add(act);
+        }
+      }
+    }
+    return AppUser(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      mobile: json['mobile']?.toString() ?? '',
+      passwordHash: '',
+      salt: '',
+      primaryRoleId: json['primaryRoleId']?.toString() ?? 'admin',
+      assignedRoleIds: (json['assignedRoleIds'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      customPermissionOverrides: overrides,
+      isActive: json['isActive'] == true,
+      avatarUrl: json['avatarUrl']?.toString() ?? '',
+      lastLoginAt: json['lastLoginAt'] != null ? DateTime.tryParse(json['lastLoginAt'].toString()) : null,
+      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now() : DateTime.now(),
+    );
+  }
+
   /// Check if user has permission considering primary role, assigned roles, custom overrides, and temporary grants
   bool hasPermission(
     ErpModule module,
@@ -366,6 +412,7 @@ class AppUser {
       case ErpNavSection.architects:
       case ErpNavSection.rawMaterials:
       case ErpNavSection.finishedProducts:
+      case ErpNavSection.billOfMaterials:
       case ErpNavSection.projectList:
       case ErpNavSection.createProject:
         return ErpModule.masters;
@@ -378,6 +425,8 @@ class AppUser {
       case ErpNavSection.commissionReports:
       case ErpNavSection.financialReports:
         return ErpModule.reports;
+      case ErpNavSection.chatSupport:
+        return ErpModule.dashboard;
       case ErpNavSection.settings:
         return ErpModule.settings;
     }

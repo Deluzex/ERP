@@ -1,10 +1,28 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class BulkImportFinishedProductsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateFinishedProductDto)
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  items!: CreateFinishedProductDto[];
+
+  @IsString()
+  @IsOptional()
+  duplicatePolicy?: 'SKIP' = 'SKIP';
+}
 
 export class CreateFinishedProductDto {
   @IsString()
@@ -45,6 +63,11 @@ export class CreateFinishedProductDto {
   @IsNumber()
   @Min(0)
   @IsOptional()
+  transportationCharge?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
   dealerSellingPrice?: number;
 
   @IsNumber()
@@ -65,7 +88,15 @@ export class UpdateFinishedProductDto {
 
   @IsString()
   @IsOptional()
+  itemCode?: string;
+
+  @IsString()
+  @IsOptional()
   categoryId?: string;
+
+  @IsString()
+  @IsOptional()
+  categoryName?: string;
 
   @IsString()
   @IsOptional()
@@ -73,7 +104,21 @@ export class UpdateFinishedProductDto {
 
   @IsString()
   @IsOptional()
+  unit?: string;
+
+  @IsString()
+  @IsOptional()
   hsnSacCode?: string;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  openingStock?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  currentStock?: number;
 
   @IsNumber()
   @Min(0)
@@ -84,6 +129,11 @@ export class UpdateFinishedProductDto {
   @Min(0)
   @IsOptional()
   costPrice?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  transportationCharge?: number;
 
   @IsNumber()
   @Min(0)
