@@ -19,6 +19,7 @@ import {
   RecordInvoicePaymentDto,
   SalesQueryDto,
   UpdateDeliveryTrackingDto,
+  UpdateProformaStatusDto,
   UpdateQuotationStatusDto,
   UpdateSalesOrderStatusDto,
 } from '../dto/sales.dto';
@@ -563,6 +564,11 @@ export class SalesService {
     if (q.quotationStatus === 'converted') {
       throw new BadRequestException('Quotation has already been converted');
     }
+    if (q.quotationStatus !== 'accepted' && q.quotationStatus !== 'approved') {
+      throw new BadRequestException(
+        `Only accepted quotations can be converted to a Proforma Invoice. Current status: ${q.quotationStatus}`,
+      );
+    }
 
     const piNumber = await this.getNextSequenceNumber('PI');
 
@@ -652,6 +658,21 @@ export class SalesService {
   // 3. SALES ORDERS & STOCK RESERVATION
   // ==========================================================================
   async createSalesOrder(dto: CreateSalesOrderDto, userId?: string, correlationId?: string) {
+    let piNumber: string | null = null;
+    if (dto.proformaId) {
+      const piRes = await this.db.query<{ id: string; proforma_status: string; invoice_number: string }>(
+        `SELECT id, proforma_status, invoice_number FROM sales WHERE id = $1 AND document_type = 'proformaInvoice'`,
+        [dto.proformaId],
+      );
+      if (piRes.rows.length === 0) {
+        throw new NotFoundException(`Proforma invoice ${dto.proformaId} not found`);
+      }
+      if (piRes.rows[0].proforma_status === 'converted') {
+        throw new BadRequestException('Proforma invoice has already been converted to a sales order');
+      }
+      piNumber = piRes.rows[0].invoice_number;
+    }
+
     const party = await this.getPartyDetails(dto.partyType, dto.partyId);
     let archName: string | null = null;
     if (dto.architectId) {
@@ -765,14 +786,16 @@ export class SalesService {
         billing_address, shipping_address, architect_id, architect_name,
         sales_order_number, sales_order_status, status, delivery_date,
         subtotal_amount, discount_amount, taxable_amount, cgst_amount, sgst_amount, igst_amount,
-        gst_amount, total_amount, pending_amount, is_inter_state_tax, payment_mode, notes, created_by
+        gst_amount, total_amount, pending_amount, is_inter_state_tax, payment_mode, notes, created_by,
+        proforma_reference_id, proforma_number
       ) VALUES (
         $1, 'salesOrder', $2, $3, $4,
         $5, $6, $7, $8,
         $9, $10, $11, $12,
         $1, $13, 'active', $14,
         $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25, $26, $27
+        $21, $22, $23, $24, $25, $26, $27,
+        $28, $29
       ) RETURNING id`,
       [
         soNumber, dto.partyType, dto.partyId, party.name,
@@ -782,6 +805,7 @@ export class SalesService {
         subtotal, totalDiscount, taxableAmount,
         isInterState ? 0 : totalGst / 2, isInterState ? 0 : totalGst / 2, isInterState ? totalGst : 0,
         totalGst, grandTotal, grandTotal, isInterState, dto.paymentMode ?? 'bankTransfer', dto.notes ?? null, userId ?? null,
+        dto.proformaId ?? null, piNumber,
       ],
     );
     const soId = soRes.rows[0].id;
@@ -842,7 +866,22 @@ export class SalesService {
       );
     }
 
+    if (dto.proformaId) {
+      await this.db.query(
+        `UPDATE sales SET proforma_status = 'converted', sales_order_reference_id = $1, sales_order_number = $2, updated_at = now() WHERE id = $3`,
+        [soId, soNumber, dto.proformaId],
+      );
+    }
+
     return this.findById(soId);
+  }
+
+  async updateProformaStatus(id: string, dto: UpdateProformaStatusDto, userId?: string, correlationId?: string) {
+    const pi = await this.findById(id);
+    if (!pi) throw new NotFoundException(`Proforma invoice ${id} not found`);
+
+    await this.db.query(`UPDATE sales SET proforma_status = $1, updated_at = now() WHERE id = $2`, [dto.status, id]);
+    return this.findById(id);
   }
 
   async updateSalesOrderStatus(id: string, dto: UpdateSalesOrderStatusDto, userId?: string, correlationId?: string) {

@@ -903,6 +903,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     });
   }
 
+  // ignore: unused_element
   void _addNewRawMaterialRow() {
     final db = ref.read(databaseServiceProvider);
     if (db.rawMaterials.isEmpty) {
@@ -1611,12 +1612,12 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                             isOutlined: true,
                             onPressed: _addNewProductRow,
                           ),
-                          ErpButton(
-                            text: 'Add Raw Material',
-                            icon: Icons.grain,
-                            isOutlined: true,
-                            onPressed: _addNewRawMaterialRow,
-                          ),
+                          // ErpButton(
+                          //   text: 'Add Raw Material',
+                          //   icon: Icons.grain,
+                          //   isOutlined: true,
+                          //   onPressed: _addNewRawMaterialRow,
+                          // ),
                         ],
                       );
 
@@ -2037,17 +2038,21 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                           const SizedBox(height: 12),
                           TextFormField(
                             controller: _termsCtrl,
-                            maxLines: 4,
-                            minLines: 3,
-                            decoration: const InputDecoration(labelText: 'Terms & Conditions (Printed on PDF)'),
+                            maxLines: isNarrow ? 6 : 8,
+                            minLines: isNarrow ? 4 : 8,
+                            decoration: const InputDecoration(
+                              labelText: 'Terms & Conditions (Printed on PDF)',
+                              alignLabelWithHint: true,
+                            ),
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _notesCtrl,
-                            maxLines: 2,
-                            minLines: 2,
-                            decoration: const InputDecoration(labelText: 'Internal Sales Notes'),
-                          ),
+                          // Internal Sales Notes commented out per user request
+                          // const SizedBox(height: 12),
+                          // TextFormField(
+                          //   controller: _notesCtrl,
+                          //   maxLines: 2,
+                          //   minLines: 2,
+                          //   decoration: const InputDecoration(labelText: 'Internal Sales Notes'),
+                          // ),
                         ],
                       );
 

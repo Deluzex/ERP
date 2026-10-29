@@ -486,14 +486,14 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                         ErpColumn(title: 'Vehicle / Transit', width: 130),
                         ErpColumn(title: 'Items Dispatched', width: 220),
                         ErpColumn(title: 'Status', width: 130),
-                        ErpColumn(title: 'Actions', width: 220),
+                        ErpColumn(title: 'Actions', width: 90),
                       ],
                       rows: paginatedDeliveries.map((dlv) {
                 return [
                   // 1. Challan No
                   InkWell(
                     onTap: () {
-                      ref.read(activeRecordDetailsStackProvider.notifier).push(dlv.id, 'delivery', ErpNavSection.salesDeliveries);
+                      SalesPdfGeneratorDialog.show(context, dlv, db);
                     },
                     borderRadius: BorderRadius.circular(4),
                     child: Padding(
@@ -665,51 +665,86 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                   ErpStatusBadge.success('DISPATCHED'),
 
                   // 8. Actions
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, color: AppColors.info, size: 17),
-                        tooltip: 'Edit Courier & Tracking Info',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        onPressed: () => _showEditCourierDialog(context, dlv, db),
-                      ),
-                      const SizedBox(width: 2),
-                      IconButton(
-                        icon: const Icon(Icons.share_outlined, color: AppColors.teal, size: 17),
-                        tooltip: 'Share Challan (WhatsApp/Email)',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        onPressed: () => ShareDocumentDialog.show(context, dlv),
-                      ),
-                      const SizedBox(width: 2),
-                      IconButton(
-                        icon: const Icon(Icons.chat_outlined, color: AppColors.success, size: 17),
-                        tooltip: 'Quick WhatsApp Message',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
-                          context,
-                          customerName: dlv.partyName,
-                          customerPhone: dlv.customerMobile ?? '+91 98765 00000',
-                          docNumber: dlv.invoiceNumber,
-                          projectName: dlv.projectName,
+                  PopupMenuButton<String>(
+                    tooltip: 'Actions',
+                    icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                    onSelected: (action) async {
+                      switch (action) {
+                        case 'view':
+                          SalesPdfGeneratorDialog.show(context, dlv, db);
+                          break;
+                        case 'invoice':
+                          final fullDlv = await db.getDeliveryDetailAsync(dlv.id);
+                          if (!context.mounted) return;
+                          _showCreateInvoiceFromDeliveryDialog(context, fullDlv, db);
+                          break;
+                        case 'tracking':
+                          _showEditCourierDialog(context, dlv, db);
+                          break;
+                        case 'share':
+                          ShareDocumentDialog.show(context, dlv);
+                          break;
+                        case 'whatsapp':
+                          WhatsAppQuickChatDialog.showCustomerQuickChat(
+                            context,
+                            customerName: dlv.partyName,
+                            customerPhone: dlv.customerMobile ?? '+91 98765 00000',
+                            docNumber: dlv.invoiceNumber,
+                            projectName: dlv.projectName,
+                          );
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'view',
+                        child: Row(
+                          children: [
+                            Icon(Icons.visibility_outlined, size: 16),
+                            SizedBox(width: 8),
+                            Expanded(child: Text('View Details')),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 2),
-                      IconButton(
-                        icon: const Icon(Icons.picture_as_pdf_outlined, color: AppColors.primary, size: 17),
-                        tooltip: 'Preview Delivery Challan PDF',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        onPressed: () => SalesPdfGeneratorDialog.show(context, dlv, db),
+                      const PopupMenuItem(
+                        value: 'invoice',
+                        child: Row(
+                          children: [
+                            Icon(Icons.receipt_long, size: 16, color: AppColors.primary),
+                            SizedBox(width: 8),
+                            Expanded(child: Text('Create Invoice')),
+                          ],
+                        ),
                       ),
-                      const SizedBox(width: 6),
-                      ErpButton(
-                        text: 'Create Invoice',
-                        icon: Icons.receipt_long,
-                        onPressed: () => _showCreateInvoiceFromDeliveryDialog(context, dlv, db),
+                      const PopupMenuItem(
+                        value: 'tracking',
+                        child: Row(
+                          children: [
+                            Icon(Icons.local_shipping_outlined, size: 16, color: AppColors.info),
+                            SizedBox(width: 8),
+                            Expanded(child: Text('Edit Tracking')),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'share',
+                        child: Row(
+                          children: [
+                            Icon(Icons.share_outlined, size: 16, color: AppColors.teal),
+                            SizedBox(width: 8),
+                            Expanded(child: Text('Share Challan')),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'whatsapp',
+                        child: Row(
+                          children: [
+                            Icon(Icons.chat_outlined, size: 16, color: AppColors.success),
+                            SizedBox(width: 8),
+                            Expanded(child: Text('WhatsApp Message')),
+                          ],
+                        ),
                       ),
                     ],
                   ),

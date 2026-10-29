@@ -110,7 +110,7 @@ class ErpFilterDropdown<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
     this.width,
-    this.isExpanded = false,
+    this.isExpanded = true,
   });
 
   @override

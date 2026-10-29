@@ -480,7 +480,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
         ErpColumn(title: 'Pending Due', isNumeric: true),
         ErpColumn(title: 'Return Status'),
         ErpColumn(title: 'Payment Status'),
-        ErpColumn(title: 'Actions'),
+        ErpColumn(title: 'Actions', width: 90),
       ],
       rows: paginatedInvoices.map((s) {
         ErpStatusBadge badge;
@@ -521,9 +521,13 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
         return [
           InkWell(
             onTap: () {
-              ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', ErpNavSection.salesInvoiceList);
+              SalesPdfGeneratorDialog.show(context, s, db);
             },
-            child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary)),
+            ),
           ),
           Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
           Text(s.partyName, style: AppTextStyles.bodyMedium),
@@ -538,31 +542,63 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
           ),
           returnBadge,
           badge,
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 18),
-                tooltip: 'Preview Invoice PDF',
-                onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
-              ),
-              if (s.invoiceReturnStatus != InvoiceReturnIndicator.fullyReturned && s.status != SaleStatus.cancelled)
-                IconButton(
-                  icon: const Icon(Icons.assignment_return_outlined, color: AppColors.primary, size: 18),
-                  tooltip: 'Create Sales Return',
-                  onPressed: () {
-                    ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.salesReturn;
-                    ref.read(salesCreateSourceDocIdProvider.notifier).state = s.id;
-                    ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesReturn;
-                  },
+          PopupMenuButton<String>(
+            tooltip: 'Actions',
+            icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+            onSelected: (action) async {
+              switch (action) {
+                case 'view':
+                  SalesPdfGeneratorDialog.show(context, s, db);
+                  break;
+                case 'payment':
+                  _showRecordPaymentDialog(context, s, db);
+                  break;
+                case 'return':
+                  ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.salesReturn;
+                  ref.read(salesCreateSourceDocIdProvider.notifier).state = s.id;
+                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesReturn;
+                  break;
+              }
+            },
+            itemBuilder: (context) {
+              final canRecordPayment = s.pendingAmount > 0;
+              final canReturn = s.invoiceReturnStatus != InvoiceReturnIndicator.fullyReturned && s.status != SaleStatus.cancelled;
+
+              return [
+                const PopupMenuItem(
+                  value: 'view',
+                  child: Row(
+                    children: [
+                      Icon(Icons.visibility_outlined, size: 16),
+                      SizedBox(width: 8),
+                      Expanded(child: Text('View Details')),
+                    ],
+                  ),
                 ),
-              if (s.pendingAmount > 0)
-                IconButton(
-                  icon: const Icon(Icons.add_card, color: AppColors.success, size: 18),
-                  tooltip: 'Record Payment',
-                  onPressed: () => _showRecordPaymentDialog(context, s, db),
-                ),
-            ],
+                if (canRecordPayment)
+                  const PopupMenuItem(
+                    value: 'payment',
+                    child: Row(
+                      children: [
+                        Icon(Icons.add_card, size: 16, color: AppColors.success),
+                        SizedBox(width: 8),
+                        Expanded(child: Text('Record Payment')),
+                      ],
+                    ),
+                  ),
+                if (canReturn)
+                  const PopupMenuItem(
+                    value: 'return',
+                    child: Row(
+                      children: [
+                        Icon(Icons.assignment_return_outlined, size: 16, color: AppColors.primary),
+                        SizedBox(width: 8),
+                        Expanded(child: Text('Create Sales Return')),
+                      ],
+                    ),
+                  ),
+              ];
+            },
           ),
         ];
       }).toList(),

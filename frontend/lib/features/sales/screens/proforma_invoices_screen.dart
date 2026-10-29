@@ -487,7 +487,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
         return [
           InkWell(
             onTap: () {
-              ref.read(activeRecordDetailsStackProvider.notifier).push(proforma.id, 'proformaInvoice', ErpNavSection.proformaInvoices);
+              SalesPdfGeneratorDialog.show(context, proforma, db);
             },
             child: Text(
               proforma.invoiceNumber,
@@ -504,104 +504,54 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
             style: AppTextStyles.bodyBold.copyWith(color: proforma.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
           ),
           badge,
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 18),
-                tooltip: 'Preview Proforma PDF',
-                onPressed: () => SalesPdfGeneratorDialog.show(context, proforma, db),
+          PopupMenuButton<String>(
+            tooltip: 'Actions',
+            icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+            onSelected: (action) async {
+              switch (action) {
+                case 'view':
+                  SalesPdfGeneratorDialog.show(context, proforma, db);
+                  break;
+                case 'payment':
+                  _showRecordAdvancePaymentDialog(context, proforma, db);
+                  break;
+                case 'convert':
+                  await _convertToSalesOrder(context, ref, proforma, db);
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'view',
+                child: Row(
+                  children: [
+                    Icon(Icons.visibility_outlined, size: 16),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('View Details')),
+                  ],
+                ),
               ),
               if (proforma.pendingAmount > 0)
-                IconButton(
-                  icon: const Icon(Icons.add_card, color: AppColors.success, size: 18),
-                  tooltip: 'Record Advance Payment',
-                  onPressed: () => _showRecordAdvancePaymentDialog(context, proforma, db),
+                const PopupMenuItem(
+                  value: 'payment',
+                  child: Row(
+                    children: [
+                      Icon(Icons.add_card, size: 16, color: AppColors.success),
+                      SizedBox(width: 8),
+                      Expanded(child: Text('Record Advance Payment')),
+                    ],
+                  ),
                 ),
               if (proforma.proformaStatus != ProformaStatus.converted)
-                IconButton(
-                  icon: const Icon(Icons.shopping_cart_checkout, color: AppColors.purple, size: 18),
-                  tooltip: 'Convert to Sales Order',
-                  onPressed: () async {
-                    // Convert Proforma to Sales Order. List rows omit line items, so hydrate first —
-                    // otherwise the new order would be posted with an empty items array.
-                    final hydratedProforma = proforma.items.isEmpty
-                        ? await db.getProformaDetailAsync(proforma.id)
-                        : proforma;
-                    if (!context.mounted) return;
-
-                    // 1. Check stock for each line item against finished product available stock
-                    final hasShortage = hydratedProforma.items.any((item) {
-                      final fp = db.finishedProducts
-                          .where((p) => p.id == item.finishedProductId || p.itemCode == item.finishedProductCode)
-                          .firstOrNull;
-                      final available = fp?.availableStock ?? 0.0;
-                      return item.quantity > available;
-                    });
-
-                    // 2. If insufficient stock: prompt Sales person with Purchase/Production decision
-                    if (hasShortage) {
-                      await ConvertProformaDialog.show(context, hydratedProforma);
-                      return;
-                    }
-
-                    // 3. If sufficient stock: continue existing Sales Order workflow without interruption
-                    final soNumber = 'DLZ/SO/2026/${(db.nextSalesOrderNumber).toString().padLeft(4, '0')}';
-                    final so = Sale(
-                      id: IdGenerator.generateId('SO'),
-                      invoiceNumber: soNumber,
-                      documentType: SalesDocumentType.salesOrder,
-                      partyType: hydratedProforma.partyType,
-                      partyId: hydratedProforma.partyId,
-                      partyName: hydratedProforma.partyName,
-                      customerContactPerson: hydratedProforma.customerContactPerson,
-                      customerMobile: hydratedProforma.customerMobile,
-                      customerEmail: hydratedProforma.customerEmail,
-                      customerGstNumber: hydratedProforma.customerGstNumber,
-                      billingAddress: hydratedProforma.billingAddress,
-                      shippingAddress: hydratedProforma.shippingAddress,
-                      projectId: hydratedProforma.projectId,
-                      projectName: hydratedProforma.projectName,
-                      architectId: hydratedProforma.architectId,
-                      architectName: hydratedProforma.architectName,
-                      salesExecutive: hydratedProforma.salesExecutive,
-                      salesOrderNumber: soNumber,
-                      proformaReferenceId: hydratedProforma.id,
-                      proformaNumber: hydratedProforma.invoiceNumber,
-                      quotationReferenceId: hydratedProforma.quotationReferenceId,
-                      saleDate: DateTime.now(),
-                      deliveryDate: DateTime.now().add(const Duration(days: 14)),
-                      items: hydratedProforma.items.map((i) => i.copyWith()).toList(),
-                      subtotalAmount: hydratedProforma.subtotalAmount,
-                      discountAmount: hydratedProforma.discountAmount,
-                      taxableAmount: hydratedProforma.taxableAmount,
-                      cgstAmount: hydratedProforma.cgstAmount,
-                      sgstAmount: hydratedProforma.sgstAmount,
-                      igstAmount: hydratedProforma.igstAmount,
-                      gstAmount: hydratedProforma.gstAmount,
-                      totalAmount: hydratedProforma.totalAmount,
-                      paidAmount: hydratedProforma.paidAmount,
-                      pendingAmount: hydratedProforma.pendingAmount,
-                      paymentMode: hydratedProforma.paymentMode,
-                      status: SaleStatus.active,
-                      createdAt: DateTime.now(),
-                    );
-
-                    try {
-                      final createdSO = await db.createSalesOrderAsync(so, autoAllocate: true);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Created Sales Order ${createdSO.invoiceNumber} with automated stock allocation!'),
-                          backgroundColor: AppColors.success,
-                        ),
-                      );
-                      ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders;
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Failed to create sales order: $e'), backgroundColor: AppColors.danger),
-                      );
-                    }
-                  },
+                const PopupMenuItem(
+                  value: 'convert',
+                  child: Row(
+                    children: [
+                      Icon(Icons.shopping_cart_checkout, size: 16, color: AppColors.purple),
+                      SizedBox(width: 8),
+                      Expanded(child: Text('Convert to Sales Order')),
+                    ],
+                  ),
                 ),
             ],
           ),
@@ -623,5 +573,104 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
     ],
   ],
 );
+  }
+
+  Future<void> _convertToSalesOrder(BuildContext context, WidgetRef ref, Sale proforma, MockDatabaseService db) async {
+    if (proforma.proformaStatus == ProformaStatus.converted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This Proforma Invoice has already been converted to a Sales Order.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    final hydratedProforma = proforma.items.isEmpty
+        ? await db.getProformaDetailAsync(proforma.id)
+        : proforma;
+    if (!context.mounted) return;
+
+    final hasShortage = hydratedProforma.items.any((item) {
+      final fp = db.finishedProducts
+          .where((p) => p.id == item.finishedProductId || p.itemCode == item.finishedProductCode)
+          .firstOrNull;
+      final available = fp?.availableStock ?? 0.0;
+      return item.quantity > available;
+    });
+
+    if (hasShortage) {
+      await ConvertProformaDialog.show(context, hydratedProforma);
+      if (mounted) setState(() {});
+      return;
+    }
+
+    final soNumber = 'DLZ/SO/2026/${(db.nextSalesOrderNumber).toString().padLeft(4, '0')}';
+    final so = Sale(
+      id: IdGenerator.generateId('SO'),
+      invoiceNumber: soNumber,
+      documentType: SalesDocumentType.salesOrder,
+      partyType: hydratedProforma.partyType,
+      partyId: hydratedProforma.partyId,
+      partyName: hydratedProforma.partyName,
+      customerContactPerson: hydratedProforma.customerContactPerson,
+      customerMobile: hydratedProforma.customerMobile,
+      customerEmail: hydratedProforma.customerEmail,
+      customerGstNumber: hydratedProforma.customerGstNumber,
+      billingAddress: hydratedProforma.billingAddress,
+      shippingAddress: hydratedProforma.shippingAddress,
+      projectId: hydratedProforma.projectId,
+      projectName: hydratedProforma.projectName,
+      architectId: hydratedProforma.architectId,
+      architectName: hydratedProforma.architectName,
+      salesExecutive: hydratedProforma.salesExecutive,
+      salesOrderNumber: soNumber,
+      proformaReferenceId: hydratedProforma.id,
+      proformaNumber: hydratedProforma.invoiceNumber,
+      quotationReferenceId: hydratedProforma.quotationReferenceId,
+      saleDate: DateTime.now(),
+      deliveryDate: DateTime.now().add(const Duration(days: 14)),
+      items: hydratedProforma.items.map((i) => i.copyWith()).toList(),
+      subtotalAmount: hydratedProforma.subtotalAmount,
+      discountAmount: hydratedProforma.discountAmount,
+      taxableAmount: hydratedProforma.taxableAmount,
+      cgstAmount: hydratedProforma.cgstAmount,
+      sgstAmount: hydratedProforma.sgstAmount,
+      igstAmount: hydratedProforma.igstAmount,
+      gstAmount: hydratedProforma.gstAmount,
+      totalAmount: hydratedProforma.totalAmount,
+      paidAmount: hydratedProforma.paidAmount,
+      pendingAmount: hydratedProforma.pendingAmount,
+      paymentMode: hydratedProforma.paymentMode,
+      status: SaleStatus.active,
+      createdAt: DateTime.now(),
+    );
+
+    try {
+      final createdSO = await db.createSalesOrderAsync(so, autoAllocate: true);
+      final piIdx = db.sales.indexWhere((s) => s.id == proforma.id);
+      if (piIdx != -1) {
+        db.sales[piIdx] = db.sales[piIdx].copyWith(
+          proformaStatus: ProformaStatus.converted,
+          salesOrderReferenceId: createdSO.id,
+          salesOrderNumber: createdSO.invoiceNumber,
+        );
+      }
+      if (mounted) setState(() {});
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Created Sales Order ${createdSO.invoiceNumber} with automated stock allocation!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders;
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create sales order: $e'), backgroundColor: AppColors.danger),
+      );
+    }
   }
 }

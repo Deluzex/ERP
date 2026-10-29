@@ -247,6 +247,17 @@ describe('Sales & Commercial Lifecycle Domain (E2E with Auto-Cleanup)', () => {
       expect(res.status).toBe(404);
     });
 
+    it('Negative: Should reject converting an unaccepted quotation to Proforma Invoice with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/sales/quotations/${revisionId}/convert-to-proforma`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send();
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('Only accepted quotations can be converted');
+    });
+
     it('Positive: Should update quotation status to accepted', async () => {
       const res = await request(app.getHttpServer())
         .patch(`/api/v1/sales/quotations/${revisionId}/status`)
@@ -333,6 +344,86 @@ describe('Sales & Commercial Lifecycle Domain (E2E with Auto-Cleanup)', () => {
       expect(resDetail.status).toBe(200);
       expect(resDetail.body.data.id).toBe(proformaId);
       expect(resDetail.body.data.items.length).toBeGreaterThan(0);
+    });
+
+    it('Positive: Should update proforma status via PATCH /api/v1/sales/proforma/:id/status', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/sales/proforma/${proformaId}/status`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({ status: 'issued' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.proformaStatus).toBe('issued');
+    });
+
+    it('Positive: Should convert proforma to sales order and mark proforma status as converted', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/sales/orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          partyType: 'customer',
+          partyId: testCustomerId,
+          proformaId: proformaId,
+          deliveryDate: new Date(Date.now() + 7 * 86400000).toISOString(),
+          paymentMode: 'bankTransfer',
+          items: [
+            {
+              finishedProductId: testFpId1,
+              quantity: 2.0,
+              rate: 4000.0,
+              discountAmount: 0.0,
+              gstPercent: 18.0,
+            },
+          ],
+          notes: 'Converted from proforma',
+        });
+
+      expect(res.status).toBe(201);
+      const convertedSoId = res.body.data.id;
+      createdSaleIds.push(convertedSoId);
+      expect(res.body.data.proformaReferenceId).toBe(proformaId);
+
+      // Verify proforma is marked converted in database
+      const piDetail = await request(app.getHttpServer())
+        .get(`/api/v1/sales/proforma/${proformaId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid);
+
+      expect(piDetail.status).toBe(200);
+      expect(piDetail.body.data.proformaStatus).toBe('converted');
+      expect(piDetail.body.data.salesOrderReferenceId).toBe(convertedSoId);
+
+      // Reset reserved stock so Milestone 5B stock isolation remains pristine
+      await db.query(`UPDATE finished_products SET reserved_stock = 0 WHERE id = $1`, [testFpId1]);
+    });
+
+    it('Negative: Should reject converting an already converted proforma invoice with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/sales/orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Correlation-ID', testCid)
+        .send({
+          partyType: 'customer',
+          partyId: testCustomerId,
+          proformaId: proformaId,
+          deliveryDate: new Date(Date.now() + 7 * 86400000).toISOString(),
+          paymentMode: 'bankTransfer',
+          items: [
+            {
+              finishedProductId: testFpId1,
+              quantity: 1.0,
+              rate: 4000.0,
+              discountAmount: 0.0,
+              gstPercent: 18.0,
+            },
+          ],
+          notes: 'Duplicate conversion attempt',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('already been converted');
     });
   });
 

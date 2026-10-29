@@ -191,6 +191,16 @@ class SalesApiService {
     }
   }
 
+  Future<Sale> updateProformaStatus(String id, String status) async {
+    try {
+      final response = await _client.dio.patch('/sales/proforma/$id/status', data: {'status': status});
+      final data = _client.unwrap<Map<String, dynamic>>(response);
+      return Sale.fromJson(data);
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
   // ==========================================================================
   // SALES ORDERS
   // ==========================================================================
@@ -204,6 +214,7 @@ class SalesApiService {
     required String partyId,
     String? architectId,
     String? projectId,
+    String? proformaId,
     String? salesExecutive,
     String? deliveryDate,
     PaymentMode paymentMode = PaymentMode.bankTransfer,
@@ -217,6 +228,7 @@ class SalesApiService {
         'partyId': partyId,
         if (architectId != null) 'architectId': architectId,
         if (projectId != null) 'projectId': projectId,
+        if (proformaId != null) 'proformaId': proformaId,
         if (salesExecutive != null) 'salesExecutive': salesExecutive,
         if (deliveryDate != null) 'deliveryDate': deliveryDate,
         'paymentMode': paymentMode.name,

@@ -95,24 +95,11 @@ void main() {
       // Verify Card Header and buttons exist
       expect(find.text('Quotation Line Items'), findsOneWidget);
       expect(find.text('Add Finished Good'), findsOneWidget);
-      expect(find.text('Add Raw Material'), findsOneWidget);
+      // Add Raw Material button is commented out per UI directive
+      expect(find.text('Add Raw Material'), findsNothing);
 
       // Verify first item is rendered with Finished Good
       expect(find.text('Fin Good'), findsWidgets);
-
-      // Tap 'Add Raw Material' button
-      final addRmButton = find.text('Add Raw Material');
-      await tester.ensureVisible(addRmButton);
-      await tester.tap(addRmButton);
-      await tester.pumpAndSettle();
-
-      // Now both Fin Good and Raw Mat rows should be visible
-      expect(find.text('Raw Mat'), findsWidgets);
-
-      // Verify raw material description was directly fetched from Raw Material Master
-      final firstRm = db.rawMaterials.first;
-      expect(find.textContaining(firstRm.name), findsWidgets);
-      expect(find.textContaining(firstRm.itemCode), findsWidgets);
 
       // Tap 'Add Finished Good' button
       final addFgButton = find.text('Add Finished Good');
@@ -120,8 +107,8 @@ void main() {
       await tester.tap(addFgButton);
       await tester.pumpAndSettle();
 
-      // Should now have 3 items
-      expect(find.text('3 Items'), findsOneWidget);
+      // Should now have 2 items
+      expect(find.text('2 Items'), findsOneWidget);
     });
   });
 }

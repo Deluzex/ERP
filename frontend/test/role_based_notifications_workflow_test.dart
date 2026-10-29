@@ -289,10 +289,10 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Low Stock Alerts pill should be visible for Inventory Manager
+      // Low Stock Alerts pill is commented out in header per UI directive
       final alertPill = find.textContaining('Low Stock Alerts');
-      expect(alertPill, findsOneWidget);
-      expect(find.text('${db.totalLowStockCount} Low Stock Alerts'), findsOneWidget);
+      expect(alertPill, findsNothing);
+      expect(find.text('${db.totalLowStockCount} Low Stock Alerts'), findsNothing);
     });
 
     testWidgets('Header displays Raw Material Alerts pill for Purchase Manager (not full 28)', (tester) async {
@@ -322,9 +322,9 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Purchase Manager must see Raw Material Alerts, NOT the combined 28
+      // Low Stock Alerts pill is commented out in header per UI directive
       final expectedLabel = '${db.lowStockRawMaterials.length} Raw Material Alerts';
-      expect(find.text(expectedLabel), findsOneWidget);
+      expect(find.text(expectedLabel), findsNothing);
       expect(find.text('${db.totalLowStockCount} Low Stock Alerts'), findsNothing);
     });
 
@@ -355,9 +355,9 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Production Manager must see Finished Goods Alerts, NOT the combined 28
+      // Low Stock Alerts pill is commented out in header per UI directive
       final expectedLabel = '${db.lowStockFinishedProducts.length} Finished Goods Alerts';
-      expect(find.text(expectedLabel), findsOneWidget);
+      expect(find.text(expectedLabel), findsNothing);
       expect(find.text('${db.totalLowStockCount} Low Stock Alerts'), findsNothing);
     });
 

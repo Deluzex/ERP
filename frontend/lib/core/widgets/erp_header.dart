@@ -124,13 +124,13 @@ class ErpHeader extends ConsumerWidget {
     final pageTitle = _resolvePageTitle(ref);
     final db = ref.watch(databaseServiceProvider);
     final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
-    final canViewLowStock = db.canViewLowStockAlerts(currentUser);
+    // final canViewLowStock = db.canViewLowStockAlerts(currentUser);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
         final isDesktop = MediaQuery.of(context).size.width >= 1024;
-        final showLowStockPill = availableWidth >= 780 && canViewLowStock;
+        // final showLowStockPill = availableWidth >= 780 && canViewLowStock;
         final isMobile = availableWidth < 500;
         final hideUserDetails = availableWidth < 900;
 
@@ -183,43 +183,43 @@ class ErpHeader extends ConsumerWidget {
               SizedBox(width: isMobile ? 6 : 10),
 
               // Low Stock Alert Quick Button if low stock exists and user role is authorized
-              if (showLowStockPill)
-                Builder(
-                  builder: (context) {
-                    final lowCount = db.getLowStockCountForUser(currentUser);
-                    if (lowCount == 0) return const SizedBox.shrink();
-                    final label = db.getLowStockAlertLabelForUser(currentUser);
-
-                    return Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      child: InkWell(
-                        onTap: () => LowStockWhatsAppAlertDialog.show(context),
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.danger.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 16),
-                              const SizedBox(width: 6),
-                              Text(
-                                label,
-                                style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 11.5),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.arrow_forward_ios, color: AppColors.danger, size: 10),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+              // if (showLowStockPill)
+              //   Builder(
+              //     builder: (context) {
+              //       final lowCount = db.getLowStockCountForUser(currentUser);
+              //       if (lowCount == 0) return const SizedBox.shrink();
+              //       final label = db.getLowStockAlertLabelForUser(currentUser);
+              //
+              //       return Container(
+              //         margin: const EdgeInsets.only(right: 6),
+              //         child: InkWell(
+              //           onTap: () => LowStockWhatsAppAlertDialog.show(context),
+              //           borderRadius: BorderRadius.circular(20),
+              //           child: Container(
+              //             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              //             decoration: BoxDecoration(
+              //               color: AppColors.danger.withValues(alpha: 0.12),
+              //               borderRadius: BorderRadius.circular(20),
+              //               border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+              //             ),
+              //             child: Row(
+              //               mainAxisSize: MainAxisSize.min,
+              //               children: [
+              //                 const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 16),
+              //                 const SizedBox(width: 6),
+              //                 Text(
+              //                   label,
+              //                   style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 11.5),
+              //                 ),
+              //                 const SizedBox(width: 4),
+              //                 const Icon(Icons.arrow_forward_ios, color: AppColors.danger, size: 10),
+              //               ],
+              //             ),
+              //           ),
+              //         ),
+              //       );
+              //     },
+              //   ),
 
               // Instance Subscription Status Pill
               const SubscriptionBadgePill(),

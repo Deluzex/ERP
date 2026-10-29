@@ -5683,7 +5683,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                       text: 'Accept & Generate Proforma',
                       icon: Icons.check_circle_outline,
                       onPressed: () {
-                        final pi = db.createProformaFromQuotation(s.id);
+                        final pi = db.createProformaFromQuotation(s.id, acceptFirst: true);
                         ref.read(activeRecordDetailsStackProvider.notifier).push(pi.id, 'proformaInvoice', details.parentSection);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Quotation Accepted! Proforma Invoice generated.'), backgroundColor: AppColors.success),

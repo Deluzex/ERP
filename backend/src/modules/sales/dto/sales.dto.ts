@@ -171,6 +171,11 @@ export class CreateQuotationDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsUUID()
+  proformaId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
   salesExecutive?: string;
 
@@ -318,8 +323,19 @@ export class CreateSalesOrderDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsUUID()
+  proformaId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
   notes?: string;
+}
+
+export class UpdateProformaStatusDto {
+  @ApiProperty()
+  @IsString()
+  status!: string;
 }
 
 export class UpdateSalesOrderStatusDto {

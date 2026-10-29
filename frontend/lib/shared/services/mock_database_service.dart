@@ -2680,6 +2680,25 @@ class MockDatabaseService extends ChangeNotifier {
         );
       }
 
+      // 4. Update linked sales order if applicable
+      if (order.salesOrderId != null || order.salesOrderNumber != null) {
+        final soIndex = sales.indexWhere((s) => (order.salesOrderId != null && s.id == order.salesOrderId) || (order.salesOrderNumber != null && s.invoiceNumber == order.salesOrderNumber));
+        if (soIndex != -1) {
+          final so = sales[soIndex];
+          final updatedItems = so.items.map((i) {
+            if (i.finishedProductId == order.finishedProductId) {
+              return i.copyWith(reservedQuantity: i.reservedQuantity + producedQty);
+            }
+            return i;
+          }).toList();
+          final updatedSo = so.copyWith(items: updatedItems);
+          final isReady = isSalesOrderStockReady(updatedSo);
+          sales[soIndex] = updatedSo.copyWith(
+            salesOrderStatus: isReady ? SalesOrderStatus.readyForDispatch : so.salesOrderStatus,
+          );
+        }
+      }
+
       productionOrders[idx] = order.copyWith(
         status: ProductionStatus.completed,
         actualQuantityProduced: producedQty,
@@ -2906,8 +2925,11 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   // --- 2. PROFORMA INVOICE WORKFLOW ---
-  Sale createProformaFromQuotation(String quotationId) {
+  Sale createProformaFromQuotation(String quotationId, {bool acceptFirst = false}) {
     final q = sales.firstWhere((s) => s.id == quotationId);
+    if (!acceptFirst && q.quotationStatus != QuotationStatus.accepted && q.quotationStatus != QuotationStatus.approved) {
+      throw StateError('Cannot convert quotation ${q.invoiceNumber} to Proforma Invoice: quote is not accepted (status: ${q.quotationStatus?.name})');
+    }
     final piNumber = 'DLZ/PI/2026/${(++_proformaCounter).toString().padLeft(4, '0')}';
     
     final proforma = Sale(
@@ -3120,6 +3142,7 @@ class MockDatabaseService extends ChangeNotifier {
       if (piIndex != -1) {
         sales[piIndex] = sales[piIndex].copyWith(
           proformaStatus: ProformaStatus.converted,
+          salesOrderReferenceId: finalSO.id,
           salesOrderNumber: finalSO.invoiceNumber,
         );
       }
@@ -3469,15 +3492,62 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   // --- 6. DIRECT SALE (IMMEDIATE COUNTER SALE) ---
-  void createSale(Sale sale) {
+  Sale createDirectSale(Sale sale) {
+    // 1. Deduct finished product physical stock and record stock movements
+    for (final item in sale.items) {
+      final fpIndex = finishedProducts.indexWhere((fp) => fp.id == item.finishedProductId || fp.itemCode == item.finishedProductCode);
+      if (fpIndex != -1) {
+        final fp = finishedProducts[fpIndex];
+        final updatedPhysical = (fp.currentStock - item.quantity).clamp(0.0, double.infinity);
+        finishedProducts[fpIndex] = fp.copyWith(
+          currentStock: updatedPhysical,
+          updatedAt: DateTime.now(),
+        );
+
+        _recordStockTransaction(
+          itemId: fp.id,
+          itemName: fp.name,
+          itemCode: fp.itemCode,
+          itemType: ItemType.finishedProduct,
+          transactionType: StockMovementType.sale,
+          referenceNumber: sale.invoiceNumber,
+          stockIn: 0.0,
+          stockOut: item.quantity,
+          newBalance: updatedPhysical,
+          unit: fp.unit,
+          notes: 'Direct Sale / Invoice ${sale.invoiceNumber} counter dispatch',
+        );
+      }
+    }
+
+    // 2. If initial payment provided, record payment
+    if (sale.paidAmount > 0) {
+      final payment = ErpPayment(
+        id: IdGenerator.generateId('PAY'),
+        paymentNumber: IdGenerator.generateDocNumber('PAY', ++_paymentCounter),
+        paymentType: sale.partyType == PartyType.customer ? PaymentType.customerPayment : PaymentType.dealerPayment,
+        partyId: sale.partyId,
+        partyName: sale.partyName,
+        referenceDocumentId: sale.id,
+        referenceDocumentNumber: sale.invoiceNumber,
+        amount: sale.paidAmount,
+        paymentMode: sale.paymentMode,
+        paymentDate: DateTime.now(),
+        notes: 'Counter payment on direct sale ${sale.invoiceNumber}',
+        createdAt: DateTime.now(),
+      );
+      payments.insert(0, payment);
+    }
+
     sales.insert(0, sale);
     _applySaleToProject(sale);
     _generateCommissionForSale(sale);
     notifyListeners();
+    return sale;
   }
 
-  void createDirectSale(Sale sale) {
-    createSale(sale);
+  void createSale(Sale sale) {
+    createDirectSale(sale);
   }
 
   // --- 7. CUSTOMER INVOICE PAYMENT ---
@@ -6263,8 +6333,27 @@ class MockDatabaseService extends ChangeNotifier {
   int get expiringQuotationsCount => quotations.where((q) => q.quotationStatus == QuotationStatus.sent && q.validUntil != null && q.validUntil!.difference(DateTime.now()).inDays <= 5).length;
   
   int get totalSalesOrdersCount => salesOrders.length;
-  int get ordersPendingProductionCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.productionPending || so.salesOrderStatus == SalesOrderStatus.inProduction).length;
-  int get ordersReadyForDispatchCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.readyForDispatch).length;
+  bool isSalesOrderStockReady(Sale so) {
+    if (so.salesOrderStatus == SalesOrderStatus.delivered || so.salesOrderStatus == SalesOrderStatus.completed) {
+      return false;
+    }
+    if (so.salesOrderStatus == SalesOrderStatus.readyForDispatch) {
+      return true;
+    }
+    if (so.items.isEmpty) {
+      return false;
+    }
+    return so.items.every((item) {
+      final remaining = (item.quantity - item.deliveredQuantity).clamp(0.0, double.infinity);
+      if (remaining <= 0) return true;
+      final fp = finishedProducts.where((p) => p.id == item.finishedProductId || p.itemCode == item.finishedProductCode).firstOrNull;
+      final physicalStock = fp?.currentStock ?? 0.0;
+      return physicalStock >= remaining || item.reservedQuantity >= remaining;
+    });
+  }
+
+  int get ordersPendingProductionCount => salesOrders.where((so) => !isSalesOrderStockReady(so) && (so.salesOrderStatus == SalesOrderStatus.productionPending || so.salesOrderStatus == SalesOrderStatus.inProduction)).length;
+  int get ordersReadyForDispatchCount => salesOrders.where((so) => isSalesOrderStockReady(so)).length;
   int get ordersPartiallyDeliveredCount => salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.partiallyDelivered).length;
 
   double get totalInvoicedRevenue => salesInvoices.fold(0.0, (sum, s) => sum + s.totalAmount.abs());
@@ -6979,6 +7068,13 @@ class MockDatabaseService extends ChangeNotifier {
   }
 
   Future<Sale> convertQuotationToProformaAsync(String quotationId) async {
+    final qIndex = sales.indexWhere((s) => s.id == quotationId);
+    if (qIndex != -1) {
+      final q = sales[qIndex];
+      if (q.quotationStatus != QuotationStatus.accepted && q.quotationStatus != QuotationStatus.approved) {
+        throw StateError('Cannot convert quotation ${q.invoiceNumber} to Proforma Invoice: quote is not accepted (status: ${q.quotationStatus?.name})');
+      }
+    }
     try {
       final proforma = await _salesApi.convertQuotationToProforma(quotationId);
       await Future.wait([
@@ -7022,6 +7118,25 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  Future<Sale> updateProformaStatusAsync(String proformaId, String status) async {
+    try {
+      final updated = await _salesApi.updateProformaStatus(proformaId, status);
+      final idx = sales.indexWhere((s) => s.id == proformaId);
+      if (idx != -1) sales[idx] = updated;
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updateProformaStatusAsync remote failed: $e');
+      final idx = sales.indexWhere((s) => s.id == proformaId);
+      if (idx != -1) {
+        final parsedStatus = ProformaStatus.values.where((st) => st.name == status).firstOrNull ?? ProformaStatus.converted;
+        sales[idx] = sales[idx].copyWith(proformaStatus: parsedStatus);
+        notifyListeners();
+      }
+      rethrow;
+    }
+  }
+
   Future<Sale> createSalesOrderAsync(Sale salesOrder, {bool autoAllocate = true}) async {
     try {
       final created = await _salesApi.createSalesOrder(
@@ -7029,6 +7144,7 @@ class MockDatabaseService extends ChangeNotifier {
         partyId: salesOrder.partyId,
         architectId: salesOrder.architectId,
         projectId: salesOrder.projectId,
+        proformaId: salesOrder.proformaReferenceId,
         salesExecutive: salesOrder.salesExecutive,
         deliveryDate: salesOrder.deliveryDate?.toIso8601String(),
         paymentMode: salesOrder.paymentMode,
@@ -7037,6 +7153,16 @@ class MockDatabaseService extends ChangeNotifier {
         notes: salesOrder.notes,
       );
       sales.insert(0, created);
+      if (salesOrder.proformaReferenceId != null) {
+        final piIndex = sales.indexWhere((s) => s.id == salesOrder.proformaReferenceId);
+        if (piIndex != -1) {
+          sales[piIndex] = sales[piIndex].copyWith(
+            proformaStatus: ProformaStatus.converted,
+            salesOrderReferenceId: created.id,
+            salesOrderNumber: created.invoiceNumber,
+          );
+        }
+      }
       // A quotation/proforma referenced by this order is now converted server-side; refresh to reflect it
       await Future.wait([
         loadQuotations(forceRefresh: true),
@@ -7046,8 +7172,9 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesOrderAsync remote failed: $e');
-      rethrow;
+      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesOrderAsync remote failed, fallback to local: $e');
+      final localSO = createSalesOrder(salesOrder, autoAllocate: autoAllocate);
+      return localSO;
     }
   }
 
@@ -7169,8 +7296,16 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createDeliveryAsync remote failed: $e');
-      rethrow;
+      if (kDebugMode) debugPrint('[MockDatabaseService] createDeliveryAsync remote failed, fallback to local: $e');
+      final localDelivery = createDelivery(
+        salesOrderId: salesOrderId,
+        deliveryItems: deliveryItems,
+        vehicleNumber: vehicleNumber,
+        driverContact: driverContact,
+        trackingNumber: trackingNumber,
+        notes: notes,
+      );
+      return localDelivery;
     }
   }
 
@@ -7236,8 +7371,15 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesInvoiceFromDeliveryAsync remote failed: $e');
-      rethrow;
+      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesInvoiceFromDeliveryAsync remote failed, fallback to local: $e');
+      final localInv = createSalesInvoiceFromDelivery(
+        deliveryId: deliveryId,
+        discountAmount: discountAmount,
+        initialPaidAmount: initialPaidAmount,
+        paymentMode: paymentMode,
+        notes: notes,
+      );
+      return localInv;
     }
   }
 
@@ -7265,8 +7407,9 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createDirectSaleAsync remote failed: $e');
-      rethrow;
+      if (kDebugMode) debugPrint('[MockDatabaseService] createDirectSaleAsync remote failed, fallback to local: $e');
+      final localSale = createDirectSale(sale);
+      return localSale;
     }
   }
 
@@ -7317,8 +7460,16 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesReturnAsync remote failed: $e');
-      rethrow;
+      if (kDebugMode) debugPrint('[MockDatabaseService] createSalesReturnAsync remote failed, fallback to local: $e');
+      final localReturn = createSalesReturn(
+        originalInvoiceId: originalInvoiceId,
+        returnItems: returnItems,
+        returnReason: returnReason,
+        condition: condition,
+        financialAction: financialAction,
+        notes: notes,
+      );
+      return localReturn;
     }
   }
 
@@ -7557,6 +7708,7 @@ class MockDatabaseService extends ChangeNotifier {
           loadRawMaterials(forceRefresh: true),
           loadFinishedProducts(forceRefresh: true),
           loadStockMovements(forceRefresh: true),
+          loadSalesOrders(forceRefresh: true),
         ]);
       }
       await loadProductionOrders(forceRefresh: true);

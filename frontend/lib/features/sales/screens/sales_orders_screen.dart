@@ -40,7 +40,10 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
   void initState() {
     super.initState();
     _tabController = TabController(length: 6, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(databaseServiceProvider).loadSalesOrders());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(databaseServiceProvider).loadSalesOrders();
+      ref.read(databaseServiceProvider).loadFinishedProducts();
+    });
   }
 
   @override
@@ -368,8 +371,8 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
               final cardWidth = constraints.maxWidth > 850
                   ? (constraints.maxWidth - (3 * 12)) / 4
                   : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
-              final readyCount = db.salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.readyForDispatch).length;
-              final prodCount = db.salesOrders.where((so) => so.salesOrderStatus == SalesOrderStatus.inProduction || so.salesOrderStatus == SalesOrderStatus.productionPending).length;
+              final readyCount = db.ordersReadyForDispatchCount;
+              final prodCount = db.ordersPendingProductionCount;
               final totalOrderValue = db.salesOrders.fold(0.0, (sum, so) => sum + so.totalAmount);
 
               return Wrap(
@@ -515,10 +518,10 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
     // Filter by tab
     switch (_tabController.index) {
       case 1:
-        filtered = filtered.where((so) => so.salesOrderStatus == SalesOrderStatus.readyForDispatch).toList();
+        filtered = filtered.where((so) => db.isSalesOrderStockReady(so)).toList();
         break;
       case 2:
-        filtered = filtered.where((so) => so.salesOrderStatus == SalesOrderStatus.productionPending || so.salesOrderStatus == SalesOrderStatus.inProduction).toList();
+        filtered = filtered.where((so) => !db.isSalesOrderStockReady(so) && (so.salesOrderStatus == SalesOrderStatus.productionPending || so.salesOrderStatus == SalesOrderStatus.inProduction)).toList();
         break;
       case 3:
         filtered = filtered.where((so) => so.salesOrderStatus == SalesOrderStatus.partiallyDelivered).toList();
@@ -538,9 +541,9 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
       filtered = filtered.where((so) {
         switch (_selectedStatusFilter) {
           case 'READY':
-            return so.salesOrderStatus == SalesOrderStatus.readyForDispatch;
+            return db.isSalesOrderStockReady(so);
           case 'PRODUCTION':
-            return so.salesOrderStatus == SalesOrderStatus.productionPending || so.salesOrderStatus == SalesOrderStatus.inProduction;
+            return !db.isSalesOrderStockReady(so) && (so.salesOrderStatus == SalesOrderStatus.productionPending || so.salesOrderStatus == SalesOrderStatus.inProduction);
           case 'PARTIAL':
             return so.salesOrderStatus == SalesOrderStatus.partiallyDelivered;
           case 'DELIVERED':
@@ -618,31 +621,28 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
         ErpColumn(title: 'Actions', width: 90),
       ],
       rows: paginatedOrders.map((so) {
+        final isDelivered = so.salesOrderStatus == SalesOrderStatus.delivered || so.salesOrderStatus == SalesOrderStatus.completed;
+        final isPartiallyDelivered = so.salesOrderStatus == SalesOrderStatus.partiallyDelivered;
+        final isStockReady = db.isSalesOrderStockReady(so);
+
         ErpStatusBadge badge;
-        switch (so.salesOrderStatus) {
-          case SalesOrderStatus.readyForDispatch:
-            badge = ErpStatusBadge.success('READY FOR DISPATCH');
-            break;
-          case SalesOrderStatus.productionPending:
-          case SalesOrderStatus.inProduction:
-            badge = ErpStatusBadge.warning('IN PRODUCTION');
-            break;
-          case SalesOrderStatus.partiallyDelivered:
-            badge = ErpStatusBadge.info('PARTIALLY DELIVERED');
-            break;
-          case SalesOrderStatus.delivered:
-          case SalesOrderStatus.completed:
-            badge = ErpStatusBadge.neutral('DELIVERED');
-            break;
-          default:
-            badge = ErpStatusBadge.neutral('CONFIRMED');
+        if (isDelivered) {
+          badge = ErpStatusBadge.neutral('DELIVERED');
+        } else if (isPartiallyDelivered) {
+          badge = ErpStatusBadge.info('PARTIALLY DELIVERED');
+        } else if (isStockReady) {
+          badge = ErpStatusBadge.success('COMPLETE PRODUCTION');
+        } else if (so.salesOrderStatus == SalesOrderStatus.productionPending || so.salesOrderStatus == SalesOrderStatus.inProduction) {
+          badge = ErpStatusBadge.warning('IN PRODUCTION');
+        } else {
+          badge = ErpStatusBadge.neutral('CONFIRMED');
         }
 
         return [
           // 1. SO Number
           InkWell(
             onTap: () {
-              ref.read(activeRecordDetailsStackProvider.notifier).push(so.id, 'salesOrder', ErpNavSection.salesOrders);
+              SalesPdfGeneratorDialog.show(context, so, db);
             },
             borderRadius: BorderRadius.circular(4),
             child: Padding(
@@ -736,8 +736,8 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
                         ],
                       ),
                       const SizedBox(height: 3),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
                             'Delivered: ${so.items.first.deliveredQuantity.toInt()}',
@@ -782,31 +782,67 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
           badge,
 
           // 7. Actions
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.picture_as_pdf_outlined, color: AppColors.primary, size: 18),
-                tooltip: 'Preview Sales Order PDF',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                onPressed: () => SalesPdfGeneratorDialog.show(context, so, db),
-              ),
-              if (so.salesOrderStatus != SalesOrderStatus.delivered && so.salesOrderStatus != SalesOrderStatus.completed) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: const Icon(Icons.local_shipping_outlined, color: AppColors.info, size: 18),
-                  tooltip: 'Dispatch Delivery',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  onPressed: () async {
-                    final fullSo = await db.getSalesOrderDetailAsync(so.id);
-                    if (!context.mounted) return;
-                    _showDispatchDeliveryDialog(context, fullSo, db);
-                  },
-                ),
-              ],
-            ],
+          Builder(
+            builder: (context) {
+              final canDispatch = !isDelivered && isStockReady;
+              return PopupMenuButton<String>(
+                tooltip: 'Actions',
+                icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+                onSelected: (action) async {
+                  switch (action) {
+                    case 'view':
+                      SalesPdfGeneratorDialog.show(context, so, db);
+                      break;
+                    case 'dispatch':
+                      if (!canDispatch) return;
+                      final fullSo = await db.getSalesOrderDetailAsync(so.id);
+                      if (!context.mounted) return;
+                      _showDispatchDeliveryDialog(context, fullSo, db);
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'view',
+                    child: Row(
+                      children: [
+                        Icon(Icons.visibility_outlined, size: 16),
+                        SizedBox(width: 8),
+                        Expanded(child: Text('View Details')),
+                      ],
+                    ),
+                  ),
+                  if (!isDelivered)
+                    PopupMenuItem(
+                      value: 'dispatch',
+                      enabled: canDispatch,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.local_shipping_outlined,
+                            size: 16,
+                            color: canDispatch ? AppColors.info : AppColors.textMuted,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Dispatch Delivery',
+                              style: TextStyle(
+                                color: canDispatch ? null : AppColors.textMuted,
+                              ),
+                            ),
+                          ),
+                          if (!canDispatch)
+                            const Tooltip(
+                              message: 'In production (stock shortage in master)',
+                              child: Icon(Icons.lock_outline, size: 14, color: AppColors.textMuted),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ];
       }).toList(),
