@@ -719,19 +719,11 @@ class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboar
 // =====================================================================
 // 4. ACCOUNTS / PAYMENT ROLE DASHBOARD
 // =====================================================================
-class AccountsPaymentRoleDashboard extends ConsumerStatefulWidget {
+class AccountsPaymentRoleDashboard extends ConsumerWidget {
   const AccountsPaymentRoleDashboard({super.key});
 
   @override
-  ConsumerState<AccountsPaymentRoleDashboard> createState() => _AccountsPaymentRoleDashboardState();
-}
-
-class _AccountsPaymentRoleDashboardState extends ConsumerState<AccountsPaymentRoleDashboard> {
-  DateTime? _paymentStartDate;
-  DateTime? _paymentEndDate;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
 
     return SingleChildScrollView(
@@ -804,85 +796,46 @@ class _AccountsPaymentRoleDashboardState extends ConsumerState<AccountsPaymentRo
           ]),
           const SizedBox(height: 28),
 
-          // Recent Payment Transactions Table (Transaction History: Date filter only)
-          Builder(
-            builder: (context) {
-              final filteredPayments = db.payments.where((p) {
-                if (_paymentStartDate != null &&
-                    p.paymentDate.isBefore(DateTime(_paymentStartDate!.year, _paymentStartDate!.month, _paymentStartDate!.day))) {
-                  return false;
-                }
-                if (_paymentEndDate != null &&
-                    p.paymentDate.isAfter(DateTime(_paymentEndDate!.year, _paymentEndDate!.month, _paymentEndDate!.day, 23, 59, 59))) {
-                  return false;
-                }
-                return true;
-              }).toList();
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text('Recent Payment & Disbursement Transactions', style: AppTextStyles.h2),
-                      ErpDateFilterBox(
-                        startDate: _paymentStartDate,
-                        endDate: _paymentEndDate,
-                        onDateRangeSelected: (start, end) {
-                          setState(() {
-                            _paymentStartDate = start;
-                            _paymentEndDate = end;
-                          });
-                        },
-                      ),
-                    ],
+          // Recent Payment Transactions Table
+          Text('Recent Payment & Disbursement Transactions', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          if (db.payments.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(32),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Text('No payment transactions recorded yet.', style: AppTextStyles.bodyMedium),
+            )
+          else
+            ErpDataTable(
+              columns: const [
+                ErpColumn(title: 'Voucher No'),
+                ErpColumn(title: 'Date'),
+                ErpColumn(title: 'Payment Type'),
+                ErpColumn(title: 'Party Name'),
+                ErpColumn(title: 'Reference / UTR'),
+                ErpColumn(title: 'Amount (₹)', isNumeric: true),
+                ErpColumn(title: 'Mode'),
+              ],
+              rows: db.payments.take(10).map((p) {
+                return [
+                  InkWell(
+                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', ErpNavSection.customerPayments),
+                    child: Text(p.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
                   ),
-                  const SizedBox(height: 12),
-                  if (filteredPayments.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(32),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Text('No payment transactions recorded for the selected date range.', style: AppTextStyles.bodyMedium),
-                    )
-                  else
-                    ErpDataTable(
-                      columns: const [
-                        ErpColumn(title: 'Voucher No'),
-                        ErpColumn(title: 'Date'),
-                        ErpColumn(title: 'Payment Type'),
-                        ErpColumn(title: 'Party Name'),
-                        ErpColumn(title: 'Reference / UTR'),
-                        ErpColumn(title: 'Amount (₹)', isNumeric: true),
-                        ErpColumn(title: 'Mode'),
-                      ],
-                      rows: filteredPayments.take(10).map((p) {
-                        return [
-                          InkWell(
-                            onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', ErpNavSection.customerPayments),
-                            child: Text(p.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                          ),
-                          Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
-                          Text(p.typeLabel, style: AppTextStyles.bodyBold),
-                          Text(p.partyName, style: AppTextStyles.bodyMedium),
-                          Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
-                          Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: Colors.green.shade800)),
-                          ErpStatusBadge.neutral(p.paymentMode.name.toUpperCase()),
-                        ];
-                      }).toList(),
-                    ),
-                ],
-              );
-            },
-          ),
+                  Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
+                  Text(p.typeLabel, style: AppTextStyles.bodyBold),
+                  Text(p.partyName, style: AppTextStyles.bodyMedium),
+                  Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
+                  Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: Colors.green.shade800)),
+                  ErpStatusBadge.neutral(p.paymentMode.name.toUpperCase()),
+                ];
+              }).toList(),
+            ),
         ],
       ),
     );
@@ -1203,37 +1156,6 @@ class _MastersRoleDashboardState extends ConsumerState<MastersRoleDashboard> {
               );
             },
           ),
-          /*
-          // NOTE: Temporarily commented out pending final decision on removal
-          const SizedBox(height: 28),
-
-          // Architect & Partner Overview Table
-          Text('Key Registered Architects & Commercial Specifiers', style: AppTextStyles.h2),
-          const SizedBox(height: 12),
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Architect Name'),
-              ErpColumn(title: 'Contact Phone'),
-              ErpColumn(title: 'Email Address'),
-              ErpColumn(title: 'Commission Rate', isNumeric: true),
-              ErpColumn(title: 'Approved Commission', isNumeric: true),
-              ErpColumn(title: 'Commission Earned', isNumeric: true),
-            ],
-            rows: (activeArchitects.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt))).take(6).map((arc) {
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(arc.id, 'architect', ErpNavSection.architects),
-                  child: Text(arc.name, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                ),
-                Text(arc.mobile, style: AppTextStyles.bodySmall),
-                Text(arc.email, style: AppTextStyles.bodySmall),
-                Text('${arc.defaultCommissionRate.toStringAsFixed(1)}%', style: AppTextStyles.bodyBold),
-                Text(Formatters.formatCurrency(arc.approvedCommission), style: AppTextStyles.bodyMedium),
-                Text(Formatters.formatCurrency(arc.totalCommissionEarned), style: AppTextStyles.bodyBold.copyWith(color: Colors.purple)),
-              ];
-            }).toList(),
-          ),
-          */
         ],
       ),
     );

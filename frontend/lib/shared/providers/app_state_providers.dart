@@ -24,11 +24,14 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
 
   static const String _kSessionUserKey = 'erp_session_user';
   static const String _kLastNavSectionKey = 'erp_last_nav_section';
+  static const String _kSessionTimestampKey = 'erp_session_timestamp';
+  static const int _kSessionTimeoutMinutes = 30;
 
   Future<void> _persistSession(AppUser user, ErpNavSection? section) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kSessionUserKey, jsonEncode(user.toJson()));
+      await prefs.setInt(_kSessionTimestampKey, DateTime.now().millisecondsSinceEpoch);
       if (section != null) {
         await prefs.setString(_kLastNavSectionKey, section.name);
       }
@@ -41,6 +44,17 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final prefs = await SharedPreferences.getInstance();
       final userJsonStr = prefs.getString(_kSessionUserKey);
       final lastSectionName = prefs.getString(_kLastNavSectionKey);
+
+      // Enforce 30-minute session expiry threshold
+      final sessionTimestamp = prefs.getInt(_kSessionTimestampKey);
+      if (sessionTimestamp != null) {
+        final lastActive = DateTime.fromMillisecondsSinceEpoch(sessionTimestamp);
+        if (DateTime.now().difference(lastActive).inMinutes >= _kSessionTimeoutMinutes) {
+          // Session expired after 30 minutes of tab close or inactivity
+          await logout();
+          return false;
+        }
+      }
 
       if (userJsonStr != null && userJsonStr.isNotEmpty) {
         final Map<String, dynamic> userMap = jsonDecode(userJsonStr);
@@ -66,6 +80,9 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
             }
           }
         }
+
+        // Update active timestamp on successful session restore
+        await prefs.setInt(_kSessionTimestampKey, DateTime.now().millisecondsSinceEpoch);
 
         await db.loadRoles();
         // Non-blocking background preload so UI renders instantly on reload
@@ -176,6 +193,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kSessionUserKey);
       await prefs.remove(_kLastNavSectionKey);
+      await prefs.remove(_kSessionTimestampKey);
     } catch (_) {}
   }
 }
@@ -277,4 +295,3 @@ final auditLogsProvider = Provider<List<AuditLogEntry>>((ref) {
   final db = ref.watch(databaseServiceProvider);
   return db.auditLogs;
 });
-

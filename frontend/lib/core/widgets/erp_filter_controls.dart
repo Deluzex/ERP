@@ -176,7 +176,7 @@ class ErpFilterDropdown<T> extends StatelessWidget {
           child: DropdownButton<T>(
             value: safeValue,
             isDense: true,
-            isExpanded: isExpanded,
+            isExpanded: isExpanded || width != null,
             dropdownColor: Colors.white,
             borderRadius: BorderRadius.circular(10),
             elevation: 4,

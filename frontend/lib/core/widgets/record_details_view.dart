@@ -20,6 +20,10 @@ import '../models/payment_model.dart';
 import '../models/commission_model.dart';
 import '../../features/sales/widgets/sales_pdf_generator.dart';
 import '../utils/formatters.dart';
+import 'package:intl/intl.dart';
+import '../utils/report_pdf_generator.dart';
+import '../models/stock_movement_model.dart';
+
 import 'erp_button.dart';
 import 'erp_data_table.dart';
 import 'erp_filter_controls.dart';
@@ -52,13 +56,278 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
   DateTime? _dealerSalesStartDate;
   DateTime? _dealerSalesEndDate;
 
-  // 4. Date filter state for Project Details
+  // 4. Date filter state for Raw Material Details (Stock Movement History)
+  DateTime? _rawMaterialMovementStartDate;
+  DateTime? _rawMaterialMovementEndDate;
+
+  // 5. Date filter state for Architect Details (Sales & Invoices History)
+  DateTime? _architectSalesStartDate;
+  DateTime? _architectSalesEndDate;
+
+  // --- PDF Export Methods for Master Details ---
+  Future<void> _exportCustomerPdf({
+    required Customer c,
+    required double grossInvoiced,
+    required double approvedReturns,
+    required double netSalesRevenue,
+    required List<Sale> filteredSales,
+  }) async {
+
+    final dateRangeStr = (_customerSalesStartDate != null || _customerSalesEndDate != null)
+        ? ' [Filtered Date Range: ${_customerSalesStartDate != null ? DateFormat('dd MMM yyyy').format(_customerSalesStartDate!) : 'Earliest'} to ${_customerSalesEndDate != null ? DateFormat('dd MMM yyyy').format(_customerSalesEndDate!) : 'Latest'}]'
+        : '';
+
+    try {
+      await ReportPdfGenerator.printOrPreviewReport(
+        title: 'Customer Account Statement: ${c.name}',
+        subtitle: 'Customer Code: ${c.id} | Contact: ${c.mobile} | Email: ${c.email.isNotEmpty ? c.email : "-"} | GSTIN: ${c.gstNumber.isNotEmpty ? c.gstNumber : "-"}$dateRangeStr',
+        columnHeaders: const [
+          'Invoice Number',
+          'Date',
+          'Document Type',
+          'Total Invoiced',
+          'Outstanding Due',
+          'Status',
+        ],
+        dataRows: filteredSales.map((s) {
+          return [
+            s.invoiceNumber,
+            Formatters.formatDate(s.saleDate),
+            s.documentType.name.toUpperCase(),
+            Formatters.formatCurrency(s.totalAmount),
+            Formatters.formatCurrency(s.pendingAmount),
+            s.statusLabel.toUpperCase(),
+          ];
+        }).toList(),
+        isNumericColumns: const [false, false, false, true, true, false],
+        summaryKpis: {
+          'Gross Invoiced': Formatters.formatCurrency(grossInvoiced),
+          'Sales Returns': Formatters.formatCurrency(approvedReturns),
+          'Net Revenue': Formatters.formatCurrency(netSalesRevenue),
+          'Receivables Due': Formatters.formatCurrency(c.outstandingAmount),
+          'Store Credit': Formatters.formatCurrency(c.creditBalance),
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF Export Error: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportDealerPdf({
+    required Dealer d,
+    required double grossInvoiced,
+    required double approvedReturns,
+    required double netSalesRevenue,
+    required List<Sale> filteredSales,
+  }) async {
+
+    final dateRangeStr = (_dealerSalesStartDate != null || _dealerSalesEndDate != null)
+        ? ' [Filtered Date Range: ${_dealerSalesStartDate != null ? DateFormat('dd MMM yyyy').format(_dealerSalesStartDate!) : 'Earliest'} to ${_dealerSalesEndDate != null ? DateFormat('dd MMM yyyy').format(_dealerSalesEndDate!) : 'Latest'}]'
+        : '';
+
+    try {
+      await ReportPdfGenerator.printOrPreviewReport(
+        title: 'Dealer Showroom Statement: ${d.name}',
+        subtitle: 'Dealer ID: ${d.id} | Entity: ${d.companyName} | Contact: ${d.contactPerson} (${d.mobile}) | GST: ${d.gstNumber.isNotEmpty ? d.gstNumber : "-"}$dateRangeStr',
+        columnHeaders: const [
+          'Invoice Number',
+          'Date',
+          'Document Type',
+          'Total Invoiced',
+          'Outstanding Due',
+          'Status',
+        ],
+        dataRows: filteredSales.map((s) {
+          return [
+            s.invoiceNumber,
+            Formatters.formatDate(s.saleDate),
+            s.documentType.name.toUpperCase(),
+            Formatters.formatCurrency(s.totalAmount),
+            Formatters.formatCurrency(s.pendingAmount),
+            s.statusLabel.toUpperCase(),
+          ];
+        }).toList(),
+        isNumericColumns: const [false, false, false, true, true, false],
+        summaryKpis: {
+          'Gross Invoiced': Formatters.formatCurrency(grossInvoiced),
+          'Approved Returns': Formatters.formatCurrency(approvedReturns),
+          'Net Channel Revenue': Formatters.formatCurrency(netSalesRevenue),
+          'Receivables Due': Formatters.formatCurrency(d.outstandingAmount),
+          'Standing': d.outstandingAmount > 0 ? 'PAYMENT OUTSTANDING' : 'CLEAR',
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF Export Error: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportVendorPdf({
+    required Vendor v,
+    required double totalPurchased,
+    required double totalPaid,
+    required double totalPending,
+    required List<Purchase> filteredPurchases,
+  }) async {
+
+    final dateRangeStr = (_vendorPurchasesStartDate != null || _vendorPurchasesEndDate != null)
+        ? ' [Filtered Date Range: ${_vendorPurchasesStartDate != null ? DateFormat('dd MMM yyyy').format(_vendorPurchasesStartDate!) : 'Earliest'} to ${_vendorPurchasesEndDate != null ? DateFormat('dd MMM yyyy').format(_vendorPurchasesEndDate!) : 'Latest'}]'
+        : '';
+
+    try {
+      await ReportPdfGenerator.printOrPreviewReport(
+        title: 'Vendor Procurement Statement: ${v.name}',
+        subtitle: 'Vendor Code: ${v.id} | Contact: ${v.contactPerson} (${v.mobile}) | GST: ${v.gstNumber.isNotEmpty ? v.gstNumber : "-"} | Terms: ${v.paymentTerms}$dateRangeStr',
+        columnHeaders: const [
+          'PO Number',
+          'Purchase Date',
+          'Total Amount',
+          'Amount Paid',
+          'Pending Balance',
+          'Status',
+        ],
+        dataRows: filteredPurchases.map((p) {
+          return [
+            p.purchaseNumber,
+            Formatters.formatDate(p.purchaseDate),
+            Formatters.formatCurrency(p.totalAmount),
+            Formatters.formatCurrency(p.paidAmount),
+            Formatters.formatCurrency(p.pendingAmount),
+            p.statusLabel.toUpperCase(),
+          ];
+        }).toList(),
+        isNumericColumns: const [false, false, true, true, true, false],
+        summaryKpis: {
+          'Total Invoiced': Formatters.formatCurrency(totalPurchased),
+          'Total Disbursed': Formatters.formatCurrency(totalPaid),
+          'Pending on Orders': Formatters.formatCurrency(totalPending),
+          'Outstanding Payables': Formatters.formatCurrency(v.outstandingBalance),
+          'Credit Limit': Formatters.formatCurrency(v.creditLimit),
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF Export Error: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportArchitectPdf({
+    required Architect a,
+    required double displayTotalGenerated,
+    required double displayApprovedPayouts,
+    required double displayPaidToDate,
+    required double displayPendingReview,
+    required List<Sale> invoices,
+  }) async {
+
+    final dateRangeStr = (_architectSalesStartDate != null || _architectSalesEndDate != null)
+        ? ' [Filtered Date Range: ${_architectSalesStartDate != null ? DateFormat('dd MMM yyyy').format(_architectSalesStartDate!) : 'Earliest'} to ${_architectSalesEndDate != null ? DateFormat('dd MMM yyyy').format(_architectSalesEndDate!) : 'Latest'}]'
+        : '';
+
+    try {
+      await ReportPdfGenerator.printOrPreviewReport(
+        title: 'Architect Partner Statement: ${a.name}',
+        subtitle: 'Architect ID: ${a.id} | Studio: ${a.companyName.isNotEmpty ? a.companyName : "-"} | Contact: ${a.mobile} | Rate: ${a.defaultCommissionRate}%$dateRangeStr',
+        columnHeaders: const [
+          'Invoice / Order',
+          'Date',
+          'Project / Client',
+          'Invoice Amount',
+          'Commission Amount',
+          'Status',
+        ],
+        dataRows: invoices.map((s) {
+          return [
+            s.invoiceNumber,
+            Formatters.formatDate(s.saleDate),
+            s.projectName ?? s.partyName,
+            Formatters.formatCurrency(s.totalAmount),
+            Formatters.formatCurrency(s.architectCommissionAmount),
+            s.statusLabel.toUpperCase(),
+          ];
+        }).toList(),
+        isNumericColumns: const [false, false, false, true, true, false],
+        summaryKpis: {
+          'Commission Rate': '${a.defaultCommissionRate}%',
+          'Total Generated': Formatters.formatCurrency(displayTotalGenerated),
+          'Approved Payouts': Formatters.formatCurrency(displayApprovedPayouts),
+          'Paid to Date': Formatters.formatCurrency(displayPaidToDate),
+          'Pending Review': Formatters.formatCurrency(displayPendingReview),
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF Export Error: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportRawMaterialPdf({
+    required RawMaterial rm,
+    required List<StockMovement> movements,
+  }) async {
+
+    final dateRangeStr = (_rawMaterialMovementStartDate != null || _rawMaterialMovementEndDate != null)
+        ? ' [Filtered Date Range: ${_rawMaterialMovementStartDate != null ? DateFormat('dd MMM yyyy').format(_rawMaterialMovementStartDate!) : 'Earliest'} to ${_rawMaterialMovementEndDate != null ? DateFormat('dd MMM yyyy').format(_rawMaterialMovementEndDate!) : 'Latest'}]'
+        : '';
+
+    try {
+      await ReportPdfGenerator.printOrPreviewReport(
+        title: 'Raw Material Inventory & Stock Ledger: ${rm.name}',
+        subtitle: 'SKU: ${rm.itemCode} | Category: ${rm.categoryName} | Unit: ${rm.unit} | Purchase Price: ${Formatters.formatCurrency(rm.defaultPurchasePrice)} | GST: ${rm.gstPercent}%$dateRangeStr',
+        columnHeaders: const [
+          'Date/Time',
+          'Activity Type',
+          'Reference Doc',
+          'IN Qty',
+          'OUT Qty',
+          'Ending Balance',
+          'Notes',
+        ],
+        dataRows: movements.map((m) {
+          return [
+            Formatters.formatDateTime(m.date),
+            m.transactionType.toString().split('.').last.toUpperCase(),
+            m.referenceNumber,
+            m.stockIn > 0 ? '+${m.stockIn} ${rm.unit}' : '-',
+            m.stockOut > 0 ? '-${m.stockOut} ${rm.unit}' : '-',
+            '${m.currentBalance} ${rm.unit}',
+            m.notes ?? '-',
+          ];
+        }).toList(),
+        isNumericColumns: const [false, false, false, true, true, true, false],
+        summaryKpis: {
+          'Current Stock': '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
+          'Minimum Level': '${rm.minimumStock} ${rm.unit}',
+          'Reorder Level': '${rm.reorderLevel} ${rm.unit}',
+          'Valuation': Formatters.formatCurrency(rm.totalValuation),
+          'Status': rm.isLowStock ? 'LOW STOCK' : 'HEALTHY',
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF Export Error: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  // 6. Date filter state for Project Details
   DateTime? _projectSalesStartDate;
   DateTime? _projectSalesEndDate;
-  DateTime? _projectPurchasesStartDate;
-  DateTime? _projectPurchasesEndDate;
-  DateTime? _projectPaymentsStartDate;
-  DateTime? _projectPaymentsEndDate;
 
   ActiveRecordDetails get details => widget.details;
 
@@ -209,15 +478,260 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
   }
 
 
+
+  Widget _buildCommonDateFilterBar({
+    required BuildContext context,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required Function(DateTime?, DateTime?) onDateRangeSelected,
+    String title = 'Activity & Transaction History',
+    String subtitle = 'Filter all records and tables below by date range',
+  }) {
+    final isMobile = MediaQuery.of(context).size.width < 780;
+    return Container(
+      margin: const EdgeInsets.only(top: 20, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(Icons.date_range_outlined, size: 18, color: AppColors.primary),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: AppTextStyles.bodyBold.copyWith(fontSize: 14, color: AppColors.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ErpDateFilterBox(
+                  startDate: startDate,
+                  endDate: endDate,
+                  onDateRangeSelected: onDateRangeSelected,
+                ),
+              ],
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.date_range_outlined, size: 20, color: AppColors.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: AppTextStyles.bodyBold.copyWith(fontSize: 14.5, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: AppTextStyles.caption.copyWith(color: AppColors.textMuted, fontSize: 11.5),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                ErpDateFilterBox(
+                  startDate: startDate,
+                  endDate: endDate,
+                  onDateRangeSelected: onDateRangeSelected,
+                ),
+              ],
+            ),
+    );
+  }
+
+
   // -----------------------------------------------------------------
   // 1. Raw Material Details
   // -----------------------------------------------------------------
   Widget _buildRawMaterialDetails(BuildContext context, WidgetRef ref, RawMaterial rm, MockDatabaseService db) {
-    final movements = db.stockMovements.where((m) => m.itemId == rm.id).toList();
-    final isMobile = MediaQuery.of(context).size.width < 850;
+    final allMovements = db.stockMovements.where((m) => m.itemId == rm.id).toList();
+    final filteredMovements = allMovements.where((m) {
+      if (_rawMaterialMovementStartDate != null &&
+          m.date.isBefore(DateTime(_rawMaterialMovementStartDate!.year, _rawMaterialMovementStartDate!.month, _rawMaterialMovementStartDate!.day))) {
+        return false;
+      }
+      if (_rawMaterialMovementEndDate != null &&
+          m.date.isAfter(DateTime(_rawMaterialMovementEndDate!.year, _rawMaterialMovementEndDate!.month, _rawMaterialMovementEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
+    }).toList();
+    final movements = filteredMovements;
+    final isMobile = MediaQuery.of(context).size.width < 780;
 
-    final materialInfoCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
+    Widget buildFieldItem(String label, Widget valueWidget) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 170,
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: valueWidget),
+          ],
+        ),
+      );
+    }
+
+    Widget buildFieldText(String label, String value, {Color? valueColor, bool isBold = true}) {
+      return buildFieldItem(
+        label,
+        Text(
+          value,
+          style: (isBold ? AppTextStyles.bodyBold : AppTextStyles.bodyMedium).copyWith(
+            fontSize: 13,
+            color: valueColor ?? AppColors.textPrimary,
+          ),
+        ),
+      );
+    }
+
+    final column1Fields = [
+      buildFieldText('Material Name', rm.name),
+      buildFieldText('Item SKU / Code', rm.itemCode),
+      buildFieldText('Category', rm.categoryName),
+      buildFieldText('Measurement Unit', rm.unit),
+      buildFieldText('Default Purchase Price', Formatters.formatCurrency(rm.defaultPurchasePrice)),
+      buildFieldText('GST Rate', '${rm.gstPercent}%'),
+      const SizedBox(height: 4),
+      buildFieldItem(
+        'Preferred Vendor(s)',
+        rm.preferredVendorIds.isEmpty
+            ? Text('No preferred vendor linked.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))
+            : Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: List.generate(rm.preferredVendorIds.length, (idx) {
+                  final vId = rm.preferredVendorIds[idx];
+                  final vName = rm.preferredVendorNames[idx];
+                  return ActionChip(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    label: Text(vName, style: const TextStyle(color: Colors.white, fontSize: 11)),
+                    backgroundColor: AppColors.primary,
+                    onPressed: () {
+                      ref.read(activeRecordDetailsStackProvider.notifier).push(vId, 'vendor', details.parentSection);
+                    },
+                  );
+                }),
+              ),
+      ),
+    ];
+
+    final column2Fields = [
+      buildFieldText('Minimum Stock Level', '${rm.minimumStock} ${rm.unit}'),
+      buildFieldText('Reorder Threshold', '${rm.reorderLevel} ${rm.unit}'),
+      buildFieldText('Total Valuation', Formatters.formatCurrency(rm.totalValuation), valueColor: AppColors.primary),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: rm.isLowStock ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: rm.isLowStock ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Current Stock In Hand:',
+                  style: AppTextStyles.bodyBold.copyWith(
+                    fontSize: 12.5,
+                    color: rm.isLowStock ? const Color(0xFF991B1B) : const Color(0xFF166534),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  rm.isLowStock ? 'Immediate reorder needed' : 'Sufficient buffer stock',
+                  style: AppTextStyles.caption.copyWith(
+                    color: rm.isLowStock ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
+              style: AppTextStyles.h2.copyWith(
+                fontSize: 18,
+                color: rm.isLowStock ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: rm.isLowStock ? Colors.red.withValues(alpha: 0.08) : Colors.green.withValues(alpha: 0.08),
+          borderRadius: AppRadius.smBorderRadius,
+          border: Border.all(color: rm.isLowStock ? Colors.red.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Stock Status:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              rm.isLowStock ? 'REORDER REQUIRED (LOW STOCK)' : 'STOCK HEALTHY',
+              style: AppTextStyles.bodyBold.copyWith(color: rm.isLowStock ? AppColors.dangerText : AppColors.successText),
+            ),
+          ],
+        ),
+      ),
+    ];
+
+    final materialCard = Container(
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.lgBorderRadius,
@@ -226,181 +740,213 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Material Info', style: AppTextStyles.h3),
-          const Divider(height: 24),
-          _buildInfoRow('Material Name', rm.name),
-          _buildInfoRow('Item SKU / Code', rm.itemCode),
-          _buildInfoRow('Category', rm.categoryName),
-          _buildInfoRow('Measurement Unit', rm.unit),
-          _buildInfoRow('Default Purchase Price', Formatters.formatCurrency(rm.defaultPurchasePrice)),
-          _buildInfoRow('GST Rate', '${rm.gstPercent}%'),
-          const SizedBox(height: 10),
-          Text('Preferred Vendor(s):', style: AppTextStyles.bodyBold),
-          const SizedBox(height: 8),
-          if (rm.preferredVendorIds.isEmpty)
-            Text('No preferred vendor linked.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted))
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.category, color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Raw Material Details',
+                            style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Inventory Specifications & Stock Summary',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+
+                  ElevatedButton.icon(
+                    onPressed: () => _exportRawMaterialPdf(
+                      rm: rm,
+                      movements: filteredMovements,
+                    ),
+                    icon: const Icon(Icons.print_outlined, size: 16, color: Colors.white),
+                    label: const Text(
+                      'Export PDF',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  rm.isLowStock
+                      ? ErpStatusBadge.danger('LOW STOCK')
+                      : ErpStatusBadge.success('IN STOCK'),
+                ],
+              ),
+            ],
+          ),
+          Divider(height: isMobile ? 24 : 32),
+
+          // 2-Column Responsive Layout with VerticalDivider on Desktop
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...column1Fields,
+                const Divider(height: 24, thickness: 1, color: Color(0xFFE5E7EB)),
+                ...column2Fields,
+              ],
+            )
           else
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: List.generate(rm.preferredVendorIds.length, (idx) {
-                final vId = rm.preferredVendorIds[idx];
-                final vName = rm.preferredVendorNames[idx];
-                return ActionChip(
-                  label: Text(vName, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                  backgroundColor: AppColors.primary,
-                  onPressed: () {
-                    ref.read(activeRecordDetailsStackProvider.notifier).push(vId, 'vendor', details.parentSection);
-                  },
-                );
-              }),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column1Fields,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  const VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: Color(0xFFE5E7EB),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column2Fields,
+                    ),
+                  ),
+                ],
+              ),
             ),
         ],
       ),
     );
 
-    final stockSummaryCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgBorderRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Stock Summary', style: AppTextStyles.h3),
-          const Divider(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: Text('Current Stock:', style: AppTextStyles.bodyMedium)),
-              const SizedBox(width: 8),
-              Text(
-                '${Formatters.formatNumber(rm.currentStock)} ${rm.unit}',
-                style: (isMobile ? AppTextStyles.h3 : AppTextStyles.h2).copyWith(
-                  color: rm.isLowStock ? AppColors.dangerText : AppColors.successText,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildInfoRow('Minimum Stock Level', '${rm.minimumStock} ${rm.unit}'),
-          _buildInfoRow('Reorder Threshold', '${rm.reorderLevel} ${rm.unit}'),
-          _buildInfoRow('Total Valuation', Formatters.formatCurrency(rm.totalValuation)),
-          const SizedBox(height: 16),
-          rm.isLowStock
-              ? ErpStatusBadge.danger('REORDER REQUIRED (LOW STOCK)')
-              : ErpStatusBadge.success('STOCK HEALTHY'),
-        ],
-      ),
-    );
+    final hasRmDateFilter = _rawMaterialMovementStartDate != null || _rawMaterialMovementEndDate != null;
+    final hasAnyRmRecords = allMovements.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isMobile) ...[
-          materialInfoCard,
+        materialCard,
+        if (hasRmDateFilter || hasAnyRmRecords) ...[
+          _buildCommonDateFilterBar(
+            context: context,
+            startDate: _rawMaterialMovementStartDate,
+            endDate: _rawMaterialMovementEndDate,
+            onDateRangeSelected: (start, end) => setState(() {
+              _rawMaterialMovementStartDate = start;
+              _rawMaterialMovementEndDate = end;
+            }),
+            title: 'Stock Ledger & Activity History',
+            subtitle: 'Filter stock movements and warehouse ledger by date range',
+          ),
           const SizedBox(height: 16),
-          stockSummaryCard,
-        ] else ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: materialInfoCard),
-              const SizedBox(width: 16),
-              Expanded(flex: 2, child: stockSummaryCard),
+          Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Stock Movement History (Ledger)', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+              const SizedBox(height: 16),
+              if (movements.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  alignment: Alignment.center,
+                  child: Text(
+                    allMovements.isEmpty
+                        ? 'No stock movement history recorded.'
+                        : 'No stock movements found for the selected date range.',
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+                  ),
+                )
+              else
+                ErpDataTable(
+                  columns: const [
+                    ErpColumn(title: 'Date/Time'),
+                    ErpColumn(title: 'Activity Type'),
+                    ErpColumn(title: 'Reference Doc'),
+                    ErpColumn(title: 'IN Qty', isNumeric: true),
+                    ErpColumn(title: 'OUT Qty', isNumeric: true),
+                    ErpColumn(title: 'Ending Stock Balance', isNumeric: true),
+                    ErpColumn(title: 'Notes'),
+                  ],
+                  rows: movements.map((m) {
+                    return [
+                      Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
+                      Text(m.transactionType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodyBold.copyWith(fontSize: 11)),
+                      Text(m.referenceNumber, style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
+                      Text(m.stockIn > 0 ? '+${m.stockIn}' : '-', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.successText)),
+                      Text(m.stockOut > 0 ? '-${m.stockOut}' : '-', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.dangerText)),
+                      Text('${m.currentBalance} ${m.unit}', style: AppTextStyles.bodyBold),
+                      Text(m.notes ?? '-', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                    ];
+                  }).toList(),
+                ),
+            ],
+          ),
+        ),
         ],
-        const SizedBox(height: 24),
-        Text('Stock Movement History (Ledger)', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-        const SizedBox(height: 12),
-        if (movements.isEmpty)
+
+        if (!hasRmDateFilter && !hasAnyRmRecords) ...[
+          const SizedBox(height: 24),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(24),
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: AppRadius.mdBorderRadius,
               border: Border.all(color: AppColors.border),
             ),
-            child: Text('No stock movement history recorded.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-          )
-        else if (isMobile)
-          Column(
-            children: movements.map((m) {
-              final isIn = m.stockIn > 0;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        ErpStatusBadge.neutral(m.transactionType.toString().split('.').last.toUpperCase()),
-                        Text(
-                          isIn ? '+${m.stockIn} ${m.unit}' : '-${m.stockOut} ${m.unit}',
-                          style: AppTextStyles.bodyBold.copyWith(
-                            color: isIn ? AppColors.successText : AppColors.dangerText,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(m.referenceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                        Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Ending Balance:', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                        Text('${m.currentBalance} ${m.unit}', style: AppTextStyles.bodyBold),
-                      ],
-                    ),
-                    if (m.notes != null && m.notes!.isNotEmpty && m.notes != '-') ...[
-                      const SizedBox(height: 4),
-                      Text('Note: ${m.notes}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                    ],
-                  ],
-                ),
-              );
-            }).toList(),
-          )
-        else
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Date/Time'),
-              ErpColumn(title: 'Activity Type'),
-              ErpColumn(title: 'Reference Doc'),
-              ErpColumn(title: 'IN Qty', isNumeric: true),
-              ErpColumn(title: 'OUT Qty', isNumeric: true),
-              ErpColumn(title: 'Ending Stock Balance', isNumeric: true),
-              ErpColumn(title: 'Notes'),
-            ],
-            rows: movements.map((m) {
-              return [
-                Text(Formatters.formatDateTime(m.date), style: AppTextStyles.bodySmall),
-                Text(m.transactionType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodyBold.copyWith(fontSize: 11)),
-                Text(m.referenceNumber, style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
-                Text(m.stockIn > 0 ? '+${m.stockIn}' : '-', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.successText)),
-                Text(m.stockOut > 0 ? '-${m.stockOut}' : '-', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.dangerText)),
-                Text('${m.currentBalance} ${m.unit}', style: AppTextStyles.bodyBold),
-                Text(m.notes ?? '-', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-              ];
-            }).toList(),
+            child: Text(
+              'No stock movement ledger history recorded for this material.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+            ),
           ),
+        ],
       ],
     );
   }
@@ -416,9 +962,33 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
     final totalPending = vendorPurchases.fold(0.0, (sum, p) => sum + p.pendingAmount);
     final vendorPayments = db.payments.where((p) => p.partyId == v.id || p.partyName.toLowerCase() == v.name.toLowerCase()).toList();
 
-    // Catalog of materials supplied by this vendor
+    final filteredPurchases = sortedPurchases.where((p) {
+      if (_vendorPurchasesStartDate != null &&
+          p.purchaseDate.isBefore(DateTime(_vendorPurchasesStartDate!.year, _vendorPurchasesStartDate!.month, _vendorPurchasesStartDate!.day))) {
+        return false;
+      }
+      if (_vendorPurchasesEndDate != null &&
+          p.purchaseDate.isAfter(DateTime(_vendorPurchasesEndDate!.year, _vendorPurchasesEndDate!.month, _vendorPurchasesEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final filteredVendorPayments = vendorPayments.where((pay) {
+      if (_vendorPurchasesStartDate != null &&
+          pay.paymentDate.isBefore(DateTime(_vendorPurchasesStartDate!.year, _vendorPurchasesStartDate!.month, _vendorPurchasesStartDate!.day))) {
+        return false;
+      }
+      if (_vendorPurchasesEndDate != null &&
+          pay.paymentDate.isAfter(DateTime(_vendorPurchasesEndDate!.year, _vendorPurchasesEndDate!.month, _vendorPurchasesEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    // Catalog of materials supplied by this vendor (filtered by active date range)
     final suppliedMaterials = <String, Map<String, dynamic>>{};
-    for (final p in vendorPurchases) {
+    for (final p in filteredPurchases) {
       for (final it in p.items) {
         final matKey = it.rawMaterialId ?? it.finishedProductId ?? it.rawMaterialCode ?? it.rawMaterialName ?? 'item';
         final matName = it.rawMaterialName ?? it.finishedProductName ?? 'Item';
@@ -442,10 +1012,190 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
       }
     }
 
-    final isMobile = MediaQuery.of(context).size.width < 850;
+    final isMobile = MediaQuery.of(context).size.width < 780;
 
-    final vendorProfileCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
+    Widget buildFieldItem(String label, Widget valueWidget) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 170,
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: valueWidget),
+          ],
+        ),
+      );
+    }
+
+    Widget buildFieldText(String label, String value, {Color? valueColor, bool isBold = true}) {
+      return buildFieldItem(
+        label,
+        Text(
+          value,
+          style: (isBold ? AppTextStyles.bodyBold : AppTextStyles.bodyMedium).copyWith(
+            fontSize: 13,
+            color: valueColor ?? AppColors.textPrimary,
+          ),
+        ),
+      );
+    }
+
+    final column1Fields = [
+      if (v.isDeleted)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12.0),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.danger.withValues(alpha: 0.08),
+              borderRadius: AppRadius.smBorderRadius,
+              border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Vendor Account is Soft-Deleted',
+                        style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Reason for Deletion: ${v.deleteReason != null && v.deleteReason!.trim().isNotEmpty ? v.deleteReason! : "Reason not specified"}',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.dangerText),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      buildFieldText('Vendor Code', v.id),
+      buildFieldText('Company Name', v.name),
+      buildFieldText('Contact Person', v.contactPerson),
+      buildFieldItem(
+        'Mobile / Phone',
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              v.mobile,
+              style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: AppColors.textPrimary),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
+                context,
+                customerName: v.name,
+                customerPhone: v.mobile,
+              ),
+              child: const Icon(Icons.chat, color: Colors.green, size: 16),
+            ),
+          ],
+        ),
+      ),
+      buildFieldText('Email Address', v.email.isNotEmpty ? v.email : '-'),
+      buildFieldText('GST Registration', v.gstNumber.isNotEmpty ? v.gstNumber : '-'),
+      buildFieldText('PAN Number', v.panNumber.isNotEmpty ? v.panNumber : '-'),
+      buildFieldText('Factory / Address', v.address.isNotEmpty ? v.address : '-'),
+      buildFieldText('State', v.state.isNotEmpty ? v.state : '-'),
+      buildFieldText('PIN Code', v.pincode.isNotEmpty ? v.pincode : '-'),
+      buildFieldText('Account Created Date', Formatters.formatDate(v.createdAt)),
+      if (v.isDeleted)
+        buildFieldText(
+          'Deletion Reason',
+          v.deleteReason != null && v.deleteReason!.trim().isNotEmpty ? v.deleteReason! : 'Reason not specified',
+          valueColor: AppColors.dangerText,
+        ),
+    ];
+
+    final column2Fields = [
+      buildFieldText('Total Purchases Invoiced', Formatters.formatCurrency(totalPurchased)),
+      buildFieldText('Total Amount Disbursed', Formatters.formatCurrency(totalPaid)),
+      buildFieldText('Pending Dues on Orders', Formatters.formatCurrency(totalPending)),
+      buildFieldText('Credit Limit Allowed', Formatters.formatCurrency(v.creditLimit)),
+      buildFieldText('Payment Terms', v.paymentTerms),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: v.outstandingBalance > 0 ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: v.outstandingBalance > 0 ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Outstanding Payables Due:',
+                  style: AppTextStyles.bodyBold.copyWith(
+                    fontSize: 12.5,
+                    color: v.outstandingBalance > 0 ? const Color(0xFF991B1B) : const Color(0xFF166534),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  v.outstandingBalance > 0 ? 'Pending payment release' : 'All dues cleared',
+                  style: AppTextStyles.caption.copyWith(
+                    color: v.outstandingBalance > 0 ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              Formatters.formatCurrency(v.outstandingBalance),
+              style: AppTextStyles.h2.copyWith(
+                fontSize: 18,
+                color: v.outstandingBalance > 0 ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: v.outstandingBalance > 0 ? Colors.red.withValues(alpha: 0.08) : Colors.green.withValues(alpha: 0.08),
+          borderRadius: AppRadius.smBorderRadius,
+          border: Border.all(color: v.outstandingBalance > 0 ? Colors.red.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Payable Status:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              v.outstandingBalance > 0 ? 'PAYMENT OUTSTANDING' : 'ALL DUES CLEARED',
+              style: AppTextStyles.bodyBold.copyWith(color: v.outstandingBalance > 0 ? AppColors.dangerText : AppColors.successText),
+            ),
+          ],
+        ),
+      ),
+    ];
+
+    final vendorCard = Container(
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.lgBorderRadius,
@@ -458,8 +1208,38 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Text('Vendor Profile', style: AppTextStyles.h3, overflow: TextOverflow.ellipsis),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.business, color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Vendor Profile',
+                            style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Procurement & Supplier Ledger',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -473,415 +1253,317 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                     ),
                   ),
                   const SizedBox(width: 4),
+
+                  ElevatedButton.icon(
+                    onPressed: () => _exportVendorPdf(
+                      v: v,
+                      totalPurchased: totalPurchased,
+                      totalPaid: totalPaid,
+                      totalPending: totalPending,
+                      filteredPurchases: filteredPurchases,
+                    ),
+                    icon: const Icon(Icons.print_outlined, size: 16, color: Colors.white),
+                    label: const Text(
+                      'Export PDF',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   v.isDeleted
-                      ? ErpStatusBadge.danger('DELETED / ARCHIVED')
-                      : ErpStatusBadge.neutral('ACTIVE VENDOR'),
+                      ? ErpStatusBadge.danger('ARCHIVED')
+                      : (v.outstandingBalance > 0
+                          ? ErpStatusBadge.danger('OUTSTANDING')
+                          : ErpStatusBadge.success('CURRENT')),
                 ],
               ),
             ],
           ),
-          const Divider(height: 24),
-          if (v.isDeleted) ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.danger.withValues(alpha: 0.08),
-                borderRadius: AppRadius.smBorderRadius,
-                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-              ),
+          Divider(height: isMobile ? 24 : 32),
+
+          // 2-Column Responsive Layout
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...column1Fields,
+                const Divider(height: 24, thickness: 1, color: Color(0xFFE5E7EB)),
+                ...column2Fields,
+              ],
+            )
+          else
+            IntrinsicHeight(
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
-                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Vendor Account is Soft-Deleted',
-                          style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Reason for Deletion: ${v.deleteReason != null && v.deleteReason!.trim().isNotEmpty ? v.deleteReason! : "Reason not specified"}',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.dangerText),
-                        ),
-                      ],
+                      children: column1Fields,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  const VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: Color(0xFFE5E7EB),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column2Fields,
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-          _buildInfoRow('Vendor Code', v.id),
-          _buildInfoRow('Company Name', v.name),
-          _buildInfoRow('Contact Person', v.contactPerson),
-          _buildInfoRow('Mobile / Phone', v.mobile),
-          _buildInfoRow('Email Address', v.email.isNotEmpty ? v.email : '-'),
-          _buildInfoRow('GST Registration', v.gstNumber.isNotEmpty ? v.gstNumber : '-'),
-          _buildInfoRow('PAN Number', v.panNumber.isNotEmpty ? v.panNumber : '-'),
-          _buildInfoRow('Factory / Address', v.address.isNotEmpty ? v.address : '-'),
-          _buildInfoRow('State', v.state.isNotEmpty ? v.state : '-'),
-          _buildInfoRow('PIN Code', v.pincode.isNotEmpty ? v.pincode : '-'),
-          _buildInfoRow('Account Created Date', Formatters.formatDate(v.createdAt)),
-          if (v.isDeleted)
-            _buildInfoRow(
-              'Deletion Reason',
-              v.deleteReason != null && v.deleteReason!.trim().isNotEmpty ? v.deleteReason! : 'Reason not specified',
-              valueColor: AppColors.dangerText,
-            ),
         ],
       ),
     );
 
-    final vendorFinancialCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgBorderRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Financial & Procurement Ledger', style: AppTextStyles.h3),
-          const Divider(height: 24),
-          _buildInfoRow('Total Purchases Invoiced', Formatters.formatCurrency(totalPurchased)),
-          _buildInfoRow('Total Amount Disbursed', Formatters.formatCurrency(totalPaid)),
-          _buildInfoRow('Pending Dues on Orders', Formatters.formatCurrency(totalPending)),
-          _buildInfoRow('Credit Limit Allowed', Formatters.formatCurrency(v.creditLimit)),
-          _buildInfoRow('Payment Terms', v.paymentTerms),
-          const Divider(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: Text('Outstanding Payables Due:', style: AppTextStyles.bodyBold)),
-              const SizedBox(width: 8),
-              Text(
-                Formatters.formatCurrency(v.outstandingBalance),
-                textAlign: TextAlign.end,
-                style: (isMobile ? AppTextStyles.h3 : AppTextStyles.h2).copyWith(
-                  color: v.outstandingBalance > 0 ? AppColors.dangerText : AppColors.successText,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: v.outstandingBalance > 0 ? Colors.red.withValues(alpha: 0.08) : Colors.green.withValues(alpha: 0.08),
-              borderRadius: AppRadius.smBorderRadius,
-              border: Border.all(color: v.outstandingBalance > 0 ? Colors.red.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
-            ),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('Payable Status:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
-                Text(
-                  v.outstandingBalance > 0 ? 'PAYMENT OUTSTANDING' : 'ALL DUES CLEARED',
-                  style: AppTextStyles.bodyBold.copyWith(color: v.outstandingBalance > 0 ? AppColors.dangerText : AppColors.successText),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    final hasVendorDateFilter = _vendorPurchasesStartDate != null || _vendorPurchasesEndDate != null;
+    final hasAnyVendorRecords = vendorPurchases.isNotEmpty || vendorPayments.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isMobile) ...[
-          vendorProfileCard,
+        vendorCard,
+        if (hasVendorDateFilter || hasAnyVendorRecords) ...[
+          _buildCommonDateFilterBar(
+            context: context,
+            startDate: _vendorPurchasesStartDate,
+            endDate: _vendorPurchasesEndDate,
+            onDateRangeSelected: (start, end) => setState(() {
+              _vendorPurchasesStartDate = start;
+              _vendorPurchasesEndDate = end;
+            }),
+          ),
           const SizedBox(height: 16),
-          vendorFinancialCard,
-        ] else ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: vendorProfileCard),
-              const SizedBox(width: 16),
-              Expanded(flex: 2, child: vendorFinancialCard),
+        ],
+
+        // Purchase Orders History inside white card container
+        if (hasVendorDateFilter || vendorPurchases.isNotEmpty)
+          Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
-        ],
-        const SizedBox(height: 24),
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text('Purchase Orders History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-            ErpDateFilterBox(
-              startDate: _vendorPurchasesStartDate,
-              endDate: _vendorPurchasesEndDate,
-              onDateRangeSelected: (start, end) => setState(() {
-                _vendorPurchasesStartDate = start;
-                _vendorPurchasesEndDate = end;
-              }),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Builder(
-          builder: (context) {
-            final filteredPurchases = sortedPurchases.where((p) {
-              if (_vendorPurchasesStartDate != null &&
-                  p.purchaseDate.isBefore(DateTime(_vendorPurchasesStartDate!.year, _vendorPurchasesStartDate!.month, _vendorPurchasesStartDate!.day))) {
-                return false;
-              }
-              if (_vendorPurchasesEndDate != null &&
-                  p.purchaseDate.isAfter(DateTime(_vendorPurchasesEndDate!.year, _vendorPurchasesEndDate!.month, _vendorPurchasesEndDate!.day, 23, 59, 59))) {
-                return false;
-              }
-              return true;
-            }).toList();
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Purchase Orders History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+              const SizedBox(height: 16),
+              Builder(
+                builder: (context) {
+                  final filteredPurchases = sortedPurchases.where((p) {
+                    if (_vendorPurchasesStartDate != null &&
+                        p.purchaseDate.isBefore(DateTime(_vendorPurchasesStartDate!.year, _vendorPurchasesStartDate!.month, _vendorPurchasesStartDate!.day))) {
+                      return false;
+                    }
+                    if (_vendorPurchasesEndDate != null &&
+                        p.purchaseDate.isAfter(DateTime(_vendorPurchasesEndDate!.year, _vendorPurchasesEndDate!.month, _vendorPurchasesEndDate!.day, 23, 59, 59))) {
+                      return false;
+                    }
+                    return true;
+                  }).toList();
 
-            if (filteredPurchases.isEmpty) {
-              return Container(
-                padding: const EdgeInsets.all(24),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: AppRadius.mdBorderRadius,
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Text(
-                  sortedPurchases.isEmpty
-                      ? 'No purchase orders recorded for this vendor yet.'
-                      : 'No purchase orders found for the selected date range.',
-                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
-                ),
-              );
-            }
+                  if (filteredPurchases.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.all(24),
+                      alignment: Alignment.center,
+                      child: Text(
+                        sortedPurchases.isEmpty
+                            ? 'No purchase orders recorded for this vendor yet.'
+                            : 'No purchase orders found for the selected date range.',
+                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+                      ),
+                    );
+                  }
 
-            if (isMobile) {
-              return Column(
-                children: filteredPurchases.map((p) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            InkWell(
-                              onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
-                              child: Text(
-                                p.purchaseNumber,
-                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
-                              ),
-                            ),
-                            Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
-                          ],
+                  return ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'PO Number'),
+                      ErpColumn(title: 'Purchase Date'),
+                      ErpColumn(title: 'Total Amount', isNumeric: true),
+                      ErpColumn(title: 'Amount Paid', isNumeric: true),
+                      ErpColumn(title: 'Pending Balance', isNumeric: true),
+                      ErpColumn(title: 'Status'),
+                    ],
+                    rows: filteredPurchases.map((p) {
+                      return [
+                        InkWell(
+                          onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
+                          child: Text(
+                            p.purchaseNumber,
+                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
+                          ),
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
-                            if (p.vendorInvoiceNumber.isNotEmpty && p.vendorInvoiceNumber != '-')
-                              Text('Inv: ${p.vendorInvoiceNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                          ],
+                        Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
+                        Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
+                        Text(Formatters.formatCurrency(p.paidAmount), style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
+                        Text(
+                          Formatters.formatCurrency(p.pendingAmount),
+                          style: AppTextStyles.bodyBold.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Due: ${Formatters.formatCurrency(p.pendingAmount)}',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
-                          ],
-                        ),
-                      ],
-                    ),
+                        ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
+                      ];
+                    }).toList(),
                   );
-                }).toList(),
-              );
-            }
-
-            return ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'PO Number'),
-                ErpColumn(title: 'Purchase Date'),
-                ErpColumn(title: 'Vendor Invoice'),
-                ErpColumn(title: 'Items Count', isNumeric: true),
-                ErpColumn(title: 'Total Amount', isNumeric: true),
-                ErpColumn(title: 'Paid Amount', isNumeric: true),
-                ErpColumn(title: 'Pending Due', isNumeric: true),
-                ErpColumn(title: 'Status'),
-              ],
-              rows: filteredPurchases.map((p) {
-                return [
-                  InkWell(
-                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'purchase', details.parentSection),
-                    child: Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                  ),
-                  Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
-                  Text(p.vendorInvoiceNumber.isNotEmpty ? p.vendorInvoiceNumber : '-', style: AppTextStyles.bodySmall),
-                  Text('${p.items.length} items', style: AppTextStyles.bodySmall),
-                  Text(Formatters.formatCurrency(p.totalAmount), style: AppTextStyles.bodyBold),
-                  Text(Formatters.formatCurrency(p.paidAmount), style: AppTextStyles.bodySmall.copyWith(color: AppColors.successText)),
-                  Text(
-                    Formatters.formatCurrency(p.pendingAmount),
-                    style: AppTextStyles.bodyBold.copyWith(color: p.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
-                  ),
-                  ErpStatusBadge.neutral(p.statusLabel.toUpperCase()),
-                ];
-              }).toList(),
-            );
-          },
+                },
+              ),
+            ],
+          ),
         ),
 
-        if (vendorPayments.isNotEmpty) ...[
-          const SizedBox(height: 28),
-          Text('Payment Transactions & Disbursements', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-          const SizedBox(height: 12),
-          if (isMobile)
-            Column(
-              children: vendorPayments.map((pay) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(pay.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                          Text(Formatters.formatCurrency(pay.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(Formatters.formatDate(pay.paymentDate), style: AppTextStyles.bodySmall),
-                          ErpStatusBadge.neutral(pay.paymentMode.name.toUpperCase()),
-                        ],
-                      ),
-                      if (pay.referenceDocumentNumber != null && pay.referenceDocumentNumber!.isNotEmpty && pay.referenceDocumentNumber != '-') ...[
-                        const SizedBox(height: 4),
-                        Text('PO Ref: ${pay.referenceDocumentNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                      ],
-                      if (pay.transactionReference != null && pay.transactionReference!.isNotEmpty && pay.transactionReference != '-') ...[
-                        const SizedBox(height: 2),
-                        Text('UTR: ${pay.transactionReference}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                      ],
-                    ],
-                  ),
-                );
-              }).toList(),
-            )
-          else
-            ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'Payment No'),
-                ErpColumn(title: 'Payment Date'),
-                ErpColumn(title: 'Reference / UTR'),
-                ErpColumn(title: 'PO Reference'),
-                ErpColumn(title: 'Amount (₹)', isNumeric: true),
-                ErpColumn(title: 'Payment Mode'),
-                ErpColumn(title: 'Status'),
+        // Payment Transactions & Disbursements
+        if (hasVendorDateFilter || vendorPayments.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
               ],
-              rows: vendorPayments.map((pay) {
-                return [
-                  Text(pay.paymentNumber, style: AppTextStyles.bodyBold),
-                  Text(Formatters.formatDate(pay.paymentDate), style: AppTextStyles.bodySmall),
-                  Text(pay.transactionReference ?? '-', style: AppTextStyles.bodySmall),
-                  Text(pay.referenceDocumentNumber ?? '-', style: AppTextStyles.bodySmall),
-                  Text(Formatters.formatCurrency(pay.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                  Text(pay.paymentMode.name.toUpperCase(), style: AppTextStyles.bodySmall),
-                  ErpStatusBadge.success('DISBURSED'),
-                ];
-              }).toList(),
             ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Payment Transactions & Disbursements', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+                const SizedBox(height: 16),
+                if (filteredVendorPayments.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'No payment disbursements found for the selected date range.',
+                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+                    ),
+                  )
+                else
+                  ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'Payment No'),
+                      ErpColumn(title: 'Payment Date'),
+                      ErpColumn(title: 'Reference / UTR'),
+                      ErpColumn(title: 'PO Reference'),
+                      ErpColumn(title: 'Amount Paid', isNumeric: true),
+                      ErpColumn(title: 'Mode'),
+                    ],
+                    rows: filteredVendorPayments.map((pay) {
+                    return [
+                      Text(pay.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                      Text(Formatters.formatDate(pay.paymentDate), style: AppTextStyles.bodySmall),
+                      Text(pay.transactionReference?.isNotEmpty == true ? pay.transactionReference! : '-', style: AppTextStyles.bodySmall),
+                      Text(pay.referenceDocumentNumber?.isNotEmpty == true ? pay.referenceDocumentNumber! : '-', style: AppTextStyles.bodySmall),
+                      Text(Formatters.formatCurrency(pay.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                      ErpStatusBadge.neutral(pay.paymentMode.name.toUpperCase()),
+                    ];
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
         ],
 
-        if (suppliedMaterials.isNotEmpty) ...[
-          const SizedBox(height: 28),
-          Text('Supplied Raw Materials & Products Catalog', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-          const SizedBox(height: 12),
-          if (isMobile)
-            Column(
-              children: suppliedMaterials.values.map((mat) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
+        // Catalog of materials supplied by this vendor
+        if (hasVendorDateFilter || vendorPurchases.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Supplied Materials Catalog', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+              const SizedBox(height: 16),
+              if (suppliedMaterials.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'No supplied materials found for the selected date range.',
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(mat['code'] as String, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                          Text(Formatters.formatCurrency(mat['totalVal'] as double), style: AppTextStyles.bodyBold),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(mat['name'] as String, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Supplied: ${Formatters.formatNumber(mat['totalQty'] as double)} ${mat['unit']}', style: AppTextStyles.bodySmall),
-                          Text('Rate: ${Formatters.formatCurrency(mat['lastRate'] as double)}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            )
-          else
-            ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'Item Code'),
-                ErpColumn(title: 'Material Name'),
-                ErpColumn(title: 'Category / Type'),
-                ErpColumn(title: 'Cumulative Quantity Supplied'),
-                ErpColumn(title: 'Last Procurement Rate (₹)', isNumeric: true),
-                ErpColumn(title: 'Total Procurement Valuation (₹)', isNumeric: true),
+                )
+              else
+                ErpDataTable(
+                  columns: const [
+                    ErpColumn(title: 'Material Name'),
+                    ErpColumn(title: 'Item SKU / Code'),
+                    ErpColumn(title: 'Type'),
+                    ErpColumn(title: 'Total Qty Supplied', isNumeric: true),
+                    ErpColumn(title: 'Last Unit Rate', isNumeric: true),
+                    ErpColumn(title: 'Total Procurement Value', isNumeric: true),
+                  ],
+                  rows: suppliedMaterials.values.map((mat) {
+                    return [
+                      Text(mat['name'] as String, style: AppTextStyles.bodyBold),
+                      Text(mat['code'] as String, style: AppTextStyles.bodySmall),
+                      ErpStatusBadge.neutral(mat['itemType'] as String),
+                      Text('${Formatters.formatNumber(mat['totalQty'] as double)} ${mat['unit']}', style: AppTextStyles.bodyMedium),
+                      Text(Formatters.formatCurrency(mat['lastRate'] as double), style: AppTextStyles.bodyMedium),
+                      Text(Formatters.formatCurrency(mat['totalVal'] as double), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                    ];
+                  }).toList(),
+                ),
               ],
-              rows: suppliedMaterials.values.map((mat) {
-                return [
-                  Text(mat['code'] as String, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                  Text(mat['name'] as String, style: AppTextStyles.bodyMedium),
-                  Text(mat['itemType'] as String, style: AppTextStyles.bodySmall),
-                  Text('${Formatters.formatNumber(mat['totalQty'] as double)} ${mat['unit']}', style: AppTextStyles.bodyMedium),
-                  Text(Formatters.formatCurrency(mat['lastRate'] as double), style: AppTextStyles.bodySmall),
-                  Text(Formatters.formatCurrency(mat['totalVal'] as double), style: AppTextStyles.bodyBold),
-                ];
-              }).toList(),
             ),
+          ),
+        ],
+
+        if (!hasVendorDateFilter && !hasAnyVendorRecords) ...[
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(24),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: AppRadius.mdBorderRadius,
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Text(
+              'No purchase orders, payment disbursements, or supplied materials found for this vendor.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+            ),
+          ),
         ],
       ],
     );
@@ -1234,11 +1916,189 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
     final grossInvoiced = customerSales.where((s) => s.documentType == SalesDocumentType.invoice).fold(0.0, (sum, s) => sum + s.totalAmount);
     final approvedReturns = customerReturns.where((r) => r.salesReturnStatus == SalesReturnStatus.approved).fold(0.0, (sum, r) => sum + r.totalAmount);
     final netSalesRevenue = (grossInvoiced - approvedReturns).clamp(0.0, double.infinity);
+    final customerPayments = db.payments.where((p) => p.partyId == c.id || p.partyName.toLowerCase() == c.name.toLowerCase()).toList();
 
-    final isMobile = MediaQuery.of(context).size.width < 850;
+    final filteredSales = customerSales.where((s) {
+      if (_customerSalesStartDate != null &&
+          s.saleDate.isBefore(DateTime(_customerSalesStartDate!.year, _customerSalesStartDate!.month, _customerSalesStartDate!.day))) {
+        return false;
+      }
+      if (_customerSalesEndDate != null &&
+          s.saleDate.isAfter(DateTime(_customerSalesEndDate!.year, _customerSalesEndDate!.month, _customerSalesEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final filteredCustomerPayments = customerPayments.where((pay) {
+      if (_customerSalesStartDate != null &&
+          pay.paymentDate.isBefore(DateTime(_customerSalesStartDate!.year, _customerSalesStartDate!.month, _customerSalesStartDate!.day))) {
+        return false;
+      }
+      if (_customerSalesEndDate != null &&
+          pay.paymentDate.isAfter(DateTime(_customerSalesEndDate!.year, _customerSalesEndDate!.month, _customerSalesEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final isMobile = MediaQuery.of(context).size.width < 780;
+
+    Widget buildFieldItem(String label, Widget valueWidget) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 170,
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: valueWidget),
+          ],
+        ),
+      );
+    }
+
+    Widget buildFieldText(String label, String value, {Color? valueColor, bool isBold = true}) {
+      return buildFieldItem(
+        label,
+        Text(
+          value,
+          style: (isBold ? AppTextStyles.bodyBold : AppTextStyles.bodyMedium).copyWith(
+            fontSize: 13,
+            color: valueColor ?? AppColors.textPrimary,
+          ),
+        ),
+      );
+    }
+
+    final column1Fields = [
+      buildFieldText('Customer Code', c.id),
+      buildFieldText('Client Name', c.name),
+      if (c.isAlsoArchitect || c.linkedArchitectId != null)
+        buildFieldItem(
+          'Dual Entity Role',
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.purple.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+              ),
+              child: const Text(
+                'ARCHITECT-CUSTOMER',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple),
+              ),
+            ),
+          ),
+        ),
+      buildFieldItem(
+        'Contact Number',
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              c.mobile,
+              style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: AppColors.textPrimary),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
+                context,
+                customerName: c.name,
+                customerPhone: c.mobile,
+              ),
+              child: const Icon(Icons.chat, color: Colors.green, size: 16),
+            ),
+          ],
+        ),
+      ),
+      buildFieldText('Email Address', c.email),
+      buildFieldText('Registered Address', c.address),
+      buildFieldText('State', c.state.isNotEmpty ? c.state : '-'),
+      buildFieldText('PIN Code', c.pincode.isNotEmpty ? c.pincode : '-'),
+      buildFieldText('Account Created Date', Formatters.formatDate(c.createdAt)),
+    ];
+
+    final column2Fields = [
+      buildFieldText('Gross Sales Invoiced', Formatters.formatCurrency(grossInvoiced)),
+      buildFieldText('Approved Sales Returns', Formatters.formatCurrency(approvedReturns)),
+      buildFieldText('Net Sales Revenue', Formatters.formatCurrency(netSalesRevenue), valueColor: AppColors.primary),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: c.outstandingAmount > 0 ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: c.outstandingAmount > 0 ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Total Receivables Due:',
+                  style: AppTextStyles.bodyBold.copyWith(
+                    fontSize: 12.5,
+                    color: c.outstandingAmount > 0 ? const Color(0xFF991B1B) : const Color(0xFF166534),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  c.outstandingAmount > 0 ? 'Pending client payment' : 'All accounts settled',
+                  style: AppTextStyles.caption.copyWith(
+                    color: c.outstandingAmount > 0 ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              Formatters.formatCurrency(c.outstandingAmount),
+              style: AppTextStyles.h2.copyWith(
+                fontSize: 18,
+                color: c.outstandingAmount > 0 ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: c.creditBalance > 0 ? AppColors.primary.withValues(alpha: 0.08) : Colors.grey.shade50,
+          borderRadius: AppRadius.smBorderRadius,
+          border: Border.all(color: c.creditBalance > 0 ? AppColors.primary.withValues(alpha: 0.3) : Colors.grey.shade200),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Customer Store Credit:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              Formatters.formatCurrency(c.creditBalance),
+              style: AppTextStyles.bodyBold.copyWith(color: c.creditBalance > 0 ? AppColors.primary : AppColors.textMuted),
+            ),
+          ],
+        ),
+      ),
+    ];
 
     final profileCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.lgBorderRadius,
@@ -1250,366 +2110,357 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Customer Profile', style: AppTextStyles.h3),
-              IconButton(
-                icon: const Icon(Icons.chat, color: Colors.green, size: 20),
-                tooltip: 'Quick WhatsApp Message',
-                onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
-                  context,
-                  customerName: c.name,
-                  customerPhone: c.mobile,
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.person, color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Customer Profile',
+                            style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Official Client Account & Financial Ledger',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chat, color: Colors.green, size: 20),
+                    tooltip: 'Quick WhatsApp Message',
+                    onPressed: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
+                      context,
+                      customerName: c.name,
+                      customerPhone: c.mobile,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+
+                  ElevatedButton.icon(
+                    onPressed: () => _exportCustomerPdf(
+                      c: c,
+                      grossInvoiced: grossInvoiced,
+                      approvedReturns: approvedReturns,
+                      netSalesRevenue: netSalesRevenue,
+                      filteredSales: filteredSales,
+                    ),
+                    icon: const Icon(Icons.print_outlined, size: 16, color: Colors.white),
+                    label: const Text(
+                      'Export PDF',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  c.outstandingAmount > 0
+                      ? ErpStatusBadge.danger('PENDING BALANCE')
+                      : ErpStatusBadge.success('CLEAR'),
+                ],
               ),
             ],
           ),
-          const Divider(height: 24),
-          _buildInfoRow('Customer Code', c.id),
-          _buildInfoRow('Client Name', c.name),
-          if (c.isAlsoArchitect || c.linkedArchitectId != null) ...[
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
+          Divider(height: isMobile ? 24 : 32),
+
+          // 2-Column Responsive Layout with VerticalDivider on Desktop
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...column1Fields,
+                const Divider(height: 24, thickness: 1, color: Color(0xFFE5E7EB)),
+                ...column2Fields,
+              ],
+            )
+          else
+            IntrinsicHeight(
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Dual Entity Role', style: AppTextStyles.bodyMedium),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.purple.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column1Fields,
                     ),
-                    child: const Text('ARCHITECT-CUSTOMER', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple)),
+                  ),
+                  const SizedBox(width: 24),
+                  const VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: Color(0xFFE5E7EB),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column2Fields,
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
-          _buildInfoRow('Contact Number', c.mobile),
-          _buildInfoRow('Email Address', c.email),
-          _buildInfoRow('Registered Address', c.address),
-          _buildInfoRow('State', c.state.isNotEmpty ? c.state : '-'),
-          _buildInfoRow('PIN Code', c.pincode.isNotEmpty ? c.pincode : '-'),
-          _buildInfoRow('Account Created Date', Formatters.formatDate(c.createdAt)),
         ],
       ),
     );
 
-    final financialCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgBorderRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Financial & Credit Ledger', style: AppTextStyles.h3),
-          const Divider(height: 24),
-          _buildInfoRow('Gross Sales Invoiced', Formatters.formatCurrency(grossInvoiced)),
-          _buildInfoRow('Approved Sales Returns', Formatters.formatCurrency(approvedReturns)),
-          const Divider(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: Text('Net Sales Revenue:', style: AppTextStyles.bodyBold)),
-              const SizedBox(width: 8),
-              Text(
-                Formatters.formatCurrency(netSalesRevenue),
-                textAlign: TextAlign.end,
-                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: Text('Total Receivables Due:', style: AppTextStyles.bodyMedium)),
-              const SizedBox(width: 8),
-              Text(
-                Formatters.formatCurrency(c.outstandingAmount),
-                textAlign: TextAlign.end,
-                style: (isMobile ? AppTextStyles.h3 : AppTextStyles.h2).copyWith(
-                  color: c.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: c.creditBalance > 0 ? AppColors.primary.withValues(alpha: 0.08) : Colors.grey.shade50,
-              borderRadius: AppRadius.smBorderRadius,
-              border: Border.all(color: c.creditBalance > 0 ? AppColors.primary.withValues(alpha: 0.3) : Colors.grey.shade200),
-            ),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('Customer Store Credit:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
-                Text(
-                  Formatters.formatCurrency(c.creditBalance),
-                  style: AppTextStyles.bodyBold.copyWith(color: c.creditBalance > 0 ? AppColors.primary : AppColors.textMuted),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    final hasCustomerDateFilter = _customerSalesStartDate != null || _customerSalesEndDate != null;
+    final hasAnyCustomerRecords = customerSales.isNotEmpty || customerPayments.isNotEmpty || customerReturns.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isMobile) ...[
-          profileCard,
+        profileCard,
+        if (hasCustomerDateFilter || hasAnyCustomerRecords) ...[
+          _buildCommonDateFilterBar(
+            context: context,
+            startDate: _customerSalesStartDate,
+            endDate: _customerSalesEndDate,
+            onDateRangeSelected: (start, end) => setState(() {
+              _customerSalesStartDate = start;
+              _customerSalesEndDate = end;
+            }),
+          ),
           const SizedBox(height: 16),
-          financialCard,
-        ] else ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: profileCard),
-              const SizedBox(width: 16),
-              Expanded(flex: 2, child: financialCard),
+        ],
+
+        // Sales & Invoices History inside white card container
+        if (hasCustomerDateFilter || customerSales.isNotEmpty)
+          Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
-        ],
-        const SizedBox(height: 24),
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-            ErpDateFilterBox(
-              startDate: _customerSalesStartDate,
-              endDate: _customerSalesEndDate,
-              onDateRangeSelected: (start, end) => setState(() {
-                _customerSalesStartDate = start;
-                _customerSalesEndDate = end;
-              }),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Builder(
-          builder: (context) {
-            final filteredSales = customerSales.where((s) {
-              if (_customerSalesStartDate != null &&
-                  s.saleDate.isBefore(DateTime(_customerSalesStartDate!.year, _customerSalesStartDate!.month, _customerSalesStartDate!.day))) {
-                return false;
-              }
-              if (_customerSalesEndDate != null &&
-                  s.saleDate.isAfter(DateTime(_customerSalesEndDate!.year, _customerSalesEndDate!.month, _customerSalesEndDate!.day, 23, 59, 59))) {
-                return false;
-              }
-              return true;
-            }).toList();
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+              const SizedBox(height: 16),
+              Builder(
+                builder: (context) {
+                  final filteredSales = customerSales.where((s) {
+                    if (_customerSalesStartDate != null &&
+                        s.saleDate.isBefore(DateTime(_customerSalesStartDate!.year, _customerSalesStartDate!.month, _customerSalesStartDate!.day))) {
+                      return false;
+                    }
+                    if (_customerSalesEndDate != null &&
+                        s.saleDate.isAfter(DateTime(_customerSalesEndDate!.year, _customerSalesEndDate!.month, _customerSalesEndDate!.day, 23, 59, 59))) {
+                      return false;
+                    }
+                    return true;
+                  }).toList();
 
-            if (filteredSales.isEmpty) {
-              return Container(
-                padding: const EdgeInsets.all(24),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: AppRadius.mdBorderRadius,
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Text(
-                  customerSales.isEmpty
-                      ? 'No sales or invoice documents linked to this customer yet.'
-                      : 'No sales documents found for the selected date range.',
-                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
-                ),
-              );
-            }
-
-            if (isMobile) {
-              return Column(
-                children: filteredSales.map((s) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            InkWell(
-                              onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                              child: Text(
-                                s.invoiceNumber,
-                                style: AppTextStyles.bodyBold.copyWith(
-                                  color: AppColors.primary,
-                                  decoration: TextDecoration.underline,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              Formatters.formatCurrency(s.totalAmount),
-                              style: AppTextStyles.bodyBold,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                            ErpStatusBadge.neutral(s.documentType.toString().split('.').last.toUpperCase()),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Due: ${Formatters.formatCurrency(s.pendingAmount)}',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.successText,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              );
-            }
-
-            return ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'Invoice Number'),
-                ErpColumn(title: 'Date'),
-                ErpColumn(title: 'Document Type'),
-                ErpColumn(title: 'Total Invoiced', isNumeric: true),
-                ErpColumn(title: 'Outstanding Due', isNumeric: true),
-                ErpColumn(title: 'Status'),
-              ],
-              rows: filteredSales.map((s) {
-                return [
-                  InkWell(
-                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                    child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                  ),
-                  Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                  Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
-                  Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
-                  Text(
-                    Formatters.formatCurrency(s.pendingAmount),
-                    style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
-                  ),
-                  Text(s.statusLabel, style: AppTextStyles.bodySmall),
-                ];
-              }).toList(),
-            );
-          },
-        ),
-
-        if (customerReturns.isNotEmpty) ...[
-          const SizedBox(height: 28),
-          Text('Sales Returns & Credit Notes', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-          const SizedBox(height: 12),
-          if (isMobile)
-            Column(
-              children: customerReturns.map((r) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          InkWell(
-                            onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(r.id, 'salesReturn', details.parentSection),
-                            child: Text(
-                              r.invoiceNumber,
-                              style: AppTextStyles.bodyBold.copyWith(
-                                color: AppColors.primary,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            Formatters.formatCurrency(r.totalAmount),
-                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText),
-                          ),
-                        ],
+                  if (filteredSales.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.all(24),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: AppRadius.mdBorderRadius,
+                        border: Border.all(color: AppColors.border),
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(Formatters.formatDate(r.saleDate), style: AppTextStyles.bodySmall),
-                          Text(
-                            r.returnType == ReturnType.fullReturn ? 'Full Return' : 'Partial Return',
-                            style: AppTextStyles.bodySmall,
-                          ),
-                        ],
+                      child: Text(
+                        customerSales.isEmpty
+                            ? 'No sales or invoice documents linked to this customer yet.'
+                            : 'No sales documents found for the selected date range.',
+                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
                       ),
-                      if (r.originalInvoiceNumber != null && r.originalInvoiceNumber!.isNotEmpty && r.originalInvoiceNumber != '-') ...[
-                        const SizedBox(height: 4),
-                        Text('Original Invoice: ${r.originalInvoiceNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                      ],
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          ErpStatusBadge.neutral(r.salesReturnStatusLabel.toUpperCase()),
-                          ErpStatusBadge.neutral(r.refundStatusLabel.toUpperCase()),
-                        ],
-                      ),
+                    );
+                  }
+
+                  return ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'Invoice Number'),
+                      ErpColumn(title: 'Date'),
+                      ErpColumn(title: 'Document Type'),
+                      ErpColumn(title: 'Total Invoiced', isNumeric: true),
+                      ErpColumn(title: 'Outstanding Due', isNumeric: true),
+                      ErpColumn(title: 'Status'),
                     ],
-                  ),
-                );
-              }).toList(),
-            )
-          else
-            ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'Return No'),
-                ErpColumn(title: 'Date'),
-                ErpColumn(title: 'Original Invoice'),
-                ErpColumn(title: 'Return Type'),
-                ErpColumn(title: 'Total Amount', isNumeric: true),
-                ErpColumn(title: 'Status'),
-                ErpColumn(title: 'Refund / Credit Note'),
+                    rows: filteredSales.map((s) {
+                      return [
+                        InkWell(
+                          onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
+                          child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                        ),
+                        Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
+                        Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
+                        Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
+                        Text(
+                          Formatters.formatCurrency(s.pendingAmount),
+                          style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
+                        ),
+                        Text(s.statusLabel, style: AppTextStyles.bodySmall),
+                      ];
+                    }).toList(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // Payment Transactions & Receipts
+        if (hasCustomerDateFilter || customerPayments.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
               ],
-              rows: customerReturns.map((r) {
-                return [
-                  InkWell(
-                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(r.id, 'salesReturn', details.parentSection),
-                    child: Text(r.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                  ),
-                  Text(Formatters.formatDate(r.saleDate), style: AppTextStyles.bodySmall),
-                  Text(r.originalInvoiceNumber ?? '-', style: AppTextStyles.bodyMedium),
-                  Text(r.returnType == ReturnType.fullReturn ? 'Full' : 'Partial', style: AppTextStyles.bodySmall),
-                  Text(Formatters.formatCurrency(r.totalAmount), style: AppTextStyles.bodyBold),
-                  Text(r.salesReturnStatusLabel.toUpperCase(), style: AppTextStyles.bodySmall),
-                  Text(r.refundStatusLabel, style: AppTextStyles.bodySmall),
-                ];
-              }).toList(),
             ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Payment Transactions & Receipts', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+                const SizedBox(height: 16),
+                if (filteredCustomerPayments.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'No payment receipts found for the selected date range.',
+                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+                    ),
+                  )
+                else
+                  ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'Receipt No'),
+                      ErpColumn(title: 'Payment Date'),
+                      ErpColumn(title: 'Reference / UTR'),
+                      ErpColumn(title: 'Invoice Reference'),
+                      ErpColumn(title: 'Amount Received', isNumeric: true),
+                      ErpColumn(title: 'Mode'),
+                    ],
+                    rows: filteredCustomerPayments.map((pay) {
+                      return [
+                        Text(pay.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                        Text(Formatters.formatDate(pay.paymentDate), style: AppTextStyles.bodySmall),
+                        Text(pay.transactionReference?.isNotEmpty == true ? pay.transactionReference! : '-', style: AppTextStyles.bodySmall),
+                        Text(pay.referenceDocumentNumber?.isNotEmpty == true ? pay.referenceDocumentNumber! : '-', style: AppTextStyles.bodySmall),
+                        Text(Formatters.formatCurrency(pay.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                        ErpStatusBadge.neutral(pay.paymentMode.name.toUpperCase()),
+                      ];
+                    }).toList(),
+                  ),
+              ],
+            ),
+          ),
+        ],
+
+        if (hasCustomerDateFilter || customerReturns.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Sales Returns & Credit Notes', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+                const SizedBox(height: 16),
+                ErpDataTable(
+                  columns: const [
+                    ErpColumn(title: 'Return No'),
+                    ErpColumn(title: 'Date'),
+                    ErpColumn(title: 'Original Invoice'),
+                    ErpColumn(title: 'Return Type'),
+                    ErpColumn(title: 'Total Amount', isNumeric: true),
+                    ErpColumn(title: 'Status'),
+                    ErpColumn(title: 'Refund / Credit Note'),
+                  ],
+                  rows: customerReturns.map((r) {
+                    return [
+                      InkWell(
+                        onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(r.id, 'salesReturn', details.parentSection),
+                        child: Text(r.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
+                      ),
+                      Text(Formatters.formatDate(r.saleDate), style: AppTextStyles.bodySmall),
+                      Text(r.originalInvoiceNumber ?? '-', style: AppTextStyles.bodyMedium),
+                      Text(r.returnType == ReturnType.fullReturn ? 'Full' : 'Partial', style: AppTextStyles.bodySmall),
+                      Text(Formatters.formatCurrency(r.totalAmount), style: AppTextStyles.bodyBold),
+                      Text(r.salesReturnStatusLabel.toUpperCase(), style: AppTextStyles.bodySmall),
+                      Text(r.refundStatusLabel, style: AppTextStyles.bodySmall),
+                    ];
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        if (!hasCustomerDateFilter && !hasAnyCustomerRecords) ...[
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(24),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: AppRadius.mdBorderRadius,
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Text(
+              'No sales invoices, payment receipts, or returns found for this customer.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+            ),
+          ),
         ],
       ],
     );
@@ -1627,10 +2478,171 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
     final netSalesRevenue = (grossInvoiced - approvedReturns).clamp(0.0, double.infinity);
     final dealerPayments = db.payments.where((p) => p.partyId == d.id).toList();
 
-    final isMobile = MediaQuery.of(context).size.width < 850;
+    final filteredDealerSales = sortedSales.where((s) {
+      if (_dealerSalesStartDate != null &&
+          s.saleDate.isBefore(DateTime(_dealerSalesStartDate!.year, _dealerSalesStartDate!.month, _dealerSalesStartDate!.day))) {
+        return false;
+      }
+      if (_dealerSalesEndDate != null &&
+          s.saleDate.isAfter(DateTime(_dealerSalesEndDate!.year, _dealerSalesEndDate!.month, _dealerSalesEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
+    }).toList();
 
-    final dealerProfileCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
+    final filteredDealerPayments = dealerPayments.where((pay) {
+      if (_dealerSalesStartDate != null &&
+          pay.paymentDate.isBefore(DateTime(_dealerSalesStartDate!.year, _dealerSalesStartDate!.month, _dealerSalesStartDate!.day))) {
+        return false;
+      }
+      if (_dealerSalesEndDate != null &&
+          pay.paymentDate.isAfter(DateTime(_dealerSalesEndDate!.year, _dealerSalesEndDate!.month, _dealerSalesEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final isMobile = MediaQuery.of(context).size.width < 780;
+
+    Widget buildFieldItem(String label, Widget valueWidget) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 170,
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: valueWidget),
+          ],
+        ),
+      );
+    }
+
+    Widget buildFieldText(String label, String value, {Color? valueColor, bool isBold = true}) {
+      return buildFieldItem(
+        label,
+        Text(
+          value,
+          style: (isBold ? AppTextStyles.bodyBold : AppTextStyles.bodyMedium).copyWith(
+            fontSize: 13,
+            color: valueColor ?? AppColors.textPrimary,
+          ),
+        ),
+      );
+    }
+
+    final column1Fields = [
+      buildFieldText('Dealer ID', d.id),
+      buildFieldText('Showroom / Store Name', d.name),
+      buildFieldText('Company Entity', d.companyName),
+      buildFieldText('Contact Person', d.contactPerson),
+      buildFieldItem(
+        'Phone Number',
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              d.mobile,
+              style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: AppColors.textPrimary),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: () => WhatsAppQuickChatDialog.showCustomerQuickChat(
+                context,
+                customerName: d.name,
+                customerPhone: d.mobile,
+              ),
+              child: const Icon(Icons.chat, color: Colors.green, size: 16),
+            ),
+          ],
+        ),
+      ),
+      buildFieldText('Email Address', d.email.isNotEmpty ? d.email : '-'),
+      buildFieldText('GST Identification', d.gstNumber.isNotEmpty ? d.gstNumber : '-'),
+      buildFieldText('Showroom Address', d.address.isNotEmpty ? d.address : '-'),
+      buildFieldText('State', d.state.isNotEmpty ? d.state : '-'),
+      buildFieldText('PIN Code', d.pincode.isNotEmpty ? d.pincode : '-'),
+      buildFieldText('Account Created Date', Formatters.formatDate(d.createdAt)),
+    ];
+
+    final column2Fields = [
+      buildFieldText('Gross Sales Invoiced', Formatters.formatCurrency(grossInvoiced)),
+      buildFieldText('Approved Sales Returns', Formatters.formatCurrency(approvedReturns)),
+      buildFieldText('Net Channel Revenue', Formatters.formatCurrency(netSalesRevenue), valueColor: AppColors.primary),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: d.outstandingAmount > 0 ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: d.outstandingAmount > 0 ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Total Receivables Due:',
+                  style: AppTextStyles.bodyBold.copyWith(
+                    fontSize: 12.5,
+                    color: d.outstandingAmount > 0 ? const Color(0xFF991B1B) : const Color(0xFF166534),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  d.outstandingAmount > 0 ? 'Pending channel payment' : 'All accounts settled',
+                  style: AppTextStyles.caption.copyWith(
+                    color: d.outstandingAmount > 0 ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              Formatters.formatCurrency(d.outstandingAmount),
+              style: AppTextStyles.h2.copyWith(
+                fontSize: 18,
+                color: d.outstandingAmount > 0 ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: d.outstandingAmount > 0 ? Colors.red.withValues(alpha: 0.08) : Colors.green.withValues(alpha: 0.08),
+          borderRadius: AppRadius.smBorderRadius,
+          border: Border.all(color: d.outstandingAmount > 0 ? Colors.red.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Account Standing:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              d.outstandingAmount > 0 ? 'PAYMENT OUTSTANDING' : 'CLEAR / CURRENT',
+              style: AppTextStyles.bodyBold.copyWith(color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
+            ),
+          ],
+        ),
+      ),
+    ];
+
+    final dealerCard = Container(
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.lgBorderRadius,
@@ -1643,8 +2655,38 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Text('Dealer Profile', style: AppTextStyles.h3, overflow: TextOverflow.ellipsis),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.storefront, color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Dealer Profile',
+                            style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Official Showroom & Channel Ledger',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1658,434 +2700,258 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  ErpStatusBadge.neutral('ACTIVE DEALER'),
+
+                  ElevatedButton.icon(
+                    onPressed: () => _exportDealerPdf(
+                      d: d,
+                      grossInvoiced: grossInvoiced,
+                      approvedReturns: approvedReturns,
+                      netSalesRevenue: netSalesRevenue,
+                      filteredSales: filteredDealerSales,
+                    ),
+                    icon: const Icon(Icons.print_outlined, size: 16, color: Colors.white),
+                    label: const Text(
+                      'Export PDF',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  d.outstandingAmount > 0
+                      ? ErpStatusBadge.danger('PENDING BALANCE')
+                      : ErpStatusBadge.success('CLEAR'),
                 ],
               ),
             ],
           ),
-          const Divider(height: 24),
-          _buildInfoRow('Dealer ID', d.id),
-          _buildInfoRow('Showroom / Store Name', d.name),
-          _buildInfoRow('Company Entity', d.companyName),
-          _buildInfoRow('Contact Person', d.contactPerson),
-          _buildInfoRow('Phone Number', d.mobile),
-          _buildInfoRow('Email Address', d.email.isNotEmpty ? d.email : '-'),
-          _buildInfoRow('GST Identification', d.gstNumber.isNotEmpty ? d.gstNumber : '-'),
-          _buildInfoRow('Showroom Address', d.address.isNotEmpty ? d.address : '-'),
-          _buildInfoRow('State', d.state.isNotEmpty ? d.state : '-'),
-          _buildInfoRow('PIN Code', d.pincode.isNotEmpty ? d.pincode : '-'),
-          _buildInfoRow('Account Created Date', Formatters.formatDate(d.createdAt)),
+          Divider(height: isMobile ? 24 : 32),
+
+          // 2-Column Responsive Layout
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...column1Fields,
+                const Divider(height: 24, thickness: 1, color: Color(0xFFE5E7EB)),
+                ...column2Fields,
+              ],
+            )
+          else
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column1Fields,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  const VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: Color(0xFFE5E7EB),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column2Fields,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
 
-    final dealerFinancialCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgBorderRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Financial & Channel Ledger', style: AppTextStyles.h3),
-          const Divider(height: 24),
-          _buildInfoRow('Gross Sales Invoiced', Formatters.formatCurrency(grossInvoiced)),
-          _buildInfoRow('Approved Sales Returns', Formatters.formatCurrency(approvedReturns)),
-          const Divider(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: Text('Net Channel Revenue:', style: AppTextStyles.bodyBold)),
-              const SizedBox(width: 8),
-              Text(
-                Formatters.formatCurrency(netSalesRevenue),
-                textAlign: TextAlign.end,
-                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: Text('Total Receivables Due:', style: AppTextStyles.bodyMedium)),
-              const SizedBox(width: 8),
-              Text(
-                Formatters.formatCurrency(d.outstandingAmount),
-                textAlign: TextAlign.end,
-                style: (isMobile ? AppTextStyles.h3 : AppTextStyles.h2).copyWith(
-                  color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: d.outstandingAmount > 0 ? Colors.red.withValues(alpha: 0.08) : Colors.green.withValues(alpha: 0.08),
-              borderRadius: AppRadius.smBorderRadius,
-              border: Border.all(color: d.outstandingAmount > 0 ? Colors.red.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
-            ),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('Account Standing:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
-                Text(
-                  d.outstandingAmount > 0 ? 'PAYMENT OUTSTANDING' : 'CLEAR / CURRENT',
-                  style: AppTextStyles.bodyBold.copyWith(color: d.outstandingAmount > 0 ? AppColors.dangerText : AppColors.successText),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    final hasDealerDateFilter = _dealerSalesStartDate != null || _dealerSalesEndDate != null;
+    final hasAnyDealerRecords = dealerSales.isNotEmpty || dealerPayments.isNotEmpty || dealerReturns.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isMobile) ...[
-          dealerProfileCard,
+        dealerCard,
+        if (hasDealerDateFilter || hasAnyDealerRecords) ...[
+          _buildCommonDateFilterBar(
+            context: context,
+            startDate: _dealerSalesStartDate,
+            endDate: _dealerSalesEndDate,
+            onDateRangeSelected: (start, end) => setState(() {
+              _dealerSalesStartDate = start;
+              _dealerSalesEndDate = end;
+            }),
+          ),
           const SizedBox(height: 16),
-          dealerFinancialCard,
-        ] else ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: dealerProfileCard),
-              const SizedBox(width: 16),
-              Expanded(flex: 2, child: dealerFinancialCard),
+        ],
+
+        // Sales & Invoices History inside white card container
+        if (hasDealerDateFilter || dealerSales.isNotEmpty)
+          Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
-        ],
-        const SizedBox(height: 24),
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-            ErpDateFilterBox(
-              startDate: _dealerSalesStartDate,
-              endDate: _dealerSalesEndDate,
-              onDateRangeSelected: (start, end) => setState(() {
-                _dealerSalesStartDate = start;
-                _dealerSalesEndDate = end;
-              }),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Builder(
-          builder: (context) {
-            final filteredDealerSales = sortedSales.where((s) {
-              if (_dealerSalesStartDate != null &&
-                  s.saleDate.isBefore(DateTime(_dealerSalesStartDate!.year, _dealerSalesStartDate!.month, _dealerSalesStartDate!.day))) {
-                return false;
-              }
-              if (_dealerSalesEndDate != null &&
-                  s.saleDate.isAfter(DateTime(_dealerSalesEndDate!.year, _dealerSalesEndDate!.month, _dealerSalesEndDate!.day, 23, 59, 59))) {
-                return false;
-              }
-              return true;
-            }).toList();
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+              const SizedBox(height: 16),
+              Builder(
+                builder: (context) {
+                  final filteredDealerSales = sortedSales.where((s) {
+                    if (_dealerSalesStartDate != null &&
+                        s.saleDate.isBefore(DateTime(_dealerSalesStartDate!.year, _dealerSalesStartDate!.month, _dealerSalesStartDate!.day))) {
+                      return false;
+                    }
+                    if (_dealerSalesEndDate != null &&
+                        s.saleDate.isAfter(DateTime(_dealerSalesEndDate!.year, _dealerSalesEndDate!.month, _dealerSalesEndDate!.day, 23, 59, 59))) {
+                      return false;
+                    }
+                    return true;
+                  }).toList();
 
-            if (filteredDealerSales.isEmpty) {
-              return Container(
-                padding: const EdgeInsets.all(24),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: AppRadius.mdBorderRadius,
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Text(
-                  sortedSales.isEmpty
-                      ? 'No sales documents linked to this dealer showroom yet.'
-                      : 'No sales documents found for the selected date range.',
-                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
-                ),
-              );
-            }
-
-            if (isMobile) {
-              return Column(
-                children: filteredDealerSales.map((s) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            InkWell(
-                              onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                              child: Text(
-                                s.invoiceNumber,
-                                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
-                              ),
-                            ),
-                            Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                            ErpStatusBadge.neutral(s.documentType.toString().split('.').last.toUpperCase()),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Due: ${Formatters.formatCurrency(s.pendingAmount)}',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.share, color: Colors.teal, size: 16),
-                                  tooltip: 'Share Document',
-                                  onPressed: () => ShareDocumentDialog.show(context, s),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
-                                  tooltip: 'View PDF',
-                                  onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              );
-            }
-
-            return ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'Invoice Number'),
-                ErpColumn(title: 'Date'),
-                ErpColumn(title: 'Document Type'),
-                ErpColumn(title: 'Total Invoiced', isNumeric: true),
-                ErpColumn(title: 'Outstanding Due', isNumeric: true),
-                ErpColumn(title: 'Status'),
-                ErpColumn(title: 'Actions'),
-              ],
-              rows: filteredDealerSales.map((s) {
-                return [
-                  InkWell(
-                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
-                    child: Text(s.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                  ),
-                  Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
-                  Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
-                  Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
-                  Text(
-                    Formatters.formatCurrency(s.pendingAmount),
-                    style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
-                  ),
-                  ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.share, color: Colors.teal, size: 16),
-                        tooltip: 'Share Document',
-                        onPressed: () => ShareDocumentDialog.show(context, s),
+                  if (filteredDealerSales.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.all(24),
+                      alignment: Alignment.center,
+                      child: Text(
+                        sortedSales.isEmpty
+                            ? 'No sales documents linked to this dealer showroom yet.'
+                            : 'No sales documents found for the selected date range.',
+                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 16),
-                        tooltip: 'View PDF',
-                        onPressed: () => SalesPdfGeneratorDialog.show(context, s, db),
-                      ),
+                    );
+                  }
+
+                  return ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'Invoice Number'),
+                      ErpColumn(title: 'Date'),
+                      ErpColumn(title: 'Document Type'),
+                      ErpColumn(title: 'Total Invoiced', isNumeric: true),
+                      ErpColumn(title: 'Outstanding Due', isNumeric: true),
+                      ErpColumn(title: 'Status'),
                     ],
-                  ),
-                ];
-              }).toList(),
-            );
-          },
-        ),
-
-        if (dealerReturns.isNotEmpty) ...[
-          const SizedBox(height: 28),
-          Text('Sales Returns & Credit Notes', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-          const SizedBox(height: 12),
-          if (isMobile)
-            Column(
-              children: dealerReturns.map((r) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          InkWell(
-                            onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(r.id, 'salesReturn', details.parentSection),
-                            child: Text(
-                              r.invoiceNumber,
-                              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
-                            ),
+                    rows: filteredDealerSales.map((s) {
+                      return [
+                        InkWell(
+                          onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
+                          child: Text(
+                            s.invoiceNumber,
+                            style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
                           ),
-                          Text(Formatters.formatCurrency(r.totalAmount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.dangerText)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(Formatters.formatDate(r.saleDate), style: AppTextStyles.bodySmall),
-                          Text(r.returnType == ReturnType.fullReturn ? 'Full Return' : 'Partial Return', style: AppTextStyles.bodySmall),
-                        ],
-                      ),
-                      if (r.originalInvoiceNumber != null && r.originalInvoiceNumber!.isNotEmpty && r.originalInvoiceNumber != '-') ...[
-                        const SizedBox(height: 4),
-                        Text('Original Invoice: ${r.originalInvoiceNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                      ],
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          ErpStatusBadge.neutral(r.salesReturnStatusLabel.toUpperCase()),
-                          ErpStatusBadge.neutral(r.refundStatusLabel.toUpperCase()),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            )
-          else
-            ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'Return No'),
-                ErpColumn(title: 'Date'),
-                ErpColumn(title: 'Original Invoice'),
-                ErpColumn(title: 'Return Type'),
-                ErpColumn(title: 'Total Amount', isNumeric: true),
-                ErpColumn(title: 'Status'),
-                ErpColumn(title: 'Refund / Credit Note'),
+                        ),
+                        Text(Formatters.formatDate(s.saleDate), style: AppTextStyles.bodySmall),
+                        Text(s.documentType.toString().split('.').last.toUpperCase(), style: AppTextStyles.bodySmall),
+                        Text(Formatters.formatCurrency(s.totalAmount), style: AppTextStyles.bodyBold),
+                        Text(
+                          Formatters.formatCurrency(s.pendingAmount),
+                          style: AppTextStyles.bodyBold.copyWith(color: s.pendingAmount > 0 ? AppColors.dangerText : AppColors.textMuted),
+                        ),
+                        ErpStatusBadge.neutral(s.statusLabel.toUpperCase()),
+                      ];
+                    }).toList(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // Payment Transactions & Disbursements
+        if (hasDealerDateFilter || dealerPayments.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
               ],
-              rows: dealerReturns.map((r) {
-                return [
-                  InkWell(
-                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(r.id, 'salesReturn', details.parentSection),
-                    child: Text(r.invoiceNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                  ),
-                  Text(Formatters.formatDate(r.saleDate), style: AppTextStyles.bodySmall),
-                  Text(r.originalInvoiceNumber ?? '-', style: AppTextStyles.bodyMedium),
-                  Text(r.returnType == ReturnType.fullReturn ? 'Full' : 'Partial', style: AppTextStyles.bodySmall),
-                  Text(Formatters.formatCurrency(r.totalAmount), style: AppTextStyles.bodyBold),
-                  Text(r.salesReturnStatusLabel.toUpperCase(), style: AppTextStyles.bodySmall),
-                  Text(r.refundStatusLabel, style: AppTextStyles.bodySmall),
-                ];
-              }).toList(),
             ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Payment Transactions & Disbursements', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+                const SizedBox(height: 16),
+                if (filteredDealerPayments.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'No payment transactions found for the selected date range.',
+                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+                    ),
+                  )
+                else
+                  ErpDataTable(
+                    columns: const [
+                      ErpColumn(title: 'Payment No'),
+                      ErpColumn(title: 'Payment Date'),
+                      ErpColumn(title: 'Reference / UTR'),
+                      ErpColumn(title: 'Invoice Reference'),
+                      ErpColumn(title: 'Amount Received', isNumeric: true),
+                      ErpColumn(title: 'Mode'),
+                    ],
+                    rows: filteredDealerPayments.map((pay) {
+                    return [
+                      Text(pay.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
+                      Text(Formatters.formatDate(pay.paymentDate), style: AppTextStyles.bodySmall),
+                      Text(pay.transactionReference?.isNotEmpty == true ? pay.transactionReference! : '-', style: AppTextStyles.bodySmall),
+                      Text(pay.referenceDocumentNumber?.isNotEmpty == true ? pay.referenceDocumentNumber! : '-', style: AppTextStyles.bodySmall),
+                      Text(Formatters.formatCurrency(pay.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
+                      ErpStatusBadge.neutral(pay.paymentMode.name.toUpperCase()),
+                    ];
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
         ],
 
-        if (dealerPayments.isNotEmpty) ...[
-          const SizedBox(height: 28),
-          Text('Payment Receipts & Settlements', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-          const SizedBox(height: 12),
-          if (isMobile)
-            Column(
-              children: dealerPayments.map((p) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(p.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                          Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
-                          p.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL'),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          ErpStatusBadge.neutral(p.paymentMode.name.toUpperCase()),
-                          if (p.referenceDocumentNumber != null && p.referenceDocumentNumber!.isNotEmpty && p.referenceDocumentNumber != '-')
-                            Text('Invoice: ${p.referenceDocumentNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                        ],
-                      ),
-                      if (p.transactionReference != null && p.transactionReference!.isNotEmpty && p.transactionReference != '-') ...[
-                        const SizedBox(height: 4),
-                        Text('UTR/Ref: ${p.transactionReference}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                      ],
-                    ],
-                  ),
-                );
-              }).toList(),
-            )
-          else
-            ErpDataTable(
-              columns: const [
-                ErpColumn(title: 'Payment No'),
-                ErpColumn(title: 'Payment Date'),
-                ErpColumn(title: 'Reference / UTR'),
-                ErpColumn(title: 'Invoice Reference'),
-                ErpColumn(title: 'Amount (₹)', isNumeric: true),
-                ErpColumn(title: 'Payment Mode'),
-                ErpColumn(title: 'Status'),
-              ],
-              rows: dealerPayments.map((p) {
-                return [
-                  Text(p.paymentNumber, style: AppTextStyles.bodyBold),
-                  Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
-                  Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
-                  Text(p.referenceDocumentNumber ?? '-', style: AppTextStyles.bodySmall),
-                  Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: AppColors.successText)),
-                  Text(p.paymentMode.name.toUpperCase(), style: AppTextStyles.bodySmall),
-                  p.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL'),
-                ];
-              }).toList(),
+        if (!hasDealerDateFilter && !hasAnyDealerRecords) ...[
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(24),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: AppRadius.mdBorderRadius,
+              border: Border.all(color: AppColors.border),
             ),
+            child: Text(
+              'No sales invoices, payment transactions, or returns found for this dealer showroom.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+            ),
+          ),
         ],
       ],
     );
@@ -2117,6 +2983,42 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
     final architectInvoices = architectSales.where((s) =>
         s.documentType == SalesDocumentType.invoice || s.documentType == SalesDocumentType.salesOrder).toList();
     final sortedInvoices = List<Sale>.from(architectInvoices)..sort((a, b) => b.saleDate.compareTo(a.saleDate));
+
+    final filteredArchitectProjects = architectProjects.where((p) {
+      if (_architectSalesStartDate != null &&
+          p.startDate.isBefore(DateTime(_architectSalesStartDate!.year, _architectSalesStartDate!.month, _architectSalesStartDate!.day))) {
+        return false;
+      }
+      if (_architectSalesEndDate != null &&
+          p.startDate.isAfter(DateTime(_architectSalesEndDate!.year, _architectSalesEndDate!.month, _architectSalesEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final filteredArchitectSales = sortedInvoices.where((s) {
+      if (_architectSalesStartDate != null &&
+          s.saleDate.isBefore(DateTime(_architectSalesStartDate!.year, _architectSalesStartDate!.month, _architectSalesStartDate!.day))) {
+        return false;
+      }
+      if (_architectSalesEndDate != null &&
+          s.saleDate.isAfter(DateTime(_architectSalesEndDate!.year, _architectSalesEndDate!.month, _architectSalesEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final filteredArchitectCommissions = architectCommissions.where((comm) {
+      if (_architectSalesStartDate != null &&
+          comm.generatedDate.isBefore(DateTime(_architectSalesStartDate!.year, _architectSalesStartDate!.month, _architectSalesStartDate!.day))) {
+        return false;
+      }
+      if (_architectSalesEndDate != null &&
+          comm.generatedDate.isAfter(DateTime(_architectSalesEndDate!.year, _architectSalesEndDate!.month, _architectSalesEndDate!.day, 23, 59, 59))) {
+        return false;
+      }
+      return true;
+    }).toList();
 
     final architectPurchases = db.purchases.where((p) =>
         p.projectId != null && projectIds.contains(p.projectId)).toList();
@@ -2189,10 +3091,194 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
       }
     }
 
-    final isMobile = MediaQuery.of(context).size.width < 850;
+    final isMobile = MediaQuery.of(context).size.width < 780;
 
-    final architectProfileCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
+    Widget buildFieldItem(String label, Widget valueWidget) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 170,
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: valueWidget),
+          ],
+        ),
+      );
+    }
+
+    Widget buildFieldText(String label, String value, {Color? valueColor, bool isBold = true}) {
+      return buildFieldItem(
+        label,
+        Text(
+          value,
+          style: (isBold ? AppTextStyles.bodyBold : AppTextStyles.bodyMedium).copyWith(
+            fontSize: 13,
+            color: valueColor ?? AppColors.textPrimary,
+          ),
+        ),
+      );
+    }
+
+    final column1Fields = [
+      buildFieldText('Architect ID', a.id),
+      buildFieldText('Architect Name', a.name),
+      buildFieldText('Studio / Company Name', a.companyName.isNotEmpty ? a.companyName : '-'),
+      buildFieldItem(
+        'Mobile Number',
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              a.mobile,
+              style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: AppColors.textPrimary),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: () => WhatsAppQuickChatDialog.showArchitectQuickChat(
+                context,
+                architectName: a.name,
+                architectPhone: a.mobile,
+                firmName: a.companyName,
+              ),
+              child: const Icon(Icons.chat, color: Colors.green, size: 16),
+            ),
+          ],
+        ),
+      ),
+      buildFieldText('Email Address', a.email.isNotEmpty ? a.email : '-'),
+      buildFieldText('Studio Address', a.address.isNotEmpty ? a.address : '-'),
+      buildFieldText('State', a.state.isNotEmpty ? a.state : '-'),
+      buildFieldText('PIN Code', a.pincode.isNotEmpty ? a.pincode : '-'),
+      buildFieldText('GST Number', a.gstNumber.isNotEmpty ? a.gstNumber : '-'),
+      buildFieldItem(
+        'Architect-Customer Link',
+        Align(
+          alignment: Alignment.centerLeft,
+          child: linkedCust != null
+              ? InkWell(
+                  onTap: () {
+                    ref.read(activeRecordDetailsStackProvider.notifier).push(linkedCust.id, 'customer', details.parentSection);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.link, size: 14, color: Colors.purple),
+                        const SizedBox(width: 6),
+                        Text(
+                          linkedCust.name,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purple,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('Not Linked to Customer Master', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                ),
+        ),
+      ),
+    ];
+
+    final column2Fields = [
+      buildFieldText('Default Commission Rate', '${a.defaultCommissionRate}%'),
+      buildFieldText('Associated Projects', '${architectProjects.length} Projects'),
+      buildFieldText('Total Commission Generated', Formatters.formatCurrency(displayTotalGenerated)),
+      buildFieldText('Approved Payouts', Formatters.formatCurrency(displayApprovedPayouts)),
+      buildFieldText('Disbursed to Date', Formatters.formatCurrency(displayPaidToDate)),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: displayPendingReview > 0 ? Colors.purple.withValues(alpha: 0.08) : const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: displayPendingReview > 0 ? Colors.purple.withValues(alpha: 0.3) : const Color(0xFFBBF7D0)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Pending Review / Due:',
+                  style: AppTextStyles.bodyBold.copyWith(
+                    fontSize: 12.5,
+                    color: displayPendingReview > 0 ? Colors.purple : const Color(0xFF166534),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  displayPendingReview > 0 ? 'Pending commission payout' : 'All commissions settled',
+                  style: AppTextStyles.caption.copyWith(
+                    color: displayPendingReview > 0 ? Colors.purple : const Color(0xFF15803D),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              Formatters.formatCurrency(displayPendingReview),
+              style: AppTextStyles.h2.copyWith(
+                fontSize: 18,
+                color: displayPendingReview > 0 ? Colors.purple : const Color(0xFF15803D),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: displayPendingReview > 0 ? Colors.purple.withValues(alpha: 0.08) : Colors.green.withValues(alpha: 0.08),
+          borderRadius: AppRadius.smBorderRadius,
+          border: Border.all(color: displayPendingReview > 0 ? Colors.purple.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Partner Payout Status:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              displayPendingReview > 0 ? 'PAYOUT PENDING' : 'SETTLED',
+              style: AppTextStyles.bodyBold.copyWith(
+                color: displayPendingReview > 0 ? Colors.purple : AppColors.successText,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+
+    final architectCard = Container(
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.lgBorderRadius,
@@ -2205,8 +3291,38 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Text('Architect Profile', style: AppTextStyles.h3, overflow: TextOverflow.ellipsis),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.architecture, color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Architect Profile',
+                            style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Design Partner & Commission Ledger',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -2221,152 +3337,101 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  ErpStatusBadge.neutral('ACTIVE PARTNER'),
+
+                  ElevatedButton.icon(
+                    onPressed: () => _exportArchitectPdf(
+                      a: a,
+                      displayTotalGenerated: displayTotalGenerated,
+                      displayApprovedPayouts: displayApprovedPayouts,
+                      displayPaidToDate: displayPaidToDate,
+                      displayPendingReview: displayPendingReview,
+                      invoices: filteredArchitectSales,
+                    ),
+                    icon: const Icon(Icons.print_outlined, size: 16, color: Colors.white),
+                    label: const Text(
+                      'Export PDF',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  displayPendingReview > 0
+                      ? ErpStatusBadge.warning('PAYOUT PENDING')
+                      : ErpStatusBadge.success('SETTLED'),
                 ],
               ),
             ],
           ),
-          const Divider(height: 24),
-          _buildInfoRow('Architect ID', a.id),
-          _buildInfoRow('Architect Name', a.name),
-          _buildInfoRow('Studio / Company Name', a.companyName.isNotEmpty ? a.companyName : '-'),
-          _buildInfoRow('Mobile Number', a.mobile),
-          _buildInfoRow('Email Address', a.email.isNotEmpty ? a.email : '-'),
-          _buildInfoRow('Studio Address', a.address.isNotEmpty ? a.address : '-'),
-          _buildInfoRow('State', a.state.isNotEmpty ? a.state : '-'),
-          _buildInfoRow('PIN Code', a.pincode.isNotEmpty ? a.pincode : '-'),
-          _buildInfoRow('GST Number', a.gstNumber.isNotEmpty ? a.gstNumber : '-'),
-          _buildInfoRow('Partner Registered Date', Formatters.formatDate(DateTime.now().subtract(const Duration(days: 120)))),
-          const SizedBox(height: 8),
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              Text('Architect-Customer Link:', style: AppTextStyles.bodyMedium),
-              linkedCust != null
-                  ? InkWell(
-                      onTap: () {
-                        ref.read(activeRecordDetailsStackProvider.notifier).push(linkedCust.id, 'customer', details.parentSection);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.purple.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.link, size: 14, color: Colors.purple),
-                            const SizedBox(width: 6),
-                            Text(
-                              linkedCust.name,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.purple,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text('Not Linked to Customer Master', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          Divider(height: isMobile ? 24 : 32),
+
+          // 2-Column Responsive Layout
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...column1Fields,
+                const Divider(height: 24, thickness: 1, color: Color(0xFFE5E7EB)),
+                ...column2Fields,
+              ],
+            )
+          else
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column1Fields,
                     ),
-            ],
-          ),
+                  ),
+                  const SizedBox(width: 24),
+                  const VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: Color(0xFFE5E7EB),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column2Fields,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
 
-    final architectFinancialCard = Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lgBorderRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Commission & Financial Ledger', style: AppTextStyles.h3),
-          const Divider(height: 24),
-          _buildInfoRow('Default Commission Rate', '${a.defaultCommissionRate}%'),
-          _buildInfoRow('Associated Projects', '${architectProjects.length} Projects'),
-          _buildInfoRow('Total Commission Generated', Formatters.formatCurrency(displayTotalGenerated)),
-          _buildInfoRow('Approved Payouts', Formatters.formatCurrency(displayApprovedPayouts)),
-          _buildInfoRow('Disbursed to Date', Formatters.formatCurrency(displayPaidToDate)),
-          const Divider(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: Text('Pending Review / Due:', style: AppTextStyles.bodyBold)),
-              const SizedBox(width: 8),
-              Text(
-                Formatters.formatCurrency(displayPendingReview),
-                textAlign: TextAlign.end,
-                style: AppTextStyles.h2.copyWith(
-                  color: displayPendingReview > 0 ? Colors.purple : AppColors.successText,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.purple.withValues(alpha: 0.08),
-              borderRadius: AppRadius.smBorderRadius,
-              border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
-            ),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                Text('Partner Payout Status:', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
-                Text(
-                  displayPendingReview > 0 ? 'PAYOUT PENDING' : 'SETTLED',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: displayPendingReview > 0 ? Colors.purple : AppColors.successText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    final hasDateFilter = _architectSalesStartDate != null || _architectSalesEndDate != null;
+    final hasAnyRecords = architectProjects.isNotEmpty || sortedInvoices.isNotEmpty || architectCommissions.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Dual Top Profile Cards
-        if (isMobile) ...[
-          architectProfileCard,
-          const SizedBox(height: 16),
-          architectFinancialCard,
-        ] else ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: architectProfileCard),
-              const SizedBox(width: 16),
-              Expanded(flex: 2, child: architectFinancialCard),
-            ],
+        architectCard,
+        if (hasDateFilter || hasAnyRecords)
+          _buildCommonDateFilterBar(
+            context: context,
+            startDate: _architectSalesStartDate,
+            endDate: _architectSalesEndDate,
+            onDateRangeSelected: (start, end) => setState(() {
+              _architectSalesStartDate = start;
+              _architectSalesEndDate = end;
+            }),
           ),
-        ],
 
         // Linked Direct Customer Account Details (Dual Entity)
         if (linkedCust != null) ...[
@@ -2445,18 +3510,24 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
         ],
 
         // Associated Architectural Projects
-        const SizedBox(height: 24),
-        Text('Associated Projects', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+        if (hasDateFilter || architectProjects.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text('Associated Projects', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
         const SizedBox(height: 12),
-        if (architectProjects.isEmpty)
+        if (filteredArchitectProjects.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No projects currently linked to this Architect.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+            child: Text(
+              architectProjects.isEmpty
+                  ? 'No projects currently linked to this Architect.'
+                  : 'No projects found for the selected date range.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+            ),
           )
         else if (isMobile)
           Column(
-            children: architectProjects.map((p) {
+            children: filteredArchitectProjects.map((p) {
               final prjSales = db.sales.where((s) => s.projectId == p.id).toList();
               final billed = prjSales.fold(0.0, (sum, s) => sum + s.totalAmount);
               final received = prjSales.fold(0.0, (sum, s) => sum + s.paidAmount);
@@ -2530,7 +3601,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
               ErpColumn(title: 'Amount Billed (₹)', isNumeric: true),
               ErpColumn(title: 'Amount Received (₹)', isNumeric: true),
             ],
-            rows: architectProjects.map((p) {
+            rows: filteredArchitectProjects.map((p) {
               final prjSales = db.sales.where((s) => s.projectId == p.id).toList();
               final billed = prjSales.fold(0.0, (sum, s) => sum + s.totalAmount);
               final received = prjSales.fold(0.0, (sum, s) => sum + s.paidAmount);
@@ -2551,15 +3622,23 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
             }).toList(),
           ),
 
+        ],
+
         // Sales & Invoices History
-        const SizedBox(height: 28),
-        Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+        if (hasDateFilter || sortedInvoices.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
         const SizedBox(height: 12),
-        if (sortedInvoices.isEmpty)
+        if (filteredArchitectSales.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No sales invoices linked to this Architect.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+            child: Text(
+              sortedInvoices.isEmpty
+                  ? 'No sales invoices linked to this Architect.'
+                  : 'No sales invoices found for the selected date range.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+            ),
           )
         else if (isMobile)
           Column(
@@ -2633,7 +3712,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
               ErpColumn(title: 'Balance Pending (₹)', isNumeric: true),
               ErpColumn(title: 'Payment Status'),
             ],
-            rows: sortedInvoices.map((s) {
+            rows: filteredArchitectSales.map((s) {
               return [
                 InkWell(
                   onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(s.id, 'invoice', details.parentSection),
@@ -2651,19 +3730,27 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
             }).toList(),
           ),
 
+        ],
+
         // Commission Vouchers & Payout Lifecycle
-        const SizedBox(height: 28),
-        Text('Commission Vouchers & Payout Lifecycle', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+        if (hasDateFilter || architectCommissions.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text('Commission Vouchers & Payout Lifecycle', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
         const SizedBox(height: 12),
-        if (architectCommissions.isEmpty)
+        if (filteredArchitectCommissions.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppRadius.mdBorderRadius, border: Border.all(color: AppColors.border)),
-            child: Text('No commission vouchers recorded for this partner.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+            child: Text(
+              architectCommissions.isEmpty
+                  ? 'No commission vouchers recorded for this partner.'
+                  : 'No commission vouchers found for the selected date range.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+            ),
           )
         else if (isMobile)
           Column(
-            children: architectCommissions.map((comm) {
+            children: filteredArchitectCommissions.map((comm) {
               ErpStatusBadge badge;
               switch (comm.status) {
                 case CommissionStatus.generated:
@@ -2851,7 +3938,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
               ErpColumn(title: 'Lifecycle Status'),
               ErpColumn(title: 'Workflow Actions'),
             ],
-            rows: architectCommissions.map((comm) {
+            rows: filteredArchitectCommissions.map((comm) {
               ErpStatusBadge badge;
               switch (comm.status) {
                 case CommissionStatus.generated:
@@ -2984,6 +4071,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
               ];
             }).toList(),
           ),
+        ],
 
         // Commission Disbursement History
         if (commissionPayments.isNotEmpty) ...[
@@ -3543,6 +4631,23 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
           ),
         ),
         */
+
+        if (!hasDateFilter && !hasAnyRecords) ...[
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(24),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: AppRadius.mdBorderRadius,
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Text(
+              'No associated projects, sales invoices, or commission records found for this architect.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -3829,25 +4934,23 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
         ],
         const SizedBox(height: 24),
 
+        if (_projectSalesStartDate != null || _projectSalesEndDate != null || projectSales.isNotEmpty || projectPurchases.isNotEmpty || projectPayments.isNotEmpty) ...[
+          _buildCommonDateFilterBar(
+            context: context,
+            startDate: _projectSalesStartDate,
+            endDate: _projectSalesEndDate,
+            onDateRangeSelected: (start, end) => setState(() {
+              _projectSalesStartDate = start;
+              _projectSalesEndDate = end;
+            }),
+          ),
+          const SizedBox(height: 20),
+        ],
+
         // Sales & Invoices History
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-            ErpDateFilterBox(
-              startDate: _projectSalesStartDate,
-              endDate: _projectSalesEndDate,
-              onDateRangeSelected: (start, end) => setState(() {
-                _projectSalesStartDate = start;
-                _projectSalesEndDate = end;
-              }),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
+        if (_projectSalesStartDate != null || _projectSalesEndDate != null || projectSales.isNotEmpty) ...[
+          Text('Sales & Invoices History', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
+          const SizedBox(height: 12),
         Builder(
           builder: (context) {
             final filteredSales = sortedSales.where((s) {
@@ -3987,36 +5090,22 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
           },
         ),
 
-        // Direct Purchases Linked to Project
-        if (projectPurchases.isNotEmpty || _projectPurchasesStartDate != null || _projectPurchasesEndDate != null) ...[
+                ],
+
+// Direct Purchases Linked to Project
+        if (projectPurchases.isNotEmpty || _projectSalesStartDate != null || _projectSalesEndDate != null) ...[
           const SizedBox(height: 28),
-          Wrap(
-            spacing: 12,
-            runSpacing: 10,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text('Direct Purchases Linked to Project', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-              ErpDateFilterBox(
-                startDate: _projectPurchasesStartDate,
-                endDate: _projectPurchasesEndDate,
-                onDateRangeSelected: (start, end) => setState(() {
-                  _projectPurchasesStartDate = start;
-                  _projectPurchasesEndDate = end;
-                }),
-              ),
-            ],
-          ),
+          Text('Direct Purchases Linked to Project', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
           const SizedBox(height: 12),
           Builder(
             builder: (context) {
               final filteredPurchases = projectPurchases.where((p) {
-                if (_projectPurchasesStartDate != null &&
-                    p.purchaseDate.isBefore(DateTime(_projectPurchasesStartDate!.year, _projectPurchasesStartDate!.month, _projectPurchasesStartDate!.day))) {
+                if (_projectSalesStartDate != null &&
+                    p.purchaseDate.isBefore(DateTime(_projectSalesStartDate!.year, _projectSalesStartDate!.month, _projectSalesStartDate!.day))) {
                   return false;
                 }
-                if (_projectPurchasesEndDate != null &&
-                    p.purchaseDate.isAfter(DateTime(_projectPurchasesEndDate!.year, _projectPurchasesEndDate!.month, _projectPurchasesEndDate!.day, 23, 59, 59))) {
+                if (_projectSalesEndDate != null &&
+                    p.purchaseDate.isAfter(DateTime(_projectSalesEndDate!.year, _projectSalesEndDate!.month, _projectSalesEndDate!.day, 23, 59, 59))) {
                   return false;
                 }
                 return true;
@@ -4274,35 +5363,19 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
         ],
 
         // Payments & Collections Linked to Project
-        if (projectPayments.isNotEmpty || _projectPaymentsStartDate != null || _projectPaymentsEndDate != null) ...[
+        if (projectPayments.isNotEmpty || _projectSalesStartDate != null || _projectSalesEndDate != null) ...[
           const SizedBox(height: 28),
-          Wrap(
-            spacing: 12,
-            runSpacing: 10,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text('Payment Transactions & Receipts', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
-              ErpDateFilterBox(
-                startDate: _projectPaymentsStartDate,
-                endDate: _projectPaymentsEndDate,
-                onDateRangeSelected: (start, end) => setState(() {
-                  _projectPaymentsStartDate = start;
-                  _projectPaymentsEndDate = end;
-                }),
-              ),
-            ],
-          ),
+          Text('Payment Transactions & Receipts', style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2),
           const SizedBox(height: 12),
           Builder(
             builder: (context) {
               final filteredPayments = projectPayments.where((pay) {
-                if (_projectPaymentsStartDate != null &&
-                    pay.paymentDate.isBefore(DateTime(_projectPaymentsStartDate!.year, _projectPaymentsStartDate!.month, _projectPaymentsStartDate!.day))) {
+                if (_projectSalesStartDate != null &&
+                    pay.paymentDate.isBefore(DateTime(_projectSalesStartDate!.year, _projectSalesStartDate!.month, _projectSalesStartDate!.day))) {
                   return false;
                 }
-                if (_projectPaymentsEndDate != null &&
-                    pay.paymentDate.isAfter(DateTime(_projectPaymentsEndDate!.year, _projectPaymentsEndDate!.month, _projectPaymentsEndDate!.day, 23, 59, 59))) {
+                if (_projectSalesEndDate != null &&
+                    pay.paymentDate.isAfter(DateTime(_projectSalesEndDate!.year, _projectSalesEndDate!.month, _projectSalesEndDate!.day, 23, 59, 59))) {
                   return false;
                 }
                 return true;
@@ -6262,6 +7335,223 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
   // 10. Payment Details
   // -----------------------------------------------------------------
   Widget _buildPaymentDetails(BuildContext context, WidgetRef ref, ErpPayment pay, MockDatabaseService db) {
+    final isMobile = MediaQuery.of(context).size.width < 780;
+
+    Widget buildFieldItem(String label, Widget valueWidget) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 170,
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: valueWidget),
+          ],
+        ),
+      );
+    }
+
+    Widget buildFieldText(String label, String value, {Color? valueColor, bool isBold = true}) {
+      return buildFieldItem(
+        label,
+        Text(
+          value,
+          style: (isBold ? AppTextStyles.bodyBold : AppTextStyles.bodyMedium).copyWith(
+            fontSize: 13,
+            color: valueColor ?? AppColors.textPrimary,
+          ),
+        ),
+      );
+    }
+
+    final column1Fields = [
+      buildFieldText('Payment Reference ID', pay.paymentNumber, valueColor: AppColors.primary),
+      buildFieldText('Payment Voucher Date', Formatters.formatDateTime(pay.paymentDate)),
+      buildFieldText('Transaction Ledger Account', pay.typeLabel),
+      buildFieldText('Associated Party Name', pay.partyName),
+      if (pay.referenceDocumentNumber != null && pay.referenceDocumentNumber!.isNotEmpty)
+        buildFieldItem(
+          'Linked ERP Document',
+          InkWell(
+            onTap: () {
+              if (pay.paymentType == PaymentType.vendorPayment) {
+                ref.read(activeRecordDetailsStackProvider.notifier).push(pay.referenceDocumentId ?? '', 'purchase', details.parentSection);
+              } else if (pay.paymentType == PaymentType.customerPayment || pay.paymentType == PaymentType.dealerPayment) {
+                ref.read(activeRecordDetailsStackProvider.notifier).push(pay.referenceDocumentId ?? '', 'invoice', details.parentSection);
+              }
+            },
+            child: Text(
+              pay.referenceDocumentNumber!,
+              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
+            ),
+          ),
+        ),
+      if (pay.projectName != null && pay.projectName!.isNotEmpty)
+        buildFieldText('Linked Project / Site', pay.projectName!, valueColor: AppColors.purple),
+    ];
+
+    final column2Fields = [
+      buildFieldText('Payment / Settlement Mode', pay.paymentMode.name.toUpperCase()),
+      buildFieldText('UTR / Transaction Ref', pay.transactionReference ?? 'Direct Ledger Entry'),
+      if (pay.discount > 0)
+        buildFieldText('Discount Allowed', Formatters.formatCurrency(pay.discount), valueColor: const Color(0xFF7C3AED)),
+      buildFieldText('Auditor Remarks / Notes', (pay.notes != null && pay.notes!.isNotEmpty) ? pay.notes! : '-'),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFBBF7D0)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Settlement Voucher Total Amount:',
+                  style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5, color: const Color(0xFF166534)),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Net disbursed amount',
+                  style: AppTextStyles.caption.copyWith(color: const Color(0xFF15803D), fontSize: 10.5),
+                ),
+              ],
+            ),
+            Text(
+              Formatters.formatCurrency(pay.amount),
+              style: AppTextStyles.h2.copyWith(fontSize: 18, color: const Color(0xFF15803D), fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    ];
+
+    return Container(
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.lgBorderRadius,
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.receipt_long, color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Payment Voucher Receipt',
+                            style: isMobile ? AppTextStyles.h3 : AppTextStyles.h2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Official Settlement & Disbursement Record',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              ErpStatusBadge.success(pay.paymentStatus?.toUpperCase() ?? 'COMPLETED'),
+            ],
+          ),
+          Divider(height: isMobile ? 24 : 32),
+
+          // 2-Column Responsive Layout with Divider
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...column1Fields,
+                const Divider(height: 24, thickness: 1, color: Color(0xFFE5E7EB)),
+                ...column2Fields,
+              ],
+            )
+          else
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column1Fields,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  const VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: Color(0xFFE5E7EB),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: column2Fields,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          if (pay.attachmentUrl != null) ...[
+            const SizedBox(height: 20),
+            Text('Payment Attachment:', style: AppTextStyles.bodyBold),
+            const SizedBox(height: 8),
+            Container(
+              height: 120,
+              width: 200,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceMuted,
+                borderRadius: AppRadius.smBorderRadius,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Center(
+                child: Icon(Icons.picture_as_pdf, size: 40, color: AppColors.danger),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ignore: unused_element
+  Widget _oldBuildPaymentDetails(BuildContext context, WidgetRef ref, ErpPayment pay, MockDatabaseService db) {
     final isMobile = MediaQuery.of(context).size.width < 700;
     return Container(
       padding: EdgeInsets.all(isMobile ? 14 : 24),

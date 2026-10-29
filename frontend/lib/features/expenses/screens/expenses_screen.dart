@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
@@ -12,9 +13,12 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_filter_controls.dart';
+import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../shared/services/mock_database_service.dart';
 
 class ExpensesScreen extends ConsumerStatefulWidget {
   const ExpensesScreen({super.key});
@@ -25,9 +29,12 @@ class ExpensesScreen extends ConsumerStatefulWidget {
 
 class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   String _searchQuery = '';
-  ExpenseCategory? _selectedCategory;
-  ExpensePaymentStatus? _selectedStatus;
-  String? _selectedProjectId;
+  String _selectedCategory = 'ALL';
+  String _selectedProjectId = 'ALL';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   @override
   void initState() {
@@ -63,18 +70,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     ExpenseCategory category = existing?.category ?? ExpenseCategory.transportation;
     ExpensePaymentStatus paymentStatus = existing?.paymentStatus ?? ExpensePaymentStatus.paid;
 
-    // Payment Method options follow the Payment Modes tab of Category Master;
-    // new records default to the first active mode. Legacy labels ('Bank
-    // Transfer') on existing records stay selectable via a fallback entry.
     final activePaymentModes = db.paymentModeMasterList.where((m) => m.isActive).toList();
     String paymentMethod = existing?.paymentMethod ??
         (activePaymentModes.isNotEmpty ? activePaymentModes.first.code : 'Bank Transfer');
 
-    // Expense Category options follow the Expense Categories tab of Category
-    // Master (every active entry, including user-added ones). Entries without
-    // a linked backend expense key save under the canonical 'other' key, so
-    // backend validation and stored categories stay valid. Items are keyed by
-    // master id, so several entries may map to the same expense key.
     final activeCategoryMasters = db.expenseCategoryMasterList.where((m) => m.isActive).toList();
     ExpenseCategory categoryForMaster(ExpenseCategoryMasterItem master) {
       final key = master.linkedKey?.trim() ?? '';
@@ -103,9 +102,6 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         categoryItems.add(DropdownMenuItem(value: legacyCategoryId(c), child: Text(c.name.toUpperCase())));
       }
     }
-    // Preselect the master entry matching the current category: entries with
-    // an explicit linked key win, then any mapped entry, and finally a legacy
-    // label entry keeps the current selection valid.
     String selectedCategoryId = legacyCategoryId(category);
     bool matched = false;
     for (final master in activeCategoryMasters) {
@@ -533,6 +529,131 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     );
   }
 
+  void _showExpenseDetailsDialog(Expense exp, MockDatabaseService db) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final isMobile = MediaQuery.of(ctx).size.width < 600;
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: Container(
+            width: isMobile ? double.infinity : 540,
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFFD97706), size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(exp.expenseNumber, style: AppTextStyles.h2.copyWith(fontSize: 16)),
+                              Text(exp.categoryLabel, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                            ],
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 16),
+                  _buildDetailRow('Expense Title', exp.expenseName),
+                  _buildDetailRow('Date', Formatters.formatDate(exp.expenseDate)),
+                  _buildDetailRow('Amount', Formatters.formatCurrency(exp.amount), isBold: true, valueColor: AppColors.primary),
+                  _buildDetailRow('Payment Status', exp.paymentStatus.name.toUpperCase()),
+                  _buildDetailRow('Paid By', exp.paidBy),
+                  _buildDetailRow('Payment Method', _paymentMethodDisplay(exp.paymentMethod, db.paymentModeMasterList)),
+                  if (exp.vendorPayee != null && exp.vendorPayee!.isNotEmpty)
+                    _buildDetailRow('Payee / Vendor', exp.vendorPayee!),
+                  if (exp.expenseReference != null && exp.expenseReference!.isNotEmpty)
+                    _buildDetailRow('Reference / Bill No', exp.expenseReference!),
+                  if (exp.projectName != null && exp.projectName!.isNotEmpty)
+                    _buildDetailRow('Linked Project', exp.projectName!, valueColor: AppColors.purple),
+                  if (exp.productionNumber != null && exp.productionNumber!.isNotEmpty)
+                    _buildDetailRow('Linked Production', exp.productionNumber!, valueColor: AppColors.warning),
+                  if (exp.receiptAttachmentName != null && exp.receiptAttachmentName!.isNotEmpty)
+                    _buildDetailRow('Attachment', exp.receiptAttachmentName!),
+                  if (exp.description != null && exp.description!.isNotEmpty)
+                    _buildDetailRow('Description', exp.description!),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ErpButton(
+                        text: 'Close',
+                        isOutlined: true,
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                      const SizedBox(width: 10),
+                      ErpButton(
+                        text: 'Edit Expense',
+                        icon: Icons.edit_outlined,
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _openAddEditExpenseDialog(exp);
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {bool isBold = false, Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontWeight: FontWeight.w500),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: (isBold ? AppTextStyles.bodyBold : AppTextStyles.bodyMedium).copyWith(
+                color: valueColor ?? AppColors.textPrimary,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmDeleteExpense(Expense expense) {
     final db = ref.read(databaseServiceProvider);
     showDialog(
@@ -558,6 +679,283 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     );
   }
 
+  Widget _buildResponsiveMetricRow(BuildContext context, List<Widget> cards) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final double cardWidth;
+        if (width < 600) {
+          cardWidth = width;
+        } else if (width < 1050) {
+          cardWidth = (width - 12) / 2;
+        } else {
+          cardWidth = (width - (12 * (cards.length - 1))) / cards.length;
+        }
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: cards.map((c) => SizedBox(width: cardWidth, child: c)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildControlsRow(MockDatabaseService db) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 750;
+        final projectItems = [
+          const DropdownMenuItem(value: 'ALL', child: Text('All Projects')),
+          ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
+        ];
+        final categoryItems = [
+          const DropdownMenuItem(value: 'ALL', child: Text('All Categories')),
+          ...ExpenseCategory.values.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name.toUpperCase()))),
+        ];
+
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search expenses by name, voucher no, payee, project, paid by...',
+                initialValue: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _selectedCategory,
+                width: double.infinity,
+                isExpanded: true,
+                items: categoryItems,
+                onChanged: (val) => setState(() {
+                  _selectedCategory = val ?? 'ALL';
+                  _currentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _selectedProjectId,
+                width: double.infinity,
+                isExpanded: true,
+                items: projectItems,
+                onChanged: (val) => setState(() {
+                  _selectedProjectId = val ?? 'ALL';
+                  _currentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 320,
+              child: ErpSearchInput(
+                hintText: 'Search expenses by name, voucher no, payee...',
+                initialValue: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _selectedCategory,
+              width: 180,
+              isExpanded: true,
+              items: categoryItems,
+              onChanged: (val) => setState(() {
+                _selectedCategory = val ?? 'ALL';
+                _currentPage = 0;
+              }),
+            ),
+            ErpFilterDropdown<String>(
+              value: _selectedProjectId,
+              width: 180,
+              isExpanded: true,
+              items: projectItems,
+              onChanged: (val) => setState(() {
+                _selectedProjectId = val ?? 'ALL';
+                _currentPage = 0;
+              }),
+            ),
+            ErpDateFilterBox(
+              startDate: _startDate,
+              endDate: _endDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _startDate = start;
+                _endDate = end;
+                _currentPage = 0;
+              }),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildExpensesTable(List<Expense> expenses, MockDatabaseService db) {
+    if (expenses.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(48),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.account_balance_wallet_outlined, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            Text('No expenses found matching the filter criteria.', style: AppTextStyles.bodyMedium),
+          ],
+        ),
+      );
+    }
+
+    return ErpDataTable(
+      dataRowMinHeight: 56,
+      dataRowMaxHeight: 66,
+      columns: const [
+        ErpColumn(title: 'Voucher No', width: 130),
+        ErpColumn(title: 'Date', width: 110),
+        ErpColumn(title: 'Expense Title & Category', width: 220),
+        ErpColumn(title: 'Linked Project / Production', width: 200),
+        ErpColumn(title: 'Paid By & Method', width: 170),
+        ErpColumn(title: 'Amount', isNumeric: true, width: 120),
+        ErpColumn(title: 'Status', width: 100),
+        ErpColumn(title: 'Actions', width: 90, alignment: Alignment.center),
+      ],
+      rows: expenses.map((exp) {
+        return [
+          InkWell(
+            onTap: () => _showExpenseDetailsDialog(exp, db),
+            child: Text(
+              exp.expenseNumber,
+              style: AppTextStyles.bodyBold.copyWith(
+                color: AppColors.primary,
+                fontSize: 12.5,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+          Text(Formatters.formatDate(exp.expenseDate), style: AppTextStyles.bodySmall),
+          SizedBox(
+            width: 220,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(exp.expenseName, style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text(exp.categoryLabel, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 200,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (exp.projectName != null)
+                  Text('Proj: ${exp.projectName}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.purple), maxLines: 1, overflow: TextOverflow.ellipsis)
+                else if (exp.productionNumber != null)
+                  Text('Prod: ${exp.productionNumber}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.warning), maxLines: 1, overflow: TextOverflow.ellipsis)
+                else
+                  const Text('Operational Overhead', style: TextStyle(fontSize: 11, color: Colors.grey)),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 170,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(exp.paidBy, style: AppTextStyles.bodyMedium.copyWith(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text(_paymentMethodDisplay(exp.paymentMethod, db.paymentModeMasterList), style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 10.5)),
+              ],
+            ),
+          ),
+          Text(Formatters.formatCurrency(exp.amount), style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5)),
+          ErpStatusBadge.success(exp.paymentStatus.name.toUpperCase()),
+          PopupMenuButton<String>(
+            tooltip: 'Actions',
+            icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onSelected: (action) {
+              if (action == 'view') {
+                _showExpenseDetailsDialog(exp, db);
+              } else if (action == 'edit') {
+                _openAddEditExpenseDialog(exp);
+              } else if (action == 'delete') {
+                _confirmDeleteExpense(exp);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'view',
+                child: Row(
+                  children: [
+                    Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
+                    SizedBox(width: 8),
+                    Text('View Details', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                    SizedBox(width: 8),
+                    Text('Edit Expense', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                    SizedBox(width: 8),
+                    Text('Delete Expense', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.danger)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ];
+      }).toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -571,22 +969,32 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           (e.projectName != null && e.projectName!.toLowerCase().contains(q)) ||
           e.paidBy.toLowerCase().contains(q);
 
-      final matchCat = _selectedCategory == null || e.category == _selectedCategory;
-      final matchStatus = _selectedStatus == null || e.paymentStatus == _selectedStatus;
-      final matchProj = _selectedProjectId == null || e.projectId == _selectedProjectId;
+      final matchCat = _selectedCategory == 'ALL' || e.category.name.toLowerCase() == _selectedCategory.toLowerCase();
+      final matchProj = _selectedProjectId == 'ALL' || e.projectId == _selectedProjectId;
 
-      return matchQuery && matchCat && matchStatus && matchProj;
+      if (_startDate != null && e.expenseDate.isBefore(_startDate!)) return false;
+      if (_endDate != null && e.expenseDate.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) return false;
+
+      return matchQuery && matchCat && matchProj;
     }).toList();
 
-    double totalExp = db.expenses.fold(0.0, (s, e) => s + e.amount);
-    double projectExp = db.expenses.where((e) => e.projectId != null).fold(0.0, (s, e) => s + e.amount);
-    double prodExp = db.expenses.where((e) => e.productionId != null).fold(0.0, (s, e) => s + e.amount);
-    double opsExp = totalExp - projectExp - prodExp;
+    // Overall KPI figures (always reflect full dataset)
+    final double totalExp = db.expenses.fold(0.0, (s, e) => s + e.amount);
+    final double projectExp = db.expenses.where((e) => e.projectId != null).fold(0.0, (s, e) => s + e.amount);
+    final double prodExp = db.expenses.where((e) => e.productionId != null).fold(0.0, (s, e) => s + e.amount);
+    final double opsExp = db.expenses.where((e) => e.projectId == null && e.productionId == null).fold(0.0, (s, e) => s + e.amount);
+
+    final totalCount = filteredExpenses.length;
+    final maxPage = (totalCount == 0) ? 0 : (totalCount - 1) ~/ _pageSize;
+    final safeCurrentPage = _currentPage.clamp(0, maxPage);
+    final startIndex = safeCurrentPage * _pageSize;
+    final endIndex = min(startIndex + _pageSize, totalCount);
+    final pageExpenses = (startIndex < totalCount) ? filteredExpenses.sublist(startIndex, endIndex) : <Expense>[];
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header
           ErpSectionHeaderCard(
@@ -601,251 +1009,76 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           ),
           const SizedBox(height: 20),
 
-          // KPI Cards
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final cardWidth = constraints.maxWidth > 1100
-                  ? (constraints.maxWidth - 36) / 4
-                  : (constraints.maxWidth > 650 ? (constraints.maxWidth - 12) / 2 : double.infinity);
-
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  SizedBox(
-                    width: cardWidth,
-                    child: FigmaMetricCard(
-                      title: 'Total Expenses',
-                      value: Formatters.formatCurrency(totalExp),
-                      subtext: '${filteredExpenses.length} Logged records',
-                      icon: Icons.account_balance_wallet_outlined,
-                      iconColor: AppColors.primary,
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: FigmaMetricCard(
-                      title: 'Project Expenses',
-                      value: Formatters.formatCurrency(projectExp),
-                      subtext: '${filteredExpenses.where((e) => e.projectId != null).length} Site projects',
-                      icon: Icons.business_outlined,
-                      iconColor: AppColors.purple,
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: FigmaMetricCard(
-                      title: 'Production Expenses',
-                      value: Formatters.formatCurrency(prodExp),
-                      subtext: '${filteredExpenses.where((e) => e.productionId != null).length} Manufacturing jobs',
-                      icon: Icons.precision_manufacturing_outlined,
-                      iconColor: AppColors.warning,
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: FigmaMetricCard(
-                      title: 'Operational Overhead',
-                      value: Formatters.formatCurrency(opsExp),
-                      subtext: 'General utilities & admin',
-                      icon: Icons.apartment_outlined,
-                      iconColor: AppColors.info,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-
-          // Filters Bar
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 700;
-              if (isSmall) {
-                return Column(
-                  children: [
-                    TextField(
-                      onChanged: (v) => setState(() => _searchQuery = v),
-                      decoration: const InputDecoration(
-                        hintText: 'Search expenses by name, voucher no, payee, project, paid by...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<ExpenseCategory?>(
-                      value: _selectedCategory,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Filter Category'),
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('All Categories')),
-                        ...ExpenseCategory.values.map((c) => DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()))),
-                      ],
-                      onChanged: (v) => setState(() => _selectedCategory = v),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String?>(
-                      value: _selectedProjectId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Filter Project'),
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('All Projects')),
-                        ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
-                      ],
-                      onChanged: (v) => setState(() => _selectedProjectId = v),
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
-                      onChanged: (v) => setState(() => _searchQuery = v),
-                      decoration: const InputDecoration(
-                        hintText: 'Search expenses by name, voucher no, payee, project, paid by...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<ExpenseCategory?>(
-                      value: _selectedCategory,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Filter Category'),
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('All Categories')),
-                        ...ExpenseCategory.values.map((c) => DropdownMenuItem(value: c, child: Text(c.name.toUpperCase()))),
-                      ],
-                      onChanged: (v) => setState(() => _selectedCategory = v),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<String?>(
-                      value: _selectedProjectId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Filter Project'),
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('All Projects')),
-                        ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
-                      ],
-                      onChanged: (v) => setState(() => _selectedProjectId = v),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+          // Overall KPI Cards
+          _buildResponsiveMetricRow(context, [
+            FigmaMetricCard(
+              title: 'Total Expenses',
+              value: Formatters.formatCurrency(totalExp),
+              subtext: '${db.expenses.length} Logged records',
+              icon: Icons.account_balance_wallet_outlined,
+              iconColor: AppColors.primary,
+            ),
+            FigmaMetricCard(
+              title: 'Project Expenses',
+              value: Formatters.formatCurrency(projectExp),
+              subtext: '${db.expenses.where((e) => e.projectId != null).length} Site projects',
+              icon: Icons.business_outlined,
+              iconColor: AppColors.purple,
+            ),
+            FigmaMetricCard(
+              title: 'Production Expenses',
+              value: Formatters.formatCurrency(prodExp),
+              subtext: '${db.expenses.where((e) => e.productionId != null).length} Manufacturing jobs',
+              icon: Icons.precision_manufacturing_outlined,
+              iconColor: AppColors.warning,
+            ),
+            FigmaMetricCard(
+              title: 'Operational Overhead',
+              value: Formatters.formatCurrency(opsExp),
+              subtext: '${db.expenses.where((e) => e.projectId == null && e.productionId == null).length} General & admin utilities',
+              icon: Icons.apartment_outlined,
+              iconColor: AppColors.info,
+            ),
+          ]),
           const SizedBox(height: 20),
 
-          // Expenses Table
-          if (filteredExpenses.isEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 40),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.lgBorderRadius,
-                border: Border.all(color: AppColors.border),
-              ),
-              child: const Text('No expenses found matching the filter criteria.'),
-            )
-          else
-            ErpDataTable(
-              dataRowMinHeight: 58,
-              dataRowMaxHeight: 68,
-              columnSpacing: 16,
-              horizontalMargin: 16,
-              columns: const [
-                ErpColumn(title: 'Voucher No', width: 130),
-                ErpColumn(title: 'Date', width: 110),
-                ErpColumn(title: 'Expense Title & Category', width: 220),
-                ErpColumn(title: 'Linked Project / Production', width: 200),
-                ErpColumn(title: 'Paid By & Method', width: 170),
-                ErpColumn(title: 'Amount', isNumeric: true, width: 120),
-                ErpColumn(title: 'Status', width: 110),
-                ErpColumn(title: 'Actions', width: 90),
+          // White Container Card enclosing Filters, Table & Pagination
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
               ],
-              rows: filteredExpenses.map((exp) {
-                return [
-                  Text(exp.expenseNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, fontSize: 12.5)),
-                  Text(Formatters.formatDate(exp.expenseDate), style: AppTextStyles.bodySmall),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 220),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(exp.expenseName, style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        const SizedBox(height: 2),
-                        Text(exp.categoryLabel, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 200),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (exp.projectName != null)
-                          Text('Proj: ${exp.projectName}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.purple), maxLines: 1, overflow: TextOverflow.ellipsis)
-                        else if (exp.productionNumber != null)
-                          Text('Prod: ${exp.productionNumber}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.warning), maxLines: 1, overflow: TextOverflow.ellipsis)
-                        else
-                          const Text('Operational Overhead', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                      ],
-                    ),
-                  ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 170),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(exp.paidBy, style: AppTextStyles.bodyMedium.copyWith(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        const SizedBox(height: 2),
-                        Text(_paymentMethodDisplay(exp.paymentMethod, db.paymentModeMasterList), style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted, fontSize: 10.5)),
-                      ],
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(Formatters.formatCurrency(exp.amount), style: AppTextStyles.bodyBold.copyWith(fontSize: 12.5)),
-                  ),
-                  ErpStatusBadge.success(exp.paymentStatus.name.toUpperCase()),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, color: AppColors.info, size: 18),
-                        tooltip: 'Edit Expense',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                        onPressed: () => _openAddEditExpenseDialog(exp),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                        tooltip: 'Delete Expense',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                        onPressed: () => _confirmDeleteExpense(exp),
-                      ),
-                    ],
-                  ),
-                ];
-              }).toList(),
             ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildControlsRow(db),
+                const SizedBox(height: 16),
+                _buildExpensesTable(pageExpenses, db),
+                const SizedBox(height: 16),
+                ErpPaginationBar(
+                  currentPage: safeCurrentPage,
+                  pageSize: _pageSize,
+                  totalRecords: totalCount,
+                  onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                  onPageSizeChanged: (newSize) => setState(() {
+                    _pageSize = newSize;
+                    _currentPage = 0;
+                  }),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
-

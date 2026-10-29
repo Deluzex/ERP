@@ -361,6 +361,101 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
     );
   }
 
+  Widget _buildControlsRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 650;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search dealer by name, showroom, GST...',
+                initialValue: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _balanceFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                  DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Receivables / Balance')),
+                  DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _balanceFilter = val;
+                      _currentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ErpSearchInput(
+                hintText: 'Search dealer by name, showroom, GST...',
+                initialValue: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _balanceFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Receivables / Balance')),
+                DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _balanceFilter = val;
+                    _currentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _startDate,
+              endDate: _endDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _startDate = start;
+                _endDate = end;
+                _currentPage = 0;
+              }),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -451,11 +546,11 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.account_balance_wallet_outlined,
-                      iconColor: AppColors.danger,
+                      iconColor: withBalanceCount > 0 ? AppColors.danger : AppColors.success,
                       title: 'With Balance',
-                      value: '${withBalanceCount}',
-                      subtext: 'Pending Collection',
-                      subtextColor: AppColors.danger,
+                      value: '$withBalanceCount',
+                      subtext: withBalanceCount > 0 ? '$withBalanceCount of $totalDealersCount with balance' : 'Zero balance pending',
+                      subtextColor: withBalanceCount > 0 ? AppColors.danger : AppColors.success,
                     ),
                   ),
                   SizedBox(
@@ -484,51 +579,26 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
           ),
           const SizedBox(height: 18),
 
-          // Modern Filter Controls Bar
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 280,
-                child: ErpSearchInput(
-                  hintText: 'Search dealer by name, showroom, GST...',
-                  initialValue: _searchQuery,
-                  onChanged: (val) => setState(() {
-                    _searchQuery = val;
-                    _currentPage = 0;
-                  }),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
                 ),
-              ),
-              ErpFilterDropdown<String>(
-                value: _balanceFilter,
-                items: const [
-                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
-                  DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Receivables / Balance')),
-                  DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
-                ],
-                onChanged: (val) {
-                  if (val != null) setState(() {
-                    _balanceFilter = val;
-                    _currentPage = 0;
-                  });
-                },
-              ),
-              ErpDateFilterBox(
-                startDate: _startDate,
-                endDate: _endDate,
-                onDateRangeSelected: (start, end) => setState(() {
-                  _startDate = start;
-                  _endDate = end;
-                  _currentPage = 0;
-                }),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          ErpDataTable(
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildControlsRow(),
+                const SizedBox(height: 16),
+                ErpDataTable(
             columns: const [
               ErpColumn(title: 'Showroom / Dealer Name'),
               ErpColumn(title: 'Company Entity'),
@@ -663,14 +733,17 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
           ),
           const SizedBox(height: 16),
           ErpPaginationBar(
-            currentPage: safeCurrentPage,
-            pageSize: safePageSize,
-            totalRecords: totalRecords,
-            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-            onPageSizeChanged: (newSize) => setState(() {
-              _pageSize = newSize;
-              _currentPage = 0;
-            }),
+                  currentPage: safeCurrentPage,
+                  pageSize: safePageSize,
+                  totalRecords: totalRecords,
+                  onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                  onPageSizeChanged: (newSize) => setState(() {
+                    _pageSize = newSize;
+                    _currentPage = 0;
+                  }),
+                ),
+              ],
+            ),
           ),
         ],
       ),

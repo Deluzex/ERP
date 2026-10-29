@@ -14,7 +14,7 @@ describe('TokenService', () => {
       JWT_ACCESS_SECRET: 'test-access-secret-12345678901234567890',
       JWT_REFRESH_SECRET: 'test-refresh-secret-12345678901234567890',
       JWT_ACCESS_EXPIRES_IN: '15m',
-      JWT_REFRESH_EXPIRES_IN: '7d',
+      JWT_REFRESH_EXPIRES_IN: '30m',
     });
 
     tokenService = new TokenService(jwtService, configService);

@@ -104,7 +104,7 @@ export class AuthService {
     // Save refresh token record
     await this.db.query(
       `INSERT INTO refresh_tokens (user_id, token_id, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '7 days')`,
+       VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
       [user.id, refreshPayload.jti],
     );
 
@@ -177,7 +177,7 @@ export class AuthService {
 
     await this.db.query(
       `INSERT INTO refresh_tokens (user_id, token_id, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '7 days')`,
+       VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
       [userData.id, newRefreshPayload.jti],
     );
 

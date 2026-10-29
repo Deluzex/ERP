@@ -540,6 +540,200 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     );
   }
 
+  Widget _buildArchControlsRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 650;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search architect by name, studio...',
+                initialValue: _archSearchQuery,
+                onChanged: (val) => setState(() {
+                  _archSearchQuery = val;
+                  _archCurrentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _archCustomerFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Architects')),
+                  DropdownMenuItem(value: 'DUAL_CUSTOMER', child: Text('Dual Arch-Customer / Linked')),
+                  DropdownMenuItem(value: 'INDEPENDENT', child: Text('Independent Studios')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _archCustomerFilter = val;
+                      _archCurrentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _archStartDate,
+                endDate: _archEndDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _archStartDate = start;
+                  _archEndDate = end;
+                  _archCurrentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ErpSearchInput(
+                hintText: 'Search architect by name, studio...',
+                initialValue: _archSearchQuery,
+                onChanged: (val) => setState(() {
+                  _archSearchQuery = val;
+                  _archCurrentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _archCustomerFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Architects')),
+                DropdownMenuItem(value: 'DUAL_CUSTOMER', child: Text('Dual Arch-Customer / Linked')),
+                DropdownMenuItem(value: 'INDEPENDENT', child: Text('Independent Studios')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _archCustomerFilter = val;
+                    _archCurrentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _archStartDate,
+              endDate: _archEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _archStartDate = start;
+                _archEndDate = end;
+                _archCurrentPage = 0;
+              }),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCommControlsRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 650;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search voucher, architect, invoice...',
+                initialValue: _commSearchQuery,
+                onChanged: (val) => setState(() {
+                  _commSearchQuery = val;
+                  _commCurrentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _commStatusFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                  DropdownMenuItem(value: 'PENDING', child: Text('Pending Review')),
+                  DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+                  DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+                  DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _commStatusFilter = val;
+                      _commCurrentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _commStartDate,
+                endDate: _commEndDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _commStartDate = start;
+                  _commEndDate = end;
+                  _commCurrentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ErpSearchInput(
+                hintText: 'Search voucher, architect, invoice...',
+                initialValue: _commSearchQuery,
+                onChanged: (val) => setState(() {
+                  _commSearchQuery = val;
+                  _commCurrentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _commStatusFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                DropdownMenuItem(value: 'PENDING', child: Text('Pending Review')),
+                DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+                DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+                DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _commStatusFilter = val;
+                    _commCurrentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _commStartDate,
+              endDate: _commEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _commStartDate = start;
+                _commEndDate = end;
+                _commCurrentPage = 0;
+              }),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -605,6 +799,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     final totalArchitectsCount = db.architects.where((a) => !a.isDeleted).length;
     final dualCustomerCount = db.architects.where((a) => !a.isDeleted && (a.isAlsoCustomer || a.linkedCustomerId != null)).length;
     final independentCount = db.architects.where((a) => !a.isDeleted && !a.isAlsoCustomer && a.linkedCustomerId == null).length;
+    final totalCommissionsCount = db.commissions.length;
     final unpaidCommissions = db.commissions.where((c) => c.status != CommissionStatus.paid && c.status != CommissionStatus.rejected).length;
     final totalCommissionPaid = db.commissions.where((c) => c.status == CommissionStatus.paid).fold(0.0, (sum, c) => sum + c.commissionAmount);
 
@@ -669,11 +864,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.pending_actions_outlined,
-                      iconColor: AppColors.warning,
+                      iconColor: unpaidCommissions > 0 ? AppColors.warning : AppColors.success,
                       title: 'Pending Comms',
-                      value: '${unpaidCommissions}',
-                      subtext: 'Awaiting Payout',
-                      subtextColor: AppColors.warning,
+                      value: '$unpaidCommissions',
+                      subtext: unpaidCommissions > 0 ? '$unpaidCommissions of $totalCommissionsCount awaiting payout' : 'All commissions settled',
+                      subtextColor: unpaidCommissions > 0 ? AppColors.warning : AppColors.success,
                     ),
                   ),
                   SizedBox(
@@ -709,54 +904,26 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
 
           if (_tabController.index == 0)
             // Tab 1: Architect Directory
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 280,
-                      child: ErpSearchInput(
-                        hintText: 'Search architect by name, studio...',
-                        initialValue: _archSearchQuery,
-                        onChanged: (val) => setState(() {
-                          _archSearchQuery = val;
-                          _archCurrentPage = 0;
-                        }),
-                      ),
-                    ),
-                    ErpFilterDropdown<String>(
-                      value: _archCustomerFilter,
-                      items: const [
-                        DropdownMenuItem(value: 'ALL', child: Text('All Architects')),
-                        DropdownMenuItem(value: 'DUAL_CUSTOMER', child: Text('Dual Arch-Customer / Linked')),
-                        DropdownMenuItem(value: 'INDEPENDENT', child: Text('Independent Studios')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _archCustomerFilter = val;
-                            _archCurrentPage = 0;
-                          });
-                        }
-                      },
-                    ),
-                    ErpDateFilterBox(
-                      startDate: _archStartDate,
-                      endDate: _archEndDate,
-                      onDateRangeSelected: (start, end) => setState(() {
-                        _archStartDate = start;
-                        _archEndDate = end;
-                        _archCurrentPage = 0;
-                      }),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                ErpDataTable(
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildArchControlsRow(),
+                  const SizedBox(height: 16),
+                  ErpDataTable(
                   dataRowMinHeight: 56,
                   dataRowMaxHeight: 72,
                   columns: const [
@@ -958,59 +1125,30 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                         }),
                       ),
                     ],
-                  )
+                  ),
+                )
           else
             // Tab 2: Commission Ledger & Approvals Lifecycle
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 280,
-                      child: ErpSearchInput(
-                        hintText: 'Search voucher, architect, invoice...',
-                        initialValue: _commSearchQuery,
-                        onChanged: (val) => setState(() {
-                          _commSearchQuery = val;
-                          _commCurrentPage = 0;
-                        }),
-                      ),
-                    ),
-                    ErpFilterDropdown<String>(
-                      value: _commStatusFilter,
-                      items: const [
-                        DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
-                        DropdownMenuItem(value: 'PENDING', child: Text('Pending Review')),
-                        DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
-                        DropdownMenuItem(value: 'PAID', child: Text('Paid')),
-                        DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _commStatusFilter = val;
-                            _commCurrentPage = 0;
-                          });
-                        }
-                      },
-                    ),
-                    ErpDateFilterBox(
-                      startDate: _commStartDate,
-                      endDate: _commEndDate,
-                      onDateRangeSelected: (start, end) => setState(() {
-                        _commStartDate = start;
-                        _commEndDate = end;
-                        _commCurrentPage = 0;
-                      }),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                ErpDataTable(
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildCommControlsRow(),
+                  const SizedBox(height: 16),
+                  ErpDataTable(
                   dataRowMinHeight: 56,
                   dataRowMaxHeight: 72,
                   columns: const [
@@ -1152,6 +1290,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                       ),
                     ],
                   ),
+                ),
         ],
       ),
     );
