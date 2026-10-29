@@ -45,6 +45,8 @@ import '../shared/providers/app_state_providers.dart';
 import '../shared/providers/subscription_provider.dart';
 import '../shared/widgets/access_required_dialog.dart';
 // import '../shared/widgets/global_whatsapp_floating_button.dart';
+import '../core/utils/navigation_history.dart';
+import 'app.dart';
 import 'routes/app_routes.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_radius.dart';
@@ -57,7 +59,7 @@ class AppShell extends ConsumerStatefulWidget {
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final Map<ErpNavSection, Widget> _cachedScreens = {};
   String? _lastUserId;
@@ -66,9 +68,42 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(subscriptionProvider.notifier).fetchStatus();
+      NavigationHistory.initialize(ref, navigatorKey: appNavigatorKey);
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    NavigationHistory.dispose();
+    super.dispose();
+  }
+
+  @override
+  Future<bool> didPopRoute() async {
+    // 1. If an active modal dialog or subroute is open in Navigator, pop it
+    final nav = appNavigatorKey.currentState;
+    if (nav != null && nav.canPop()) {
+      nav.pop();
+      return true;
+    }
+
+    // 2. If a drilldown detail view is active in the stack, pop back to the list
+    final detailsStack = ref.read(activeRecordDetailsStackProvider);
+    if (detailsStack.isNotEmpty) {
+      ref.read(activeRecordDetailsStackProvider.notifier).pop();
+      return true;
+    }
+
+    // 3. If navigation history can go back, return to the previous section
+    if (NavigationHistory.canGoBack) {
+      return NavigationHistory.goBack();
+    }
+
+    return false;
   }
 
   ErpNavSection _canonicalSection(ErpNavSection section) {
@@ -106,6 +141,12 @@ class _AppShellState extends ConsumerState<AppShell> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('erp_last_nav_section', next.name);
       } catch (_) {}
+      NavigationHistory.onSectionChanged(next);
+    });
+
+    // Sync detail view state with browser history
+    ref.listen(activeRecordDetailsStackProvider, (previous, next) {
+      NavigationHistory.onDetailStateChanged(next.isNotEmpty, ref.read(currentNavSectionProvider));
     });
 
     Widget contentWidget;

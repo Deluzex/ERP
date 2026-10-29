@@ -50,6 +50,7 @@
    - [7.2 Create Purchase Order / Inward Bill](#72-create-purchase-order--inward-bill)
    - [7.3 Get Purchase Details](#73-get-purchase-details)
    - [7.4 Update Purchase Status](#74-update-purchase-status)
+   - [7.5 Update (Edit) Purchase](#75-update-edit-purchase)
 8. [Production & Manufacturing Module](#8-production--manufacturing-module)
    - [8.1 List Production Work Orders](#81-list-production-work-orders)
    - [8.2 Create Production Work Order](#82-create-production-work-order)
@@ -1443,6 +1444,63 @@ Content-Type: application/json
   "reason": "Supplier unable to meet delivery lead time"
 }
 ```
+
+---
+
+### 7.5 Update (Edit) Purchase
+
+### API: Update Purchase Order / Inward Bill (Edit Amendment)
+
+**Method:** `PATCH`
+
+**Endpoint:**
+`/api/v1/purchases/:purchaseId`
+
+**Purpose:**
+Edits an existing purchase bill atomically: header fields (purchase date, invoice date, vendor, notes, amounts, payment mode) and optional full line-item replacement. Guarantees the **edited values (including the edited date)** are persisted on the same `purchase_number` — the list and detail views immediately reflect them.
+
+**Headers:**
+```text
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Permission:** `purchase.edit`
+
+**Request Body (all fields optional; omitted header fields keep current values):**
+```json
+{
+  "purchaseDate": "2026-01-15T09:00:00.000Z",
+  "invoiceDate": "2026-01-14T09:00:00.000Z",
+  "vendorId": "vendor-uuid",
+  "vendorInvoiceNumber": "INV-2026-0001",
+  "notes": "Date corrected after supplier reprint",
+  "items": [
+    {
+      "itemType": "rawMaterial",
+      "rawMaterialId": "rm-uuid",
+      "quantity": 60.0,
+      "unit": "MTR",
+      "rate": 300.0,
+      "gstPercent": 18.0,
+      "lineTotal": 21240.0
+    }
+  ],
+  "totalAmount": 21240.0,
+  "paidAmount": 0.0,
+  "pendingAmount": 21240.0,
+  "status": "saved"
+}
+```
+
+**Contract Guarantees:**
+- `purchase_number` and ownership never change — edits amend the same document.
+- When `items` is provided it is a FULL replacement; stock is adjusted by the **net quantity delta** per (itemType, itemId) and one consolidated ledger movement is written (`purchase` for inward, `purchaseReturn` for revert). A header-only edit (items omitted) touches zero stock.
+- Vendor pending balances rebalance by the pending delta; switching vendors releases the old ledger and charges the new one.
+- Draft → posted transitions stock the bill in and update the vendor ledger; posted bills cannot revert to `draft`; cancelled bills cannot be edited; direct `status: "cancelled"` edits are rejected (use 7.4 so rollbacks execute).
+- `updated_at` and full audit snapshot (`update_purchase`) are written transactionally.
+
+**Status Codes:** `200 OK`, `400` validation, `404` not found, `409` guarded transition
 
 ---
 

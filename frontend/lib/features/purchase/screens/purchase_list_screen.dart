@@ -247,6 +247,8 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                           _buildDetailField('Vendor Name', p.vendorName),
                           _buildDetailField('Vendor Invoice', p.vendorInvoiceNumber.isNotEmpty ? p.vendorInvoiceNumber : 'N/A'),
                           _buildDetailField('Purchase Date', Formatters.formatDate(p.purchaseDate)),
+                          if (p.isModified && p.updatedAt != null)
+                            _buildDetailField('Modified Date', Formatters.formatDateTime(p.updatedAt!)),
                           _buildDetailField('Purchase Type', p.purchaseTypeLabel),
                           _buildDetailField('Payment Mode', p.paymentMode.name.toUpperCase()),
                           if (p.projectName != null && p.projectName!.isNotEmpty)
@@ -624,13 +626,13 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                 icon: Icons.add,
                 onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
               ),
-              ErpButton(
-                text: 'Refresh',
-                icon: Icons.refresh,
-                isOutlined: true,
-                isLoading: db.isLoadingPurchases,
-                onPressed: () => db.loadPurchases(forceRefresh: true),
-              ),
+              // ErpButton(
+              //   text: 'Refresh',
+              //   icon: Icons.refresh,
+              //   isOutlined: true,
+              //   isLoading: db.isLoadingPurchases,
+              //   onPressed: () => db.loadPurchases(forceRefresh: true),
+              // ),
             ],
           ),
           const SizedBox(height: 20),
@@ -835,7 +837,32 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                   rows: pagedPurchases.map((p) {
                     return [
                       Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                      Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(Formatters.formatDate(p.displayDate), style: AppTextStyles.bodySmall),
+                          if (p.isModified && p.updatedAt != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryLight.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Modified',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.primary,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                       Text(p.vendorName, style: AppTextStyles.bodyMedium),
                       Text(p.vendorInvoiceNumber, style: AppTextStyles.bodySmall),
                       Text('${p.items.length} items', style: AppTextStyles.bodySmall),

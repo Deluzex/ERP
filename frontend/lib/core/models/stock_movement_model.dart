@@ -88,7 +88,9 @@ class StockMovement {
 
     return StockMovement(
       id: json['id'] as String? ?? '',
-      date: json['date'] != null ? DateTime.tryParse(json['date'] as String) ?? DateTime.now() : DateTime.now(),
+      date: json['date'] != null
+          ? DateTime.tryParse(json['date'] as String)?.toLocal() ?? DateTime.now()
+          : DateTime.now(),
       itemId: json['itemId'] as String? ?? '',
       itemName: json['itemName'] as String? ?? '',
       itemCode: json['itemCode'] as String? ?? '',

@@ -284,6 +284,7 @@ class Purchase {
   final String? projectId;
   final String? projectName;
   final DateTime createdAt;
+  final DateTime? updatedAt;
 
   Purchase({
     required this.id,
@@ -314,6 +315,7 @@ class Purchase {
     this.projectId,
     this.projectName,
     required this.createdAt,
+    this.updatedAt,
   })  : subtotalAmount = subtotalAmount ?? totalAmount,
         taxableAmount = taxableAmount ?? (totalAmount / 1.18),
         cgstAmount = cgstAmount ?? ((totalAmount - (totalAmount / 1.18)) / 2),
@@ -342,6 +344,15 @@ class Purchase {
 
   bool get isFinishedProductPurchase => purchaseType == PurchaseItemType.finishedProduct;
   bool get isInterStateTax => igstAmount > 0;
+
+  /// Returns true if this purchase was amended after creation.
+  bool get isModified =>
+      updatedAt != null &&
+      (updatedAt!.difference(createdAt).inSeconds.abs() > 2 ||
+          updatedAt!.isAfter(createdAt.add(const Duration(seconds: 2))));
+
+  /// Shows the modification date if amended, or the original purchase date.
+  DateTime get displayDate => (isModified && updatedAt != null) ? updatedAt! : purchaseDate;
 
   Purchase copyWith({
     String? id,
@@ -372,6 +383,7 @@ class Purchase {
     String? projectId,
     String? projectName,
     DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return Purchase(
       id: id ?? this.id,
@@ -402,6 +414,7 @@ class Purchase {
       projectId: projectId ?? this.projectId,
       projectName: projectName ?? this.projectName,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -415,15 +428,15 @@ class Purchase {
       id: json['id']?.toString() ?? '',
       purchaseNumber: json['purchaseNumber']?.toString() ?? json['purchase_number']?.toString() ?? '',
       purchaseDate: json['purchaseDate'] != null
-          ? DateTime.tryParse(json['purchaseDate'].toString()) ?? DateTime.now()
-          : (json['purchase_date'] != null ? DateTime.tryParse(json['purchase_date'].toString()) ?? DateTime.now() : DateTime.now()),
+          ? DateTime.tryParse(json['purchaseDate'].toString())?.toLocal() ?? DateTime.now()
+          : (json['purchase_date'] != null ? DateTime.tryParse(json['purchase_date'].toString())?.toLocal() ?? DateTime.now() : DateTime.now()),
       vendorId: json['vendorId']?.toString() ?? json['vendor_id']?.toString() ?? '',
       vendorName: json['vendorName']?.toString() ?? json['vendor_name']?.toString() ?? '',
       vendorCompanyName: json['vendorCompanyName']?.toString() ?? json['vendor_company_name']?.toString(),
       vendorInvoiceNumber: json['vendorInvoiceNumber']?.toString() ?? json['vendor_invoice_number']?.toString() ?? '',
       invoiceDate: json['invoiceDate'] != null
-          ? DateTime.tryParse(json['invoiceDate'].toString()) ?? DateTime.now()
-          : (json['invoice_date'] != null ? DateTime.tryParse(json['invoice_date'].toString()) ?? DateTime.now() : DateTime.now()),
+          ? DateTime.tryParse(json['invoiceDate'].toString())?.toLocal() ?? DateTime.now()
+          : (json['invoice_date'] != null ? DateTime.tryParse(json['invoice_date'].toString())?.toLocal() ?? DateTime.now() : DateTime.now()),
       purchaseType: _parsePurchaseItemType(json['purchaseType'] ?? json['purchase_type']),
       items: parsedItems,
       subtotalAmount: double.tryParse(json['subtotalAmount']?.toString() ?? json['subtotal_amount']?.toString() ?? '0'),
@@ -444,8 +457,11 @@ class Purchase {
       projectId: json['projectId']?.toString() ?? json['project_id']?.toString(),
       projectName: json['projectName']?.toString() ?? json['project_name']?.toString(),
       createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
-          : (json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now() : DateTime.now()),
+          ? DateTime.tryParse(json['createdAt'].toString())?.toLocal() ?? DateTime.now()
+          : (json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString())?.toLocal() ?? DateTime.now() : DateTime.now()),
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'].toString())?.toLocal()
+          : (json['updated_at'] != null ? DateTime.tryParse(json['updated_at'].toString())?.toLocal() : null),
     );
   }
 

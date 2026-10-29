@@ -5915,6 +5915,7 @@ class MockDatabaseService extends ChangeNotifier {
     ItemType? itemType,
     StockMovementType? transactionType,
     String? search,
+    int? limit,
     bool forceRefresh = false,
   }) async {
     try {
@@ -5923,6 +5924,7 @@ class MockDatabaseService extends ChangeNotifier {
         itemType: itemType,
         transactionType: transactionType,
         search: search,
+        limit: limit ?? 500,
       );
       stockMovements = remote;
       notifyListeners();
@@ -5931,9 +5933,9 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
-  Future<void> loadStockAdjustments({bool forceRefresh = false}) async {
+  Future<void> loadStockAdjustments({bool forceRefresh = false, int? limit}) async {
     try {
-      final remote = await _inventoryApi.getStockAdjustments();
+      final remote = await _inventoryApi.getStockAdjustments(limit: limit ?? 500);
       stockAdjustments = remote;
       notifyListeners();
     } catch (e) {
@@ -6695,6 +6697,35 @@ class MockDatabaseService extends ChangeNotifier {
       return created;
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] createPurchaseAsync remote failed: $e');
+      rethrow;
+    }
+  }
+
+  /// 7.5 Update (Edit) an existing purchase via PATCH /purchases/:id and
+  /// reflect the returned record immediately in the local list. Also refreshes
+  /// masters, vendors, inventory, and stock movements affected by amend stock.
+  Future<Purchase> updatePurchaseAsync(Purchase purchase) async {
+    try {
+      final updated = await _purchasesApi.updatePurchase(purchase);
+      final idx = purchases.indexWhere((p) => p.id == updated.id);
+      if (idx != -1) {
+        purchases[idx] = updated;
+      } else {
+        purchases.insert(0, updated);
+      }
+      // Re-fetch the ordered list so the re-dated purchase is sorted and the
+      // summary KPIs stay accurate.
+      await loadPurchases(forceRefresh: true);
+      await Future.wait([
+        loadVendors(forceRefresh: true),
+        loadRawMaterials(forceRefresh: true),
+        loadFinishedProducts(forceRefresh: true),
+        loadStockMovements(forceRefresh: true),
+      ]);
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] updatePurchaseAsync remote failed: $e');
       rethrow;
     }
   }

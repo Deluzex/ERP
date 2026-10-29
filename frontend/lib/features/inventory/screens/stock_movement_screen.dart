@@ -42,7 +42,7 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(databaseServiceProvider).loadStockMovements();
+      ref.read(databaseServiceProvider).loadStockMovements(limit: 500);
     });
   }
 
@@ -51,8 +51,8 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
     final db = ref.watch(databaseServiceProvider);
 
     final allMovements = db.stockMovements;
-    final inCount = allMovements.where((m) => m.stockIn > 0 && m.transactionType != StockMovementType.adjustment).length;
-    final outCount = allMovements.where((m) => m.stockOut > 0 && m.transactionType != StockMovementType.adjustment).length;
+    final inCount = allMovements.where((m) => m.stockIn > 0 && m.transactionType != StockMovementType.adjustment && m.transactionType != StockMovementType.damage).length;
+    final outCount = allMovements.where((m) => m.stockOut > 0 && m.transactionType != StockMovementType.adjustment && m.transactionType != StockMovementType.damage).length;
     final adjCount = allMovements.where((m) => m.transactionType == StockMovementType.adjustment || m.transactionType == StockMovementType.damage).length;
 
     final movements = allMovements.where((m) {
@@ -71,10 +71,10 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
           matchesCategory = true;
           break;
         case StockLedgerCategory.stockIn:
-          matchesCategory = m.stockIn > 0 && m.transactionType != StockMovementType.adjustment;
+          matchesCategory = m.stockIn > 0 && m.transactionType != StockMovementType.adjustment && m.transactionType != StockMovementType.damage;
           break;
         case StockLedgerCategory.stockOut:
-          matchesCategory = m.stockOut > 0 && m.transactionType != StockMovementType.adjustment;
+          matchesCategory = m.stockOut > 0 && m.transactionType != StockMovementType.adjustment && m.transactionType != StockMovementType.damage;
           break;
         case StockLedgerCategory.stockAdjustments:
           matchesCategory = m.transactionType == StockMovementType.adjustment || m.transactionType == StockMovementType.damage;
@@ -103,20 +103,20 @@ class _StockMovementScreenState extends ConsumerState<StockMovementScreen> {
             title: 'Stock Movement Ledger',
             badgeText: 'AUDIT TRAIL',
             subtitle: 'Immutable audit trail of all inventory inward, outward, consumption and adjustment events',
-            action: LayoutBuilder(
-              builder: (context, actionBox) {
-                final isMobile = actionBox.maxWidth < 520;
-                return SizedBox(
-                  width: isMobile ? double.infinity : null,
-                  child: ErpButton(
-                    text: 'Refresh Ledger',
-                    icon: Icons.refresh,
-                    isOutlined: true,
-                    onPressed: () => db.loadStockMovements(forceRefresh: true),
-                  ),
-                );
-              },
-            ),
+            // action: LayoutBuilder(
+            //   builder: (context, actionBox) {
+            //     final isMobile = actionBox.maxWidth < 520;
+            //     return SizedBox(
+            //       width: isMobile ? double.infinity : null,
+            //       child: ErpButton(
+            //         text: 'Refresh Ledger',
+            //         icon: Icons.refresh,
+            //         isOutlined: true,
+            //         onPressed: () => db.loadStockMovements(forceRefresh: true, limit: 500),
+            //       ),
+            //     );
+            //   },
+            // ),
           ),
           const SizedBox(height: 18),
 

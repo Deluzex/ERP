@@ -72,7 +72,7 @@ class StockAdjustment {
       id: json['id'] as String? ?? '',
       adjustmentNumber: json['adjustmentNumber'] as String? ?? '',
       adjustmentDate: json['adjustmentDate'] != null
-          ? DateTime.tryParse(json['adjustmentDate'] as String) ?? DateTime.now()
+          ? DateTime.tryParse(json['adjustmentDate'] as String)?.toLocal() ?? DateTime.now()
           : DateTime.now(),
       itemId: json['itemId'] as String? ?? '',
       itemName: json['itemName'] as String? ?? '',
@@ -92,7 +92,7 @@ class StockAdjustment {
       remarks: json['remarks'] as String? ?? '',
       performedBy: json['performedBy'] as String? ?? 'System',
       createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
+          ? DateTime.tryParse(json['createdAt'] as String)?.toLocal() ?? DateTime.now()
           : DateTime.now(),
     );
   }

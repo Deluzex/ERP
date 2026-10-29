@@ -342,16 +342,16 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                           onPressed: () => _openAddEditDialog(),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'Refresh',
-                          icon: Icons.refresh,
-                          isOutlined: true,
-                          onPressed: () => db.loadRawMaterials(forceRefresh: true),
-                        ),
-                      ),
+                      // const SizedBox(height: 8),
+                      // SizedBox(
+                      //   width: double.infinity,
+                      //   child: ErpButton(
+                      //     text: 'Refresh',
+                      //     icon: Icons.refresh,
+                      //     isOutlined: true,
+                      //     onPressed: () => db.loadRawMaterials(forceRefresh: true),
+                      //   ),
+                      // ),
                     ],
                   );
                 }
@@ -365,12 +365,12 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                       icon: Icons.add,
                       onPressed: () => _openAddEditDialog(),
                     ),
-                    ErpButton(
-                      text: 'Refresh',
-                      icon: Icons.refresh,
-                      isOutlined: true,
-                      onPressed: () => db.loadRawMaterials(forceRefresh: true),
-                    ),
+                    // ErpButton(
+                    //   text: 'Refresh',
+                    //   icon: Icons.refresh,
+                    //   isOutlined: true,
+                    //   onPressed: () => db.loadRawMaterials(forceRefresh: true),
+                    // ),
                   ],
                 );
               },

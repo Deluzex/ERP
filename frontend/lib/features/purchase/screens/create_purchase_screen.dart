@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -865,14 +864,27 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       cgstAmount: _cgstAmount,
       sgstAmount: _sgstAmount,
       igstAmount: _igstAmount,
-      createdAt: DateTime.now(),
+      createdAt: widget.existingPurchase?.createdAt ?? DateTime.now(),
+      updatedAt: widget.existingPurchase != null ? DateTime.now() : null,
     );
 
     setState(() => _isSubmitting = true);
     try {
-      await db.createPurchaseAsync(purchase);
+      final isEditMode = widget.existingPurchase != null;
+      final savedPurchase =
+          isEditMode ? await db.updatePurchaseAsync(purchase) : await db.createPurchaseAsync(purchase);
 
       if (mounted) {
+        if (isEditMode) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Purchase ${savedPurchase.purchaseNumber} updated successfully!'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+          _navigateBack();
+        } else {
         final containsFinished = purchaseItems.any((it) => it.itemType == PurchaseItemType.finishedProduct);
         final containsRaw = purchaseItems.any((it) => it.itemType == PurchaseItemType.rawMaterial);
         String stockMsg = 'Stock updated!';
@@ -892,6 +904,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         );
 
         _navigateBack();
+        }
       }
     } catch (e) {
       if (mounted) {

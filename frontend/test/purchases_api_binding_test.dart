@@ -162,6 +162,52 @@ void main() {
       expect((json['items'] as List).length, 1);
     });
 
+    test('Edit payload: Purchase.toJson stays PATCH /purchases/:id whitelist-safe and carries the edited date', () {
+      final p = Purchase(
+        id: 'pur-edit-001',
+        purchaseNumber: 'PO-2026-0025',
+        purchaseDate: DateTime.parse('2026-03-21T09:00:00.000Z'),
+        vendorId: 'ven-789',
+        vendorName: 'Sukaina Metals',
+        vendorInvoiceNumber: 'INV-EDIT-9901',
+        invoiceDate: DateTime.parse('2026-03-21T09:00:00.000Z'),
+        purchaseType: PurchaseItemType.rawMaterial,
+        items: [
+          PurchaseLineItem(
+            itemType: PurchaseItemType.rawMaterial,
+            rawMaterialId: 'rm-090',
+            rawMaterialName: 'Aluminium Profile',
+            quantity: 12.0,
+            unit: 'MTR',
+            rate: 450.0,
+            lineTotal: 6363.0,
+          ),
+        ],
+        totalAmount: 6363.0,
+        paidAmount: 0.0,
+        pendingAmount: 6363.0,
+        paymentMode: PaymentMode.credit,
+        status: PurchaseStatus.saved,
+        createdAt: DateTime.now(),
+      );
+
+      final json = p.toJson();
+
+      // The reported bug: editing must transmit the edited purchase date as an
+      // ISO8601 string the NestJS IsDateString validator accepts.
+      expect(json['purchaseDate'], '2026-03-21T09:00:00.000Z');
+      expect(json['invoiceDate'], '2026-03-21T09:00:00.000Z');
+      expect(json['status'], 'saved');
+
+      // The update endpoint accepts no id/purchaseNumber (immutable fields) —
+      // forbidNonWhitelisted ValidationPipe would reject them with 400.
+      expect(json.containsKey('id'), isFalse);
+      expect(json.containsKey('purchaseNumber'), isFalse);
+
+      // Items are a full replacement with at least one line
+      expect((json['items'] as List).length, 1);
+    });
+
     test('Purchase & PurchaseLineItem serialize and parse transportation fields with backward compatibility', () {
       final json = {
         'id': 'pur-2026-002',
@@ -317,6 +363,51 @@ void main() {
       );
       expect(freeAllocated[0].transportationCost + freeAllocated[1].transportationCost, 500.0);
       expect(freeAllocated[0].landedRate, 25.0); // 250 / 10
+    });
+
+    test('Purchase parses updatedAt from backend, reflects isModified, and exposes displayDate as modify date', () {
+      final unedited = Purchase.fromJson({
+        'id': 'pur-orig',
+        'purchaseNumber': 'PO-2026-0001',
+        'purchaseDate': '2026-10-27T09:00:00.000Z',
+        'vendorId': 'ven-1',
+        'vendorName': 'Orig Vendor',
+        'vendorInvoiceNumber': 'INV-1',
+        'invoiceDate': '2026-10-27T09:00:00.000Z',
+        'totalAmount': '1000.00',
+        'paidAmount': '0.00',
+        'pendingAmount': '1000.00',
+        'paymentMode': 'cash',
+        'status': 'saved',
+        'createdAt': '2026-10-27T09:00:00.000Z',
+        'updatedAt': '2026-10-27T09:00:00.000Z',
+      });
+
+      expect(unedited.isModified, isFalse);
+      expect(unedited.displayDate.toIso8601String(), contains('2026-10-27'));
+
+      // Edited purchase 2 days later
+      final edited = Purchase.fromJson({
+        'id': 'pur-orig',
+        'purchaseNumber': 'PO-2026-0001',
+        'purchaseDate': '2026-10-27T09:00:00.000Z',
+        'vendorId': 'ven-1',
+        'vendorName': 'Renamed Vendor',
+        'vendorInvoiceNumber': 'INV-1',
+        'invoiceDate': '2026-10-27T09:00:00.000Z',
+        'totalAmount': '1000.00',
+        'paidAmount': '0.00',
+        'pendingAmount': '1000.00',
+        'paymentMode': 'cash',
+        'status': 'saved',
+        'createdAt': '2026-10-27T09:00:00.000Z',
+        'updatedAt': '2026-10-29T14:30:00.000Z',
+      });
+
+      expect(edited.isModified, isTrue);
+      expect(edited.updatedAt, isNotNull);
+      // displayDate reflects the modification date (29 Oct) rather than creation date (27 Oct)
+      expect(edited.displayDate.toIso8601String(), contains('2026-10-29'));
     });
 
     test('PurchasesApiService instantiates without error', () {

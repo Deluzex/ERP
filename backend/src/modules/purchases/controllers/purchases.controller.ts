@@ -12,6 +12,7 @@ import { Ctx } from '../../../core/auth/ctx.decorator';
 import { RequestContext } from '../../../core/auth/request-context';
 import { RequirePermission } from '../../../core/auth/require-permission.decorator';
 import { CreatePurchaseDto } from '../dto/create-purchase.dto';
+import { UpdatePurchaseDto } from '../dto/update-purchase.dto';
 import {
   PurchaseQueryDto,
   UpdatePurchaseStatusDto,
@@ -50,6 +51,20 @@ export class PurchasesController {
   })
   create(@Body() dto: CreatePurchaseDto, @Ctx() ctx: RequestContext) {
     return this.purchasesService.create(dto, ctx.userId, ctx.correlationId);
+  }
+
+  @Patch(':id')
+  @RequirePermission('purchase.edit')
+  @ApiOperation({
+    summary:
+      'Edit purchase order / inward bill: update header fields (date, vendor, notes), replace line items with net stock-delta handling, and rebalance vendor payables',
+  })
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdatePurchaseDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.purchasesService.update(id, dto, ctx.userId, ctx.correlationId);
   }
 
   @Patch(':id/status')

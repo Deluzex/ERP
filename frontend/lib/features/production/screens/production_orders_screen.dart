@@ -882,7 +882,8 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
-    final orders = db.productionOrders.where((o) => !o.isDeleted).where((o) {
+    final allOrders = db.productionOrders.where((o) => !o.isDeleted).toList();
+    final orders = allOrders.where((o) {
       if (_statusFilter != 'ALL') {
         switch (_statusFilter) {
           case 'PLANNED':
@@ -937,7 +938,7 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
           const SizedBox(height: 24),
 
           // 4 KPI Metrics Strip
-          _buildProductionKpiStrip(context, orders),
+          _buildProductionKpiStrip(context, allOrders),
           const SizedBox(height: 24),
 
           // Table and Filters Enclosed in Card
@@ -1147,16 +1148,16 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                     onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
                   ),
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ErpButton(
-                    text: 'Refresh',
-                    icon: Icons.refresh,
-                    isOutlined: true,
-                    onPressed: () => ref.read(databaseServiceProvider).loadProductionOrders(forceRefresh: true),
-                  ),
-                ),
+                // const SizedBox(height: 8),
+                // SizedBox(
+                //   width: double.infinity,
+                //   child: ErpButton(
+                //     text: 'Refresh',
+                //     icon: Icons.refresh,
+                //     isOutlined: true,
+                //     onPressed: () => ref.read(databaseServiceProvider).loadProductionOrders(forceRefresh: true),
+                //   ),
+                // ),
               ],
             );
           }
@@ -1171,12 +1172,12 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                 icon: Icons.add,
                 onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
               ),
-              ErpButton(
-                text: 'Refresh',
-                icon: Icons.refresh,
-                isOutlined: true,
-                onPressed: () => ref.read(databaseServiceProvider).loadProductionOrders(forceRefresh: true),
-              ),
+              // ErpButton(
+              //   text: 'Refresh',
+              //   icon: Icons.refresh,
+              //   isOutlined: true,
+              //   onPressed: () => ref.read(databaseServiceProvider).loadProductionOrders(forceRefresh: true),
+              // ),
             ],
           );
         },

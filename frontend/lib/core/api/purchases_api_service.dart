@@ -87,6 +87,24 @@ class PurchasesApiService {
     }
   }
 
+  /// 7.5 Update (Edit) an existing purchase order / inward bill.
+  /// Updates header fields (date, vendor, notes) and replaces line items with
+  /// net stock-delta handling on the backend. The API returns the updated
+  /// purchase so the UI can immediately reflect the edited values.
+  Future<Purchase> updatePurchase(Purchase purchase) async {
+    try {
+      final payload = purchase.toJson();
+      final response = await _client.dio.patch(
+        '/purchases/${purchase.id}',
+        data: payload,
+      );
+      final data = _client.unwrap<Map<String, dynamic>>(response);
+      return Purchase.fromJson(data);
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
   /// 7.4 Update Purchase Status (with auto-rollback on cancellation)
   Future<Purchase> updatePurchaseStatus(
     String id, {

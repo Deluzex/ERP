@@ -322,20 +322,20 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
             title: 'Finished Product Stock',
             badgeText: 'FINISHED GOODS',
             subtitle: 'Manage finished goods catalog, multi-tier pricing, and stock levels',
-            action: LayoutBuilder(
-              builder: (context, actionBox) {
-                final isMobile = actionBox.maxWidth < 520;
-                return SizedBox(
-                  width: isMobile ? double.infinity : null,
-                  child: ErpButton(
-                    text: 'Refresh Stock',
-                    icon: Icons.refresh,
-                    isOutlined: true,
-                    onPressed: () => db.loadFinishedProducts(forceRefresh: true),
-                  ),
-                );
-              },
-            ),
+            // action: LayoutBuilder(
+            //   builder: (context, actionBox) {
+            //     final isMobile = actionBox.maxWidth < 520;
+            //     return SizedBox(
+            //       width: isMobile ? double.infinity : null,
+            //       child: ErpButton(
+            //         text: 'Refresh Stock',
+            //         icon: Icons.refresh,
+            //         isOutlined: true,
+            //         onPressed: () => db.loadFinishedProducts(forceRefresh: true),
+            //       ),
+            //     );
+            //   },
+            // ),
           ),
           const SizedBox(height: 18),
 

@@ -8,6 +8,8 @@ import 'constants/app_constants.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
 class ErpApplication extends ConsumerStatefulWidget {
   const ErpApplication({super.key});
 
@@ -37,6 +39,7 @@ class _ErpApplicationState extends ConsumerState<ErpApplication> {
     final isAuthenticated = ref.watch(isAuthenticatedProvider);
 
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

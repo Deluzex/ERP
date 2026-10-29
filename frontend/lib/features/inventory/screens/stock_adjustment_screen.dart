@@ -46,8 +46,9 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
     final db = ref.read(databaseServiceProvider);
     ItemType selectedItemType = ItemType.finishedProduct;
     String selectedItemId = db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : '';
-    AdjustmentReason selectedReason = AdjustmentReason.physicalCountMismatch;
-    final newQtyCtrl = TextEditingController();
+    AdjustmentReason selectedReason = AdjustmentReason.damagedGoods;
+    bool isReduction = true;
+    final adjQtyCtrl = TextEditingController();
     final remarksCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
@@ -75,8 +76,9 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
               itemCode = fp.itemCode;
             }
 
-            final parsedNewQty = double.tryParse(newQtyCtrl.text.trim()) ?? currentStock;
-            final diff = parsedNewQty - currentStock;
+            final rawQty = double.tryParse(adjQtyCtrl.text.trim())?.abs() ?? 0.0;
+            final effectiveDiff = isReduction ? -rawQty : rawQty;
+            final newResultingStock = currentStock + (adjQtyCtrl.text.trim().isEmpty ? 0.0 : effectiveDiff);
 
             return AlertDialog(
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -208,22 +210,151 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                           ),
                         ),
                         const SizedBox(height: 14),
+
+                        // Adjustment Mode Toggle (Excess / Addition and Damage / Reduction buttons commented out)
+                        // Row(
+                        //   children: [
+                        //     Expanded(
+                        //       child: InkWell(
+                        //         onTap: () => setDlgState(() => isReduction = true),
+                        //         borderRadius: BorderRadius.circular(8),
+                        //         child: Container(
+                        //           padding: const EdgeInsets.symmetric(vertical: 9),
+                        //           decoration: BoxDecoration(
+                        //             color: isReduction ? const Color(0xFFFEF2F2) : Colors.transparent,
+                        //             borderRadius: BorderRadius.circular(8),
+                        //             border: Border.all(
+                        //               color: isReduction ? const Color(0xFFEF4444) : AppColors.border,
+                        //               width: isReduction ? 1.5 : 1,
+                        //             ),
+                        //           ),
+                        //           child: Row(
+                        //             mainAxisAlignment: MainAxisAlignment.center,
+                        //             children: [
+                        //               Icon(
+                        //                 Icons.remove_circle_outline,
+                        //                 size: 16,
+                        //                 color: isReduction ? const Color(0xFFEF4444) : AppColors.textSecondary,
+                        //               ),
+                        //               const SizedBox(width: 6),
+                        //               Text(
+                        //                 'Damage / Reduction (-)',
+                        //                 style: AppTextStyles.bodyBold.copyWith(
+                        //                   fontSize: 12,
+                        //                   color: isReduction ? const Color(0xFFEF4444) : AppColors.textSecondary,
+                        //                 ),
+                        //               ),
+                        //             ],
+                        //           ),
+                        //         ),
+                        //       ),
+                        //     ),
+                        //     const SizedBox(width: 10),
+                        //     Expanded(
+                        //       child: InkWell(
+                        //         onTap: () => setDlgState(() => isReduction = false),
+                        //         borderRadius: BorderRadius.circular(8),
+                        //         child: Container(
+                        //           padding: const EdgeInsets.symmetric(vertical: 9),
+                        //           decoration: BoxDecoration(
+                        //             color: !isReduction ? const Color(0xFFF0FDF4) : Colors.transparent,
+                        //             borderRadius: BorderRadius.circular(8),
+                        //             border: Border.all(
+                        //               color: !isReduction ? const Color(0xFF16A34A) : AppColors.border,
+                        //               width: !isReduction ? 1.5 : 1,
+                        //             ),
+                        //           ),
+                        //           child: Row(
+                        //             mainAxisAlignment: MainAxisAlignment.center,
+                        //             children: [
+                        //               Icon(
+                        //                 Icons.add_circle_outline,
+                        //                 size: 16,
+                        //                 color: !isReduction ? const Color(0xFF16A34A) : AppColors.textSecondary,
+                        //               ),
+                        //               const SizedBox(width: 6),
+                        //               Text(
+                        //                 'Excess / Addition (+)',
+                        //                 style: AppTextStyles.bodyBold.copyWith(
+                        //                   fontSize: 12,
+                        //                   color: !isReduction ? const Color(0xFF16A34A) : AppColors.textSecondary,
+                        //                 ),
+                        //               ),
+                        //             ],
+                        //           ),
+                        //         ),
+                        //       ),
+                        //     ),
+                        //   ],
+                        // ),
+                        // const SizedBox(height: 14),
+
                         TextFormField(
-                          controller: newQtyCtrl,
-                          keyboardType: TextInputType.number,
-                          validator: Validators.nonNegativeNumber,
+                          controller: adjQtyCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Please enter damage pieces';
+                            }
+                            final parsed = double.tryParse(v.trim());
+                            if (parsed == null) return 'Please enter a valid number';
+                            if (parsed.abs() == 0) return 'Damage quantity cannot be 0';
+                            return null;
+                          },
                           onChanged: (_) => setDlgState(() {}),
                           decoration: InputDecoration(
-                            labelText: 'New Actual Physical Stock ($unit) *',
-                            hintText: 'Enter physical count',
+                            labelText: 'Damage Pieces ($unit) *',
+                            hintText: 'Enter damage pieces to deduct (e.g. 20)',
                           ),
                         ),
-                        if (newQtyCtrl.text.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Adjustment Quantity: ${diff >= 0 ? "+${Formatters.formatNumber(diff)}" : Formatters.formatNumber(diff)} $unit',
-                            style: AppTextStyles.bodyBold.copyWith(
-                              color: diff >= 0 ? AppColors.successText : AppColors.dangerText,
+                        if (adjQtyCtrl.text.trim().isNotEmpty && double.tryParse(adjQtyCtrl.text.trim()) != null) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isReduction ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isReduction ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Resulting Stock After Adjustment:',
+                                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                                    ),
+                                    Text(
+                                      '${Formatters.formatNumber(newResultingStock)} $unit',
+                                      style: AppTextStyles.bodyBold.copyWith(
+                                        fontSize: 15,
+                                        color: newResultingStock < 0 ? const Color(0xFFDC2626) : const Color(0xFF111827),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: isReduction ? const Color(0xFFFCA5A5) : const Color(0xFF86EFAC),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${effectiveDiff >= 0 ? "+" : ""}${Formatters.formatNumber(effectiveDiff)} $unit',
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      fontSize: 12,
+                                      color: isReduction ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -239,7 +370,17 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                             );
                           }).toList(),
                           onChanged: (val) {
-                            if (val != null) setDlgState(() => selectedReason = val);
+                            if (val != null) {
+                              setDlgState(() {
+                                selectedReason = val;
+                                if (val == AdjustmentReason.damagedGoods ||
+                                    val == AdjustmentReason.theftOrLoss ||
+                                    val == AdjustmentReason.expiry ||
+                                    val == AdjustmentReason.internalConsumption) {
+                                  isReduction = true;
+                                }
+                              });
+                            }
                           },
                         ),
                         const SizedBox(height: 14),
@@ -267,8 +408,9 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                   text: 'Save Adjustment & Update Stock',
                   onPressed: () {
                     if (!formKey.currentState!.validate()) return;
-                    final targetQty = double.parse(newQtyCtrl.text.trim());
-                    final adjDiff = targetQty - currentStock;
+                    final rawVal = double.parse(adjQtyCtrl.text.trim()).abs();
+                    final adjDiff = isReduction ? -rawVal : rawVal;
+                    final targetQty = currentStock + adjDiff;
 
                     final adjustment = StockAdjustment(
                       id: IdGenerator.generateId('ADJ'),
