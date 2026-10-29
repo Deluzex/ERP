@@ -233,24 +233,20 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
             icon: Icons.receipt_long_outlined,
             title: 'Proforma Invoices',
             badgeText: 'COMMERCIAL BILLING',
-            action: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: db.isLoadingProforma
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.refresh, color: AppColors.primary, size: 20),
-                  tooltip: 'Refresh from Database',
-                  onPressed: db.isLoadingProforma ? null : () => ref.read(databaseServiceProvider).loadProforma(forceRefresh: true),
-                ),
-                const SizedBox(width: 8),
-                ErpButton(
-                  text: 'Create Proforma from Quote',
-                  icon: Icons.receipt_long_outlined,
-                  onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
-                ),
-              ],
-            ),
+            actions: [
+              IconButton(
+                icon: db.isLoadingProforma
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.refresh, color: AppColors.primary, size: 20),
+                tooltip: 'Refresh from Database',
+                onPressed: db.isLoadingProforma ? null : () => ref.read(databaseServiceProvider).loadProforma(forceRefresh: true),
+              ),
+              ErpButton(
+                text: 'Create Proforma from Quote',
+                icon: Icons.receipt_long_outlined,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations,
+              ),
+            ],
           ),
           const SizedBox(height: 18),
 

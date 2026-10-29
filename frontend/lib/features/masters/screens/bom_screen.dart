@@ -1166,6 +1166,161 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   double _effectiveBatchMaterialCost(BillOfMaterial bom, Map<String, double> prices) =>
       _effectiveMaterialCostPerUnit(bom, prices) * bom.outputQuantity;
 
+  Widget _buildControlsRow(dynamic db) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 700;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search by BOM #, recipe name, product...',
+                initialValue: _searchQuery,
+                onChanged: (v) => setState(() {
+                  _searchQuery = v;
+                  _currentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                width: double.infinity,
+                isExpanded: true,
+                value: _selectedProductFilter,
+                items: [
+                  const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
+                  ...db.finishedProducts.map((p) {
+                    return DropdownMenuItem<String>(
+                      value: p.id,
+                      child: Text(p.name, overflow: TextOverflow.ellipsis),
+                    );
+                  }),
+                ],
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() {
+                      _selectedProductFilter = v;
+                      _currentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: ErpFilterDropdown<String>(
+                      width: double.infinity,
+                      isExpanded: true,
+                      value: _statusFilter,
+                      items: const [
+                        DropdownMenuItem(value: 'ALL', child: Text('All Status')),
+                        DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
+                        DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                        DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() {
+                            _statusFilter = v;
+                            _currentPage = 0;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ErpButton(
+                    text: 'Reset',
+                    icon: Icons.refresh,
+                    isOutlined: true,
+                    onPressed: () {
+                      setState(() {
+                        _searchQuery = '';
+                        _selectedProductFilter = 'ALL';
+                        _statusFilter = 'ALL';
+                        _currentPage = 0;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
+
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ErpSearchInput(
+                hintText: 'Search by BOM #, recipe name, product...',
+                initialValue: _searchQuery,
+                onChanged: (v) => setState(() {
+                  _searchQuery = v;
+                  _currentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _selectedProductFilter,
+              items: [
+                const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
+                ...db.finishedProducts.map((p) {
+                  return DropdownMenuItem<String>(
+                    value: p.id,
+                    child: Text(p.name, overflow: TextOverflow.ellipsis),
+                  );
+                }),
+              ],
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() {
+                    _selectedProductFilter = v;
+                    _currentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpFilterDropdown<String>(
+              value: _statusFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Status')),
+                DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
+                DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
+              ],
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() {
+                    _statusFilter = v;
+                    _currentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpButton(
+              text: 'Reset',
+              icon: Icons.refresh,
+              isOutlined: true,
+              onPressed: () {
+                setState(() {
+                  _searchQuery = '';
+                  _selectedProductFilter = 'ALL';
+                  _statusFilter = 'ALL';
+                  _currentPage = 0;
+                });
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildListView() {
     final db = ref.watch(databaseServiceProvider);
     final rmPrices = _currentRmUnitPrices();
@@ -1255,22 +1410,22 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.edit_note_outlined,
-                      iconColor: AppColors.warning,
+                      iconColor: draftBoms > 0 ? AppColors.warning : AppColors.success,
                       title: 'Draft BOMs',
                       value: '$draftBoms',
-                      subtext: 'Under Review',
-                      subtextColor: AppColors.warning,
+                      subtext: draftBoms > 0 ? '$draftBoms of $totalBoms under review' : 'Zero drafts',
+                      subtextColor: draftBoms > 0 ? AppColors.warning : AppColors.success,
                     ),
                   ),
                   SizedBox(
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.cancel_outlined,
-                      iconColor: AppColors.danger,
+                      iconColor: inactiveBoms > 0 ? AppColors.danger : AppColors.success,
                       title: 'Inactive BOMs',
                       value: '$inactiveBoms',
-                      subtext: 'Archived',
-                      subtextColor: AppColors.danger,
+                      subtext: inactiveBoms > 0 ? '$inactiveBoms of $totalBoms archived' : 'No inactive BOMs',
+                      subtextColor: inactiveBoms > 0 ? AppColors.danger : AppColors.success,
                     ),
                   ),
                 ],
@@ -1279,272 +1434,45 @@ class _BomScreenState extends ConsumerState<BomScreen> {
           ),
           const SizedBox(height: 18),
 
-          // Standard ERP Filter Controls Bar (Responsive Mobile & Desktop)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isMobile = constraints.maxWidth < 700;
-              if (isMobile) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ErpSearchInput(
-                      hintText: 'Search by BOM #, recipe name, product...',
-                      initialValue: _searchQuery,
-                      onChanged: (v) => setState(() {
-                        _searchQuery = v;
-                        _currentPage = 0;
-                      }),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildControlsRow(db),
+                const SizedBox(height: 16),
+                if (filteredBoms.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: AppRadius.lgBorderRadius,
+                      border: Border.all(color: AppColors.border),
                     ),
-                    const SizedBox(height: 10),
-                    ErpFilterDropdown<String>(
-                      width: double.infinity,
-                      isExpanded: true,
-                      value: _selectedProductFilter,
-                      items: [
-                        const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
-                        ...db.finishedProducts.map((p) {
-                          return DropdownMenuItem<String>(
-                            value: p.id,
-                            child: Text(p.name, overflow: TextOverflow.ellipsis),
-                          );
-                        }),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) {
-                          setState(() {
-                            _selectedProductFilter = v;
-                            _currentPage = 0;
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
+                    child: Column(
                       children: [
-                        Expanded(
-                          child: ErpFilterDropdown<String>(
-                            width: double.infinity,
-                            isExpanded: true,
-                            value: _statusFilter,
-                            items: const [
-                              DropdownMenuItem(value: 'ALL', child: Text('All Status')),
-                              DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
-                              DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                              DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
-                            ],
-                            onChanged: (v) {
-                              if (v != null) {
-                                setState(() {
-                                  _statusFilter = v;
-                                  _currentPage = 0;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        ErpButton(
-                          text: 'Reset',
-                          icon: Icons.refresh,
-                          isOutlined: true,
-                          onPressed: () {
-                            setState(() {
-                              _searchQuery = '';
-                              _selectedProductFilter = 'ALL';
-                              _statusFilter = 'ALL';
-                              _currentPage = 0;
-                            });
-                          },
-                        ),
+                        const Icon(Icons.description_outlined, size: 40, color: AppColors.textMuted),
+                        const SizedBox(height: 12),
+                        Text('No BOM recipes found matching your query.', style: AppTextStyles.bodyBold),
+                        const SizedBox(height: 6),
+                        Text('Click "Create BOM" above to register a manufacturing recipe.', style: AppTextStyles.caption),
                       ],
                     ),
-                  ],
-                );
-              }
-
-              return Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 280,
-                    child: ErpSearchInput(
-                      hintText: 'Search by BOM #, recipe name, product...',
-                      initialValue: _searchQuery,
-                      onChanged: (v) => setState(() {
-                        _searchQuery = v;
-                        _currentPage = 0;
-                      }),
-                    ),
-                  ),
-                  ErpFilterDropdown<String>(
-                    value: _selectedProductFilter,
-                    items: [
-                      const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
-                      ...db.finishedProducts.map((p) {
-                        return DropdownMenuItem<String>(
-                          value: p.id,
-                          child: Text(p.name, overflow: TextOverflow.ellipsis),
-                        );
-                      }),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) {
-                        setState(() {
-                          _selectedProductFilter = v;
-                          _currentPage = 0;
-                        });
-                      }
-                    },
-                  ),
-                  ErpFilterDropdown<String>(
-                    value: _statusFilter,
-                    items: const [
-                      DropdownMenuItem(value: 'ALL', child: Text('All Status')),
-                      DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
-                      DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                      DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) {
-                        setState(() {
-                          _statusFilter = v;
-                          _currentPage = 0;
-                        });
-                      }
-                    },
-                  ),
-                  ErpButton(
-                    text: 'Reset',
-                    icon: Icons.refresh,
-                    isOutlined: true,
-                    onPressed: () {
-                      setState(() {
-                        _searchQuery = '';
-                        _selectedProductFilter = 'ALL';
-                        _statusFilter = 'ALL';
-                        _currentPage = 0;
-                      });
-                    },
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-
-          // BOM Recipes Data Table
-          if (filteredBoms.isEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.lgBorderRadius,
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                children: [
-                  const Icon(Icons.description_outlined, size: 40, color: AppColors.textMuted),
-                  const SizedBox(height: 12),
-                  Text('No BOM recipes found matching your query.', style: AppTextStyles.bodyBold),
-                  const SizedBox(height: 6),
-                  Text('Click "Create BOM" above to register a manufacturing recipe.', style: AppTextStyles.caption),
-                ],
-              ),
-            )
-          else if (MediaQuery.of(context).size.width < 850) ...[
-            Column(
-              children: pagedBoms.map((bom) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          InkWell(
-                            onTap: () => _openViewBomDialog(bom),
-                            child: Text(
-                              bom.id,
-                              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
-                            ),
-                          ),
-                          _buildStatusBadge(bom.safeStatus),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(bom.safeName, style: AppTextStyles.bodyBold),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Product: ${bom.safeProductName} (${bom.safeProductCode})',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-                      ),
-                      const Divider(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Batch Cost: ${Formatters.formatCurrency(bom.totalBatchMaterialCost)}', style: AppTextStyles.bodyBold),
-                          Text('Unit: ${Formatters.formatCurrency(bom.totalMaterialCostPerUnit)}', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Created: ${Formatters.formatDate(bom.createdAt)}', style: AppTextStyles.caption),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.visibility_outlined, size: 20, color: AppColors.primary),
-                                tooltip: 'View Details',
-                                onPressed: () => _openViewBomDialog(bom),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.precision_manufacturing_rounded, size: 20, color: AppColors.primary),
-                                tooltip: 'Produce',
-                                onPressed: () => _onProduce(bom),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
-                                tooltip: 'Edit Recipe',
-                                onPressed: () => _startEdit(bom),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.published_with_changes, size: 20, color: AppColors.textMuted),
-                                tooltip: 'Change Status',
-                                onPressed: () => _openChangeStatusDialog(bom),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            ErpPaginationBar(
-              currentPage: safeCurrentPage,
-              pageSize: safePageSize,
-              totalRecords: totalRecords,
-              onPageChanged: (page) => setState(() => _currentPage = page),
-              onPageSizeChanged: (size) => setState(() {
-                _pageSize = size;
-                _currentPage = 0;
-              }),
-            ),
-          ] else ...[
+                  )
+                else ...[
             ErpDataTable(
               columns: const [
                 ErpColumn(title: 'BOM No.'),
@@ -1697,7 +1625,10 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                 _currentPage = 0;
               }),
             ),
-          ],
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );

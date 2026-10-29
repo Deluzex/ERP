@@ -8,10 +8,22 @@ class ReportPdfGenerator {
   ReportPdfGenerator._();
 
   static String _cleanText(String input) {
-    return input
+    final s = input
         .replaceAll('₹', 'Rs. ')
         .replaceAll('\u20B9', 'Rs. ')
-        .replaceAll('Rs.  ', 'Rs. ');
+        .replaceAll('Rs.  ', 'Rs. ')
+        .replaceAll('•', '-')
+        .replaceAll('–', '-')
+        .replaceAll('—', '-')
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('‘', "'")
+        .replaceAll('’', "'")
+        .replaceAll('…', '...')
+        .replaceAll('→', '->')
+        .replaceAll('←', '<-')
+        .replaceAll('\u00A0', ' ');
+    return s.replaceAll(RegExp(r'[^\x00-\x7E]'), '');
   }
 
   static Future<Uint8List> generateReportPdfBytes({
@@ -28,7 +40,19 @@ class ReportPdfGenerator {
     final cleanRows = dataRows.map((row) => row.map(_cleanText).toList()).toList();
     final cleanKpis = summaryKpis?.map((k, v) => MapEntry(_cleanText(k), _cleanText(v)));
 
-    final pdf = pw.Document();
+    pw.ThemeData? theme;
+    try {
+      final fontRegular = await PdfGoogleFonts.robotoRegular();
+      final fontBold = await PdfGoogleFonts.robotoBold();
+      theme = pw.ThemeData.withFont(
+        base: fontRegular,
+        bold: fontBold,
+      );
+    } catch (_) {
+      // Fallback gracefully if network/fonts unavailable
+    }
+
+    final pdf = pw.Document(theme: theme);
     final now = DateTime.now();
     final dateStr = DateFormat('dd MMM yyyy, hh:mm a').format(now);
 

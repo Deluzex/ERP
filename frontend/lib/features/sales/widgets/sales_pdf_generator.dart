@@ -76,14 +76,38 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
   }
 
   static String _cleanPdfText(String input) {
-    return input
+    final s = input
         .replaceAll('₹', 'Rs. ')
         .replaceAll('\u20B9', 'Rs. ')
-        .replaceAll('Rs.  ', 'Rs. ');
+        .replaceAll('Rs.  ', 'Rs. ')
+        .replaceAll('•', '-')
+        .replaceAll('–', '-')
+        .replaceAll('—', '-')
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('‘', "'")
+        .replaceAll('’', "'")
+        .replaceAll('…', '...')
+        .replaceAll('→', '->')
+        .replaceAll('←', '<-')
+        .replaceAll('\u00A0', ' ');
+    return s.replaceAll(RegExp(r'[^\x00-\x7E]'), '');
   }
 
   static Future<Uint8List> generateDocumentPdfBytes(Sale saleDoc, MockDatabaseService db) async {
-    final pdf = pw.Document();
+    pw.ThemeData? theme;
+    try {
+      final fontRegular = await PdfGoogleFonts.robotoRegular();
+      final fontBold = await PdfGoogleFonts.robotoBold();
+      theme = pw.ThemeData.withFont(
+        base: fontRegular,
+        bold: fontBold,
+      );
+    } catch (_) {
+      // Graceful fallback
+    }
+
+    final pdf = pw.Document(theme: theme);
 
     String customerCode = saleDoc.partyId;
     String customerPhone = saleDoc.customerMobile ?? '+91 98765 00000';

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../app/constants/app_constants.dart';
 import '../../../app/theme/app_colors.dart';
-import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
@@ -153,80 +152,70 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth >= 1024;
+    final isCompact = screenWidth < 480;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0C0C0F), // Deep Luxury Obsidian
       body: Stack(
         children: [
-          // Responsive Atmospheric Ambient Warm Gold Glow (Centered on Phone, Dual-Zone on Desktop)
-          _buildAtmosphericGlow(context, isDesktop),
+          // Warm Golden Ambient Glow centered behind the logo & login card
+          _buildAtmosphericGlow(context),
 
-          // Main Responsive Content
+          // Main Centered Content: Company Logo + Login Box
           SafeArea(
-            child: isDesktop ? _buildDesktopSplitLayout(context) : _buildCenteredMobileLayout(context),
+            child: Center(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isCompact ? 16 : 24,
+                  vertical: 32,
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 450),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Centered Company Logo
+                      SizedBox(
+                        height: 48,
+                        child: SvgPicture.asset(
+                          'assets/images/logo_white.svg',
+                          height: 48,
+                          fit: BoxFit.contain,
+                          alignment: Alignment.center,
+                          placeholderBuilder: (context) => Image.asset(
+                            'assets/images/logo_white.png',
+                            height: 48,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.center,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+
+                      // Login Box
+                      _buildLoginFormCard(context, isCompact: isCompact),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// Seamless Atmospheric Glow: Accurately aligned behind the 'de luzex' logo without any circular edges or cutoff boundaries
-  Widget _buildAtmosphericGlow(BuildContext context, bool isDesktop) {
-    if (isDesktop) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          // Base obsidian canvas with warm golden glow centered directly behind the 'de luzex' logo & showcase
-          IgnorePointer(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(-0.58, -0.72),
-                  radius: 1.15,
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.15),
-                    AppColors.primary.withValues(alpha: 0.06),
-                    AppColors.primary.withValues(alpha: 0.015),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.35, 0.65, 1.0],
-                ),
-              ),
-            ),
-          ),
-
-          // Secondary soft ambient backlight framing the right login card
-          IgnorePointer(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(0.22, -0.05),
-                  radius: 0.85,
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.07),
-                    AppColors.primary.withValues(alpha: 0.02),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.45, 1.0],
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Phone & Tablet Mobile View: Seamless full-screen ambient wash centered directly behind the top 'de luzex' logo
+  /// Ambient Glow centered directly behind the company logo & login card
+  Widget _buildAtmosphericGlow(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Top-center ambient wash aligned directly with the logo
+        // Center ambient golden halo
         IgnorePointer(
           child: Container(
             decoration: BoxDecoration(
               gradient: RadialGradient(
-                center: const Alignment(0.0, -0.78),
+                center: const Alignment(0.0, -0.15),
                 radius: 0.95,
                 colors: [
                   AppColors.primary.withValues(alpha: 0.16),
@@ -248,7 +237,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 center: const Alignment(0.8, 0.9),
                 radius: 0.75,
                 colors: [
-                  AppColors.primary.withValues(alpha: 0.05),
+                  AppColors.primary.withValues(alpha: 0.04),
                   Colors.transparent,
                 ],
                 stops: const [0.0, 1.0],
@@ -257,247 +246,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  /// Desktop View: Premium Split-Screen Enterprise Showcase
-  Widget _buildDesktopSplitLayout(BuildContext context) {
-    return Row(
-      children: [
-        // Left Column: Brand Showcase & Value Proposition
-        Expanded(
-          flex: 1,
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(
-                right: BorderSide(color: AppColors.sidebarBorder.withValues(alpha: 0.6), width: 1),
-              ),
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 36),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 460),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Top Brand Header
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          height: 42,
-                          child: SvgPicture.asset(
-                            'assets/images/logo_white.svg',
-                            height: 42,
-                            fit: BoxFit.contain,
-                            alignment: Alignment.centerLeft,
-                            placeholderBuilder: (context) => Image.asset(
-                              'assets/images/logo_white.png',
-                              height: 42,
-                              fit: BoxFit.contain,
-                              alignment: Alignment.centerLeft,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 7,
-                                height: 7,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'ENTERPRISE MANUFACTURING & INVENTORY',
-                                style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.8,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Precision Engineering.\nComplete Operational Control.',
-                          style: AppTextStyles.h1.copyWith(
-                            color: Colors.white,
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            height: 1.25,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Seamless, real-time coordination across multi-tier bill of materials, shop-floor production, stock movements, and statutory tax invoices.',
-                          softWrap: true,
-                          style: AppTextStyles.bodyRegular.copyWith(
-                            color: const Color(0xFF94A3B8),
-                            fontSize: 14.5,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-
-                    // Center: Feature Grid Cards (Compact & neatly constrained)
-                    Column(
-                      children: [
-                        _buildShowcaseFeature(
-                          icon: Icons.precision_manufacturing_outlined,
-                          title: 'Multi-Level BOM & WIP Tracking',
-                          description: 'Real-time stage-wise material consumption, scrap calculation, and direct manufacturing costing.',
-                        ),
-                        const SizedBox(height: 10),
-                        _buildShowcaseFeature(
-                          icon: Icons.receipt_long_outlined,
-                          title: 'Statutory GST & Revenue Operations',
-                          description: 'Direct sales invoices, delivery challans, credit notes, and automated customer ledgers.',
-                        ),
-                        const SizedBox(height: 10),
-                        _buildShowcaseFeature(
-                          icon: Icons.admin_panel_settings_outlined,
-                          title: 'Multi-Role Granular RBAC',
-                          description: 'Strict security boundaries across Admin, Inventory, Production, Sales, and Payments teams.',
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        // Right Column: Sign In Form (Brought more into the left)
-        Expanded(
-          flex: 1,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.only(left: 36, right: 36, top: 24, bottom: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: _buildLoginFormCard(context, isCompact: false),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Mobile & Tablet View: Centered Luxury Card
-  Widget _buildCenteredMobileLayout(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isCompact = screenWidth < 480;
-
-    return Center(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(
-          horizontal: isCompact ? 16 : 24,
-          vertical: 24,
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Top Brand Logo
-              SizedBox(
-                height: 38,
-                child: SvgPicture.asset(
-                  'assets/images/logo_white.svg',
-                  height: 38,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.center,
-                  placeholderBuilder: (context) => Image.asset(
-                    'assets/images/logo_white.png',
-                    height: 38,
-                    fit: BoxFit.contain,
-                    alignment: Alignment.center,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Form Card
-              _buildLoginFormCard(context, isCompact: isCompact),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Feature Showcase Item for Desktop View
-  Widget _buildShowcaseFeature({
-    required IconData icon,
-    required String title,
-    required String description,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF13131A),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.sidebarBorder),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: AppColors.primary, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  description,
-                  style: const TextStyle(
-                    color: Color(0xFF94A3B8),
-                    fontSize: 12,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

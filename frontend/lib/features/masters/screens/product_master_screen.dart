@@ -555,6 +555,130 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
     }
   }
 
+  Widget _buildControlsRow(List<DropdownMenuItem<String>> categoryFilterItems) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 650;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search by name, SKU, barcode...',
+                initialValue: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _selectedCategoryFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: categoryFilterItems,
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedCategoryFilter = val;
+                      _currentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _stockFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Collections')),
+                  DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                  DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                  DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _stockFilter = val;
+                      _currentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ErpSearchInput(
+                hintText: 'Search by name, SKU, barcode...',
+                initialValue: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _selectedCategoryFilter,
+              items: categoryFilterItems,
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _selectedCategoryFilter = val;
+                    _currentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpFilterDropdown<String>(
+              value: _stockFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Collections')),
+                DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _stockFilter = val;
+                    _currentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _startDate,
+              endDate: _endDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _startDate = start;
+                _endDate = end;
+                _currentPage = 0;
+              }),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
@@ -608,30 +732,25 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
             icon: Icons.inventory_2_outlined,
             title: 'Products Master',
             badgeText: 'FINISHED GOODS',
-            action: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ErpButton(
-                  text: 'Upload History',
-                  icon: Icons.history,
-                  isOutlined: true,
-                  onPressed: () => BulkUploadHistoryDialog.show(context, masterFilter: 'Finished Products'),
-                ),
-                const SizedBox(width: 10),
-                ErpButton(
-                  text: 'Bulk Upload',
-                  icon: Icons.upload_file,
-                  isOutlined: true,
-                  onPressed: () => BulkUploadDialog.show(context, BulkUploadMasterType.finishedProduct),
-                ),
-                const SizedBox(width: 10),
-                ErpButton(
-                  text: 'Add Product',
-                  icon: Icons.add,
-                  onPressed: () => _openAddEditDialog(),
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'Upload History',
+                icon: Icons.history,
+                isOutlined: true,
+                onPressed: () => BulkUploadHistoryDialog.show(context, masterFilter: 'Finished Products'),
+              ),
+              ErpButton(
+                text: 'Bulk Upload',
+                icon: Icons.upload_file,
+                isOutlined: true,
+                onPressed: () => BulkUploadDialog.show(context, BulkUploadMasterType.finishedProduct),
+              ),
+              ErpButton(
+                text: 'Add Product',
+                icon: Icons.add,
+                onPressed: () => _openAddEditDialog(),
+              ),
+            ],
           ),
           const SizedBox(height: 18),
 
@@ -669,22 +788,22 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.warning_amber_rounded,
-                      iconColor: AppColors.danger,
+                      iconColor: lowStockCount > 0 ? AppColors.danger : AppColors.success,
                       title: 'Low Stock Items',
                       value: '$lowStockCount',
-                      subtext: 'Reorder Soon',
-                      subtextColor: AppColors.danger,
+                      subtext: lowStockCount > 0 ? '$lowStockCount of $totalProductsCount need reorder' : 'Healthy stock levels',
+                      subtextColor: lowStockCount > 0 ? AppColors.danger : AppColors.success,
                     ),
                   ),
                   SizedBox(
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.cancel_outlined,
-                      iconColor: AppColors.danger,
+                      iconColor: outOfStockCount > 0 ? AppColors.danger : AppColors.success,
                       title: 'Out of Stock',
                       value: '$outOfStockCount',
-                      subtext: 'No Stock',
-                      subtextColor: AppColors.danger,
+                      subtext: outOfStockCount > 0 ? '$outOfStockCount of $totalProductsCount zero stock' : 'No stockouts',
+                      subtextColor: outOfStockCount > 0 ? AppColors.danger : AppColors.success,
                     ),
                   ),
                   SizedBox(
@@ -703,64 +822,26 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
           ),
           const SizedBox(height: 18),
 
-          // Modern Filter Controls Bar
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 280,
-                child: ErpSearchInput(
-                  hintText: 'Search by name, SKU, barcode...',
-                  initialValue: _searchQuery,
-                  onChanged: (val) => setState(() {
-                    _searchQuery = val;
-                    _currentPage = 0;
-                  }),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
                 ),
-              ),
-              ErpFilterDropdown<String>(
-                value: _selectedCategoryFilter,
-                items: categoryFilterItems,
-                onChanged: (val) {
-                  if (val != null) setState(() {
-                    _selectedCategoryFilter = val;
-                    _currentPage = 0;
-                  });
-                },
-              ),
-              ErpFilterDropdown<String>(
-                value: _stockFilter,
-                items: const [
-                  DropdownMenuItem(value: 'ALL', child: Text('All Collections')),
-                  DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
-                  DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
-                  DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock')),
-                ],
-                onChanged: (val) {
-                  if (val != null) setState(() {
-                    _stockFilter = val;
-                    _currentPage = 0;
-                  });
-                },
-              ),
-              ErpDateFilterBox(
-                startDate: _startDate,
-                endDate: _endDate,
-                onDateRangeSelected: (start, end) => setState(() {
-                  _startDate = start;
-                  _endDate = end;
-                  _currentPage = 0;
-                }),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Data Table (Matching Figma Screenshot 2 Columns)
-          // Data Table with All Deluzex ERP Product Master Fields & Figma Typography
-          ErpDataTable(
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildControlsRow(categoryFilterItems),
+                const SizedBox(height: 16),
+                ErpDataTable(
             columns: const [
               ErpColumn(title: 'PRODUCT NAME'),
               ErpColumn(title: 'SKU / CODE'),
@@ -871,14 +952,17 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
           ),
           const SizedBox(height: 16),
           ErpPaginationBar(
-            currentPage: safeCurrentPage,
-            pageSize: safePageSize,
-            totalRecords: totalRecords,
-            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-            onPageSizeChanged: (newSize) => setState(() {
-              _pageSize = newSize;
-              _currentPage = 0;
-            }),
+                  currentPage: safeCurrentPage,
+                  pageSize: safePageSize,
+                  totalRecords: totalRecords,
+                  onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                  onPageSizeChanged: (newSize) => setState(() {
+                    _pageSize = newSize;
+                    _currentPage = 0;
+                  }),
+                ),
+              ],
+            ),
           ),
         ],
       ),
