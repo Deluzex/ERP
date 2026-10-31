@@ -110,7 +110,7 @@ class ErpFilterDropdown<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
     this.width,
-    this.isExpanded = true,
+    this.isExpanded = false,
   });
 
   @override
@@ -176,7 +176,7 @@ class ErpFilterDropdown<T> extends StatelessWidget {
           child: DropdownButton<T>(
             value: safeValue,
             isDense: true,
-            isExpanded: isExpanded || width != null,
+            isExpanded: isExpanded,
             dropdownColor: Colors.white,
             borderRadius: BorderRadius.circular(10),
             elevation: 4,

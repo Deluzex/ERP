@@ -419,7 +419,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
   Widget _buildControlsRow() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 650;
+        final isMobile = constraints.maxWidth < 450;
         if (isMobile) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

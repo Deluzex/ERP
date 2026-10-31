@@ -963,7 +963,7 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                   padding: const EdgeInsets.all(18),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final isMobile = constraints.maxWidth < 650;
+                      final isMobile = constraints.maxWidth < 450;
                       if (isMobile) {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,

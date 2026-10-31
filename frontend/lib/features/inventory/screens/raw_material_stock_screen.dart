@@ -101,10 +101,14 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     value: selectedUnit,
                                     decoration: const InputDecoration(labelText: 'Unit'),
                                     items: db.units.map((u) {
-                                      return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
+                                      return DropdownMenuItem(
+                                        value: u.symbol,
+                                        child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis, maxLines: 1),
+                                      );
                                     }).toList(),
                                     onChanged: (val) {
                                       if (val != null) setDlgState(() => selectedUnit = val);
@@ -166,10 +170,14 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                                   children: [
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         value: selectedUnit,
                                         decoration: const InputDecoration(labelText: 'Unit'),
                                         items: db.units.map((u) {
-                                          return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
+                                          return DropdownMenuItem(
+                                            value: u.symbol,
+                                            child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis, maxLines: 1),
+                                          );
                                         }).toList(),
                                         onChanged: (val) {
                                           if (val != null) setDlgState(() => selectedUnit = val);
@@ -456,7 +464,7 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                 // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 650;
+                    final isMobile = constraints.maxWidth < 450;
                     if (isMobile) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,

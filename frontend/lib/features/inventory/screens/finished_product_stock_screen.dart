@@ -62,7 +62,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Text('Edit Finished Product', style: AppTextStyles.h2),
               content: Container(
-                constraints: BoxConstraints(maxWidth: 580, maxHeight: MediaQuery.of(context).size.height * 0.72),
+                constraints: BoxConstraints(maxWidth: 620, maxHeight: MediaQuery.of(context).size.height * 0.72),
                 width: double.infinity,
                 child: Form(
                   key: formKey,
@@ -101,10 +101,14 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     value: selectedUnit,
                                     decoration: const InputDecoration(labelText: 'Unit'),
                                     items: db.units.map((u) {
-                                      return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
+                                      return DropdownMenuItem(
+                                        value: u.symbol,
+                                        child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis, maxLines: 1),
+                                      );
                                     }).toList(),
                                     onChanged: (val) {
                                       if (val != null) setDlgState(() => selectedUnit = val);
@@ -180,10 +184,14 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                                   children: [
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         value: selectedUnit,
                                         decoration: const InputDecoration(labelText: 'Unit'),
                                         items: db.units.map((u) {
-                                          return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
+                                          return DropdownMenuItem(
+                                            value: u.symbol,
+                                            child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis, maxLines: 1),
+                                          );
                                         }).toList(),
                                         onChanged: (val) {
                                           if (val != null) setDlgState(() => selectedUnit = val);
@@ -419,7 +427,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                 // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 650;
+                    final isMobile = constraints.maxWidth < 450;
                     if (isMobile) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,

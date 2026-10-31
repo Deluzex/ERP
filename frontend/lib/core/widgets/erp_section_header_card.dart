@@ -19,7 +19,7 @@ class ErpSectionHeaderCard extends StatelessWidget {
     this.subtitle,
     this.action,
     this.actions,
-    this.narrowBreakpoint = 750,
+    this.narrowBreakpoint = 480,
   });
 
   @override
@@ -53,31 +53,6 @@ class ErpSectionHeaderCard extends StatelessWidget {
               alignment: WrapAlignment.end,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: actions!,
-            );
-          }
-        } else if (effectiveAction is Row) {
-          final rowChildren = effectiveAction.children.where((w) => w is! SizedBox).toList();
-          if (isNarrow) {
-            effectiveAction = Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (int i = 0; i < rowChildren.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: rowChildren[i],
-                  ),
-                ],
-              ],
-            );
-          } else {
-            effectiveAction = Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: rowChildren,
             );
           }
         }

@@ -1435,17 +1435,19 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
           // 4. Search and Dropdown Filter Row
           LayoutBuilder(
-            builder: (context, filterBox) {
-              final isMobile = filterBox.maxWidth < 650;
-              final isTablet = filterBox.maxWidth < 950;
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 450;
 
-              final searchField = ErpSearchInput(
-                hintText: 'Search return no, customer, reason...',
-                initialValue: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
+              final searchField = SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search return no, customer, reason...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
               );
 
               final customerDropdown = ErpFilterDropdown<String?>(
@@ -1489,7 +1491,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    searchField,
+                    ErpSearchInput(
+                      hintText: 'Search return no, customer, reason...',
+                      initialValue: _searchQuery,
+                      onChanged: (val) => setState(() {
+                        _searchQuery = val;
+                        _currentPage = 0;
+                      }),
+                    ),
                     const SizedBox(height: 10),
                     customerDropdown,
                     const SizedBox(height: 10),
@@ -1500,36 +1509,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                 );
               }
 
-              if (isTablet) {
-                return Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: searchField),
-                        const SizedBox(width: 12),
-                        dateBox,
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(child: customerDropdown),
-                        const SizedBox(width: 12),
-                        Expanded(child: typeDropdown),
-                      ],
-                    ),
-                  ],
-                );
-              }
-
-              return Row(
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(flex: 3, child: searchField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: customerDropdown),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: typeDropdown),
-                  const SizedBox(width: 12),
+                  searchField,
+                  customerDropdown,
+                  typeDropdown,
                   dateBox,
                 ],
               );

@@ -166,31 +166,67 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
           const SizedBox(height: 16),
 
           // 3. Global Filters
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              ErpSearchInput(
-                hintText: 'Search quotation, client, project...',
-                value: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
-              ),
-              ErpDateFilterBox(
-                startDate: _startDate,
-                endDate: _endDate,
-                onDateRangeSelected: (start, end) {
-                  setState(() {
-                    _startDate = start;
-                    _endDate = end;
-                    _currentPage = 0;
-                  });
-                },
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 450;
+              if (isMobile) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ErpSearchInput(
+                      hintText: 'Search quotation, client, project...',
+                      initialValue: _searchQuery,
+                      onChanged: (val) => setState(() {
+                        _searchQuery = val;
+                        _currentPage = 0;
+                      }),
+                    ),
+                    const SizedBox(height: 10),
+                    ErpDateFilterBox(
+                      startDate: _startDate,
+                      endDate: _endDate,
+                      onDateRangeSelected: (start, end) {
+                        setState(() {
+                          _startDate = start;
+                          _endDate = end;
+                          _currentPage = 0;
+                        });
+                      },
+                    ),
+                  ],
+                );
+              }
+
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 300,
+                    child: ErpSearchInput(
+                      hintText: 'Search quotation, client, project...',
+                      initialValue: _searchQuery,
+                      onChanged: (val) => setState(() {
+                        _searchQuery = val;
+                        _currentPage = 0;
+                      }),
+                    ),
+                  ),
+                  ErpDateFilterBox(
+                    startDate: _startDate,
+                    endDate: _endDate,
+                    onDateRangeSelected: (start, end) {
+                      setState(() {
+                        _startDate = start;
+                        _endDate = end;
+                        _currentPage = 0;
+                      });
+                    },
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
 

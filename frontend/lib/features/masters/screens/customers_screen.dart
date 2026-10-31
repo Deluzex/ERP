@@ -410,7 +410,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   Widget _buildControlsRow() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 650;
+        final isMobile = constraints.maxWidth < 450;
         if (isMobile) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

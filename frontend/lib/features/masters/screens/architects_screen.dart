@@ -543,7 +543,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
   Widget _buildArchControlsRow() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 650;
+        final isMobile = constraints.maxWidth < 450;
         if (isMobile) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -638,7 +638,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
   Widget _buildCommControlsRow() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 650;
+        final isMobile = constraints.maxWidth < 450;
         if (isMobile) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
