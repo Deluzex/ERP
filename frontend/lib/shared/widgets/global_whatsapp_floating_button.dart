@@ -1,3 +1,4 @@
+import '../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/whatsapp_models.dart';
@@ -83,9 +84,7 @@ class GlobalWhatsAppFloatingButton extends ConsumerWidget {
                 defaultMessage: msgCtrl.text.trim(),
               ));
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Global WhatsApp Support destination updated!')),
-              );
+ErpToast.showSuccess(context, 'Global WhatsApp Support destination updated!');
             },
             child: const Text('Save Configuration'),
           ),

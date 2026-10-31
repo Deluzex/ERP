@@ -7,6 +7,7 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/purchase_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -111,22 +112,15 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                         );
                         if (mounted) {
                           Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Purchase cancelled and stock rolled back successfully'),
-                              backgroundColor: AppColors.success,
-                            ),
+                          ErpToast.showSuccess(
+                            context,
+                            'Purchase cancelled and stock rolled back successfully',
                           );
                         }
                       } catch (err) {
                         setDialogState(() => isSubmitting = false);
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error: $err'),
-                              backgroundColor: AppColors.danger,
-                            ),
-                          );
+                          ErpToast.showError(context, 'Error: $err');
                         }
                       }
                     },
@@ -137,6 +131,58 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
     );
   }
 
+  Future<void> _openEditPurchaseDialog(Purchase initialPurchase) async {
+    Purchase p = initialPurchase;
+    if (p.items.isEmpty) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+      try {
+        p = await ref.read(databaseServiceProvider).getPurchaseDetailAsync(initialPurchase.id);
+      } catch (e) {
+        debugPrint('[PurchaseListScreen] Failed to load full purchase: ' + e.toString());
+      } finally {
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 1280,
+            maxHeight: MediaQuery.of(context).size.height * 0.92,
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            height: double.infinity,
+            child: CreatePurchaseScreen(
+              key: ValueKey('edit_purchase_' + p.id),
+              existingPurchase: p,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (mounted) {
+      await ref.read(databaseServiceProvider).loadPurchases();
+      setState(() {});
+    }
+  }
   void _showPurchaseDetailsDialog(Purchase initialPurchase) {
     Purchase currentPurchase = initialPurchase;
     bool isLoading = initialPurchase.items.isEmpty;
@@ -207,12 +253,7 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                     constraints: const BoxConstraints(),
                     onPressed: () {
                       Navigator.pop(ctx);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CreatePurchaseScreen(existingPurchase: p),
-                        ),
-                      );
+                      _openEditPurchaseDialog(currentPurchase);
                     },
                   ),
                 ],
@@ -380,12 +421,7 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                             icon: Icons.edit_outlined,
                             onPressed: () {
                               Navigator.pop(ctx);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CreatePurchaseScreen(existingPurchase: p),
-                                ),
-                              );
+                              _openEditPurchaseDialog(currentPurchase);
                             },
                           ),
                           const SizedBox(height: 8),
@@ -405,12 +441,7 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                         icon: Icons.edit_outlined,
                         onPressed: () {
                           Navigator.pop(ctx);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CreatePurchaseScreen(existingPurchase: p),
-                            ),
-                          );
+                          _openEditPurchaseDialog(currentPurchase);
                         },
                       ),
                       const SizedBox(width: 8),
@@ -624,7 +655,10 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
               ErpButton(
                 text: 'Create Direct Purchase',
                 icon: Icons.add,
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                onPressed: () {
+                  ref.read(editingPurchaseProvider.notifier).state = null;
+                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase;
+                },
               ),
               // ErpButton(
               //   text: 'Refresh',
@@ -885,6 +919,9 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                             case 'view':
                               _showPurchaseDetailsDialog(p);
                               break;
+                            case 'edit':
+                              _openEditPurchaseDialog(p);
+                              break;
                             case 'cancel':
                               _confirmCancelPurchase(p);
                               break;
@@ -901,6 +938,17 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                               ],
                             ),
                           ),
+                          if (p.status != PurchaseStatus.cancelled)
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Edit Purchase'),
+                                ],
+                              ),
+                            ),
                           if (p.status != PurchaseStatus.cancelled)
                             const PopupMenuItem(
                               value: 'cancel',

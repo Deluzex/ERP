@@ -1,3 +1,4 @@
+import 'erp_toast.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -498,9 +499,7 @@ class ErpHeader extends ConsumerWidget {
               if (pwdCtrl.text.trim().isNotEmpty) {
                 ref.read(databaseServiceProvider).resetUserPassword(user.id, pwdCtrl.text.trim());
                 Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password updated successfully!'), backgroundColor: AppColors.success),
-                );
+ErpToast.showSuccess(context, 'Password updated successfully!');
               }
             },
             child: const Text('Save Password'),

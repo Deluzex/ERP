@@ -1,3 +1,4 @@
+import '../../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -226,9 +227,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                             isActive: isActive,
                           );
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('User ${nameCtrl.text.trim()} updated successfully!'), backgroundColor: AppColors.success),
-                            );
+ErpToast.showSuccess(context, 'User ${nameCtrl.text.trim()} updated successfully!');
                           }
                         } else {
                           await db.addUserAsync(
@@ -240,17 +239,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                             assignedRoleIds: assignedRoleIds,
                           );
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('New User ${nameCtrl.text.trim()} created!'), backgroundColor: AppColors.success),
-                            );
+ErpToast.showSuccess(context, 'New User ${nameCtrl.text.trim()} created!');
                           }
                         }
                         if (ctx.mounted) Navigator.of(ctx).pop();
                       } catch (e) {
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.danger),
-                          );
+ErpToast.showError(context, 'Failed: ${e.toString().replaceFirst("Exception: ", "")}');
                         }
                       }
                     }
@@ -305,15 +300,11 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                   await db.resetUserPasswordAsync(user.id, pwdCtrl.text.trim());
                   if (ctx.mounted) Navigator.of(ctx).pop();
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Password for ${user.name} reset successfully!'), backgroundColor: AppColors.success),
-                    );
+ErpToast.showSuccess(context, 'Password for ${user.name} reset successfully!');
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to reset password: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.danger),
-                    );
+ErpToast.showError(context, 'Failed to reset password: ${e.toString().replaceFirst("Exception: ", "")}');
                   }
                 }
               }
@@ -629,9 +620,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                       ));
                                       ref.read(authStateProvider.notifier).refreshUserPermissions(existing.id, permMatrix);
                                       if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('Role "${existing.name}" permissions updated!'), backgroundColor: AppColors.success),
-                                        );
+ErpToast.showSuccess(context, 'Role "${existing.name}" permissions updated!');
                                       }
                                     } else {
                                       final roleId = 'role_${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
@@ -643,17 +632,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                         defaultDashboardSection: selectedDashboard.name,
                                       );
                                       if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('New Role "${nameCtrl.text.trim()}" created!'), backgroundColor: AppColors.success),
-                                        );
+ErpToast.showSuccess(context, 'New Role "${nameCtrl.text.trim()}" created!');
                                       }
                                     }
                                     if (ctx.mounted) Navigator.of(ctx).pop();
                                   } catch (e) {
                                     if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Role operation failed: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.danger),
-                                      );
+ErpToast.showError(context, 'Role operation failed: ${e.toString().replaceFirst("Exception: ", "")}');
                                     }
                                   }
                                 }
@@ -694,15 +679,11 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                 await db.deleteRoleAsync(role.id);
                 if (ctx.mounted) Navigator.of(ctx).pop();
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Role "${role.name}" deleted successfully!'), backgroundColor: AppColors.success),
-                  );
+ErpToast.showSuccess(context, 'Role "${role.name}" deleted successfully!');
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to delete role: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.danger),
-                  );
+ErpToast.showError(context, 'Failed to delete role: ${e.toString().replaceFirst("Exception: ", "")}');
                 }
               }
             },
@@ -718,18 +699,11 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
     try {
       await db.toggleUserStatusAsync(user.id, willBeActive);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('User "${user.name}" ${willBeActive ? "reactivated" : "deactivated"} successfully!'),
-            backgroundColor: willBeActive ? AppColors.success : AppColors.warning,
-          ),
-        );
+ErpToast.showWarning(context, 'User "${user.name}" ${willBeActive ? "reactivated" : "deactivated"} successfully!');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update status: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'Failed to update status: ${e.toString().replaceFirst("Exception: ", "")}');
       }
     }
   }
@@ -1166,9 +1140,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                   db.revokeTemporaryAccess(g.id);
                                 }
                                 setState(() {});
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('All temporary supervisor overrides revoked.'), backgroundColor: AppColors.warning),
-                                );
+ErpToast.showWarning(context, 'All temporary supervisor overrides revoked.');
                               },
                             ),
                           ],

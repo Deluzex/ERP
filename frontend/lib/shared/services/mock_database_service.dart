@@ -2418,10 +2418,12 @@ class MockDatabaseService extends ChangeNotifier {
             final updatedStock = fp.currentStock + line.quantity;
             final updatedPurchased = fp.purchasedStock + line.quantity;
             final newCost = line.landedRate > 0 ? line.landedRate : fp.costPrice;
+            final unitTrans = line.quantity > 0 ? (line.transportationCost / line.quantity) : 0.0;
             finishedProducts[fpIndex] = fp.copyWith(
               currentStock: updatedStock,
               purchasedStock: updatedPurchased,
               costPrice: newCost,
+              transportationCharge: unitTrans > 0 ? unitTrans : fp.transportationCharge,
               updatedAt: DateTime.now(),
             );
 
@@ -2449,6 +2451,7 @@ class MockDatabaseService extends ChangeNotifier {
             rawMaterials[rmIndex] = rm.copyWith(
               currentStock: updatedStock,
               defaultPurchasePrice: newRate,
+              transportationCharge: line.transportationCost > 0 ? line.transportationCost : rm.transportationCharge,
               updatedAt: DateTime.now(),
             );
 

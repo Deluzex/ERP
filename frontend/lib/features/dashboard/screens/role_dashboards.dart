@@ -470,7 +470,10 @@ class PurchaseRoleDashboard extends ConsumerWidget {
               ErpButton(
                 text: 'Create Direct Purchase',
                 icon: Icons.add_shopping_cart,
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                onPressed: () {
+                  ref.read(editingPurchaseProvider.notifier).state = null;
+                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase;
+                },
               ),
               ErpButton(
                 text: 'Purchase Invoices',
@@ -1590,7 +1593,10 @@ class DataEntryRoleDashboard extends ConsumerWidget {
               subtitle: 'PO for Vendor supply',
               icon: Icons.add_shopping_cart,
               color: Colors.purple,
-              onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+              onTap: () {
+                ref.read(editingPurchaseProvider.notifier).state = null;
+                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase;
+              },
             ),
             _buildActionShortcutTile(
               title: 'Add New Customer',

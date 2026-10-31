@@ -351,14 +351,16 @@ export class PurchasesService {
           if (item.itemType === PurchaseItemTypeEnum.rawMaterial && item.rawMaterialId) {
             // Lock and update Raw Material with landed cost (including transportation)
             const unitCost = Number(landedRate || item.landedRate || item.rate || 0);
+            const transAmount = Number(transCost || 0);
             const updRm = await client.query<{ current_stock: string }>(
               `UPDATE raw_materials
                SET current_stock = current_stock + $1::numeric,
                    default_purchase_price = CASE WHEN $3::numeric > 0 THEN $3::numeric ELSE default_purchase_price END,
+                   transportation_charge = $4::numeric,
                    updated_at = now()
                WHERE id = $2 AND is_deleted = false
                RETURNING current_stock`,
-              [item.quantity, item.rawMaterialId, unitCost],
+              [item.quantity, item.rawMaterialId, unitCost, transAmount],
             );
             const newBal = Number(updRm.rows[0]?.current_stock || 0);
 
@@ -391,15 +393,17 @@ export class PurchasesService {
           } else if (item.itemType === PurchaseItemTypeEnum.finishedProduct && item.finishedProductId) {
             // Lock and update Finished Product with landed cost (including transportation)
             const unitCost = Number(landedRate || item.landedRate || item.rate || 0);
+            const unitTrans = Number(item.quantity) > 0 ? Number(transCost) / Number(item.quantity) : 0;
             const updFp = await client.query<{ current_stock: string }>(
               `UPDATE finished_products
                SET current_stock = current_stock + $1,
                    purchased_stock = purchased_stock + $1::numeric,
                    cost_price = CASE WHEN $3::numeric > 0 THEN $3::numeric ELSE cost_price END,
+                   transportation_charge = $4::numeric,
                    updated_at = now()
                WHERE id = $2 AND is_deleted = false
                RETURNING current_stock`,
-              [item.quantity, item.finishedProductId, unitCost],
+              [item.quantity, item.finishedProductId, unitCost, unitTrans],
             );
             const newBal = Number(updFp.rows[0]?.current_stock || 0);
 

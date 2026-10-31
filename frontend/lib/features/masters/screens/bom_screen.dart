@@ -14,6 +14,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
@@ -292,23 +293,13 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                 try {
                   await ref.read(databaseServiceProvider).updateBomStatusAsync(bom.id, selected);
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('BOM "${bom.safeName}" status updated to $selected!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
+ErpToast.showSuccess(context, 'BOM "${bom.safeName}" status updated to $selected!');
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(e is ApiException
+ErpToast.showError(context, e is ApiException
                             ? 'Failed to update status: ${e.message}'
-                            : 'Failed to update status. Please try again.'),
-                        backgroundColor: AppColors.danger,
-                      ),
-                    );
+                            : 'Failed to update status. Please try again.');
                   }
                 }
               },
@@ -634,17 +625,16 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   }
 
   Future<void> _saveBom() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ErpToast.showError(context, 'Please fill in all required recipe fields marked with *');
+      return;
+    }
     if (_selectedProductId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a finished product.')),
-      );
+ErpToast.showWarning(context, 'Please select a finished product.');
       return;
     }
     if (_draftItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one raw material to the BOM recipe.')),
-      );
+ErpToast.showWarning(context, 'Please add at least one raw material to the BOM recipe.');
       return;
     }
     if (_isSavingBom) return;
@@ -652,9 +642,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     final db = ref.read(databaseServiceProvider);
     final prod = db.finishedProducts.where((p) => p.id == _selectedProductId).firstOrNull;
     if (prod == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Finished product not found. Please refresh and try again.')),
-      );
+ErpToast.showWarning(context, 'Finished product not found. Please refresh and try again.');
       return;
     }
     final outputQty = double.tryParse(_prodQtyCtrl.text.trim()) ?? 1.0;
@@ -704,23 +692,13 @@ class _BomScreenState extends ConsumerState<BomScreen> {
         _isSavingBom = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(isEdit ? 'BOM updated successfully!' : 'BOM created successfully!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+ErpToast.showSuccess(context, isEdit ? 'BOM updated successfully!' : 'BOM created successfully!');
     } catch (e) {
       setState(() => _isSavingBom = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e is ApiException
+ErpToast.showError(context, e is ApiException
               ? 'Failed to save BOM: ${e.message}'
-              : 'Failed to save BOM. Please try again.'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+              : 'Failed to save BOM. Please try again.');
     }
   }
 
@@ -748,20 +726,13 @@ class _BomScreenState extends ConsumerState<BomScreen> {
               try {
                 await db.deleteBomAsync(bom.id);
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('BOM recipe retired successfully!'), backgroundColor: AppColors.danger),
-                  );
+ErpToast.showError(context, 'BOM recipe retired successfully!');
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(e is ApiException
+ErpToast.showError(context, e is ApiException
                           ? 'Failed to retire recipe: ${e.message}'
-                          : 'Failed to retire recipe. Please try again.'),
-                      backgroundColor: AppColors.danger,
-                    ),
-                  );
+                          : 'Failed to retire recipe. Please try again.');
                 }
               }
             },
@@ -783,12 +754,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     final List<RawMaterial> uniqueRms = rawList.where((rm) => rm.id.isNotEmpty && seenRmIds.add(rm.id)).toList();
 
     if (uniqueRms.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No raw materials found in inventory catalog.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
       return;
     }
 
@@ -1229,20 +1195,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  ErpButton(
-                    text: 'Reset',
-                    icon: Icons.refresh,
-                    isOutlined: true,
-                    onPressed: () {
-                      setState(() {
-                        _searchQuery = '';
-                        _selectedProductFilter = 'ALL';
-                        _statusFilter = 'ALL';
-                        _currentPage = 0;
-                      });
-                    },
-                  ),
+
                 ],
               ),
             ],
@@ -1302,19 +1255,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                 }
               },
             ),
-            ErpButton(
-              text: 'Reset',
-              icon: Icons.refresh,
-              isOutlined: true,
-              onPressed: () {
-                setState(() {
-                  _searchQuery = '';
-                  _selectedProductFilter = 'ALL';
-                  _statusFilter = 'ALL';
-                  _currentPage = 0;
-                });
-              },
-            ),
+
           ],
         );
       },
@@ -1820,7 +1761,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                         const SizedBox(width: 16),
                         // BOM Name
                         Expanded(
-                          flex: isEdit ? 2 : 3,
                           child: TextFormField(
                             controller: _bomNameCtrl,
                             decoration: const InputDecoration(labelText: 'BOM Recipe Name *'),
@@ -1849,35 +1789,42 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Finished Product Picker
+                        // Finished Product Picker (50% - matches BOM Number above)
                         Expanded(
-                          flex: 2,
                           child: _buildFinishedProductPicker(db),
                         ),
                         const SizedBox(width: 16),
-                        // Product Code (Read-only)
+                        // Right half (50% - matches BOM Recipe Name above)
                         Expanded(
-                          child: TextFormField(
-                            controller: _productCodeCtrl,
-                            readOnly: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Product Code / SKU',
-                              filled: true,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // Production Quantity
-                        Expanded(
-                          child: TextFormField(
-                            controller: _prodQtyCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: InputDecoration(
-                              labelText: 'Batch Qty *',
-                              suffixText: _unitCtrl.text.isNotEmpty ? _unitCtrl.text : 'PCS',
-                            ),
-                            validator: (v) => Validators.positiveNumber(v, 'Valid quantity required'),
-                            onChanged: (_) => setState(() {}),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Product Code (Read-only)
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _productCodeCtrl,
+                                  readOnly: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Product Code / SKU',
+                                    filled: true,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              // Production Quantity
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _prodQtyCtrl,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  decoration: InputDecoration(
+                                    labelText: 'Batch Qty *',
+                                    suffixText: _unitCtrl.text.isNotEmpty ? _unitCtrl.text : 'PCS',
+                                  ),
+                                  validator: (v) => Validators.positiveNumber(v, 'Valid quantity required'),
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

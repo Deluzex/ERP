@@ -14,6 +14,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -359,7 +360,10 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          if (!formKey.currentState!.validate()) return;
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
                           setDlgState(() {
                             isSubmitting = true;
                             serverError = null;
@@ -403,12 +407,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
 
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Architect "${architect.name}" ${isEdit ? "updated" : "saved"} successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+ErpToast.showSuccess(context, 'Architect "${architect.name}" ${isEdit ? "updated" : "saved"} successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {
@@ -440,21 +439,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
             try {
               await db.deleteArchitectAsync(architectId: architect.id, reason: reason);
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Architect "${architect.name}" archived with audit reason: $reason'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+ErpToast.showSuccess(context, 'Architect "${architect.name}" archived with audit reason: $reason');
               }
             } catch (e) {
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Delete failed: ${e.toString().replaceFirst("Exception: ", "")}'),
-                    backgroundColor: AppColors.danger,
-                  ),
-                );
+ErpToast.showError(context, 'Delete failed: ${e.toString().replaceFirst("Exception: ", "")}');
               }
             }
           },
@@ -528,9 +517,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                 }
                 if (ctx.mounted) Navigator.of(ctx).pop();
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Commission Paid & Ledger Updated!'), backgroundColor: AppColors.success),
-                  );
+ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                 }
               },
             ),
@@ -1201,17 +1188,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       try {
                                         await db.approveCommissionAsync(comm.id);
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Commission Voucher ${comm.commissionNumber} Approved!'),
-                                            backgroundColor: AppColors.success,
-                                          ));
+ErpToast.showSuccess(context, 'Commission Voucher ${comm.commissionNumber} Approved!');
                                         }
                                       } catch (e) {
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Failed to approve: $e'),
-                                            backgroundColor: AppColors.danger,
-                                          ));
+ErpToast.showError(context, 'Failed to approve: $e');
                                         }
                                       }
                                     },
@@ -1223,17 +1204,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       try {
                                         await db.rejectCommissionAsync(comm.id, reason: 'Declined during partner audit');
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
-                                            backgroundColor: AppColors.danger,
-                                          ));
+ErpToast.showError(context, 'Commission Voucher ${comm.commissionNumber} Rejected.');
                                         }
                                       } catch (e) {
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Failed to reject: $e'),
-                                            backgroundColor: AppColors.danger,
-                                          ));
+ErpToast.showError(context, 'Failed to reject: $e');
                                         }
                                       }
                                     },
@@ -1252,17 +1227,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       try {
                                         await db.rejectCommissionAsync(comm.id, reason: 'Declined after approval');
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
-                                            backgroundColor: AppColors.danger,
-                                          ));
+ErpToast.showError(context, 'Commission Voucher ${comm.commissionNumber} Rejected.');
                                         }
                                       } catch (e) {
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Failed to reject: $e'),
-                                            backgroundColor: AppColors.danger,
-                                          ));
+ErpToast.showError(context, 'Failed to reject: $e');
                                         }
                                       }
                                     },

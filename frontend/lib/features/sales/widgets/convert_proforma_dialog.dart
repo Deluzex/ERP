@@ -1,3 +1,4 @@
+import '../../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -210,12 +211,7 @@ class _ConvertProformaDialogState extends ConsumerState<ConvertProformaDialog> {
 
     if (user == null) {
       setState(() => _errorMessage = 'Please select a responsible person before proceeding.');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a valid responsible person before proceeding.'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+ErpToast.showError(context, 'Please select a valid responsible person before proceeding.');
       return;
     }
 
@@ -427,24 +423,14 @@ class _ConvertProformaDialogState extends ConsumerState<ConvertProformaDialog> {
         _isProcessing = false;
         _errorMessage = e.toString();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error converting proforma to sales order: $e'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+ErpToast.showError(context, 'Error converting proforma to sales order: $e');
     }
   }
 
   void _sendWhatsAppNotification(Sale so, AppUser user, MockDatabaseService db, List<ProductShortageDetail> shortages) {
     final cleaned = DocumentSharingService.cleanPhoneNumber(user.mobile);
     if (cleaned.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${user.name} does not have a valid mobile/WhatsApp number stored.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+ErpToast.showWarning(context, '${user.name} does not have a valid mobile/WhatsApp number stored.');
       return;
     }
 
@@ -478,12 +464,7 @@ class _ConvertProformaDialogState extends ConsumerState<ConvertProformaDialog> {
       message: message,
     );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Opening WhatsApp message for ${user.name} (${user.mobile})...'),
-        backgroundColor: const Color(0xFF25D366),
-      ),
-    );
+ErpToast.showInfo(context, 'Opening WhatsApp message for ${user.name} (${user.mobile})...');
   }
 
   @override

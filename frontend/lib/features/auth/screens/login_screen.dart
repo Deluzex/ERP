@@ -6,6 +6,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -119,7 +120,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate() || _isLoading) return;
+    if (_isLoading) return;
+    if (!_formKey.currentState!.validate()) {
+      ErpToast.showError(context, 'Please enter a valid email and password');
+      return;
+    }
 
     setState(() {
       _isLoading = true;

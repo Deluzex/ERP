@@ -1,3 +1,4 @@
+import '../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -322,12 +323,7 @@ Greetings from Deluzex Lighting Systems.
     );
 
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Opening WhatsApp with message for ${widget.recipientName}...'),
-        backgroundColor: const Color(0xFF25D366),
-      ),
-    );
+ErpToast.showInfo(context, 'Opening WhatsApp with message for ${widget.recipientName}...');
   }
 
   @override
@@ -482,9 +478,7 @@ Greetings from Deluzex Lighting Systems.
                     label: const Text('Copy Text'),
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: _messageCtrl.text.trim()));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Message copied to clipboard!')),
-                      );
+ErpToast.showInfo(context, 'Message copied to clipboard!');
                     },
                   ),
                   Wrap(

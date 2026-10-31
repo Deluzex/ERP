@@ -179,15 +179,11 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
                 icon: Icons.check,
                 onPressed: () async {
                   if (enteredAmount <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter a valid payment amount.'), backgroundColor: AppColors.danger),
-                    );
+ErpToast.showError(context, 'Please enter a valid payment amount.');
                     return;
                   }
                   if (enteredAmount > proforma.pendingAmount) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Recorded payment cannot exceed the remaining balance.'), backgroundColor: AppColors.danger),
-                    );
+ErpToast.showError(context, 'Recorded payment cannot exceed the remaining balance.');
                     return;
                   }
 
@@ -201,12 +197,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
                     );
 
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Advance of ${Formatters.formatCurrency(enteredAmount)} recorded against ${proforma.invoiceNumber}!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
+ErpToast.showSuccess(context, 'Advance of ${Formatters.formatCurrency(enteredAmount)} recorded against ${proforma.invoiceNumber}!');
                   } catch (e) {
                     ErpToast.showError(context, 'Failed to record payment: $e');
                   }
@@ -609,12 +600,7 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
 
   Future<void> _convertToSalesOrder(BuildContext context, WidgetRef ref, Sale proforma, MockDatabaseService db) async {
     if (proforma.proformaStatus == ProformaStatus.converted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This Proforma Invoice has already been converted to a Sales Order.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+ErpToast.showWarning(context, 'This Proforma Invoice has already been converted to a Sales Order.');
       return;
     }
 
@@ -691,18 +677,11 @@ class _ProformaInvoicesScreenState extends ConsumerState<ProformaInvoicesScreen>
       if (mounted) setState(() {});
 
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Created Sales Order ${createdSO.invoiceNumber} with automated stock allocation!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+ErpToast.showSuccess(context, 'Created Sales Order ${createdSO.invoiceNumber} with automated stock allocation!');
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders;
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create sales order: $e'), backgroundColor: AppColors.danger),
-      );
+ErpToast.showError(context, 'Failed to create sales order: $e');
     }
   }
 }

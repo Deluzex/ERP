@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
@@ -363,7 +364,10 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          if (!formKey.currentState!.validate()) return;
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
                           setDlgState(() {
                             isSubmitting = true;
                             serverError = null;
@@ -430,12 +434,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
 
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(isEdit ? 'Raw material updated successfully!' : 'Raw material created successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+                              ErpToast.showSuccess(context, isEdit ? 'Raw material updated successfully!' : 'Raw material created successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {
@@ -477,17 +476,10 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                 try {
                   await ref.read(databaseServiceProvider).deleteRawMaterialAsync(rm.id);
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Raw material "${rm.name}" deleted successfully!'),
-                      backgroundColor: AppColors.danger,
-                    ),
-                  );
+                  ErpToast.showSuccess(context, 'Raw material "${rm.name}" deleted successfully!');
                 } catch (e) {
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to delete "${rm.name}": $e'), backgroundColor: AppColors.danger),
-                  );
+                  ErpToast.showError(context, 'Failed to delete "${rm.name}": $e');
                 }
               },
             ),

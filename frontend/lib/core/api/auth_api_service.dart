@@ -36,7 +36,7 @@ class AuthApiService {
       final data = _client.unwrap<Map<String, dynamic>>(response);
       final accessToken = data['accessToken'] as String;
       final refreshToken = data['refreshToken'] as String;
-      final expiresIn = (data['expiresIn'] as num?)?.toInt() ?? 900;
+      final expiresIn = (data['expiresIn'] as num?)?.toInt() ?? 1800;
       final userJson = data['user'] as Map<String, dynamic>;
 
       final sessionId = data['sessionId']?.toString() ??
@@ -46,6 +46,7 @@ class AuthApiService {
         accessToken: accessToken,
         refreshToken: refreshToken,
         sessionId: sessionId,
+        expiresIn: expiresIn,
       );
 
       final permissionsList = (userJson['permissions'] as List?)?.map((p) => p.toString()).toList() ?? [];

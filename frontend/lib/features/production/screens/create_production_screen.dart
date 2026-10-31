@@ -9,11 +9,13 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/bom_model.dart';
 import '../../../core/models/production_model.dart';
 import '../../../core/models/raw_material_model.dart';
+import '../../../core/models/finished_product_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class _RawMaterialUsageDraft {
@@ -102,11 +104,14 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
     super.initState();
     final db = ref.read(databaseServiceProvider);
     final preselectedId = ref.read(selectedProductionProductIdProvider);
-    if (preselectedId != null && db.finishedProducts.any((p) => p.id == preselectedId)) {
+    final activeProducts = db.finishedProducts.where((p) => !p.isDeleted).toList();
+    if (preselectedId != null && activeProducts.any((p) => p.id == preselectedId)) {
       _selectedFinishedProductId = preselectedId;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(selectedProductionProductIdProvider.notifier).state = null;
       });
+    } else if (activeProducts.isNotEmpty) {
+      _selectedFinishedProductId = activeProducts.first.id;
     } else if (db.finishedProducts.isNotEmpty) {
       _selectedFinishedProductId = db.finishedProducts.first.id;
     }
@@ -131,6 +136,8 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
   void _loadBomForSelectedProduct({bool showFeedback = false}) {
     if (_selectedFinishedProductId == null) return;
     final db = ref.read(databaseServiceProvider);
+    final exists = db.finishedProducts.any((p) => p.id == _selectedFinishedProductId && !p.isDeleted);
+    if (!exists) return;
     final bom = db.getBomForProduct(_selectedFinishedProductId!);
     if (bom != null) {
       final plannedQty = _actualQty > 0 ? _actualQty : 1.0;
@@ -158,13 +165,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
         }
       });
       if (showFeedback && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Auto-loaded ${bom.items.length} raw materials from BOM recipe "${bom.name}"'),
-            backgroundColor: AppColors.primary,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+ErpToast.showInfo(context, 'Auto-loaded ${bom.items.length} raw materials from BOM recipe "${bom.name}"');
       }
     } else {
       setState(() {
@@ -194,19 +195,21 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
 
   Future<void> _showAddRawMaterialDialog() async {
     final db = ref.read(databaseServiceProvider);
-    if (db.rawMaterials.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No raw materials found in inventory catalog.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+    final availableRmsMap = <String, RawMaterial>{};
+    for (final r in db.rawMaterials) {
+      if (!r.isDeleted && !availableRmsMap.containsKey(r.id)) {
+        availableRmsMap[r.id] = r;
+      }
+    }
+    final activeRawMaterials = availableRmsMap.values.toList();
+    if (activeRawMaterials.isEmpty) {
+      ErpToast.showError(context, 'No raw materials found in inventory catalog.');
       return;
     }
 
     final dialogFormKey = GlobalKey<FormState>();
-    String? selectedRmId = db.rawMaterials.first.id;
-    final firstRm = db.rawMaterials.first;
+    String? selectedRmId = activeRawMaterials.first.id;
+    final firstRm = activeRawMaterials.first;
     final qtyCtrl = TextEditingController(text: '10');
     final unitCostCtrl = TextEditingController(text: firstRm.defaultPurchasePrice.toString());
 
@@ -214,9 +217,9 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) {
-          final selectedRm = db.rawMaterials.firstWhere(
+          final selectedRm = activeRawMaterials.firstWhere(
             (r) => r.id == selectedRmId,
-            orElse: () => db.rawMaterials.first,
+            orElse: () => activeRawMaterials.first,
           );
           final qty = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
           final unitCost = double.tryParse(unitCostCtrl.text.trim()) ?? 0.0;
@@ -265,13 +268,15 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                     children: [
                       // Raw Material Dropdown
                       DropdownButtonFormField<String>(
-                        value: selectedRmId,
+                        value: activeRawMaterials.any((r) => r.id == selectedRmId)
+                            ? selectedRmId
+                            : (activeRawMaterials.isNotEmpty ? activeRawMaterials.first.id : null),
                         isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Select Raw Material *',
                           prefixIcon: Icon(Icons.inventory_2_outlined, size: 20),
                         ),
-                        items: db.rawMaterials.map((rm) {
+                        items: activeRawMaterials.map((rm) {
                           return DropdownMenuItem(
                             value: rm.id,
                             child: Text(
@@ -283,7 +288,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                         }).toList(),
                         onChanged: (val) {
                           if (val != null) {
-                            final chosen = db.rawMaterials.firstWhere((r) => r.id == val);
+                            final chosen = activeRawMaterials.firstWhere((r) => r.id == val, orElse: () => activeRawMaterials.first);
                             setDlgState(() {
                               selectedRmId = chosen.id;
                               unitCostCtrl.text = chosen.defaultPurchasePrice.toString();
@@ -493,14 +498,12 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
 
   Future<void> _completeProduction() async {
     if (_isSubmitting) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ErpToast.showError(context, 'Please fill in all required production fields marked with *');
+      return;
+    }
     if (_rawMaterialsUsed.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one raw material before submitting the production order.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+ErpToast.showWarning(context, 'Please add at least one raw material before submitting the production order.');
       return;
     }
     final db = ref.read(databaseServiceProvider);
@@ -606,22 +609,12 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
     try {
       await db.completeProductionOrderAsync(order);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Production Completed! ${Formatters.formatNumber(_actualQty)} ${fp.unit} added to Finished Goods stock.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+ErpToast.showSuccess(context, 'Production Completed! ${Formatters.formatNumber(_actualQty)} ${fp.unit} added to Finished Goods stock.');
       _resetForm();
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders;
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error completing production: $e'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+ErpToast.showError(context, 'Error completing production: $e');
     } finally {
       if (mounted) {
         setState(() => _submittingAction = null);
@@ -631,14 +624,12 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
 
   Future<void> _saveAsPlanned() async {
     if (_isSubmitting) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ErpToast.showError(context, 'Please fill in all required production fields marked with *');
+      return;
+    }
     if (_rawMaterialsUsed.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one raw material before submitting the production order.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+ErpToast.showWarning(context, 'Please add at least one raw material before submitting the production order.');
       return;
     }
     final db = ref.read(databaseServiceProvider);
@@ -681,22 +672,12 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
     try {
       await db.completeProductionOrderAsync(order);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Production Order saved as Waiting Approval (Planned). Stock has not been deducted.'),
-          backgroundColor: AppColors.primary,
-        ),
-      );
+ErpToast.showSuccess(context, 'Production Order saved as Waiting Approval (Planned). Stock has not been deducted.');
       _resetForm();
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders;
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error saving production order: $e'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+ErpToast.showError(context, 'Error saving production order: $e');
     } finally {
       if (mounted) {
         setState(() => _submittingAction = null);
@@ -824,86 +805,83 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isNarrow = constraints.maxWidth < 550;
-                      if (isNarrow) {
-                        return Column(
-                          children: [
-                            DropdownButtonFormField<String>(
-                              value: _selectedFinishedProductId,
-                              isExpanded: true,
-                              decoration: const InputDecoration(labelText: 'Finished Product *'),
-                              items: db.finishedProducts.map((fp) {
-                                return DropdownMenuItem(
-                                  value: fp.id,
-                                  child: Text(
-                                    '${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val == null || val == _selectedFinishedProductId) return;
-                                setState(() {
-                                  _selectedFinishedProductId = val;
-                                  _isAutoSyncedWithBom = true;
-                                });
-                                _loadBomForSelectedProduct(showFeedback: true);
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _actualQtyCtrl,
-                              keyboardType: TextInputType.number,
-                              validator: Validators.positiveNumber,
-                              onChanged: (_) => setState(() {}),
-                              decoration: const InputDecoration(labelText: 'Production Quantity *'),
-                            ),
-                          ],
+                  Builder(
+                    builder: (context) {
+                      final availableProductsMap = <String, FinishedProduct>{};
+                      for (final p in db.finishedProducts) {
+                        if (!p.isDeleted && !availableProductsMap.containsKey(p.id)) {
+                          availableProductsMap[p.id] = p;
+                        }
+                      }
+                      final availableProducts = availableProductsMap.values.toList();
+                      final effectiveProductId = availableProducts.any((p) => p.id == _selectedFinishedProductId)
+                          ? _selectedFinishedProductId
+                          : (availableProducts.isNotEmpty ? availableProducts.first.id : null);
+
+                      Widget buildProductDropdown() {
+                        return DropdownButtonFormField<String>(
+                          value: effectiveProductId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: 'Finished Product *'),
+                          items: availableProducts.map((fp) {
+                            return DropdownMenuItem<String>(
+                              value: fp.id,
+                              child: Text(
+                                '${fp.itemCode} - ${fp.name} (Stock: ${Formatters.formatNumber(fp.currentStock)} ${fp.unit})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val == null || val == _selectedFinishedProductId) return;
+                            setState(() {
+                              _selectedFinishedProductId = val;
+                              _isAutoSyncedWithBom = true;
+                            });
+                            _loadBomForSelectedProduct(showFeedback: true);
+                          },
                         );
                       }
-                      return Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedFinishedProductId,
-                              isExpanded: true,
-                              decoration: const InputDecoration(labelText: 'Finished Product *'),
-                              items: db.finishedProducts.map((fp) {
-                                return DropdownMenuItem(
-                                  value: fp.id,
-                                  child: Text(
-                                    '${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val == null || val == _selectedFinishedProductId) return;
-                                setState(() {
-                                  _selectedFinishedProductId = val;
-                                  _isAutoSyncedWithBom = true;
-                                });
-                                _loadBomForSelectedProduct(showFeedback: true);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            flex: 2,
-                            child: TextFormField(
-                              controller: _actualQtyCtrl,
-                              keyboardType: TextInputType.number,
-                              validator: Validators.positiveNumber,
-                              onChanged: (_) => setState(() {}),
-                              decoration: const InputDecoration(labelText: 'Production Quantity *'),
-                            ),
-                          ),
-                        ],
+
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isNarrow = constraints.maxWidth < 550;
+                          if (isNarrow) {
+                            return Column(
+                              children: [
+                                buildProductDropdown(),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: _actualQtyCtrl,
+                                  keyboardType: TextInputType.number,
+                                  validator: Validators.positiveNumber,
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: const InputDecoration(labelText: 'Production Quantity *'),
+                                ),
+                              ],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: buildProductDropdown(),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 2,
+                                child: TextFormField(
+                                  controller: _actualQtyCtrl,
+                                  keyboardType: TextInputType.number,
+                                  validator: Validators.positiveNumber,
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: const InputDecoration(labelText: 'Production Quantity *'),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       );
                     },
                   ),
@@ -1081,15 +1059,26 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
                             );
                             final isStockShort = rm.currentStock < item.quantityUsed;
 
+                            final availableRmsMap = <String, RawMaterial>{};
+                            for (final r in db.rawMaterials) {
+                              if (!r.isDeleted && !availableRmsMap.containsKey(r.id)) {
+                                availableRmsMap[r.id] = r;
+                              }
+                            }
+                            final rmList = availableRmsMap.values.toList();
+                            final effectiveRmId = rmList.any((r) => r.id == item.rawMaterialId)
+                                ? item.rawMaterialId
+                                : (rmList.isNotEmpty ? rmList.first.id : null);
+
                             final rawMaterialDropdown = DropdownButtonFormField<String>(
-                              value: item.rawMaterialId,
+                              value: effectiveRmId,
                               isExpanded: true,
                               decoration: const InputDecoration(
                                 labelText: 'Raw Material *',
                                 contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               ),
-                              items: db.rawMaterials.map((r) {
-                                return DropdownMenuItem(
+                              items: rmList.map((r) {
+                                return DropdownMenuItem<String>(
                                   value: r.id,
                                   child: Text(
                                     '${r.itemCode} - ${r.name} (Stock: ${Formatters.formatNumber(r.currentStock)} ${r.unit})',

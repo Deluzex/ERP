@@ -491,16 +491,12 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         case 'send':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.sent.name);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Quotation ${quote.invoiceNumber} marked as SENT to client.'), backgroundColor: AppColors.info),
-          );
+ErpToast.showInfo(context, 'Quotation ${quote.invoiceNumber} marked as SENT to client.');
           break;
         case 'accept':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.accepted.name);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Quotation ${quote.invoiceNumber} ACCEPTED! You can now generate Proforma Invoice.'), backgroundColor: AppColors.success),
-          );
+ErpToast.showSuccess(context, 'Quotation ${quote.invoiceNumber} ACCEPTED! You can now generate Proforma Invoice.');
           break;
         case 'reject':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.rejected.name);
@@ -510,12 +506,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         case 'proforma':
           if (quote.quotationStatus != QuotationStatus.accepted && quote.quotationStatus != QuotationStatus.approved) {
             if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Only accepted quotations can be converted to a Proforma Invoice. Please accept the quote first.'),
-                backgroundColor: AppColors.warning,
-              ),
-            );
+ErpToast.showWarning(context, 'Only accepted quotations can be converted to a Proforma Invoice. Please accept the quote first.');
             return;
           }
           final proforma = await db.convertQuotationToProformaAsync(quote.id);

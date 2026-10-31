@@ -1,3 +1,4 @@
+import '../../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -989,9 +990,7 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
               isOutlined: true,
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: 'https://erp.deluzex.com/docs/${saleDoc.invoiceNumber.replaceAll(RegExp(r"[/\\ ]"), "_")}.pdf'));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Document link copied to clipboard!'), backgroundColor: AppColors.success),
-                );
+ErpToast.showSuccess(context, 'Document link copied to clipboard!');
               },
             ),
             ErpButton(
@@ -1007,9 +1006,7 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
                   );
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Print error: $e'), backgroundColor: AppColors.danger),
-                    );
+ErpToast.showError(context, 'Print error: $e');
                   }
                 }
               },
@@ -1023,18 +1020,11 @@ class SalesPdfGeneratorDialog extends StatelessWidget {
                   final safeFileName = saleDoc.invoiceNumber.replaceAll(RegExp(r'[/\\?%*:|"<> ]'), '_');
                   await FileDownloader.downloadPdf(bytes, '$safeFileName.pdf');
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('$safeFileName.pdf downloaded / saved!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
+ErpToast.showSuccess(context, '$safeFileName.pdf downloaded / saved!');
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to generate PDF: $e'), backgroundColor: AppColors.danger),
-                    );
+ErpToast.showError(context, 'Failed to generate PDF: $e');
                   }
                 }
               },

@@ -8,6 +8,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
@@ -393,7 +394,10 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          if (!formKey.currentState!.validate()) return;
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
                           setDlgState(() {
                             isSubmitting = true;
                             serverError = null;
@@ -456,12 +460,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
 
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(isEdit ? 'Product updated successfully!' : 'Product created successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+                              ErpToast.showSuccess(context, isEdit ? 'Product updated successfully!' : 'Product created successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {
@@ -510,22 +509,12 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                             await ref.read(databaseServiceProvider).deleteFinishedProductAsync(fp.id);
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Product "${fp.name}" deleted successfully!'),
-                                  backgroundColor: AppColors.danger,
-                                ),
-                              );
+                              ErpToast.showSuccess(context, 'Product "${fp.name}" deleted successfully!');
                             }
                           } catch (e) {
                             setDlgState(() => isDeleting = false);
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Failed to delete: $e'),
-                                  backgroundColor: AppColors.danger,
-                                ),
-                              );
+                              ErpToast.showError(context, 'Failed to delete: $e');
                             }
                           }
                         },

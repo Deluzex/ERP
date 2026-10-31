@@ -11,6 +11,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
@@ -461,7 +462,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               ErpButton(
                 text: isEdit ? 'Update Expense' : 'Save Expense',
                 onPressed: () {
-                  if (!formKey.currentState!.validate()) return;
+                  if (!formKey.currentState!.validate()) {
+                    ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                    return;
+                  }
                   final amt = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
                   String? projName;
                   if (selectedProjId != null) {
@@ -514,12 +518,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   }
 
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(isEdit ? 'Expense updated successfully!' : 'Expense recorded successfully!'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
+ErpToast.showSuccess(context, isEdit ? 'Expense updated successfully!' : 'Expense recorded successfully!');
                 },
               ),
             ],
@@ -669,9 +668,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             onPressed: () {
               db.deleteExpense(expense.id);
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Expense deleted successfully!'), backgroundColor: AppColors.danger),
-              );
+ErpToast.showError(context, 'Expense deleted successfully!');
             },
           ),
         ],

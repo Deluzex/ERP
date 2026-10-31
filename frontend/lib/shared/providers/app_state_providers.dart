@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/api/token_storage.dart';
+import '../../core/api/api_client.dart';
+import '../../core/widgets/erp_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/routes/app_routes.dart';
+import '../../core/models/purchase_model.dart';
 import '../../core/models/rbac_models.dart';
 import '../../core/models/sale_model.dart';
 import '../../core/models/stock_movement_model.dart';
@@ -18,7 +21,11 @@ final databaseServiceProvider = ChangeNotifierProvider<MockDatabaseService>((ref
 // Authentication Session State Provider
 class AuthStateNotifier extends StateNotifier<AppUser?> {
   final Ref ref;
-  AuthStateNotifier(this.ref) : super(null);
+  AuthStateNotifier(this.ref) : super(null) {
+    ApiClient.onSessionExpired = () {
+      handleSessionExpired();
+    };
+  }
 
   final AuthApiService _authApi = AuthApiService();
 
@@ -26,6 +33,72 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
   static const String _kLastNavSectionKey = 'erp_last_nav_section';
   static const String _kSessionTimestampKey = 'erp_session_timestamp';
   static const int _kSessionTimeoutMinutes = 30;
+
+  Timer? _sessionExpiryTimer;
+  DateTime? _lastActivityRecord;
+  bool _isLoggingOutDueToExpiry = false;
+
+  void _startSessionTimer() {
+    _sessionExpiryTimer?.cancel();
+    _sessionExpiryTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
+      await _checkSessionExpiry();
+    });
+  }
+
+  Future<void> _checkSessionExpiry() async {
+    if (state == null) {
+      _sessionExpiryTimer?.cancel();
+      _sessionExpiryTimer = null;
+      return;
+    }
+
+    try {
+      // 1. Check if token lifetime has expired (30 minutes)
+      if (TokenStorage.instance.isTokenExpired) {
+        await handleSessionExpired();
+        return;
+      }
+
+      // 2. Check inactivity duration against 30 minutes
+      final prefs = await SharedPreferences.getInstance();
+      final sessionTimestamp = prefs.getInt(_kSessionTimestampKey);
+      if (sessionTimestamp != null) {
+        final lastActive = DateTime.fromMillisecondsSinceEpoch(sessionTimestamp);
+        if (DateTime.now().difference(lastActive).inMinutes >= _kSessionTimeoutMinutes) {
+          await handleSessionExpired();
+          return;
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> handleSessionExpired() async {
+    if (_isLoggingOutDueToExpiry || state == null) return;
+    _isLoggingOutDueToExpiry = true;
+    try {
+      _sessionExpiryTimer?.cancel();
+      _sessionExpiryTimer = null;
+      await logout();
+      ErpToast.showWarning(
+        null,
+        'Your login session has expired after 30 minutes. Please sign in again.',
+      );
+    } finally {
+      _isLoggingOutDueToExpiry = false;
+    }
+  }
+
+  void recordUserActivity() {
+    if (state == null) return;
+    final now = DateTime.now();
+    if (_lastActivityRecord != null && now.difference(_lastActivityRecord!).inSeconds < 30) {
+      return;
+    }
+    _lastActivityRecord = now;
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setInt(_kSessionTimestampKey, now.millisecondsSinceEpoch);
+    }).catchError((_) {});
+  }
 
   Future<void> _persistSession(AppUser user, ErpNavSection? section) async {
     try {
@@ -49,9 +122,14 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final sessionTimestamp = prefs.getInt(_kSessionTimestampKey);
       if (sessionTimestamp != null) {
         final lastActive = DateTime.fromMillisecondsSinceEpoch(sessionTimestamp);
-        if (DateTime.now().difference(lastActive).inMinutes >= _kSessionTimeoutMinutes) {
+        if (DateTime.now().difference(lastActive).inMinutes >= _kSessionTimeoutMinutes ||
+            TokenStorage.instance.isTokenExpired) {
           // Session expired after 30 minutes of tab close or inactivity
           await logout();
+          ErpToast.showWarning(
+            null,
+            'Your login session has expired after 30 minutes. Please sign in again.',
+          );
           return false;
         }
       }
@@ -96,6 +174,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
             ref.read(currentNavSectionProvider.notifier).state = user.getAccessibleLandingSection(db.roles);
           }
         }
+        _startSessionTimer();
         return true;
       }
       return false;
@@ -120,6 +199,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       ref.read(currentNavSectionProvider.notifier).state = landingSection;
       ref.read(activeRecordDetailsStackProvider.notifier).clear();
       await _persistSession(user, landingSection);
+      _startSessionTimer();
       return true;
     } catch (e) {
       // Flutter test environment intercepts network requests with mock 400 or network errors
@@ -138,6 +218,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
           ref.read(currentNavSectionProvider.notifier).state = landingSection;
           ref.read(activeRecordDetailsStackProvider.notifier).clear();
           await _persistSession(user, landingSection);
+          _startSessionTimer();
           return true;
         }
       }
@@ -155,6 +236,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       ref.read(currentNavSectionProvider.notifier).state = landingSection;
       ref.read(activeRecordDetailsStackProvider.notifier).clear();
       _persistSession(user, landingSection);
+      _startSessionTimer();
       return true;
     }
     return false;
@@ -175,6 +257,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     ref.read(currentNavSectionProvider.notifier).state = landingSection;
     ref.read(activeRecordDetailsStackProvider.notifier).clear();
     await _persistSession(user, landingSection);
+    _startSessionTimer();
   }
 
   void refreshUserPermissions(String roleId, Map<ErpModule, Set<ErpAction>> permissions) {
@@ -184,6 +267,8 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
   }
 
   Future<void> logout() async {
+    _sessionExpiryTimer?.cancel();
+    _sessionExpiryTimer = null;
     _authApi.logout();
     state = null;
     ref.read(activeRecordDetailsStackProvider.notifier).clear();
@@ -194,7 +279,14 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       await prefs.remove(_kSessionUserKey);
       await prefs.remove(_kLastNavSectionKey);
       await prefs.remove(_kSessionTimestampKey);
+      TokenStorage.instance.clear();
     } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _sessionExpiryTimer?.cancel();
+    super.dispose();
   }
 }
 
@@ -232,6 +324,7 @@ final currentNavSectionProvider = StateProvider<ErpNavSection>((ref) {
 // Sales creation navigation helper state
 final salesCreateDocTypeProvider = StateProvider<SalesDocumentType?>((ref) => null);
 final salesCreateSourceDocIdProvider = StateProvider<String?>((ref) => null);
+final editingPurchaseProvider = StateProvider<Purchase?>((ref) => null);
 
 // Selected production product ID (used when navigating from BOM to CreateProduction)
 final selectedProductionProductIdProvider = StateProvider<String?>((ref) => null);

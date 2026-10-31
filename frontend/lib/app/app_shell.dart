@@ -159,6 +159,16 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       contentWidget = _buildAccessDeniedBarrier(context, currentUser, currentSection, db);
     } else {
       final canonicalKey = _canonicalSection(currentSection);
+      final isCreationScreen = canonicalKey == ErpNavSection.createPurchase ||
+          canonicalKey == ErpNavSection.createSale ||
+          canonicalKey == ErpNavSection.createSalesOrder ||
+          canonicalKey == ErpNavSection.createQuotation ||
+          canonicalKey == ErpNavSection.createProduction;
+
+      if (isCreationScreen) {
+        _cachedScreens.remove(canonicalKey);
+      }
+
       // Lazy load screen into cache if not present
       if (!_cachedScreens.containsKey(canonicalKey)) {
         _cachedScreens[canonicalKey] = _buildSectionWidget(canonicalKey, currentUser);
@@ -184,8 +194,11 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       key: _scaffoldKey,
       backgroundColor: AppColors.background,
       drawer: isDesktop ? null : const Drawer(child: ErpSidebar()),
-      body: Stack(
-        children: [
+      body: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => ref.read(authStateProvider.notifier).recordUserActivity(),
+        child: Stack(
+          children: [
           Row(
             children: [
               // Persistent Dark Sidebar for Desktop
@@ -225,7 +238,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
           // const GlobalWhatsAppFloatingButton(),
         ],
       ),
-    );
+    ),);
   }
 
   Widget _buildSectionWidget(ErpNavSection section, AppUser currentUser) {
@@ -275,7 +288,11 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       case ErpNavSection.purchaseHistory:
         return const PurchaseListScreen();
       case ErpNavSection.createPurchase:
-        return const CreatePurchaseScreen();
+        final editingPurchase = ref.watch(editingPurchaseProvider);
+        return CreatePurchaseScreen(
+          key: ValueKey(editingPurchase?.id ?? 'create_purchase_new'),
+          existingPurchase: editingPurchase,
+        );
       case ErpNavSection.vendorPayments:
       case ErpNavSection.vendorPaymentsSection:
         return const PaymentCenterScreen(initialTab: PaymentType.vendorPayment);

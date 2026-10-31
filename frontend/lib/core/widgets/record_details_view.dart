@@ -1,3 +1,4 @@
+import 'erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/routes/app_routes.dart';
@@ -110,9 +111,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF Export Error: $e'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'PDF Export Error: $e');
       }
     }
   }
@@ -162,9 +161,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF Export Error: $e'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'PDF Export Error: $e');
       }
     }
   }
@@ -214,9 +211,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF Export Error: $e'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'PDF Export Error: $e');
       }
     }
   }
@@ -267,9 +262,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF Export Error: $e'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'PDF Export Error: $e');
       }
     }
   }
@@ -318,9 +311,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF Export Error: $e'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'PDF Export Error: $e');
       }
     }
   }
@@ -3829,17 +3820,11 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                                 try {
                                   await db.approveCommissionAsync(comm.id);
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Commission Voucher ${comm.commissionNumber} Approved!'),
-                                      backgroundColor: AppColors.success,
-                                    ));
+ErpToast.showSuccess(context, 'Commission Voucher ${comm.commissionNumber} Approved!');
                                   }
                                 } catch (e) {
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Failed to approve: $e'),
-                                      backgroundColor: AppColors.danger,
-                                    ));
+ErpToast.showError(context, 'Failed to approve: $e');
                                   }
                                 }
                               },
@@ -3851,17 +3836,11 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                                 try {
                                   await db.rejectCommissionAsync(comm.id, reason: 'Declined during partner audit');
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
-                                      backgroundColor: AppColors.danger,
-                                    ));
+ErpToast.showError(context, 'Commission Voucher ${comm.commissionNumber} Rejected.');
                                   }
                                 } catch (e) {
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Failed to reject: $e'),
-                                      backgroundColor: AppColors.danger,
-                                    ));
+ErpToast.showError(context, 'Failed to reject: $e');
                                   }
                                 }
                               },
@@ -3879,17 +3858,11 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                                     transactionRef: 'TXN-DISB-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
                                   );
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Disbursed ${Formatters.formatCurrency(comm.commissionAmount)} to ${comm.architectName}!'),
-                                      backgroundColor: AppColors.success,
-                                    ));
+ErpToast.showSuccess(context, 'Disbursed ${Formatters.formatCurrency(comm.commissionAmount)} to ${comm.architectName}!');
                                   }
                                 } catch (e) {
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Failed to disburse: $e'),
-                                      backgroundColor: AppColors.danger,
-                                    ));
+ErpToast.showError(context, 'Failed to disburse: $e');
                                   }
                                 }
                               },
@@ -3901,17 +3874,11 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                                 try {
                                   await db.rejectCommissionAsync(comm.id, reason: 'Declined after approval');
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
-                                      backgroundColor: AppColors.danger,
-                                    ));
+ErpToast.showError(context, 'Commission Voucher ${comm.commissionNumber} Rejected.');
                                   }
                                 } catch (e) {
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Failed to reject: $e'),
-                                      backgroundColor: AppColors.danger,
-                                    ));
+ErpToast.showError(context, 'Failed to reject: $e');
                                   }
                                 }
                               },
@@ -3978,17 +3945,11 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                           try {
                             await db.approveCommissionAsync(comm.id);
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('Commission Voucher ${comm.commissionNumber} Approved!'),
-                                backgroundColor: AppColors.success,
-                              ));
+ErpToast.showSuccess(context, 'Commission Voucher ${comm.commissionNumber} Approved!');
                             }
                           } catch (e) {
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('Failed to approve: $e'),
-                                backgroundColor: AppColors.danger,
-                              ));
+ErpToast.showError(context, 'Failed to approve: $e');
                             }
                           }
                         },
@@ -4000,17 +3961,11 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                           try {
                             await db.rejectCommissionAsync(comm.id, reason: 'Declined during partner audit');
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
-                                backgroundColor: AppColors.danger,
-                              ));
+ErpToast.showError(context, 'Commission Voucher ${comm.commissionNumber} Rejected.');
                             }
                           } catch (e) {
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('Failed to reject: $e'),
-                                backgroundColor: AppColors.danger,
-                              ));
+ErpToast.showError(context, 'Failed to reject: $e');
                             }
                           }
                         },
@@ -4028,17 +3983,11 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                               transactionRef: 'TXN-DISB-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
                             );
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('Disbursed ${Formatters.formatCurrency(comm.commissionAmount)} to ${comm.architectName}!'),
-                                backgroundColor: AppColors.success,
-                              ));
+ErpToast.showSuccess(context, 'Disbursed ${Formatters.formatCurrency(comm.commissionAmount)} to ${comm.architectName}!');
                             }
                           } catch (e) {
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('Failed to disburse: $e'),
-                                backgroundColor: AppColors.danger,
-                              ));
+ErpToast.showError(context, 'Failed to disburse: $e');
                             }
                           }
                         },
@@ -4050,17 +3999,11 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                           try {
                             await db.rejectCommissionAsync(comm.id, reason: 'Declined after approval');
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
-                                backgroundColor: AppColors.danger,
-                              ));
+ErpToast.showError(context, 'Commission Voucher ${comm.commissionNumber} Rejected.');
                             }
                           } catch (e) {
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('Failed to reject: $e'),
-                                backgroundColor: AppColors.danger,
-                              ));
+ErpToast.showError(context, 'Failed to reject: $e');
                             }
                           }
                         },
@@ -5789,9 +5732,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
             onPressed: () {
               Navigator.of(ctx).pop();
               db.approveSalesReturn(s.id);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Sales Return ${s.invoiceNumber} Approved! All stock and ledger adjustments executed.'), backgroundColor: AppColors.success),
-              );
+ErpToast.showSuccess(context, 'Sales Return ${s.invoiceNumber} Approved! All stock and ledger adjustments executed.');
             },
             child: const Text('Confirm & Execute', style: TextStyle(color: Colors.white)),
           ),
@@ -5845,16 +5786,12 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () {
               if (reasonCtrl.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a rejection reason.'), backgroundColor: AppColors.warning),
-                );
+ErpToast.showWarning(context, 'Please enter a rejection reason.');
                 return;
               }
               Navigator.of(ctx).pop();
               db.rejectSalesReturn(s.id, reasonCtrl.text.trim());
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Sales Return ${s.invoiceNumber} Rejected.'), backgroundColor: AppColors.danger),
-              );
+ErpToast.showError(context, 'Sales Return ${s.invoiceNumber} Rejected.');
             },
             child: const Text('Confirm Rejection', style: TextStyle(color: Colors.white)),
           ),
@@ -5931,9 +5868,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
               onPressed: () {
                 final amt = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
                 if (amt <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a valid refund amount.'), backgroundColor: AppColors.warning),
-                  );
+ErpToast.showWarning(context, 'Please enter a valid refund amount.');
                   return;
                 }
                 Navigator.of(ctx).pop();
@@ -5943,9 +5878,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                   paymentMode: selectedMode,
                   transactionRef: refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : null,
                 );
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Refund of ${Formatters.formatCurrency(amt)} recorded via ${selectedMode.name.toUpperCase()}!'), backgroundColor: AppColors.success),
-                );
+ErpToast.showSuccess(context, 'Refund of ${Formatters.formatCurrency(amt)} recorded via ${selectedMode.name.toUpperCase()}!');
               },
               child: const Text('Disburse & Finalize', style: TextStyle(color: Colors.white)),
             ),
@@ -6074,9 +6007,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                 icon: Icons.send_outlined,
                 onPressed: () {
                   db.updateSalesReturnStatus(s.id, SalesReturnStatus.submitted);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Return Submitted for Warehouse Receiving'), backgroundColor: AppColors.primary),
-                  );
+ErpToast.showInfo(context, 'Return Submitted for Warehouse Receiving');
                 },
               ),
             ),
@@ -6091,9 +6022,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                 icon: Icons.inventory_2_outlined,
                 onPressed: () {
                   db.updateSalesReturnStatus(s.id, SalesReturnStatus.itemsReceived);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Items Received at Warehouse! Ready for QA.'), backgroundColor: AppColors.primary),
-                  );
+ErpToast.showInfo(context, 'Items Received at Warehouse! Ready for QA.');
                 },
               ),
             ),
@@ -6108,9 +6037,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                 icon: Icons.fact_check_outlined,
                 onPressed: () {
                   db.updateSalesReturnStatus(s.id, SalesReturnStatus.inspection);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('QA Inspection Logged. Ready for Approval.'), backgroundColor: AppColors.primary),
-                  );
+ErpToast.showInfo(context, 'QA Inspection Logged. Ready for Approval.');
                 },
               ),
             ),
@@ -6758,9 +6685,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                       onPressed: () {
                         final pi = db.createProformaFromQuotation(s.id, acceptFirst: true);
                         ref.read(activeRecordDetailsStackProvider.notifier).push(pi.id, 'proformaInvoice', details.parentSection);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Quotation Accepted! Proforma Invoice generated.'), backgroundColor: AppColors.success),
-                        );
+ErpToast.showSuccess(context, 'Quotation Accepted! Proforma Invoice generated.');
                       },
                     ),
                   ),
@@ -6777,9 +6702,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                       onPressed: () {
                         final rev = db.createQuotationRevision(s.id);
                         ref.read(activeRecordDetailsStackProvider.notifier).push(rev.id, 'quotation', details.parentSection);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Created Revision ${rev.revisionNumber} (${rev.invoiceNumber})'), backgroundColor: AppColors.primary),
-                        );
+ErpToast.showSuccess(context, 'Created Revision ${rev.revisionNumber} (${rev.invoiceNumber})');
                       },
                     ),
                   ),
@@ -6818,9 +6741,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
               onChanged: (newStatus) {
                 if (newStatus != null) {
                   db.updateSalesOrderStatus(s.id, newStatus);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Order Status updated to ${newStatus.toString().split('.').last.toUpperCase()}')),
-                  );
+ErpToast.showSuccess(context, 'Order Status updated to ${newStatus.toString().split('.').last.toUpperCase()}');
                 }
               },
             ),
@@ -6877,9 +6798,7 @@ class _RecordDetailsViewState extends ConsumerState<RecordDetailsView> {
                     onPressed: () {
                       final inv = db.createSalesInvoiceFromDelivery(deliveryId: s.id);
                       ref.read(activeRecordDetailsStackProvider.notifier).push(inv.id, 'invoice', details.parentSection);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Tax Invoice ${inv.invoiceNumber} created from delivery!'), backgroundColor: AppColors.success),
-                      );
+ErpToast.showSuccess(context, 'Tax Invoice ${inv.invoiceNumber} created from delivery!');
                     },
                   ),
                 ),

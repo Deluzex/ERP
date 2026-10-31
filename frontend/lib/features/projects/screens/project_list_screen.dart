@@ -12,6 +12,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -487,7 +488,10 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          if (!formKey.currentState!.validate()) return;
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
                           setDlgState(() {
                             isSubmitting = true;
                             serverError = null;
@@ -552,12 +556,7 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                             }
 
                             if (ctx.mounted) Navigator.of(ctx).pop();
-                            messenger.showSnackBar(
-                              SnackBar(
-                                content: Text(isEdit ? 'Project updated successfully!' : 'Project created successfully!'),
-                                backgroundColor: AppColors.success,
-                              ),
-                            );
+ErpToast.showSuccess(context, isEdit ? 'Project updated successfully!' : 'Project created successfully!');
                           } catch (e) {
                             setDlgState(() {
                               serverError = e.toString().replaceFirst('Exception: ', '');
@@ -588,19 +587,9 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
             final db = ref.read(databaseServiceProvider);
             try {
               await db.deleteProjectAsync(project.id, reason: reason);
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text('Project "${project.name}" archived successfully!'),
-                  backgroundColor: AppColors.success,
-                ),
-              );
+ErpToast.showSuccess(context, 'Project "${project.name}" archived successfully!');
             } catch (e) {
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text('Error deleting project: ${e.toString().replaceFirst("Exception: ", "")}'),
-                  backgroundColor: AppColors.danger,
-                ),
-              );
+ErpToast.showError(context, 'Error deleting project: ${e.toString().replaceFirst("Exception: ", "")}');
             }
           },
         );
@@ -788,12 +777,7 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                             await db.updateProjectAsync(updated);
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Project status updated to ${newStatus.name.toUpperCase()} successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+ErpToast.showSuccess(context, 'Project status updated to ${newStatus.name.toUpperCase()} successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {

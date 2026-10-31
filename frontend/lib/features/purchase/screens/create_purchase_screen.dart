@@ -11,6 +11,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
@@ -56,8 +57,8 @@ class CreatePurchaseScreen extends ConsumerStatefulWidget {
 /// If an item (product/raw material) does not specify an explicit per-unit transportationCharge (> 0),
 /// and the vendor does not specify defaultTransportationCharges (> 0), this configurable default applies.
 class PurchaseTransportationConfig {
-  /// Clearly defined configurable default transportation rate in ₹ per unit (default: ₹50.0 / unit).
-  static double defaultRatePerUnit = 50.0;
+  /// Clearly defined configurable default transportation rate in ₹ per unit (default: ₹0.0 / unit).
+  static double defaultRatePerUnit = 0.0;
 }
 
 class _LineItemDraft {
@@ -131,9 +132,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to open storage: $e'), backgroundColor: AppColors.danger),
-        );
+        ErpToast.showError(context, 'Failed to open storage: $e');
       }
     }
   }
@@ -173,8 +172,8 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     super.initState();
     final db = ref.read(databaseServiceProvider);
 
-    if (widget.existingPurchase != null) {
-      final p = widget.existingPurchase!;
+    final p = widget.existingPurchase ?? ref.read(editingPurchaseProvider);
+    if (p != null) {
       _selectedVendorId = p.vendorId;
       _selectedProjectId = p.projectId;
       _vendorInvoiceCtrl.text = p.vendorInvoiceNumber;
@@ -234,7 +233,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       ]);
       if (mounted) {
         setState(() {
-          if (widget.existingPurchase == null && _selectedVendorId == null) {
+          if ((widget.existingPurchase ?? ref.read(editingPurchaseProvider)) == null && _selectedVendorId == null) {
             final freshVendors = database.vendors.where((v) => !v.isDeleted).toList();
             if (freshVendors.isNotEmpty) {
               _selectedVendorId = freshVendors.first.id;
@@ -652,7 +651,10 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                 text: 'Add to Order',
                 icon: Icons.add,
                 onPressed: () {
-                  if (!formKey.currentState!.validate()) return;
+                  if (!formKey.currentState!.validate()) {
+                    ErpToast.showError(ctx, 'Please fill in all required item fields');
+                    return;
+                  }
                   if (selectedItemId == null) return;
 
                   final enteredQty = double.tryParse(qtyCtrl.text.trim()) ?? 1.0;
@@ -690,35 +692,12 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   }
 
   void _recalculateTransportation({bool force = false}) {
-    if (_isManualTransportation && !force) return;
-    if (_items.isEmpty) {
-      _validTransportationCharges = 0.0;
-      _transportationChargesCtrl.value = const TextEditingValue(
-        text: '0',
-        selection: TextSelection.collapsed(offset: 1),
-      );
-      return;
-    }
-    final itemTransSum = _items.fold<double>(0.0, (sum, i) => sum + (i.quantity * i.transportationCharge));
-    _validTransportationCharges = itemTransSum;
-    final formatted = itemTransSum % 1 == 0
-        ? itemTransSum.toInt().toString()
-        : itemTransSum.toStringAsFixed(2);
-    _transportationChargesCtrl.value = TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
+    // Keep transportation text box manual and 0 by default. Never auto-calculate.
   }
 
   void _removeLineItem(int index) {
     setState(() {
       _items.removeAt(index);
-      if (_items.isEmpty) {
-        _validTransportationCharges = 0.0;
-        _transportationChargesCtrl.text = '0';
-      } else {
-        _recalculateTransportation(force: true);
-      }
     });
   }
 
@@ -734,6 +713,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   double get _totalUnits => _items.fold(0.0, (sum, i) => sum + i.quantity);
 
     void _resetForm() {
+    _formKey.currentState?.reset();
     setState(() {
       _vendorInvoiceCtrl.clear();
       _paidAmountCtrl.text = '0';
@@ -757,6 +737,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
 
   void _navigateBack() {
     _resetForm();
+    ref.read(editingPurchaseProvider.notifier).state = null;
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
@@ -765,23 +746,26 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   }
 
   Future<void> _savePurchase(bool isDraft) async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      if (_selectedVendorId == null) {
+        ErpToast.showError(context, 'Please select a vendor');
+      } else if (_vendorInvoiceCtrl.text.trim().isEmpty) {
+        ErpToast.showError(context, 'Vendor invoice number is required');
+      } else {
+        ErpToast.showError(context, 'Please fill in all required fields marked with *');
+      }
+      return;
+    }
     if (_items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one line item to purchase order')),
-      );
+      ErpToast.showWarning(context, 'Please add at least one line item to purchase order');
       return;
     }
     if (_paidAmount > 0 && _paymentMode == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a payment mode before proceeding')),
-      );
+      ErpToast.showWarning(context, 'Please select a payment mode before proceeding');
       return;
     }
     if (_paidAmount > _totalAmount) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Paid amount cannot exceed Grand Total (${Formatters.formatCurrency(_totalAmount)})')),
-      );
+      ErpToast.showWarning(context, 'Paid amount cannot exceed Grand Total (${Formatters.formatCurrency(_totalAmount)})');
       return;
     }
 
@@ -835,9 +819,11 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       status = PurchaseStatus.saved;
     }
 
+    final purchaseToEdit = widget.existingPurchase ?? ref.read(editingPurchaseProvider);
+    final isEditMode = purchaseToEdit != null;
     final purchase = Purchase(
-      id: widget.existingPurchase?.id ?? IdGenerator.generateId('PUR'),
-      purchaseNumber: widget.existingPurchase?.purchaseNumber ??
+      id: purchaseToEdit?.id ?? IdGenerator.generateId('PUR'),
+      purchaseNumber: purchaseToEdit?.purchaseNumber ??
           IdGenerator.generateDocNumber('PO', db.nextPurchaseNumber),
       purchaseDate: _purchaseDate,
       vendorId: vendor.id,
@@ -864,24 +850,21 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       cgstAmount: _cgstAmount,
       sgstAmount: _sgstAmount,
       igstAmount: _igstAmount,
-      createdAt: widget.existingPurchase?.createdAt ?? DateTime.now(),
-      updatedAt: widget.existingPurchase != null ? DateTime.now() : null,
+      createdAt: purchaseToEdit?.createdAt ?? DateTime.now(),
+      updatedAt: isEditMode ? DateTime.now() : null,
     );
 
     setState(() => _isSubmitting = true);
     try {
-      final isEditMode = widget.existingPurchase != null;
       final savedPurchase =
           isEditMode ? await db.updatePurchaseAsync(purchase) : await db.createPurchaseAsync(purchase);
 
       if (mounted) {
+        ref.read(editingPurchaseProvider.notifier).state = null;
         if (isEditMode) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Purchase ${savedPurchase.purchaseNumber} updated successfully!'),
-              backgroundColor: AppColors.success,
-            ),
+          ErpToast.showSuccess(
+            context,
+            'Purchase ${savedPurchase.purchaseNumber} updated successfully!',
           );
           _navigateBack();
         } else {
@@ -896,11 +879,9 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
           stockMsg = 'Raw Material stock inwarded to Raw Materials inventory!';
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isDraft ? 'Draft Purchase Order Saved' : 'Purchase Saved! $stockMsg'),
-            backgroundColor: AppColors.success,
-          ),
+        ErpToast.showSuccess(
+          context,
+          isDraft ? 'Draft Purchase Order Saved' : 'Purchase Saved! $stockMsg',
         );
 
         _navigateBack();
@@ -908,12 +889,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving purchase: $e'),
-            backgroundColor: AppColors.danger,
-          ),
-        );
+        ErpToast.showError(context, 'Error saving purchase: $e');
       }
     } finally {
       if (mounted) {
@@ -1001,22 +977,24 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+    final purchaseToEdit = widget.existingPurchase ?? ref.watch(editingPurchaseProvider);
     final canPop = ModalRoute.of(context)?.canPop ?? false;
 
     final formContent = SingleChildScrollView(
       padding: AppSpacing.pagePadding,
       child: Form(
         key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header enclosed in section header card
             ErpSectionHeaderCard(
               icon: Icons.shopping_bag_outlined,
-              title: widget.existingPurchase != null
-                  ? 'Edit Purchase (${widget.existingPurchase!.purchaseNumber})'
+              title: purchaseToEdit != null
+                  ? 'Edit Purchase (${purchaseToEdit.purchaseNumber})'
                   : 'Create Direct Purchase',
-              badgeText: widget.existingPurchase != null ? 'EDIT PROCUREMENT' : 'DIRECT PROCUREMENT',
+              badgeText: purchaseToEdit != null ? 'EDIT PROCUREMENT' : 'DIRECT PROCUREMENT',
               action: LayoutBuilder(
                 builder: (context, actionBox) {
                   final isMobile = actionBox.maxWidth < 600;
@@ -1242,7 +1220,14 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _vendorInvoiceCtrl,
+                              autovalidateMode: AutovalidateMode.onUserInteraction,
                               validator: (v) => Validators.requiredField(v, 'Vendor invoice number required'),
+                              onChanged: (val) {
+                                if (_formKey.currentState != null) {
+                                  _formKey.currentState!.validate();
+                                }
+                                setState(() {});
+                              },
                               decoration: const InputDecoration(
                                 labelText: 'Vendor Invoice Number *',
                                 hintText: 'E.g. APEX/2026/901',
@@ -2209,7 +2194,11 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                   final parsed = double.tryParse(trimmed);
                                   if (parsed != null && parsed >= 0) {
                                     _validTransportationCharges = parsed;
+                                  } else {
+                                    _validTransportationCharges = 0.0;
                                   }
+                                } else {
+                                  _validTransportationCharges = 0.0;
                                 }
                                 setState(() {});
                               },
@@ -2397,14 +2386,23 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
           elevation: 1,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            tooltip: 'Back',
             onPressed: _navigateBack,
           ),
           title: Text(
-            widget.existingPurchase != null
-                ? 'Edit Purchase: ${widget.existingPurchase!.purchaseNumber}'
+            purchaseToEdit != null
+                ? 'Edit Purchase: ${purchaseToEdit.purchaseNumber}'
                 : 'Create Direct Purchase',
             style: AppTextStyles.h3,
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.close, color: AppColors.textPrimary),
+              tooltip: 'Close',
+              onPressed: _navigateBack,
+            ),
+            const SizedBox(width: 8),
+          ],
         ),
         body: Material(
           color: AppColors.background,

@@ -1,3 +1,4 @@
+import '../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -246,9 +247,7 @@ class _ShareDocumentDialogState extends ConsumerState<ShareDocumentDialog> {
                         message: _messageCtrl.text.trim(),
                       );
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Opening WhatsApp with pre-filled document details...'), backgroundColor: Color(0xFF25D366)),
-                      );
+ErpToast.showInfo(context, 'Opening WhatsApp with pre-filled document details...');
                     },
                   ),
 
@@ -270,9 +269,7 @@ class _ShareDocumentDialogState extends ConsumerState<ShareDocumentDialog> {
                         isBusiness: true,
                       );
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Opening WhatsApp Business...'), backgroundColor: Color(0xFF128C7E)),
-                      );
+ErpToast.showInfo(context, 'Opening WhatsApp Business...');
                     },
                   ),
 
@@ -325,9 +322,7 @@ class _ShareDocumentDialogState extends ConsumerState<ShareDocumentDialog> {
                     onPressed: () {
                       _logShareAction('Instagram');
                       DocumentSharingService.shareToInstagram(message: _messageCtrl.text.trim());
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Text copied to clipboard! Opening Instagram...')),
-                      );
+ErpToast.showInfo(context, 'Text copied to clipboard! Opening Instagram...');
                     },
                   ),
                 ],
@@ -348,9 +343,7 @@ class _ShareDocumentDialogState extends ConsumerState<ShareDocumentDialog> {
                     label: const Text('Copy Message Text'),
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: _messageCtrl.text.trim()));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Message copied to clipboard!')),
-                      );
+ErpToast.showInfo(context, 'Message copied to clipboard!');
                     },
                   ),
                   Wrap(

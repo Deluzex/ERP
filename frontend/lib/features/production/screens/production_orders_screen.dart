@@ -1,3 +1,4 @@
+import '../../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -57,19 +58,12 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
       await db.updateProductionOrderStatusAsync(orderId: o.id, newStatus: ProductionStatus.inProgress);
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Production Order ${o.productionNumber} started. Status is now In Progress.'),
-            backgroundColor: AppColors.info,
-          ),
-        );
+ErpToast.showInfo(context, 'Production Order ${o.productionNumber} started. Status is now In Progress.');
       }
     } catch (e) {
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start production: $e'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'Failed to start production: $e');
       }
     }
   }
@@ -250,19 +244,12 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
       );
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Production Batch ${targetOrder.productionNumber} completed! Stock has been updated.'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+ErpToast.showSuccess(context, 'Production Batch ${targetOrder.productionNumber} completed! Stock has been updated.');
       }
     } catch (e) {
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error completing batch: $e'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'Error completing batch: $e');
       }
     }
   }
@@ -373,18 +360,12 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                 await db.updateProductionOrderStatusAsync(orderId: o.id, newStatus: ProductionStatus.cancelled, reason: reason);
                 if (mounted) {
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Order ${o.productionNumber} cancelled${o.status == ProductionStatus.completed ? ' and stock rolled back' : ''}.'),
-                    ),
-                  );
+ErpToast.showSuccess(context, 'Order ${o.productionNumber} cancelled${o.status == ProductionStatus.completed ? ' and stock rolled back' : ''}.');
                 }
               } catch (e) {
                 if (mounted) {
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error cancelling order: $e'), backgroundColor: AppColors.danger),
-                  );
+ErpToast.showError(context, 'Error cancelling order: $e');
                 }
               }
             },

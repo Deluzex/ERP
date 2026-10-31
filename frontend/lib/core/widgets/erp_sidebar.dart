@@ -120,6 +120,9 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
     final hasAccess = currentUser.hasPermission(module, action ?? ErpAction.view, allRoles, temporaryGrants);
 
     if (hasAccess) {
+      if (targetSection == ErpNavSection.createPurchase) {
+        ref.read(editingPurchaseProvider.notifier).state = null;
+      }
       ref.read(currentNavSectionProvider.notifier).state = targetSection;
       ref.read(activeRecordDetailsStackProvider.notifier).clear();
     } else {
@@ -131,7 +134,10 @@ class _ErpSidebarState extends ConsumerState<ErpSidebar> {
         customMessage:
             'You do not have direct permission to access the "${module.label}" module under your assigned role (${db.getUserRole(currentUser).name}).',
         onAccessGranted: (grant) {
-          ref.read(currentNavSectionProvider.notifier).state = targetSection;
+          if (targetSection == ErpNavSection.createPurchase) {
+        ref.read(editingPurchaseProvider.notifier).state = null;
+      }
+      ref.read(currentNavSectionProvider.notifier).state = targetSection;
           ref.read(activeRecordDetailsStackProvider.notifier).clear();
         },
       );

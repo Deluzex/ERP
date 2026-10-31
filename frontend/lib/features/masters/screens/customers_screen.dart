@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
@@ -309,7 +310,10 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          if (!formKey.currentState!.validate()) return;
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
                           setDlgState(() {
                             isSubmitting = true;
                             serverError = null;
@@ -347,12 +351,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
 
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Customer "${customer.name}" ${isEdit ? "updated" : "saved"} successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+                              ErpToast.showSuccess(context, 'Customer "${customer.name}" ${isEdit ? "updated" : "saved"} successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {
@@ -384,21 +383,11 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
             try {
               await db.deleteCustomerAsync(customerId: customer.id, reason: reason);
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Customer "${customer.name}" archived with audit reason: $reason'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+                ErpToast.showSuccess(context, 'Customer "${customer.name}" archived with audit reason: $reason');
               }
             } catch (e) {
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Delete failed: ${e.toString().replaceFirst("Exception: ", "")}'),
-                    backgroundColor: AppColors.danger,
-                  ),
-                );
+                ErpToast.showError(context, 'Delete failed: ${e.toString().replaceFirst("Exception: ", "")}');
               }
             }
           },

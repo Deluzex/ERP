@@ -1,3 +1,4 @@
+import '../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_colors.dart';
@@ -91,12 +92,7 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
       message: message,
     );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Low Stock WhatsApp Alert dispatched to ${recipient.recipientName}!'),
-        backgroundColor: const Color(0xFF25D366),
-      ),
-    );
+ErpToast.showInfo(context, 'Low Stock WhatsApp Alert dispatched to ${recipient.recipientName}!');
   }
 
   void _openAddRecipientDialog([WhatsAppAlertRecipient? existing]) {
@@ -380,9 +376,7 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
                     label: const Text('Notify Team', style: TextStyle(fontSize: 11)),
                     onPressed: () {
                       if (db.alertRecipients.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please add at least one alert recipient in the Recipients tab!')),
-                        );
+ErpToast.showWarning(context, 'Please add at least one alert recipient in the Recipients tab!');
                         return;
                       }
                       _sendAlertToRecipient(rm, true, db.alertRecipients.first);
@@ -421,9 +415,7 @@ class _LowStockWhatsAppAlertDialogState extends ConsumerState<LowStockWhatsAppAl
                     label: const Text('Notify Team', style: TextStyle(fontSize: 11)),
                     onPressed: () {
                       if (db.alertRecipients.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please add at least one alert recipient in the Recipients tab!')),
-                        );
+ErpToast.showWarning(context, 'Please add at least one alert recipient in the Recipients tab!');
                         return;
                       }
                       _sendAlertToRecipient(fp, false, db.alertRecipients.first);

@@ -70,7 +70,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         child: ErpButton(
                           text: 'Create Purchase',
                           icon: Icons.shopping_bag_outlined,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                          onPressed: () {
+                            ref.read(editingPurchaseProvider.notifier).state = null;
+                            ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase;
+                          },
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -93,7 +96,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ErpButton(
                       text: 'Create Purchase',
                       icon: Icons.shopping_bag_outlined,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                      onPressed: () {
+                        ref.read(editingPurchaseProvider.notifier).state = null;
+                        ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase;
+                      },
                     ),
                     ErpButton(
                       text: 'Create Sale',

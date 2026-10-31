@@ -5,6 +5,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/finished_product_model.dart';
+import '../../../core/models/purchase_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
@@ -16,6 +17,7 @@ import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../shared/services/mock_database_service.dart';
 
 class FinishedProductStockScreen extends ConsumerStatefulWidget {
   const FinishedProductStockScreen({super.key});
@@ -36,8 +38,35 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(databaseServiceProvider).loadFinishedProducts();
+      final db = ref.read(databaseServiceProvider);
+      db.loadFinishedProducts();
+      db.loadPurchases();
     });
+  }
+
+  double _getLatestTransportationCharge(FinishedProduct fp, MockDatabaseService db) {
+    final sortedPurchases = List<Purchase>.from(db.purchases)
+      ..sort((a, b) => b.purchaseDate.compareTo(a.purchaseDate));
+
+    for (final purchase in sortedPurchases) {
+      if (purchase.status == PurchaseStatus.cancelled) continue;
+      for (final item in purchase.items) {
+        final matches = (item.itemType == PurchaseItemType.finishedProduct) &&
+            (item.finishedProductId == fp.id ||
+                (item.finishedProductCode != null && item.finishedProductCode == fp.itemCode) ||
+                item.itemId == fp.id);
+        if (matches) {
+          if (item.transportationCost > 0) {
+            return item.transportationCost;
+          }
+          if (purchase.transportationCharges > 0 && purchase.items.length == 1) {
+            return purchase.transportationCharges;
+          }
+          return 0.0;
+        }
+      }
+    }
+    return fp.transportationCharge;
   }
 
   void _openEditDialog(FinishedProduct existing) {
@@ -552,6 +581,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                             ErpColumn(title: 'Category'),
                             ErpColumn(title: 'Current Stock', isNumeric: true),
                             ErpColumn(title: 'Cost Price', isNumeric: true),
+                            ErpColumn(title: 'Transportation Charges', isNumeric: true),
                             ErpColumn(title: 'Dealer Price', isNumeric: true),
                             ErpColumn(title: 'Customer Price', isNumeric: true),
                             ErpColumn(title: 'Inventory Value', isNumeric: true),
@@ -559,6 +589,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                             ErpColumn(title: 'Actions'),
                           ],
                           rows: paginatedProducts.map((fp) {
+                            final transportCharge = _getLatestTransportationCharge(fp, db);
                             return [
                               Text(fp.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
                               Text(fp.name, style: AppTextStyles.bodyMedium),
@@ -570,6 +601,7 @@ class _FinishedProductStockScreenState extends ConsumerState<FinishedProductStoc
                                 ),
                               ),
                               Text(Formatters.formatCurrency(fp.costPrice), style: AppTextStyles.bodySmall),
+                              Text(Formatters.formatCurrency(transportCharge), style: AppTextStyles.bodySmall),
                               Text(Formatters.formatCurrency(fp.dealerSellingPrice), style: AppTextStyles.bodyMedium),
                               Text(Formatters.formatCurrency(fp.customerSellingPrice), style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
                               Text(Formatters.formatCurrency(fp.totalValuation), style: AppTextStyles.bodyBold),

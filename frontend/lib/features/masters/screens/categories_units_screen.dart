@@ -1,3 +1,4 @@
+import '../../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
@@ -131,12 +132,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                             );
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Item category "${nameCtrl.text.trim()}" added successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+ErpToast.showSuccess(context, 'Item category "${nameCtrl.text.trim()}" added successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {
@@ -237,12 +233,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                             );
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Category "${nameCtrl.text.trim()}" updated successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+ErpToast.showSuccess(context, 'Category "${nameCtrl.text.trim()}" updated successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {
@@ -353,12 +344,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                         );
                         if (ctx.mounted) Navigator.of(ctx).pop();
                         if (mounted) {
-                          messenger.showSnackBar(
-                            SnackBar(
-                              content: Text('Expense category "$name" added successfully!'),
-                              backgroundColor: AppColors.success,
-                            ),
-                          );
+ErpToast.showSuccess(context, 'Expense category "$name" added successfully!');
                         }
                       } catch (e) {
                         setDlgState(() {
@@ -467,12 +453,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                         );
                         if (ctx.mounted) Navigator.of(ctx).pop();
                         if (mounted) {
-                          messenger.showSnackBar(
-                            SnackBar(
-                              content: Text('Expense category "$name" updated successfully!'),
-                              backgroundColor: AppColors.success,
-                            ),
-                          );
+ErpToast.showSuccess(context, 'Expense category "$name" updated successfully!');
                         }
                       } catch (e) {
                         setDlgState(() {
@@ -544,12 +525,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
               );
               if (ctx.mounted) Navigator.of(ctx).pop();
               if (mounted) {
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text('Payment mode "$name" added successfully!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+ErpToast.showSuccess(context, 'Payment mode "$name" added successfully!');
               }
             },
           ),
@@ -612,12 +588,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
               );
               if (ctx.mounted) Navigator.of(ctx).pop();
               if (mounted) {
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text('Payment mode "$name" updated successfully!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+ErpToast.showSuccess(context, 'Payment mode "$name" updated successfully!');
               }
             },
           ),
@@ -712,12 +683,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                             );
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Unit "${symbolCtrl.text.trim().toUpperCase()}" added successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+ErpToast.showSuccess(context, 'Unit "${symbolCtrl.text.trim().toUpperCase()}" added successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {
@@ -819,12 +785,7 @@ class _CategoriesUnitsScreenState extends ConsumerState<CategoriesUnitsScreen> {
                             );
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Unit "${symbolCtrl.text.trim().toUpperCase()}" updated successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+ErpToast.showSuccess(context, 'Unit "${symbolCtrl.text.trim().toUpperCase()}" updated successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {

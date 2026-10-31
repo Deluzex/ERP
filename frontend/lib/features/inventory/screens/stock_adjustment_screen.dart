@@ -407,7 +407,10 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                 ErpButton(
                   text: 'Save Adjustment & Update Stock',
                   onPressed: () {
-                    if (!formKey.currentState!.validate()) return;
+                    if (!formKey.currentState!.validate()) {
+                      ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                      return;
+                    }
                     final rawVal = double.parse(adjQtyCtrl.text.trim()).abs();
                     final adjDiff = isReduction ? -rawVal : rawVal;
                     final targetQty = currentStock + adjDiff;

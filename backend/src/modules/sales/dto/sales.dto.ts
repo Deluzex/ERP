@@ -58,12 +58,12 @@ export class SaleLineItemDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUUID()
+  @IsString()
   finishedProductId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUUID()
+  @IsString()
   rawMaterialId?: string;
 
   @ApiPropertyOptional()
@@ -519,7 +519,7 @@ export class RecordInvoicePaymentDto {
 
 export class CreateSalesReturnDto {
   @ApiProperty()
-  @IsUUID()
+  @IsString()
   originalInvoiceId!: string;
 
   @ApiProperty()

@@ -5,6 +5,7 @@ import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/utils/document_sharing_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
@@ -938,9 +939,7 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-    );
+    ErpToast.showInfo(context, message);
   }
 }
 

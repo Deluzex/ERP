@@ -11,6 +11,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class _SoItemDraft {
@@ -189,7 +190,14 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
   double get _grandTotal => _totalTaxable + _totalGst;
 
   Future<void> _createSalesOrder() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      if (_selectedPartyId == null) {
+        ErpToast.showError(context, 'Please select a customer or dealer');
+      } else {
+        ErpToast.showError(context, 'Please fill in all required fields marked with *');
+      }
+      return;
+    }
     final db = ref.read(databaseServiceProvider);
 
     if (_selectedProjectId != null) {
@@ -198,12 +206,7 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
         final siteState = p.siteState?.trim();
         final siteCode = p.siteStateCode?.trim();
         if ((siteState == null || siteState.isEmpty) && (siteCode == null || siteCode.isEmpty)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cannot finalize sales order: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.'),
-              backgroundColor: AppColors.danger,
-            ),
-          );
+ErpToast.showError(context, 'Cannot finalize sales order: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.');
           return;
         }
       }
@@ -295,19 +298,12 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
       final createdSO = await db.createSalesOrderAsync(so, autoAllocate: true);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Sales Order ${createdSO.invoiceNumber} created! Automated inventory check & reservation applied.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+ErpToast.showSuccess(context, 'Sales Order ${createdSO.invoiceNumber} created! Automated inventory check & reservation applied.');
 
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders;
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create sales order: $e'), backgroundColor: AppColors.danger),
-      );
+ErpToast.showError(context, 'Failed to create sales order: $e');
     }
   }
 

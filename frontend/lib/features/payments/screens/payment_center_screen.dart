@@ -6,6 +6,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/models/architect_model.dart';
 import '../../../core/models/commission_model.dart';
 import '../../../core/models/customer_model.dart';
 import '../../../core/models/dealer_model.dart';
@@ -3637,6 +3638,69 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
   DateTime _selectedDate = DateTime.now();
   PaymentMode? _selectedMode;
 
+  double _getCustomerOutstanding(Customer customer, MockDatabaseService db) {
+    if (customer.isDeleted) return 0.0;
+    final cName = customer.name.trim().toLowerCase();
+    final duplicates = db.customers.where((c) {
+      if (c.isDeleted) return false;
+      final dName = c.name.trim().toLowerCase();
+      return (dName.isNotEmpty && dName == cName) || c.id == customer.id;
+    }).toList();
+
+    final matchingIds = duplicates.map((c) => c.id).toSet();
+    final directOutstanding = duplicates.fold(0.0, (maxVal, c) => max(maxVal, c.outstandingAmount));
+    final salesPending = db.sales
+        .where((s) => matchingIds.contains(s.partyId) && s.pendingAmount > 0)
+        .fold(0.0, (sum, s) => sum + s.pendingAmount);
+
+    return max(directOutstanding, salesPending);
+  }
+
+  double _getDealerOutstanding(Dealer dealer, MockDatabaseService db) {
+    if (dealer.isDeleted) return 0.0;
+    final dName = dealer.name.trim().toLowerCase();
+    final duplicates = db.dealers.where((d) {
+      if (d.isDeleted) return false;
+      final otherName = d.name.trim().toLowerCase();
+      return (otherName.isNotEmpty && otherName == dName) || d.id == dealer.id;
+    }).toList();
+
+    final matchingIds = duplicates.map((d) => d.id).toSet();
+    final directOutstanding = duplicates.fold(0.0, (maxVal, d) => max(maxVal, d.outstandingAmount));
+    final salesPending = db.sales
+        .where((s) => matchingIds.contains(s.partyId) && s.pendingAmount > 0)
+        .fold(0.0, (sum, s) => sum + s.pendingAmount);
+
+    return max(directOutstanding, salesPending);
+  }
+
+  double _getVendorOutstanding(Vendor vendor, MockDatabaseService db) {
+    if (vendor.isDeleted) return 0.0;
+    final vName = vendor.name.trim().toLowerCase();
+    final duplicates = db.vendors.where((v) {
+      if (v.isDeleted) return false;
+      final otherName = v.name.trim().toLowerCase();
+      return (otherName.isNotEmpty && otherName == vName) || v.id == vendor.id;
+    }).toList();
+
+    final matchingIds = duplicates.map((v) => v.id).toSet();
+    final directOutstanding = duplicates.fold(0.0, (maxVal, v) => max(maxVal, v.outstandingBalance));
+    final purchasesPending = db.purchases
+        .where((p) => matchingIds.contains(p.vendorId) && p.pendingAmount > 0)
+        .fold(0.0, (sum, p) => sum + p.pendingAmount);
+
+    return max(directOutstanding, purchasesPending);
+  }
+
+  double _getArchitectOutstanding(Architect architect, MockDatabaseService db) {
+    if (architect.isDeleted) return 0.0;
+    final directCommission = architect.pendingCommission;
+    final commPending = db.commissions
+        .where((cm) => cm.architectId == architect.id && cm.status != CommissionStatus.paid)
+        .fold(0.0, (sum, cm) => sum + cm.commissionAmount);
+    return max(directCommission, commPending);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -3648,14 +3712,18 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     final db = ref.read(databaseServiceProvider);
     if (widget.preselectedPartyId != null) {
       _selectedPartyId = widget.preselectedPartyId;
-    } else if (widget.type == PaymentType.customerPayment && db.customers.isNotEmpty) {
-      _selectedPartyId = db.customers.first.id;
-    } else if (widget.type == PaymentType.dealerPayment && db.dealers.isNotEmpty) {
-      _selectedPartyId = db.dealers.first.id;
-    } else if (widget.type == PaymentType.vendorPayment && db.vendors.isNotEmpty) {
-      _selectedPartyId = db.vendors.first.id;
-    } else if (widget.type == PaymentType.commissionPayment && db.architects.isNotEmpty) {
-      _selectedPartyId = db.architects.first.id;
+    } else if (widget.type == PaymentType.customerPayment) {
+      final eligible = db.customers.where((c) => !c.isDeleted && _getCustomerOutstanding(c, db) > 0).toList();
+      _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
+    } else if (widget.type == PaymentType.dealerPayment) {
+      final eligible = db.dealers.where((d) => !d.isDeleted && _getDealerOutstanding(d, db) > 0).toList();
+      _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
+    } else if (widget.type == PaymentType.vendorPayment) {
+      final eligible = db.vendors.where((v) => !v.isDeleted && _getVendorOutstanding(v, db) > 0).toList();
+      _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
+    } else if (widget.type == PaymentType.commissionPayment) {
+      final eligible = db.architects.where((a) => !a.isDeleted && _getArchitectOutstanding(a, db) > 0).toList();
+      _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
     }
   }
 
@@ -3671,6 +3739,77 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+
+    // Compute eligible parties with outstanding amounts > 0
+    final eligibleCustomers = <Customer>[];
+    final seenCustKeys = <String>{};
+    for (final c in db.customers) {
+      if (c.isDeleted) continue;
+      final out = _getCustomerOutstanding(c, db);
+      if (out <= 0) continue;
+      final key = c.name.trim().toLowerCase().isNotEmpty ? c.name.trim().toLowerCase() : c.id;
+      if (seenCustKeys.add(key)) {
+        eligibleCustomers.add(c);
+      }
+    }
+    eligibleCustomers.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final eligibleDealers = <Dealer>[];
+    final seenDealerKeys = <String>{};
+    for (final d in db.dealers) {
+      if (d.isDeleted) continue;
+      final out = _getDealerOutstanding(d, db);
+      if (out <= 0) continue;
+      final key = d.name.trim().toLowerCase().isNotEmpty ? d.name.trim().toLowerCase() : d.id;
+      if (seenDealerKeys.add(key)) {
+        eligibleDealers.add(d);
+      }
+    }
+    eligibleDealers.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final eligibleVendors = <Vendor>[];
+    final seenVendorKeys = <String>{};
+    for (final v in db.vendors) {
+      if (v.isDeleted) continue;
+      final out = _getVendorOutstanding(v, db);
+      if (out <= 0) continue;
+      final key = v.name.trim().toLowerCase().isNotEmpty ? v.name.trim().toLowerCase() : v.id;
+      if (seenVendorKeys.add(key)) {
+        eligibleVendors.add(v);
+      }
+    }
+    eligibleVendors.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final eligibleArchitects = <Architect>[];
+    for (final a in db.architects) {
+      if (a.isDeleted) continue;
+      final out = _getArchitectOutstanding(a, db);
+      if (out <= 0) continue;
+      eligibleArchitects.add(a);
+    }
+    eligibleArchitects.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    // Synchronize _selectedPartyId with available eligible list if not preselected
+    if (widget.preselectedPartyId == null) {
+      if (widget.type == PaymentType.customerPayment) {
+        if (_selectedPartyId == null || !eligibleCustomers.any((c) => c.id == _selectedPartyId)) {
+          _selectedPartyId = eligibleCustomers.isNotEmpty ? eligibleCustomers.first.id : null;
+        }
+      } else if (widget.type == PaymentType.dealerPayment) {
+        if (_selectedPartyId == null || !eligibleDealers.any((d) => d.id == _selectedPartyId)) {
+          _selectedPartyId = eligibleDealers.isNotEmpty ? eligibleDealers.first.id : null;
+        }
+      } else if (widget.type == PaymentType.vendorPayment) {
+        if (_selectedPartyId == null || !eligibleVendors.any((v) => v.id == _selectedPartyId)) {
+          _selectedPartyId = eligibleVendors.isNotEmpty ? eligibleVendors.first.id : null;
+        }
+      } else if (widget.type == PaymentType.commissionPayment) {
+        if (_selectedPartyId == null || !eligibleArchitects.any((a) => a.id == _selectedPartyId)) {
+          _selectedPartyId = eligibleArchitects.isNotEmpty ? eligibleArchitects.first.id : null;
+        }
+      }
+    }
+
     double outstanding = 0.0;
     String partyName = '';
     List<DropdownMenuItem<String>> linkedDocItems = [];
@@ -3681,9 +3820,11 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     String? selectedProjectName;
 
     if (widget.type == PaymentType.customerPayment && _selectedPartyId != null) {
-      final c = db.customers.firstWhere((cust) => cust.id == _selectedPartyId, orElse: () => db.customers.first);
-      outstanding = c.outstandingAmount;
-      partyName = c.name;
+      final c = db.customers.where((cust) => cust.id == _selectedPartyId).firstOrNull;
+      if (c != null) {
+        outstanding = _getCustomerOutstanding(c, db);
+        partyName = c.name;
+      }
       final sales = db.sales.where((s) => s.partyId == _selectedPartyId && s.pendingAmount > 0);
       linkedDocItems = sales.map((s) => DropdownMenuItem(value: s.id, child: Text('${s.invoiceNumber} (Pending: ${Formatters.formatCurrency(s.pendingAmount)})'))).toList();
 
@@ -3698,9 +3839,11 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
         }
       }
     } else if (widget.type == PaymentType.dealerPayment && _selectedPartyId != null) {
-      final d = db.dealers.firstWhere((dlr) => dlr.id == _selectedPartyId, orElse: () => db.dealers.first);
-      outstanding = d.outstandingAmount;
-      partyName = d.name;
+      final d = db.dealers.where((dlr) => dlr.id == _selectedPartyId).firstOrNull;
+      if (d != null) {
+        outstanding = _getDealerOutstanding(d, db);
+        partyName = d.name;
+      }
       final sales = db.sales.where((s) => s.partyId == _selectedPartyId && s.pendingAmount > 0);
       linkedDocItems = sales.map((s) => DropdownMenuItem(value: s.id, child: Text('${s.invoiceNumber} (Pending: ${Formatters.formatCurrency(s.pendingAmount)})'))).toList();
 
@@ -3715,9 +3858,11 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
         }
       }
     } else if (widget.type == PaymentType.vendorPayment && _selectedPartyId != null) {
-      final v = db.vendors.firstWhere((ven) => ven.id == _selectedPartyId, orElse: () => db.vendors.first);
-      outstanding = v.outstandingBalance;
-      partyName = v.name;
+      final v = db.vendors.where((ven) => ven.id == _selectedPartyId).firstOrNull;
+      if (v != null) {
+        outstanding = _getVendorOutstanding(v, db);
+        partyName = v.name;
+      }
       final purchases = db.purchases.where((p) => p.vendorId == _selectedPartyId && p.pendingAmount > 0);
       linkedDocItems = purchases.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.purchaseNumber} (Pending: ${Formatters.formatCurrency(p.pendingAmount)})'))).toList();
 
@@ -3732,9 +3877,11 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
         }
       }
     } else if (widget.type == PaymentType.commissionPayment && _selectedPartyId != null) {
-      final a = db.architects.firstWhere((arc) => arc.id == _selectedPartyId, orElse: () => db.architects.first);
-      outstanding = a.pendingCommission;
-      partyName = a.name;
+      final a = db.architects.where((arc) => arc.id == _selectedPartyId).firstOrNull;
+      if (a != null) {
+        outstanding = _getArchitectOutstanding(a, db);
+        partyName = a.name;
+      }
 
       final commissions = db.commissions.where((cm) => cm.architectId == _selectedPartyId && cm.status != CommissionStatus.paid);
       linkedDocItems = commissions.map((cm) => DropdownMenuItem(value: cm.id, child: Text('${cm.commissionNumber} (Amt: ${Formatters.formatCurrency(cm.commissionAmount)})'))).toList();
@@ -3866,16 +4013,44 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                         labelText: 'Select Customer *',
                         prefixIcon: Icon(Icons.person_outline, size: 20),
                       ),
-                      items: db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedPartyId = val;
-                          _selectedLinkedDocId = null;
-                          _amountCtrl.clear();
-                          _discountCtrl.clear();
-                        });
+                      hint: const Text('Select Customer with outstanding balance'),
+                      items: eligibleCustomers.isEmpty
+                          ? null
+                          : eligibleCustomers.map((c) {
+                              final out = _getCustomerOutstanding(c, db);
+                              return DropdownMenuItem(
+                                value: c.id,
+                                child: Text(
+                                  '${c.name} — Outstanding: ${Formatters.formatCurrency(out)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                      onChanged: eligibleCustomers.isEmpty
+                          ? null
+                          : (val) {
+                              setState(() {
+                                _selectedPartyId = val;
+                                _selectedLinkedDocId = null;
+                                _amountCtrl.clear();
+                                _discountCtrl.clear();
+                              });
+                            },
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return 'Select Customer';
+                        }
+                        return null;
                       },
                     ),
+                    if (eligibleCustomers.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6, left: 4),
+                        child: Text(
+                          'All customer accounts are settled (Zero outstanding dues).',
+                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                        ),
+                      ),
                     const SizedBox(height: 14),
                   ] else if (widget.type == PaymentType.dealerPayment) ...[
                     DropdownButtonFormField<String>(
@@ -3885,16 +4060,44 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                         labelText: 'Select Dealer *',
                         prefixIcon: Icon(Icons.storefront_outlined, size: 20),
                       ),
-                      items: db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedPartyId = val;
-                          _selectedLinkedDocId = null;
-                          _amountCtrl.clear();
-                          _discountCtrl.clear();
-                        });
+                      hint: const Text('Select Dealer with outstanding balance'),
+                      items: eligibleDealers.isEmpty
+                          ? null
+                          : eligibleDealers.map((d) {
+                              final out = _getDealerOutstanding(d, db);
+                              return DropdownMenuItem(
+                                value: d.id,
+                                child: Text(
+                                  '${d.name} — Outstanding: ${Formatters.formatCurrency(out)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                      onChanged: eligibleDealers.isEmpty
+                          ? null
+                          : (val) {
+                              setState(() {
+                                _selectedPartyId = val;
+                                _selectedLinkedDocId = null;
+                                _amountCtrl.clear();
+                                _discountCtrl.clear();
+                              });
+                            },
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return 'Select Dealer';
+                        }
+                        return null;
                       },
                     ),
+                    if (eligibleDealers.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6, left: 4),
+                        child: Text(
+                          'All dealer accounts are settled (Zero outstanding dues).',
+                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                        ),
+                      ),
                     const SizedBox(height: 14),
                   ] else if (widget.type == PaymentType.vendorPayment) ...[
                     DropdownButtonFormField<String>(
@@ -3904,16 +4107,44 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                         labelText: 'Select Vendor *',
                         prefixIcon: Icon(Icons.business_outlined, size: 20),
                       ),
-                      items: db.vendors.map((v) => DropdownMenuItem(value: v.id, child: Text(v.name, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedPartyId = val;
-                          _selectedLinkedDocId = null;
-                          _amountCtrl.clear();
-                          _discountCtrl.clear();
-                        });
+                      hint: const Text('Select Vendor with outstanding balance'),
+                      items: eligibleVendors.isEmpty
+                          ? null
+                          : eligibleVendors.map((v) {
+                              final out = _getVendorOutstanding(v, db);
+                              return DropdownMenuItem(
+                                value: v.id,
+                                child: Text(
+                                  '${v.name} — Outstanding: ${Formatters.formatCurrency(out)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                      onChanged: eligibleVendors.isEmpty
+                          ? null
+                          : (val) {
+                              setState(() {
+                                _selectedPartyId = val;
+                                _selectedLinkedDocId = null;
+                                _amountCtrl.clear();
+                                _discountCtrl.clear();
+                              });
+                            },
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return 'Select Vendor';
+                        }
+                        return null;
                       },
                     ),
+                    if (eligibleVendors.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6, left: 4),
+                        child: Text(
+                          'All vendor accounts are settled (Zero outstanding dues).',
+                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                        ),
+                      ),
                     const SizedBox(height: 14),
                   ] else if (widget.type == PaymentType.commissionPayment) ...[
                     DropdownButtonFormField<String>(
@@ -3923,16 +4154,44 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                         labelText: 'Select Architect / Partner *',
                         prefixIcon: Icon(Icons.handshake_outlined, size: 20),
                       ),
-                      items: db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedPartyId = val;
-                          _selectedLinkedDocId = null;
-                          _amountCtrl.clear();
-                          _discountCtrl.clear();
-                        });
+                      hint: const Text('Select Architect with commission due'),
+                      items: eligibleArchitects.isEmpty
+                          ? null
+                          : eligibleArchitects.map((a) {
+                              final out = _getArchitectOutstanding(a, db);
+                              return DropdownMenuItem(
+                                value: a.id,
+                                child: Text(
+                                  '${a.name} — Commission Due: ${Formatters.formatCurrency(out)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                      onChanged: eligibleArchitects.isEmpty
+                          ? null
+                          : (val) {
+                              setState(() {
+                                _selectedPartyId = val;
+                                _selectedLinkedDocId = null;
+                                _amountCtrl.clear();
+                                _discountCtrl.clear();
+                              });
+                            },
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return 'Select Architect';
+                        }
+                        return null;
                       },
                     ),
+                    if (eligibleArchitects.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6, left: 4),
+                        child: Text(
+                          'All architect commissions are settled (Zero dues).',
+                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                        ),
+                      ),
                     const SizedBox(height: 14),
                   ],
                 ],
@@ -4317,7 +4576,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                     ErpButton(
                       text: 'Add Transaction',
                       icon: Icons.check,
-                      onPressed: () {
+                      onPressed: (_selectedPartyId == null) ? null : () {
                         if (!_formKey.currentState!.validate()) return;
                         if (_transactionType != 'Discount Only' && _selectedMode == null) {
                           ErpToast.showWarning(context, 'Please select a payment mode.');

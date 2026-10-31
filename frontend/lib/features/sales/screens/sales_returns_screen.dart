@@ -64,9 +64,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
   Future<void> _showCreateOrEditSalesReturnDialog(BuildContext context, MockDatabaseService db, {Sale? initialExistingReturn, String? preselectedInvoiceId}) async {
     if (db.salesInvoices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No sales invoices available for return.'), backgroundColor: AppColors.warning),
-      );
+ErpToast.showWarning(context, 'No sales invoices available for return.');
       return;
     }
 
@@ -115,6 +113,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
     final initialInv = db.salesInvoices.firstWhere((i) => i.id == selectedInvoiceId, orElse: () => db.salesInvoices.first);
     initializeControllers(initialInv);
+
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
@@ -575,36 +575,46 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                             ErpButton(
                               text: 'Submit for Inspection',
                               icon: Icons.send_outlined,
-                              onPressed: () => _processReturnSubmission(
-                                context,
-                                db,
-                                selectedInvoice,
-                                returnQtyCtrls,
-                                itemConditions,
-                                reasonCtrl.text.trim(),
-                                financialAction,
-                                notesCtrl.text.trim(),
-                                SalesReturnStatus.submitted,
-                                ctx,
-                              ),
+                              isLoading: isSubmitting,
+                              onPressed: isSubmitting ? null : () {
+                                setDialogState(() => isSubmitting = true);
+                                _processReturnSubmission(
+                                  context,
+                                  db,
+                                  selectedInvoice,
+                                  returnQtyCtrls,
+                                  itemConditions,
+                                  reasonCtrl.text.trim(),
+                                  financialAction,
+                                  notesCtrl.text.trim(),
+                                  SalesReturnStatus.submitted,
+                                  ctx,
+                                  () => setDialogState(() => isSubmitting = false),
+                                );
+                              },
                             ),
                             const SizedBox(height: 8),
                             ErpButton(
                               text: 'Save as Draft',
                               isOutlined: true,
                               icon: Icons.edit_note,
-                              onPressed: () => _processReturnSubmission(
-                                context,
-                                db,
-                                selectedInvoice,
-                                returnQtyCtrls,
-                                itemConditions,
-                                reasonCtrl.text.trim(),
-                                financialAction,
-                                notesCtrl.text.trim(),
-                                SalesReturnStatus.draft,
-                                ctx,
-                              ),
+                              isLoading: isSubmitting,
+                              onPressed: isSubmitting ? null : () {
+                                setDialogState(() => isSubmitting = true);
+                                _processReturnSubmission(
+                                  context,
+                                  db,
+                                  selectedInvoice,
+                                  returnQtyCtrls,
+                                  itemConditions,
+                                  reasonCtrl.text.trim(),
+                                  financialAction,
+                                  notesCtrl.text.trim(),
+                                  SalesReturnStatus.draft,
+                                  ctx,
+                                  () => setDialogState(() => isSubmitting = false),
+                                );
+                              },
                             ),
                             const SizedBox(height: 4),
                           ] else ...[
@@ -612,16 +622,20 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                               text: 'Update Return Draft',
                               icon: Icons.save_outlined,
                               onPressed: () {
-                                Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Sales return updated.'), backgroundColor: AppColors.success),
-                                );
+                                if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                                  Navigator.of(ctx).pop();
+                                }
+                                ErpToast.showSuccess(context, 'Sales return updated.');
                               },
                             ),
                             const SizedBox(height: 4),
                           ],
                           TextButton(
-                            onPressed: () => Navigator.pop(ctx),
+                            onPressed: isSubmitting ? null : () {
+                              if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                                Navigator.of(ctx).pop();
+                              }
+                            },
                             child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
                           ),
                         ],
@@ -629,51 +643,68 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     ),
                   ]
                 : [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: isSubmitting ? null : () {
+                        if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                          Navigator.of(ctx).pop();
+                        }
+                      },
+                      child: const Text('Cancel'),
+                    ),
                     if (!isEdit) ...[
                       ErpButton(
                         text: 'Save as Draft',
                         isOutlined: true,
                         icon: Icons.edit_note,
-                        onPressed: () => _processReturnSubmission(
-                          context,
-                          db,
-                          selectedInvoice,
-                          returnQtyCtrls,
-                          itemConditions,
-                          reasonCtrl.text.trim(),
-                          financialAction,
-                          notesCtrl.text.trim(),
-                          SalesReturnStatus.draft,
-                          ctx,
-                        ),
+                        isLoading: isSubmitting,
+                        onPressed: isSubmitting ? null : () {
+                          setDialogState(() => isSubmitting = true);
+                          _processReturnSubmission(
+                            context,
+                            db,
+                            selectedInvoice,
+                            returnQtyCtrls,
+                            itemConditions,
+                            reasonCtrl.text.trim(),
+                            financialAction,
+                            notesCtrl.text.trim(),
+                            SalesReturnStatus.draft,
+                            ctx,
+                            () => setDialogState(() => isSubmitting = false),
+                          );
+                        },
                       ),
                       const SizedBox(width: 8),
                       ErpButton(
                         text: 'Submit for Inspection',
                         icon: Icons.send_outlined,
-                        onPressed: () => _processReturnSubmission(
-                          context,
-                          db,
-                          selectedInvoice,
-                          returnQtyCtrls,
-                          itemConditions,
-                          reasonCtrl.text.trim(),
-                          financialAction,
-                          notesCtrl.text.trim(),
-                          SalesReturnStatus.submitted,
-                          ctx,
-                        ),
+                        isLoading: isSubmitting,
+                        onPressed: isSubmitting ? null : () {
+                          setDialogState(() => isSubmitting = true);
+                          _processReturnSubmission(
+                            context,
+                            db,
+                            selectedInvoice,
+                            returnQtyCtrls,
+                            itemConditions,
+                            reasonCtrl.text.trim(),
+                            financialAction,
+                            notesCtrl.text.trim(),
+                            SalesReturnStatus.submitted,
+                            ctx,
+                            () => setDialogState(() => isSubmitting = false),
+                          );
+                        },
                       ),
                     ] else ...[
                       ErpButton(
                         text: 'Update Return Draft',
                         icon: Icons.save_outlined,
                         onPressed: () {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Sales return updated.'), backgroundColor: AppColors.success),
-                          );
+                          if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                            Navigator.of(ctx).pop();
+                          }
+                          ErpToast.showSuccess(context, 'Sales return updated.');
                         },
                       ),
                     ],
@@ -717,6 +748,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     String notes,
     SalesReturnStatus targetStatus,
     BuildContext dialogCtx,
+    VoidCallback onFailed,
   ) async {
     List<SaleLineItem> returnItems = [];
 
@@ -726,11 +758,10 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
       final maxReturnable = (item.quantity - item.returnedQuantity).clamp(0.0, double.infinity);
 
       if (qtyToReturn > maxReturnable) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Return quantity for ${item.finishedProductName} exceeds maximum returnable quantity (${maxReturnable.toInt()}).'),
-            backgroundColor: AppColors.danger,
-          ),
+        onFailed();
+        ErpToast.showError(
+          dialogCtx,
+          'Return quantity for ${item.finishedProductName} exceeds maximum returnable quantity (${maxReturnable.toInt()}).',
         );
         return;
       }
@@ -753,16 +784,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     }
 
     if (returnItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please specify a return quantity greater than 0 for at least one item.'), backgroundColor: AppColors.danger),
-      );
+      onFailed();
+      ErpToast.showError(dialogCtx, 'Please specify a return quantity greater than 0 for at least one item.');
       return;
     }
 
     if (returnReason.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please provide a reason for the return.'), backgroundColor: AppColors.danger),
-      );
+      onFailed();
+      ErpToast.showError(dialogCtx, 'Please provide a reason for the return.');
       return;
     }
 
@@ -776,21 +805,30 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
         notes: notes,
       );
 
-      Navigator.pop(dialogCtx);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Sales Return ${returnDoc.invoiceNumber} created as ${(returnDoc.salesReturnStatus ?? targetStatus).name.toUpperCase()}!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      if (dialogCtx.mounted && Navigator.of(dialogCtx).canPop()) {
+        Navigator.of(dialogCtx).pop();
+      }
+      if (context.mounted) {
+        ErpToast.showSuccess(
+          context,
+          'Sales Return ${returnDoc.invoiceNumber} created as ${(returnDoc.salesReturnStatus ?? targetStatus).name.toUpperCase()}!',
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create sales return: $e'), backgroundColor: AppColors.danger),
-      );
+      onFailed();
+      final cleanMsg = e.toString()
+          .replaceFirst('Exception: ', '')
+          .replaceFirst('DioException: ', '')
+          .trim();
+      if (dialogCtx.mounted) {
+        ErpToast.showError(dialogCtx, 'Failed to create sales return: $cleanMsg');
+      }
     }
   }
 
   void _showApproveConfirmationDialog(BuildContext context, Sale returnDoc, MockDatabaseService db) {
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -848,16 +886,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                             Navigator.pop(ctx);
                             try {
                               await db.approveSalesReturnAsync(returnDoc.id);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+ErpToast.showSuccess(context, 'Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.');
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Failed to approve return: $e'), backgroundColor: AppColors.danger),
-                              );
+ErpToast.showError(context, 'Failed to approve return: $e');
                             }
                           },
                         ),
@@ -879,16 +910,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                       Navigator.pop(ctx);
                       try {
                         await db.approveSalesReturnAsync(returnDoc.id);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.'),
-                            backgroundColor: AppColors.success,
-                          ),
-                        );
+ErpToast.showSuccess(context, 'Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.');
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to approve return: $e'), backgroundColor: AppColors.danger),
-                        );
+ErpToast.showError(context, 'Failed to approve return: $e');
                       }
                     },
                   ),
@@ -900,6 +924,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
   void _showRejectConfirmationDialog(BuildContext context, Sale returnDoc, MockDatabaseService db) {
     final reasonCtrl = TextEditingController();
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -942,16 +968,12 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                           icon: Icons.close,
                           onPressed: () {
                             if (reasonCtrl.text.trim().isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please specify a rejection reason.'), backgroundColor: AppColors.danger),
-                              );
+ErpToast.showError(context, 'Please specify a rejection reason.');
                               return;
                             }
                             Navigator.pop(ctx);
                             db.rejectSalesReturn(returnDoc.id, reasonCtrl.text.trim());
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Sales Return ${returnDoc.invoiceNumber} rejected.'), backgroundColor: AppColors.neutral),
-                            );
+ErpToast.showInfo(context, 'Sales Return ${returnDoc.invoiceNumber} rejected.');
                           },
                         ),
                         const SizedBox(height: 6),
@@ -971,16 +993,12 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     icon: Icons.close,
                     onPressed: () {
                       if (reasonCtrl.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please specify a rejection reason.'), backgroundColor: AppColors.danger),
-                        );
+ErpToast.showError(context, 'Please specify a rejection reason.');
                         return;
                       }
                       Navigator.pop(ctx);
                       db.rejectSalesReturn(returnDoc.id, reasonCtrl.text.trim());
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Sales Return ${returnDoc.invoiceNumber} rejected.'), backgroundColor: AppColors.neutral),
-                      );
+ErpToast.showInfo(context, 'Sales Return ${returnDoc.invoiceNumber} rejected.');
                     },
                   ),
                 ],
@@ -995,6 +1013,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     final amountCtrl = TextEditingController(text: returnDoc.refundAmount.toStringAsFixed(0));
     final refCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
+
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
@@ -1143,9 +1163,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                             onPressed: () async {
                               final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
                               if (amount <= 0) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Please enter a valid refund amount.'), backgroundColor: AppColors.danger),
-                                );
+ErpToast.showError(context, 'Please enter a valid refund amount.');
                                 return;
                               }
 
@@ -1159,16 +1177,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                                 );
 
                                 Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!'),
-                                    backgroundColor: AppColors.success,
-                                  ),
-                                );
+ErpToast.showSuccess(context, 'Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!');
                               } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Failed to process refund: $e'), backgroundColor: AppColors.danger),
-                                );
+ErpToast.showError(context, 'Failed to process refund: $e');
                               }
                             },
                           ),
@@ -1189,9 +1200,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                       onPressed: () async {
                         final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
                         if (amount <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please enter a valid refund amount.'), backgroundColor: AppColors.danger),
-                          );
+ErpToast.showError(context, 'Please enter a valid refund amount.');
                           return;
                         }
 
@@ -1205,16 +1214,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                           );
 
                           Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!'),
-                              backgroundColor: AppColors.success,
-                            ),
-                          );
+ErpToast.showSuccess(context, 'Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!');
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed to process refund: $e'), backgroundColor: AppColors.danger),
-                          );
+ErpToast.showError(context, 'Failed to process refund: $e');
                         }
                       },
                     ),
@@ -1821,15 +1823,15 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
             break;
           case 'submit':
             db.updateSalesReturnStatus(ret.id, SalesReturnStatus.submitted);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return submitted for review.'), backgroundColor: AppColors.primary));
+ErpToast.showInfo(context, 'Return submitted for review.');
             break;
           case 'receive':
             db.updateSalesReturnStatus(ret.id, SalesReturnStatus.itemsReceived);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Items marked as received at warehouse.'), backgroundColor: AppColors.info));
+ErpToast.showInfo(context, 'Items marked as received at warehouse.');
             break;
           case 'inspect':
             db.updateSalesReturnStatus(ret.id, SalesReturnStatus.inspection);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return moved to QA inspection.'), backgroundColor: AppColors.warning));
+ErpToast.showWarning(context, 'Return moved to QA inspection.');
             break;
           case 'approve':
             _showApproveConfirmationDialog(context, ret, db);

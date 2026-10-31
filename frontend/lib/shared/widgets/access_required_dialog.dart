@@ -1,3 +1,4 @@
+import '../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_colors.dart';
@@ -100,26 +101,7 @@ class _AccessRequiredDialogState extends ConsumerState<AccessRequiredDialog> {
 
       if (mounted) {
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.verified_user_rounded, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Access granted by ${result.authorizerName}. Temporary override is active.',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        ErpToast.showSuccess(context, 'Access granted by ${result.authorizerName}. Temporary override is active.');
       }
     } else {
       setState(() {

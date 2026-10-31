@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
@@ -302,7 +303,10 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          if (!formKey.currentState!.validate()) return;
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
                           setDlgState(() {
                             isSubmitting = true;
                             serverError = null;
@@ -351,12 +355,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                               Navigator.of(ctx).pop();
                             }
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Vendor "${nameCtrl.text.trim()}" ${isEdit ? "updated" : "saved"} successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+                              ErpToast.showSuccess(context, 'Vendor "${nameCtrl.text.trim()}" ${isEdit ? "updated" : "saved"} successfully!');
                             }
                           } on ApiException catch (e) {
                             setDlgState(() {
@@ -393,21 +392,11 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
             try {
               await db.deleteVendorAsync(vendorId: vendor.id, reason: reason);
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Vendor "${vendor.name}" archived with audit reason: $reason'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+                ErpToast.showSuccess(context, 'Vendor "${vendor.name}" archived with audit reason: $reason');
               }
             } catch (e) {
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Delete failed: ${e.toString().replaceFirst("Exception: ", "")}'),
-                    backgroundColor: AppColors.danger,
-                  ),
-                );
+                ErpToast.showError(context, 'Delete failed: ${e.toString().replaceFirst("Exception: ", "")}');
               }
             }
           },

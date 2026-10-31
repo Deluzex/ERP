@@ -44,7 +44,7 @@ export class TokenService {
 
     this.accessSecret = accessSecret || 'deluzex_dev_access_secret';
     this.refreshSecret = refreshSecret || 'deluzex_dev_refresh_secret';
-    this.accessExpiresIn = this.config.get<string>('JWT_ACCESS_EXPIRES_IN') || '15m';
+    this.accessExpiresIn = this.config.get<string>('JWT_ACCESS_EXPIRES_IN') || '30m';
     this.refreshExpiresIn = this.config.get<string>('JWT_REFRESH_EXPIRES_IN') || '30m';
   }
 
@@ -69,7 +69,7 @@ export class TokenService {
     return {
       accessToken,
       refreshToken,
-      expiresIn: 900, // 15 minutes in seconds
+      expiresIn: this.accessExpiresIn === '15m' ? 900 : 1800, // 30 minutes in seconds
     };
   }
 
