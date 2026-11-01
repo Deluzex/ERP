@@ -32,7 +32,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
     final isDesktop = MediaQuery.of(context).size.width >= 1100;
-    final isTablet = MediaQuery.of(context).size.width >= 700;
 
     // Current user context
     final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
@@ -241,16 +240,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 8),
-                            Text(
-                              Formatters.formatCurrency(finishedProductStockVal),
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primaryDark, // Warm caramel gold primary dark
-                                letterSpacing: -0.5,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                Formatters.formatCurrency(finishedProductStockVal),
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primaryDark, // Warm caramel gold primary dark
+                                  letterSpacing: -0.5,
+                                ),
+                                maxLines: 1,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -707,18 +709,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
           child: Text(
             value,
             style: const TextStyle(
-              fontSize: 24,
+              fontSize: 26,
               fontWeight: FontWeight.w700,
               color: Color(0xFF111827),
               letterSpacing: -0.4,
             ),
+            maxLines: 1,
           ),
         ),
       ],
@@ -736,7 +739,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     VoidCallback? onTap,
   }) {
     final cardContent = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -763,6 +766,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     fontSize: 13.5,
                     fontWeight: FontWeight.w500,
                     color: titleColor ?? const Color(0xFF4B5563),
+                    height: 1.2,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -770,21 +774,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 6),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               value,
               style: const TextStyle(
-                fontSize: 24,
+                fontSize: 26,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF111827),
                 letterSpacing: -0.5,
+                height: 1.15,
               ),
+              maxLines: 1,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [

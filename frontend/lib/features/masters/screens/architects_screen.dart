@@ -15,8 +15,8 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_toast.dart';
-import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/figma_metric_card.dart';
@@ -425,29 +425,35 @@ ErpToast.showSuccess(context, 'Architect "${architect.name}" ${isEdit ? "updated
     );
   }
 
-  void _confirmDeleteArchitect(Architect architect) {
-    showDialog(
+  void _confirmToggleStatus(Architect architect) {
+    final willActivate = !architect.isActive;
+    showErpStatusConfirmDialog(
       context: context,
-      builder: (ctx) {
-        return ErpConfirmDeleteDialog(
-          title: 'Delete Architect Record',
-          message: 'Are you sure you want to deactivate and archive this architect? A mandatory audit reason is required.',
-          itemName: '${architect.name} (${architect.id})',
-          requireReason: true,
-          onConfirm: (reason) async {
-            final db = ref.read(databaseServiceProvider);
-            try {
-              await db.deleteArchitectAsync(architectId: architect.id, reason: reason);
-              if (mounted) {
-ErpToast.showSuccess(context, 'Architect "${architect.name}" archived with audit reason: $reason');
-              }
-            } catch (e) {
-              if (mounted) {
-ErpToast.showError(context, 'Delete failed: ${e.toString().replaceFirst("Exception: ", "")}');
-              }
-            }
-          },
-        );
+      title: willActivate ? 'Activate Architect' : 'Deactivate Architect',
+      message: willActivate
+          ? 'Activate "${architect.name}"? It will immediately become available in all transaction dropdowns and lookups.'
+          : 'Are you sure you want to deactivate "${architect.name}"? This entity will no longer appear in transaction dropdowns for new Sales, Purchases, or Production orders. Historical records will remain intact.',
+      itemName: architect.name,
+      willActivate: willActivate,
+      confirmLabel: willActivate ? 'Activate' : 'Deactivate',
+      onConfirm: () async {
+        final db = ref.read(databaseServiceProvider);
+        try {
+          await db.toggleArchitectStatusAsync(architect.id, willActivate);
+          if (mounted) {
+            ErpToast.showSuccess(
+              context,
+              'Architect "${architect.name}" ${willActivate ? "activated" : "deactivated"} successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ErpToast.showError(
+              context,
+              'Status update failed: ${e.toString().replaceFirst("Exception: ", "")}',
+            );
+          }
+        }
       },
     );
   }
@@ -912,11 +918,11 @@ ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                   const SizedBox(height: 16),
                   ErpDataTable(
                   dataRowMinHeight: 56,
-                  dataRowMaxHeight: 72,
                   columns: const [
                           ErpColumn(title: 'Architect Name'),
                           ErpColumn(title: 'Architect-Customer Name'),
                           ErpColumn(title: 'Studio / Company'),
+                          ErpColumn(title: 'Address', width: 220),
                           ErpColumn(title: 'State'),
                           ErpColumn(title: 'Contact'),
                           ErpColumn(title: 'Default Rate (%)', isNumeric: true),
@@ -924,6 +930,7 @@ ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                           ErpColumn(title: 'Pending Review', isNumeric: true),
                           ErpColumn(title: 'Approved', isNumeric: true),
                           ErpColumn(title: 'Paid to Date', isNumeric: true),
+                          ErpColumn(title: 'Status'),
                           ErpColumn(title: 'Actions'),
                         ],
                         rows: pagedArchitects.map((a) {
@@ -952,31 +959,12 @@ ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                               onTap: () {
                                 ref.read(activeRecordDetailsStackProvider.notifier).push(a.id, 'architect', ErpNavSection.architects);
                               },
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    a.name,
-                                    style: AppTextStyles.bodyBold.copyWith(
-                                      fontSize: 13,
-                                      color: const Color(0xFF1E293B),
-                                    ),
-                                  ),
-                                  if (a.address.isNotEmpty || a.state.isNotEmpty || a.pincode.isNotEmpty)
-                                    Text(
-                                      [
-                                        if (a.address.isNotEmpty) a.address,
-                                        if (a.state.isNotEmpty) a.state,
-                                        if (a.pincode.isNotEmpty) a.pincode,
-                                      ].join(', '),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                    )
-                                  else
-                                    Text('ID: ${a.id}', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                                ],
+                              child: Text(
+                                a.name,
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  fontSize: 13,
+                                  color: const Color(0xFF1E293B),
+                                ),
                               ),
                             ),
                             // 2. Architect-Customer Name (Clickable -> Customer Detail Page or Not Linked)
@@ -1021,6 +1009,14 @@ ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                                     child: const Text('Not Linked', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                                   ),
                             Text(a.companyName.isNotEmpty ? a.companyName : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(minWidth: 160, maxWidth: 240),
+                              child: Text(
+                                a.address.isNotEmpty ? a.address : '-',
+                                softWrap: true,
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.35),
+                              ),
+                            ),
                             Text(a.state.isNotEmpty ? a.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                             Text(a.mobile, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
                             Text('${a.defaultCommissionRate}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563))),
@@ -1028,6 +1024,7 @@ ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                             Text(Formatters.formatCurrency(displayPending), style: const TextStyle(fontSize: 12, color: AppColors.warningText)),
                             Text(Formatters.formatCurrency(displayApproved), style: const TextStyle(fontSize: 12, color: AppColors.infoText)),
                             Text(Formatters.formatCurrency(displayPaid), style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: AppColors.successText)),
+                            a.isActive ? ErpStatusBadge.active() : ErpStatusBadge.inactive(),
                             PopupMenuButton<String>(
                               tooltip: 'Actions',
                               icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
@@ -1049,12 +1046,12 @@ ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                                   case 'edit':
                                     _openAddEditArchitectDialog(a);
                                     break;
-                                  case 'delete':
-                                    _confirmDeleteArchitect(a);
+                                  case 'toggle_status':
+                                    _confirmToggleStatus(a);
                                     break;
                                 }
                               },
-                              itemBuilder: (context) => const [
+                              itemBuilder: (context) => [
                                 PopupMenuItem(
                                   value: 'view',
                                   child: Row(
@@ -1086,12 +1083,21 @@ ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                                   ),
                                 ),
                                 PopupMenuItem(
-                                  value: 'delete',
+                                  value: 'toggle_status',
                                   child: Row(
                                     children: [
-                                      Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                                      SizedBox(width: 8),
-                                      Text('Delete Architect', style: TextStyle(color: AppColors.danger)),
+                                      Icon(
+                                        a.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                                        size: 18,
+                                        color: a.isActive ? AppColors.warning : AppColors.success,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        a.isActive ? 'Deactivate Architect' : 'Activate Architect',
+                                        style: TextStyle(
+                                          color: a.isActive ? AppColors.warning : AppColors.success,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),

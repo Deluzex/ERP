@@ -1,4 +1,4 @@
-class ApiConfig {
+﻿class ApiConfig {
   ApiConfig._();
 
   /// Base URL of the NestJS ERP backend

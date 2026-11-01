@@ -5,7 +5,7 @@ import 'api_client.dart';
 class VendorsApiService {
   final ApiClient _client = ApiClient.instance;
 
-  Future<List<Vendor>> getVendors({String? search, bool includeDeleted = false}) async {
+  Future<List<Vendor>> getVendors({String? search, bool includeDeleted = false, bool? isActive}) async {
     try {
       final queryParams = <String, dynamic>{};
       if (search != null && search.trim().isNotEmpty) {
@@ -13,6 +13,9 @@ class VendorsApiService {
       }
       if (includeDeleted) {
         queryParams['includeDeleted'] = 'true';
+      }
+      if (isActive != null) {
+        queryParams['isActive'] = isActive.toString();
       }
 
       final response = await _client.dio.get(
@@ -42,9 +45,13 @@ class VendorsApiService {
 
   Future<Vendor> createVendor(Vendor vendor) async {
     try {
+      final payload = vendor.toJson();
+      if (vendor.id.startsWith('VEN-') || vendor.id.isEmpty) {
+        payload.remove('id');
+      }
       final response = await _client.dio.post(
         '/masters/vendors',
-        data: vendor.toJson(),
+        data: payload,
       );
       final data = _client.unwrap<Map<String, dynamic>>(response);
       return Vendor.fromJson(data);
@@ -73,6 +80,17 @@ class VendorsApiService {
         data: {
           'deleteReason': reason.trim(),
         },
+      );
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
+  Future<void> toggleVendorStatus(String id, bool isActive) async {
+    try {
+      await _client.dio.patch(
+        '/masters/vendors/$id/status',
+        data: {'isActive': isActive},
       );
     } catch (e) {
       throw _client.handleDioError(e);

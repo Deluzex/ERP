@@ -10,6 +10,7 @@ class RawMaterialsApiService {
     String? categoryId,
     bool? lowStock,
     bool includeDeleted = false,
+    bool? isActive,
   }) async {
     try {
       final queryParams = <String, dynamic>{};
@@ -24,6 +25,9 @@ class RawMaterialsApiService {
       }
       if (includeDeleted) {
         queryParams['includeDeleted'] = 'true';
+      }
+      if (isActive != null) {
+        queryParams['isActive'] = isActive.toString();
       }
 
       final response = await _client.dio.get(
@@ -80,6 +84,17 @@ class RawMaterialsApiService {
   Future<void> deleteRawMaterial(String id) async {
     try {
       await _client.dio.delete('/masters/raw-materials/$id');
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
+  Future<void> toggleRawMaterialStatus(String id, bool isActive) async {
+    try {
+      await _client.dio.patch(
+        '/masters/raw-materials/$id/status',
+        data: {'isActive': isActive},
+      );
     } catch (e) {
       throw _client.handleDioError(e);
     }

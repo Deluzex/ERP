@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/models/purchase_model.dart';
+import '../core/models/sale_model.dart';
 import '../core/models/payment_model.dart';
 import '../core/models/rbac_models.dart';
+import '../core/storage/tab_session_storage.dart';
 import '../core/widgets/erp_button.dart';
 import '../core/widgets/erp_header.dart';
 import '../core/widgets/erp_sidebar.dart';
@@ -69,9 +72,14 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(subscriptionProvider.notifier).fetchStatus();
       NavigationHistory.initialize(ref, navigatorKey: appNavigatorKey);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final current = ref.read(currentNavSectionProvider);
+        await prefs.setString('erp_last_nav_section', current.name);
+      } catch (_) {}
     });
   }
 
@@ -149,6 +157,39 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       NavigationHistory.onDetailStateChanged(next.isNotEmpty, ref.read(currentNavSectionProvider));
     });
 
+    // Contextual edit and creation providers persistence
+    ref.listen<Purchase?>(editingPurchaseProvider, (previous, next) {
+      if (next != null) {
+        TabSessionStorage.setItem('erp_editing_purchase_id', next.id);
+      } else {
+        TabSessionStorage.removeItem('erp_editing_purchase_id');
+      }
+    });
+
+    ref.listen<SalesDocumentType?>(salesCreateDocTypeProvider, (previous, next) {
+      if (next != null) {
+        TabSessionStorage.setItem('erp_sales_create_doc_type', next.name);
+      } else {
+        TabSessionStorage.removeItem('erp_sales_create_doc_type');
+      }
+    });
+
+    ref.listen<String?>(salesCreateSourceDocIdProvider, (previous, next) {
+      if (next != null) {
+        TabSessionStorage.setItem('erp_sales_create_source_doc_id', next);
+      } else {
+        TabSessionStorage.removeItem('erp_sales_create_source_doc_id');
+      }
+    });
+
+    ref.listen<String?>(selectedProductionProductIdProvider, (previous, next) {
+      if (next != null) {
+        TabSessionStorage.setItem('erp_selected_prod_product_id', next);
+      } else {
+        TabSessionStorage.removeItem('erp_selected_prod_product_id');
+      }
+    });
+
     Widget contentWidget;
 
     // Check if there is an active detail view in the drilldown stack
@@ -159,17 +200,8 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       contentWidget = _buildAccessDeniedBarrier(context, currentUser, currentSection, db);
     } else {
       final canonicalKey = _canonicalSection(currentSection);
-      final isCreationScreen = canonicalKey == ErpNavSection.createPurchase ||
-          canonicalKey == ErpNavSection.createSale ||
-          canonicalKey == ErpNavSection.createSalesOrder ||
-          canonicalKey == ErpNavSection.createQuotation ||
-          canonicalKey == ErpNavSection.createProduction;
 
-      if (isCreationScreen) {
-        _cachedScreens.remove(canonicalKey);
-      }
-
-      // Lazy load screen into cache if not present
+      // Lazy load screen into cache if not present (retain existing creation state on tab switch)
       if (!_cachedScreens.containsKey(canonicalKey)) {
         _cachedScreens[canonicalKey] = _buildSectionWidget(canonicalKey, currentUser);
       }
@@ -194,10 +226,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       key: _scaffoldKey,
       backgroundColor: AppColors.background,
       drawer: isDesktop ? null : const Drawer(child: ErpSidebar()),
-      body: Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) => ref.read(authStateProvider.notifier).recordUserActivity(),
-        child: Stack(
+      body: Stack(
           children: [
           Row(
             children: [
@@ -222,7 +251,9 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
                             ),
                           Expanded(
                             child: RepaintBoundary(
-                              child: contentWidget,
+                              child: SelectionArea(
+                                child: contentWidget,
+                              ),
                             ),
                           ),
                         ],
@@ -238,7 +269,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
           // const GlobalWhatsAppFloatingButton(),
         ],
       ),
-    ),);
+    );
   }
 
   Widget _buildSectionWidget(ErpNavSection section, AppUser currentUser) {

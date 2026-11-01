@@ -20,6 +20,7 @@ import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../core/storage/form_draft_service.dart';
 
 class _SaleLineItemDraft {
   String finishedProductId;
@@ -79,16 +80,122 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
   void initState() {
     super.initState();
     final db = ref.read(databaseServiceProvider);
-    if (db.customers.isNotEmpty) {
-      _selectedPartyId = db.customers.first.id;
+    final activeCust = db.customers.where((c) => !c.isDeleted && c.isActive).firstOrNull;
+    if (activeCust != null) {
+      _selectedPartyId = activeCust.id;
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+
+    _paidAmountCtrl.addListener(_saveDraftToStorage);
+    _notesCtrl.addListener(_saveDraftToStorage);
+
+    final syncDraft = FormDraftService.instance.getDraftSync('sale_invoice');
+    if (syncDraft != null) {
+      _applyDraftData(syncDraft);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreDraftFromStorage();
       if (mounted) {
         setState(() {
           _resolveTaxClassification();
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _paidAmountCtrl.removeListener(_saveDraftToStorage);
+    _notesCtrl.removeListener(_saveDraftToStorage);
+    _paidAmountCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  void _saveDraftToStorage() {
+    if (!mounted) return;
+    if (_items.isEmpty && _selectedPartyId == null && _notesCtrl.text.isEmpty && _paidAmountCtrl.text == '0') {
+      return;
+    }
+    final data = {
+      'partyType': _partyType.name,
+      'selectedPartyId': _selectedPartyId,
+      'selectedProjectId': _selectedProjectId,
+      'paymentMode': _paymentMode.name,
+      'paidAmount': _paidAmountCtrl.text,
+      'notes': _notesCtrl.text,
+      'isInterStateTax': _isInterStateTax,
+      'items': _items.map((it) => {
+        'finishedProductId': it.finishedProductId,
+        'finishedProductName': it.finishedProductName,
+        'finishedProductCode': it.finishedProductCode,
+        'unit': it.unit,
+        'quantity': it.quantity,
+        'rate': it.rate,
+        'discount': it.discount,
+        'gstPercent': it.gstPercent,
+      }).toList(),
+    };
+    FormDraftService.instance.saveDraft('sale_invoice', data);
+  }
+
+  void _applyDraftData(Map<String, dynamic> draft) {
+    if (draft['partyType'] != null) {
+      _partyType = PartyType.values.firstWhere(
+        (p) => p.name == draft['partyType'],
+        orElse: () => PartyType.customer,
+      );
+    }
+    if (draft['selectedPartyId'] != null) {
+      _selectedPartyId = draft['selectedPartyId'] as String?;
+    }
+    if (draft['selectedProjectId'] != null) {
+      _selectedProjectId = draft['selectedProjectId'] as String?;
+    }
+    if (draft['paymentMode'] != null) {
+      _paymentMode = PaymentMode.values.firstWhere(
+        (m) => m.name == draft['paymentMode'],
+        orElse: () => PaymentMode.bankTransfer,
+      );
+    }
+    if (draft['paidAmount'] != null) {
+      _paidAmountCtrl.text = draft['paidAmount'] as String;
+    }
+    if (draft['notes'] != null) {
+      _notesCtrl.text = draft['notes'] as String;
+    }
+    if (draft['isInterStateTax'] != null) {
+      _isInterStateTax = draft['isInterStateTax'] as bool;
+    }
+    final rawItems = draft['items'];
+    if (rawItems is List && rawItems.isNotEmpty) {
+      _items.clear();
+      for (final it in rawItems) {
+        if (it is Map<String, dynamic>) {
+          _items.add(_SaleLineItemDraft(
+            finishedProductId: it['finishedProductId'] as String? ?? '',
+            finishedProductName: it['finishedProductName'] as String? ?? '',
+            finishedProductCode: it['finishedProductCode'] as String? ?? '',
+            unit: it['unit'] as String? ?? '',
+            quantity: (it['quantity'] as num?)?.toDouble() ?? 1.0,
+            rate: (it['rate'] as num?)?.toDouble() ?? 0.0,
+            discount: (it['discount'] as num?)?.toDouble() ?? 0.0,
+            gstPercent: (it['gstPercent'] as num?)?.toDouble() ?? 18.0,
+          ));
+        }
+      }
+    }
+  }
+
+  Future<void> _restoreDraftFromStorage() async {
+    try {
+      final draft = await FormDraftService.instance.loadDraft('sale_invoice');
+      if (draft != null && mounted) {
+        setState(() {
+          _applyDraftData(draft);
+        });
+      }
+    } catch (_) {}
   }
 
   void _resolveTaxClassification() {
@@ -158,14 +265,15 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
 
   Future<void> _showAddProductDialog() async {
     final db = ref.read(databaseServiceProvider);
-    if (db.finishedProducts.isEmpty) {
-ErpToast.showWarning(context, 'No finished products found in catalog.');
+    final activeProducts = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).toList();
+    if (activeProducts.isEmpty) {
+      ErpToast.showWarning(context, 'No active finished products found in catalog.');
       return;
     }
 
     final dialogFormKey = GlobalKey<FormState>();
-    String? selectedProductId = db.finishedProducts.first.id;
-    final firstFp = db.finishedProducts.first;
+    String? selectedProductId = activeProducts.first.id;
+    final firstFp = activeProducts.first;
     final initialRate = _partyType == PartyType.customer ? firstFp.customerSellingPrice : firstFp.dealerSellingPrice;
 
     final qtyCtrl = TextEditingController(text: '1');
@@ -177,9 +285,9 @@ ErpToast.showWarning(context, 'No finished products found in catalog.');
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) {
-          final selectedFp = db.finishedProducts.firstWhere(
+          final selectedFp = activeProducts.firstWhere(
             (p) => p.id == selectedProductId,
-            orElse: () => db.finishedProducts.first,
+            orElse: () => activeProducts.first,
           );
           final qty = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
           final rate = double.tryParse(rateCtrl.text.trim()) ?? 0.0;
@@ -237,7 +345,7 @@ ErpToast.showWarning(context, 'No finished products found in catalog.');
                           labelText: 'Select Product *',
                           prefixIcon: Icon(Icons.category_outlined, size: 20),
                         ),
-                        items: db.finishedProducts.map((fp) {
+                        items: activeProducts.map((fp) {
                           return DropdownMenuItem(
                             value: fp.id,
                             child: Text(
@@ -249,7 +357,7 @@ ErpToast.showWarning(context, 'No finished products found in catalog.');
                         }).toList(),
                         onChanged: (val) {
                           if (val != null) {
-                            final chosen = db.finishedProducts.firstWhere((p) => p.id == val);
+                            final chosen = activeProducts.firstWhere((p) => p.id == val);
                             setDlgState(() {
                               selectedProductId = chosen.id;
                               final newRate = _partyType == PartyType.customer
@@ -423,6 +531,7 @@ ErpToast.showWarning(context, 'No finished products found in catalog.');
                       gstPercent: gstPercent,
                     ));
                   });
+                  _saveDraftToStorage();
                   Navigator.of(ctx).pop();
                 },
               ),
@@ -435,6 +544,7 @@ ErpToast.showWarning(context, 'No finished products found in catalog.');
 
   void _removeLineItem(int index) {
     setState(() => _items.removeAt(index));
+    _saveDraftToStorage();
   }
 
   double get _subtotalAmount => _items.fold(0.0, (sum, i) => sum + (i.quantity * i.rate));
@@ -818,7 +928,7 @@ ErpToast.showWarning(context, 'No finished products found in catalog.');
                           decoration: const InputDecoration(labelText: 'Linked Client / Customer (Optional)'),
                           items: [
                             const DropdownMenuItem<String?>(value: null, child: Text('None (Direct Architect Specification)')),
-                            ...db.customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                            ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                           ],
                           onChanged: (val) => setDlgState(() => selectedCustId = val),
                         ),
@@ -1063,6 +1173,7 @@ ErpToast.showError(context, 'Insufficient stock for ${fp.name}! Available: ${fp.
       if (!mounted) return;
 ErpToast.showSuccess(context, isDraft ? 'Draft Sale Saved' : 'Invoice Created! Finished Product stock deducted & commission generated.');
 
+      FormDraftService.instance.clearDraft('sale_invoice');
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
     } catch (e) {
       if (!mounted) return;
@@ -1115,7 +1226,10 @@ ErpToast.showError(context, 'Failed to create sale: $e');
                             child: ErpButton(
                               text: 'Cancel',
                               isOutlined: true,
-                              onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
+                              onPressed: () {
+                                FormDraftService.instance.clearDraft('sale_invoice');
+                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+                              },
                             ),
                           ),
                         ],
@@ -1128,7 +1242,10 @@ ErpToast.showError(context, 'Failed to create sale: $e');
                         ErpButton(
                           text: 'Cancel',
                           isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
+                          onPressed: () {
+                            FormDraftService.instance.clearDraft('sale_invoice');
+                            ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+                          },
                         ),
                         ErpButton(
                           text: 'Save Draft',
@@ -1190,11 +1307,11 @@ ErpToast.showError(context, 'Failed to create sale: $e');
                               _partyType = val;
                               _selectedProjectId = null;
                               if (val == PartyType.customer) {
-                                _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
+                                _selectedPartyId = db.customers.where((c) => !c.isDeleted && c.isActive).firstOrNull?.id;
                               } else if (val == PartyType.dealer) {
-                                _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
+                                _selectedPartyId = db.dealers.where((d) => !d.isDeleted && d.isActive).firstOrNull?.id;
                               } else {
-                                _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
+                                _selectedPartyId = db.architects.where((a) => !a.isDeleted && a.isActive).firstOrNull?.id;
                               }
                               _resolveTaxClassification();
                             });
@@ -1218,24 +1335,41 @@ ErpToast.showError(context, 'Failed to create sale: $e');
                                   : 'Select Architect *',
                         ),
                         selectedItemBuilder: (context) {
+                          final currentCustomer = _partyType == PartyType.customer ? db.customers.where((c) => c.id == _selectedPartyId).firstOrNull : null;
+                          final currentDealer = _partyType == PartyType.dealer ? db.dealers.where((d) => d.id == _selectedPartyId).firstOrNull : null;
+                          final currentArchitect = _partyType == PartyType.architect ? db.architects.where((a) => a.id == _selectedPartyId).firstOrNull : null;
+                          final isCurrentInactive = (currentCustomer != null && !currentCustomer.isActive) ||
+                              (currentDealer != null && !currentDealer.isActive) ||
+                              (currentArchitect != null && !currentArchitect.isActive);
+
                           return [
                             Text(
                               _selectedPartyId != null
                                   ? (_partyType == PartyType.customer
-                                      ? db.customers.where((c) => c.id == _selectedPartyId).firstOrNull?.name ?? ''
+                                      ? (currentCustomer?.name ?? '')
                                       : _partyType == PartyType.dealer
-                                          ? db.dealers.where((d) => d.id == _selectedPartyId).firstOrNull?.name ?? ''
-                                          : db.architects.where((a) => a.id == _selectedPartyId).firstOrNull?.name ?? '')
+                                          ? (currentDealer?.name ?? '')
+                                          : (currentArchitect?.name ?? ''))
                                   : '',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                            if (isCurrentInactive)
+                              Text(
+                                _partyType == PartyType.customer
+                                    ? '${currentCustomer!.name} (Inactive)'
+                                    : _partyType == PartyType.dealer
+                                        ? '${currentDealer!.name} (Inactive)'
+                                        : '${currentArchitect!.name} (Inactive)',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             if (_partyType == PartyType.customer)
-                              ...db.customers.map((c) => Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))
+                              ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))
                             else if (_partyType == PartyType.dealer)
-                              ...db.dealers.map((d) => Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis))
+                              ...db.dealers.where((d) => !d.isDeleted && d.isActive).map((d) => Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis))
                             else
-                              ...db.architects.map((a) => Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                              ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis)),
                           ];
                         },
                         items: [
@@ -1263,12 +1397,27 @@ ErpToast.showError(context, 'Failed to create sale: $e');
                               ),
                             ),
                           ),
+                          if (_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId && !c.isActive))
+                            DropdownMenuItem<String?>(
+                              value: _selectedPartyId,
+                              child: Text('${db.customers.firstWhere((c) => c.id == _selectedPartyId).name} (Inactive)', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            )
+                          else if (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId && !d.isActive))
+                            DropdownMenuItem<String?>(
+                              value: _selectedPartyId,
+                              child: Text('${db.dealers.firstWhere((d) => d.id == _selectedPartyId).name} (Inactive)', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            )
+                          else if (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId && !a.isActive))
+                            DropdownMenuItem<String?>(
+                              value: _selectedPartyId,
+                              child: Text('${db.architects.firstWhere((a) => a.id == _selectedPartyId).name} (Inactive)', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ),
                           if (_partyType == PartyType.customer)
-                            ...db.customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                            ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
                           else if (_partyType == PartyType.dealer)
-                            ...db.dealers.map((d) => DropdownMenuItem<String?>(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                            ...db.dealers.where((d) => !d.isDeleted && d.isActive).map((d) => DropdownMenuItem<String?>(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
                           else
-                            ...db.architects.map((a) => DropdownMenuItem<String?>(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
+                            ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => DropdownMenuItem<String?>(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
                         ],
                         onChanged: (val) {
                           if (val == '__ADD_NEW__') {
@@ -1524,21 +1673,32 @@ ErpToast.showError(context, 'Failed to create sale: $e');
                                   ),
                                   const SizedBox(height: 10),
                                   DropdownButtonFormField<String>(
-                                    value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
+                                    value: (item.finishedProductId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.finishedProductId))
                                         ? item.finishedProductId
-                                        : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                                        : (db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : null),
                                     isExpanded: true,
                                     decoration: const InputDecoration(labelText: 'Product'),
-                                    items: db.finishedProducts.map((fp) {
-                                      return DropdownMenuItem(
-                                        value: fp.id,
-                                        child: Text(
-                                          '${fp.itemCode} - ${fp.name}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                    items: [
+                                      if (item.finishedProductId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.finishedProductId && !p.isActive))
+                                        DropdownMenuItem(
+                                          value: item.finishedProductId,
+                                          child: Text(
+                                            '${db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId).itemCode} - ${db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId).name} (Inactive)',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                      );
-                                    }).toList(),
+                                      ...db.finishedProducts.where((p) => !p.isDeleted && p.isActive).map((fp) {
+                                        return DropdownMenuItem(
+                                          value: fp.id,
+                                          child: Text(
+                                            '${fp.itemCode} - ${fp.name}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        );
+                                      }),
+                                    ],
                                     onChanged: (val) {
                                       if (val != null) {
                                         final fp = db.finishedProducts.firstWhere((p) => p.id == val);
@@ -1666,21 +1826,32 @@ ErpToast.showError(context, 'Failed to create sale: $e');
                                     SizedBox(
                                       width: 280,
                                       child: DropdownButtonFormField<String>(
-                                        value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
+                                        value: (item.finishedProductId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.finishedProductId))
                                             ? item.finishedProductId
-                                            : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                                            : (db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : null),
                                         isExpanded: true,
                                         decoration: const InputDecoration(labelText: 'Product'),
-                                        items: db.finishedProducts.map((fp) {
-                                          return DropdownMenuItem(
-                                            value: fp.id,
-                                            child: Text(
-                                              '${fp.itemCode} - ${fp.name}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                        items: [
+                                          if (item.finishedProductId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.finishedProductId && !p.isActive))
+                                            DropdownMenuItem(
+                                              value: item.finishedProductId,
+                                              child: Text(
+                                                '${db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId).itemCode} - ${db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId).name} (Inactive)',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
-                                          );
-                                        }).toList(),
+                                          ...db.finishedProducts.where((p) => !p.isDeleted && p.isActive).map((fp) {
+                                            return DropdownMenuItem(
+                                              value: fp.id,
+                                              child: Text(
+                                                '${fp.itemCode} - ${fp.name}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            );
+                                          }),
+                                        ],
                                         onChanged: (val) {
                                           if (val != null) {
                                             final fp = db.finishedProducts.firstWhere((p) => p.id == val);

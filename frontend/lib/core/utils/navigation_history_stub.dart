@@ -167,10 +167,13 @@ class NavigationHistory {
   }
 
   static ErpNavSection? sectionFromPath(String path) {
-    final clean = path.replaceAll('#', '').replaceAll('/', '').trim().toLowerCase();
-    if (clean.isEmpty) return ErpNavSection.dashboard;
+    final clean = path.replaceAll('#', '').trim();
+    if (clean.isEmpty || clean == '/') return null;
+    final segments = clean.split('/').where((s) => s.isNotEmpty).toList();
+    if (segments.isEmpty) return null;
+    final sectionPart = segments.first.toLowerCase();
     for (final s in ErpNavSection.values) {
-      if (pathToSection(s) == clean || s.name.toLowerCase() == clean.replaceAll('-', '')) {
+      if (pathToSection(s) == sectionPart || s.name.toLowerCase() == sectionPart.replaceAll('-', '')) {
         return s;
       }
     }

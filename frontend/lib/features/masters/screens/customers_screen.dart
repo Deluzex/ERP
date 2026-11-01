@@ -10,6 +10,7 @@ import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_toast.dart';
+import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
@@ -18,6 +19,9 @@ import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
+import 'dart:convert';
+import '../../../core/storage/tab_session_storage.dart';
+import '../../../core/storage/form_draft_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class CustomersScreen extends ConsumerStatefulWidget {
@@ -39,10 +43,35 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreFilters();
       ref.read(databaseServiceProvider).loadCustomers();
       ref.read(databaseServiceProvider).loadArchitects();
     });
+  }
+
+  void _persistFilters() {
+    TabSessionStorage.setItem('erp_filter_customers', jsonEncode({
+      'search': _searchQuery,
+      'role': _roleFilter,
+      'balance': _balanceFilter,
+      'page': _currentPage,
+    }));
+  }
+
+  Future<void> _restoreFilters() async {
+    try {
+      final raw = await TabSessionStorage.getItem('erp_filter_customers');
+      if (raw != null && raw.isNotEmpty && mounted) {
+        final data = jsonDecode(raw);
+        setState(() {
+          _searchQuery = data['search'] as String? ?? '';
+          _roleFilter = data['role'] as String? ?? 'ALL';
+          _balanceFilter = data['balance'] as String? ?? 'ALL';
+          _currentPage = data['page'] as int? ?? 0;
+        });
+      }
+    } catch (_) {}
   }
 
   /// GST state code derived the same way the backend derives it when the
@@ -59,22 +88,55 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     return '';
   }
 
-  void _openAddEditCustomerDialog([Customer? existing]) {
+  void _openAddEditCustomerDialog([Customer? existing]) async {
     final db = ref.read(databaseServiceProvider);
     final isEdit = existing != null;
-    final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final mobileCtrl = TextEditingController(text: existing?.mobile ?? '');
-    final emailCtrl = TextEditingController(text: existing?.email ?? '');
-    final gstCtrl = TextEditingController(text: existing?.gstNumber ?? '');
-    final addressCtrl = TextEditingController(text: existing?.address ?? '');
-    final stateCtrl = TextEditingController(text: existing?.state.isNotEmpty ?? false ? existing!.state : 'Gujarat');
-    final pincodeCtrl = TextEditingController(text: existing?.pincode ?? '');
+    final draft = await FormDraftService.instance.loadFormDraft(
+      module: 'masters',
+      formId: 'customer_dialog',
+      recordId: existing?.id,
+      userId: ref.read(currentUserProvider)?.id,
+    );
+
+    final nameCtrl = TextEditingController(text: draft?['name'] as String? ?? existing?.name ?? '');
+    final mobileCtrl = TextEditingController(text: draft?['mobile'] as String? ?? existing?.mobile ?? '');
+    final emailCtrl = TextEditingController(text: draft?['email'] as String? ?? existing?.email ?? '');
+    final gstCtrl = TextEditingController(text: draft?['gst'] as String? ?? existing?.gstNumber ?? '');
+    final addressCtrl = TextEditingController(text: draft?['address'] as String? ?? existing?.address ?? '');
+    final stateCtrl = TextEditingController(text: draft?['state'] as String? ?? (existing?.state.isNotEmpty ?? false ? existing!.state : 'Gujarat'));
+    final pincodeCtrl = TextEditingController(text: draft?['pincode'] as String? ?? existing?.pincode ?? '');
     String? linkedArchitectId = (existing?.linkedArchitectId != null &&
             db.architects.any((a) => a.id == existing!.linkedArchitectId))
         ? existing!.linkedArchitectId
         : null;
     bool isAlsoArchitect = existing?.isAlsoArchitect ?? (existing?.linkedArchitectId != null);
     final formKey = GlobalKey<FormState>();
+
+    void saveDialogDraft() {
+      FormDraftService.instance.saveFormDraft(
+        module: 'masters',
+        formId: 'customer_dialog',
+        recordId: existing?.id,
+        userId: ref.read(currentUserProvider)?.id,
+        data: {
+          'name': nameCtrl.text,
+          'mobile': mobileCtrl.text,
+          'email': emailCtrl.text,
+          'gst': gstCtrl.text,
+          'address': addressCtrl.text,
+          'state': stateCtrl.text,
+          'pincode': pincodeCtrl.text,
+        },
+      );
+    }
+
+    nameCtrl.addListener(saveDialogDraft);
+    mobileCtrl.addListener(saveDialogDraft);
+    emailCtrl.addListener(saveDialogDraft);
+    gstCtrl.addListener(saveDialogDraft);
+    addressCtrl.addListener(saveDialogDraft);
+    stateCtrl.addListener(saveDialogDraft);
+    pincodeCtrl.addListener(saveDialogDraft);
 
     bool isSubmitting = false;
     String? serverError;
@@ -349,6 +411,13 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                               await db.linkArchitectAndCustomerAsync(architectId: linkedArchitectId!, customerId: saved.id);
                             }
 
+                            await FormDraftService.instance.clearFormDraft(
+                              module: 'masters',
+                              formId: 'customer_dialog',
+                              recordId: existing?.id,
+                              userId: ref.read(currentUserProvider)?.id,
+                            );
+
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
                               ErpToast.showSuccess(context, 'Customer "${customer.name}" ${isEdit ? "updated" : "saved"} successfully!');
@@ -369,29 +438,35 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     );
   }
 
-  void _confirmDeleteCustomer(Customer customer) {
-    showDialog(
+  void _confirmToggleStatus(Customer customer) {
+    final willActivate = !customer.isActive;
+    showErpStatusConfirmDialog(
       context: context,
-      builder: (ctx) {
-        return ErpConfirmDeleteDialog(
-          title: 'Delete Customer Record',
-          message: 'Are you sure you want to deactivate and archive this customer? A mandatory audit reason is required.',
-          itemName: '${customer.name} (${customer.id})',
-          requireReason: true,
-          onConfirm: (reason) async {
-            final db = ref.read(databaseServiceProvider);
-            try {
-              await db.deleteCustomerAsync(customerId: customer.id, reason: reason);
-              if (mounted) {
-                ErpToast.showSuccess(context, 'Customer "${customer.name}" archived with audit reason: $reason');
-              }
-            } catch (e) {
-              if (mounted) {
-                ErpToast.showError(context, 'Delete failed: ${e.toString().replaceFirst("Exception: ", "")}');
-              }
-            }
-          },
-        );
+      title: willActivate ? 'Activate Customer' : 'Deactivate Customer',
+      message: willActivate
+          ? 'Activate "${customer.name}"? It will immediately become available in all transaction dropdowns and lookups.'
+          : 'Are you sure you want to deactivate "${customer.name}"? This entity will no longer appear in transaction dropdowns for new Sales, Purchases, or Production orders. Historical records will remain intact.',
+      itemName: customer.name,
+      willActivate: willActivate,
+      confirmLabel: willActivate ? 'Activate' : 'Deactivate',
+      onConfirm: () async {
+        final db = ref.read(databaseServiceProvider);
+        try {
+          await db.toggleCustomerStatusAsync(customer.id, willActivate);
+          if (mounted) {
+            ErpToast.showSuccess(
+              context,
+              'Customer "${customer.name}" ${willActivate ? "activated" : "deactivated"} successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ErpToast.showError(
+              context,
+              'Status update failed: ${e.toString().replaceFirst("Exception: ", "")}',
+            );
+          }
+        }
       },
     );
   }
@@ -407,10 +482,13 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               ErpSearchInput(
                 hintText: 'Search customer by name, mobile, GST...',
                 initialValue: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
               ),
               const SizedBox(height: 10),
               ErpFilterDropdown<String>(
@@ -428,6 +506,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       _roleFilter = val;
                       _currentPage = 0;
                     });
+                    _persistFilters();
                   }
                 },
               ),
@@ -447,6 +526,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       _balanceFilter = val;
                       _currentPage = 0;
                     });
+                    _persistFilters();
                   }
                 },
               ),
@@ -473,10 +553,13 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               child: ErpSearchInput(
                 hintText: 'Search customer by name, mobile, GST...',
                 initialValue: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
               ),
             ),
             ErpFilterDropdown<String>(
@@ -492,6 +575,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                     _roleFilter = val;
                     _currentPage = 0;
                   });
+                  _persistFilters();
                 }
               },
             ),
@@ -508,17 +592,21 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                     _balanceFilter = val;
                     _currentPage = 0;
                   });
+                  _persistFilters();
                 }
               },
             ),
             ErpDateFilterBox(
               startDate: _startDate,
               endDate: _endDate,
-              onDateRangeSelected: (start, end) => setState(() {
-                _startDate = start;
-                _endDate = end;
-                _currentPage = 0;
-              }),
+              onDateRangeSelected: (start, end) {
+                setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                });
+                _persistFilters();
+              },
             ),
           ],
         );
@@ -677,8 +765,9 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               ErpColumn(title: 'Mobile Phone'),
               ErpColumn(title: 'Email Address'),
               ErpColumn(title: 'GST Number'),
-              ErpColumn(title: 'Site / Billing Address'),
+              ErpColumn(title: 'Site / Billing Address', width: 220),
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
+              ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
             rows: pagedCustomers.map((c) {
@@ -692,29 +781,12 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                   onTap: () {
                     ref.read(activeRecordDetailsStackProvider.notifier).push(c.id, 'customer', ErpNavSection.customers);
                   },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        c.name,
-                        style: AppTextStyles.bodyBold.copyWith(
-                          fontSize: 13,
-                          color: const Color(0xFF1E293B),
-                        ),
-                      ),
-                      if (c.address.isNotEmpty || c.state.isNotEmpty || c.pincode.isNotEmpty)
-                        Text(
-                          [
-                            if (c.address.isNotEmpty) c.address,
-                            if (c.state.isNotEmpty) c.state,
-                            if (c.pincode.isNotEmpty) c.pincode,
-                          ].join(', '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                        ),
-                    ],
+                  child: Text(
+                    c.name,
+                    style: AppTextStyles.bodyBold.copyWith(
+                      fontSize: 13,
+                      color: const Color(0xFF1E293B),
+                    ),
                   ),
                 ),
                 // 2. Client Role / Linked Architect (Clickable -> Architect Detail Page if linked)
@@ -768,7 +840,14 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                 Text(c.mobile, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
                 Text(c.email, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                 Text(c.gstNumber.isNotEmpty ? c.gstNumber : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
-                Text(c.address, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 160, maxWidth: 240),
+                  child: Text(
+                    c.address.isNotEmpty ? c.address : '-',
+                    softWrap: true,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.35),
+                  ),
+                ),
                 Text(
                   Formatters.formatCurrency(c.outstandingAmount),
                   style: AppTextStyles.bodyBold.copyWith(
@@ -776,6 +855,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                     color: c.outstandingAmount > 0 ? AppColors.danger : const Color(0xFF1E293B),
                   ),
                 ),
+                c.isActive ? ErpStatusBadge.active() : ErpStatusBadge.inactive(),
                 PopupMenuButton<String>(
                   tooltip: 'Actions',
                   icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
@@ -796,12 +876,12 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       case 'edit':
                         _openAddEditCustomerDialog(c);
                         break;
-                      case 'delete':
-                        _confirmDeleteCustomer(c);
+                      case 'toggle_status':
+                        _confirmToggleStatus(c);
                         break;
                     }
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'view',
                       child: Row(
@@ -833,12 +913,21 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       ),
                     ),
                     PopupMenuItem(
-                      value: 'delete',
+                      value: 'toggle_status',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                          SizedBox(width: 8),
-                          Text('Delete Customer', style: TextStyle(color: AppColors.danger)),
+                          Icon(
+                            c.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                            size: 18,
+                            color: c.isActive ? AppColors.warning : AppColors.success,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            c.isActive ? 'Deactivate Customer' : 'Activate Customer',
+                            style: TextStyle(
+                              color: c.isActive ? AppColors.warning : AppColors.success,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -852,11 +941,17 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                   currentPage: safeCurrentPage,
                   pageSize: safePageSize,
                   totalRecords: totalRecords,
-                  onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-                  onPageSizeChanged: (newSize) => setState(() {
-                    _pageSize = newSize;
-                    _currentPage = 0;
-                  }),
+                  onPageChanged: (newPage) {
+                    setState(() => _currentPage = newPage);
+                    _persistFilters();
+                  },
+                  onPageSizeChanged: (newSize) {
+                    setState(() {
+                      _pageSize = newSize;
+                      _currentPage = 0;
+                    });
+                    _persistFilters();
+                  },
                 ),
               ],
             ),

@@ -30,6 +30,7 @@ export interface FinishedProductRecord {
   customerSellingPrice: string;
   gstPercent: number;
   isDeleted: boolean;
+  isActive: boolean;
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -47,6 +48,7 @@ export class FinishedProductsService {
     search?: string,
     categoryId?: string,
     includeDeleted = false,
+    isActive?: boolean,
   ): Promise<FinishedProductRecord[]> {
     const conditions: string[] = [];
     const values: unknown[] = [];
@@ -54,6 +56,11 @@ export class FinishedProductsService {
 
     if (!includeDeleted) {
       conditions.push('fp.is_deleted = false');
+    }
+
+    if (isActive !== undefined) {
+      conditions.push(`fp.is_active = $${idx++}`);
+      values.push(isActive);
     }
 
     if (categoryId) {
@@ -544,6 +551,61 @@ export class FinishedProductsService {
     return { success: true };
   }
 
+  async toggleStatus(
+    id: string,
+    isActive: boolean,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<{ success: boolean; message: string; data: any; timestamp: string }> {
+    const existing = await this.findById(id);
+    if (existing.isActive === isActive) {
+      return {
+        success: true,
+        message: `Finished product status updated to ${isActive ? 'active' : 'inactive'}`,
+        data: {
+          id: existing.id,
+          name: existing.name,
+          isActive: existing.isActive,
+          updatedAt: existing.updatedAt,
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    await this.db.query('UPDATE finished_products SET is_active = $1, updated_at = NOW() WHERE id = $2', [isActive, id]);
+
+    await this.auditService.log({
+      userId,
+      userName: 'User',
+      action: 'MASTER_STATUS_CHANGE',
+      entityType: 'FINISHED_PRODUCT',
+      entityId: id,
+      beforeSnapshot: { isActive: existing.isActive },
+      afterSnapshot: {
+        entityType: 'FINISHED_PRODUCT',
+        entityId: id,
+        entityName: existing.name,
+        previousStatus: existing.isActive,
+        newStatus: isActive,
+      },
+      reason: `Status changed to ${isActive ? 'active' : 'inactive'}`,
+      correlationId,
+    });
+
+    const updated = await this.findById(id);
+    return {
+      success: true,
+      message: `Finished product status updated to ${isActive ? 'active' : 'inactive'}`,
+      data: {
+        id: updated.id,
+        name: updated.name,
+        isActive: updated.isActive,
+        updatedAt: updated.updatedAt,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   private mapRow(r: any): FinishedProductRecord {
     const rawCurrentStock = r.current_stock !== null && r.current_stock !== undefined ? parseFloat(r.current_stock) : null;
     const rawOpeningStock = parseFloat(r.opening_stock) || 0;
@@ -567,6 +629,7 @@ export class FinishedProductsService {
       customerSellingPrice: Money.format(r.customer_selling_price),
       gstPercent: parseFloat(r.gst_percent) || 18.0,
       isDeleted: r.is_deleted,
+      isActive: r.is_active ?? true,
       deletedAt: r.deleted_at,
       createdAt: r.created_at,
       updatedAt: r.updated_at,

@@ -22,6 +22,7 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
+import '../../../core/storage/form_draft_service.dart';
 
 class _QuotationItemDraft {
   PurchaseItemType itemType;
@@ -213,13 +214,26 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     final db = ref.read(databaseServiceProvider);
     final sourceId = ref.read(salesCreateSourceDocIdProvider);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      db.loadRawMaterials();
-      db.loadFinishedProducts();
-      db.loadCustomers();
-      db.loadDealers();
-      db.loadArchitects();
-      db.loadProjects();
+    _contactPersonCtrl.addListener(_saveDraftToStorage);
+    _mobileCtrl.addListener(_saveDraftToStorage);
+    _emailCtrl.addListener(_saveDraftToStorage);
+    _gstNumberCtrl.addListener(_saveDraftToStorage);
+    _billingAddressCtrl.addListener(_saveDraftToStorage);
+    _shippingAddressCtrl.addListener(_saveDraftToStorage);
+    _notesCtrl.addListener(_saveDraftToStorage);
+    _termsCtrl.addListener(_saveDraftToStorage);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await db.loadRawMaterials();
+      await db.loadFinishedProducts();
+      await db.loadCustomers();
+      await db.loadDealers();
+      await db.loadArchitects();
+      await db.loadProjects();
+
+      if (sourceId == null && !_isRevision) {
+        await _restoreDraftFromStorage();
+      }
     });
 
     if (sourceId != null) {
@@ -270,46 +284,202 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
           ));
         }
       }
+    } else {
+      final syncDraft = FormDraftService.instance.getDraftSync('quotation');
+      if (syncDraft != null) {
+        _applyDraftData(syncDraft);
+      } else {
+        final firstCust = db.customers.where((c) => !c.isDeleted && c.isActive).firstOrNull;
+        if (firstCust != null) {
+          _selectedPartyId = firstCust.id;
+          _autoFillPartyDetails(firstCust.id, PartyType.customer, db);
+        }
+        _resolveTaxClassification();
+        final firstFp = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).firstOrNull;
+        if (firstFp != null) {
+          _items.add(_QuotationItemDraft(
+            itemType: PurchaseItemType.finishedProduct,
+            itemId: firstFp.id,
+            itemName: firstFp.name,
+            itemCode: firstFp.itemCode,
+            productDescription: _generateFpDescription(firstFp),
+            unit: firstFp.unit,
+            quantity: 10.0,
+            rate: firstFp.customerSellingPrice,
+            discount: 0.0,
+            gstPercent: firstFp.gstPercent,
+            availableStockSnapshot: firstFp.availableStock,
+          ));
+        } else {
+          final rm = db.rawMaterials.where((r) => !r.isDeleted && r.isActive).firstOrNull;
+          if (rm != null) {
+            _items.add(_QuotationItemDraft(
+              itemType: PurchaseItemType.rawMaterial,
+              itemId: rm.id,
+              itemName: rm.name,
+              itemCode: rm.itemCode,
+              productDescription: _generateRmDescription(rm),
+              unit: rm.unit,
+              quantity: 10.0,
+              rate: rm.defaultPurchasePrice,
+              discount: 0.0,
+              gstPercent: rm.gstPercent,
+              availableStockSnapshot: rm.currentStock,
+            ));
+          }
+        }
+      }
     }
+  }
 
-    if (_items.isEmpty) {
-      if (db.customers.isNotEmpty) {
-        _selectedPartyId = db.customers.first.id;
-        _autoFillPartyDetails(db.customers.first.id, PartyType.customer, db);
-      }
-      _resolveTaxClassification();
-      if (db.finishedProducts.isNotEmpty) {
-        final fp = db.finishedProducts.first;
-        _items.add(_QuotationItemDraft(
-          itemType: PurchaseItemType.finishedProduct,
-          itemId: fp.id,
-          itemName: fp.name,
-          itemCode: fp.itemCode,
-          productDescription: _generateFpDescription(fp),
-          unit: fp.unit,
-          quantity: 10.0,
-          rate: fp.customerSellingPrice,
-          discount: 0.0,
-          gstPercent: fp.gstPercent,
-          availableStockSnapshot: fp.availableStock,
-        ));
-      } else if (db.rawMaterials.isNotEmpty) {
-        final rm = db.rawMaterials.first;
-        _items.add(_QuotationItemDraft(
-          itemType: PurchaseItemType.rawMaterial,
-          itemId: rm.id,
-          itemName: rm.name,
-          itemCode: rm.itemCode,
-          productDescription: _generateRmDescription(rm),
-          unit: rm.unit,
-          quantity: 10.0,
-          rate: rm.defaultPurchasePrice,
-          discount: 0.0,
-          gstPercent: rm.gstPercent,
-          availableStockSnapshot: rm.currentStock,
-        ));
+  @override
+  void dispose() {
+    _contactPersonCtrl.removeListener(_saveDraftToStorage);
+    _mobileCtrl.removeListener(_saveDraftToStorage);
+    _emailCtrl.removeListener(_saveDraftToStorage);
+    _gstNumberCtrl.removeListener(_saveDraftToStorage);
+    _billingAddressCtrl.removeListener(_saveDraftToStorage);
+    _shippingAddressCtrl.removeListener(_saveDraftToStorage);
+    _notesCtrl.removeListener(_saveDraftToStorage);
+    _termsCtrl.removeListener(_saveDraftToStorage);
+
+    _contactPersonCtrl.dispose();
+    _mobileCtrl.dispose();
+    _emailCtrl.dispose();
+    _gstNumberCtrl.dispose();
+    _billingAddressCtrl.dispose();
+    _shippingAddressCtrl.dispose();
+    _notesCtrl.dispose();
+    _termsCtrl.dispose();
+    super.dispose();
+  }
+
+  void _saveDraftToStorage() {
+    if (_isRevision || !mounted) return;
+    if (_items.isEmpty &&
+        _selectedPartyId == null &&
+        _contactPersonCtrl.text.isEmpty &&
+        _notesCtrl.text.isEmpty) {
+      return;
+    }
+    final data = {
+      'partyType': _partyType.name,
+      'selectedPartyId': _selectedPartyId,
+      'selectedProjectId': _selectedProjectId,
+      'contactPerson': _contactPersonCtrl.text,
+      'mobile': _mobileCtrl.text,
+      'email': _emailCtrl.text,
+      'gstNumber': _gstNumberCtrl.text,
+      'billingAddress': _billingAddressCtrl.text,
+      'shippingAddress': _shippingAddressCtrl.text,
+      'deliveryPosState': _deliveryPosState,
+      'isInterStateTax': _isInterStateTax,
+      'isTaxManuallySelected': _isTaxManuallySelected,
+      'salesExecutive': _salesExecutive,
+      'notes': _notesCtrl.text,
+      'terms': _termsCtrl.text,
+      'items': _items.map((it) => {
+        'itemType': it.itemType.name,
+        'itemId': it.itemId,
+        'itemName': it.itemName,
+        'itemCode': it.itemCode,
+        'productDescription': it.productDescription,
+        'unit': it.unit,
+        'quantity': it.quantity,
+        'rate': it.rate,
+        'discount': it.discount,
+        'gstPercent': it.gstPercent,
+        'availableStockSnapshot': it.availableStockSnapshot,
+      }).toList(),
+    };
+    FormDraftService.instance.saveDraft('quotation', data);
+  }
+
+  void _applyDraftData(Map<String, dynamic> draft) {
+    if (draft['partyType'] != null) {
+      _partyType = PartyType.values.firstWhere(
+        (p) => p.name == draft['partyType'],
+        orElse: () => PartyType.customer,
+      );
+    }
+    if (draft['selectedPartyId'] != null) {
+      _selectedPartyId = draft['selectedPartyId'] as String?;
+    }
+    if (draft['selectedProjectId'] != null) {
+      _selectedProjectId = draft['selectedProjectId'] as String?;
+    }
+    if (draft['contactPerson'] != null) {
+      _contactPersonCtrl.text = draft['contactPerson'] as String;
+    }
+    if (draft['mobile'] != null) {
+      _mobileCtrl.text = draft['mobile'] as String;
+    }
+    if (draft['email'] != null) {
+      _emailCtrl.text = draft['email'] as String;
+    }
+    if (draft['gstNumber'] != null) {
+      _gstNumberCtrl.text = draft['gstNumber'] as String;
+    }
+    if (draft['billingAddress'] != null) {
+      _billingAddressCtrl.text = draft['billingAddress'] as String;
+    }
+    if (draft['shippingAddress'] != null) {
+      _shippingAddressCtrl.text = draft['shippingAddress'] as String;
+    }
+    if (draft['deliveryPosState'] != null) {
+      _deliveryPosState = draft['deliveryPosState'] as String?;
+    }
+    if (draft['isInterStateTax'] != null) {
+      _isInterStateTax = draft['isInterStateTax'] as bool;
+    }
+    if (draft['isTaxManuallySelected'] != null) {
+      _isTaxManuallySelected = draft['isTaxManuallySelected'] as bool;
+    }
+    if (draft['salesExecutive'] != null) {
+      _salesExecutive = draft['salesExecutive'] as String;
+    }
+    if (draft['notes'] != null) {
+      _notesCtrl.text = draft['notes'] as String;
+    }
+    if (draft['terms'] != null) {
+      _termsCtrl.text = draft['terms'] as String;
+    }
+    final rawItems = draft['items'];
+    if (rawItems is List && rawItems.isNotEmpty) {
+      _items.clear();
+      for (final it in rawItems) {
+        if (it is Map<String, dynamic>) {
+          final itemTypeStr = it['itemType'] as String? ?? 'finishedProduct';
+          final itemType = itemTypeStr == 'rawMaterial'
+              ? PurchaseItemType.rawMaterial
+              : PurchaseItemType.finishedProduct;
+          _items.add(_QuotationItemDraft(
+            itemType: itemType,
+            itemId: it['itemId'] as String? ?? '',
+            itemName: it['itemName'] as String? ?? '',
+            itemCode: it['itemCode'] as String? ?? '',
+            productDescription: it['productDescription'] as String? ?? '',
+            unit: it['unit'] as String? ?? '',
+            quantity: (it['quantity'] as num?)?.toDouble() ?? 1.0,
+            rate: (it['rate'] as num?)?.toDouble() ?? 0.0,
+            discount: (it['discount'] as num?)?.toDouble() ?? 0.0,
+            gstPercent: (it['gstPercent'] as num?)?.toDouble() ?? 18.0,
+            availableStockSnapshot: (it['availableStockSnapshot'] as num?)?.toDouble() ?? 0.0,
+          ));
+        }
       }
     }
+  }
+
+  Future<void> _restoreDraftFromStorage() async {
+    try {
+      final draft = await FormDraftService.instance.loadDraft('quotation');
+      if (draft != null && mounted && !_isRevision) {
+        setState(() {
+          _applyDraftData(draft);
+        });
+      }
+    } catch (_) {}
   }
 
   void _resolveTaxClassification() {
@@ -932,6 +1102,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         availableStockSnapshot: fp.availableStock,
       ));
     });
+    _saveDraftToStorage();
   }
 
   // ignore: unused_element
@@ -957,6 +1128,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         availableStockSnapshot: rm.currentStock,
       ));
     });
+    _saveDraftToStorage();
   }
 
   void _duplicateRow(int index) {
@@ -964,12 +1136,14 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       setState(() {
         _items.insert(index + 1, _items[index].copy());
       });
+      _saveDraftToStorage();
     }
   }
 
   void _removeRow(int index) {
     if (_items.length > 1) {
       setState(() => _items.removeAt(index));
+      _saveDraftToStorage();
     }
   }
 
@@ -1016,6 +1190,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   double get _grandTotal => _totalTaxable + _totalGst;
 
   void _resetForm() {
+    FormDraftService.instance.clearDraft('quotation');
     setState(() {
       _partyType = PartyType.customer;
       _selectedPartyId = null;
@@ -1384,11 +1559,11 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             if (_partyType == PartyType.customer)
-                              ...db.customers.map((c) => Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))
+                              ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))
                             else if (_partyType == PartyType.dealer)
-                              ...db.dealers.map((d) => Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis))
+                              ...db.dealers.where((d) => !d.isDeleted && d.isActive).map((d) => Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis))
                             else
-                              ...db.architects.map((a) => Text(a.companyName.isNotEmpty ? '${a.name} (${a.companyName})' : a.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                              ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => Text(a.companyName.isNotEmpty ? '${a.name} (${a.companyName})' : a.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
                           ];
                         },
                         items: [
@@ -1426,11 +1601,11 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               ),
                             ),
                           if (_partyType == PartyType.customer)
-                            ...db.customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                            ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
                           else if (_partyType == PartyType.dealer)
-                            ...db.dealers.map((d) => DropdownMenuItem<String?>(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                            ...db.dealers.where((d) => !d.isDeleted && d.isActive).map((d) => DropdownMenuItem<String?>(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
                           else
-                            ...db.architects.map((a) => DropdownMenuItem<String?>(value: a.id, child: Text(a.companyName.isNotEmpty ? '${a.name} (${a.companyName})' : a.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                            ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => DropdownMenuItem<String?>(value: a.id, child: Text(a.companyName.isNotEmpty ? '${a.name} (${a.companyName})' : a.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                         ],
                         onChanged: (val) {
                           if (val == '__ADD_NEW__') {
@@ -1840,9 +2015,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                             final itemPicker = isRm
                                 ? DropdownButtonFormField<String>(
                                     key: ValueKey('rm_picker_${item.itemId}_${item.itemType.name}'),
-                                    value: db.rawMaterials.any((m) => m.id == item.itemId)
+                                    value: db.rawMaterials.where((m) => !m.isDeleted && m.isActive).any((m) => m.id == item.itemId)
                                         ? item.itemId
-                                        : (db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : null),
+                                        : (db.rawMaterials.where((m) => !m.isDeleted && m.isActive).isNotEmpty ? db.rawMaterials.where((m) => !m.isDeleted && m.isActive).first.id : null),
                                     isExpanded: true,
                                     decoration: InputDecoration(
                                       labelText: 'Raw Material Master *',
@@ -1850,7 +2025,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       filled: true,
                                       fillColor: Colors.white,
                                     ),
-                                    items: db.rawMaterials.map((rm) {
+                                    items: db.rawMaterials.where((m) => !m.isDeleted && m.isActive).map((rm) {
                                       return DropdownMenuItem(
                                         value: rm.id,
                                         child: Text(
@@ -1878,9 +2053,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                   )
                                 : DropdownButtonFormField<String>(
                                     key: ValueKey('fp_picker_${item.itemId}_${item.itemType.name}'),
-                                    value: db.finishedProducts.any((p) => p.id == item.itemId)
+                                    value: (item.itemId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.itemId))
                                         ? item.itemId
-                                        : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                                        : (db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : null),
                                     isExpanded: true,
                                     decoration: InputDecoration(
                                       labelText: 'Finished Product Master *',
@@ -1888,16 +2063,27 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       filled: true,
                                       fillColor: Colors.white,
                                     ),
-                                    items: db.finishedProducts.map((fp) {
-                                      return DropdownMenuItem(
-                                        value: fp.id,
-                                        child: Text(
-                                          '${fp.name} (${fp.itemCode}) — Stock: ${fp.availableStock} ${fp.unit}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                    items: [
+                                      if (item.itemId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.itemId && !p.isActive))
+                                        DropdownMenuItem(
+                                          value: item.itemId,
+                                          child: Text(
+                                            '${db.finishedProducts.firstWhere((p) => p.id == item.itemId).name} (${db.finishedProducts.firstWhere((p) => p.id == item.itemId).itemCode}) (Inactive)',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                      );
-                                    }).toList(),
+                                      ...db.finishedProducts.where((p) => !p.isDeleted && p.isActive).map((fp) {
+                                        return DropdownMenuItem(
+                                          value: fp.id,
+                                          child: Text(
+                                            '${fp.name} (${fp.itemCode}) — Stock: ${fp.availableStock} ${fp.unit}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        );
+                                      }),
+                                    ],
                                     onChanged: (val) {
                                       if (val != null) {
                                         final fp = db.finishedProducts.firstWhere((p) => p.id == val);

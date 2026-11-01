@@ -516,12 +516,13 @@ ErpToast.showError(context, 'Failed to reset password: ${e.toString().replaceFir
                           child: SingleChildScrollView(
                             child: DataTable(
                               headingRowColor: WidgetStateProperty.all(AppColors.surfaceMuted),
+                              headingTextStyle: AppTextStyles.tableHeader,
                               columnSpacing: 18,
                               horizontalMargin: 12,
                               columns: [
-                                const DataColumn(label: Text('Module', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                DataColumn(label: Text('Module', style: AppTextStyles.tableHeader.copyWith(fontWeight: FontWeight.w700, fontSize: 12))),
                                 ...ErpAction.values.map((act) => DataColumn(
-                                      label: Text(act.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                      label: Text(act.label, style: AppTextStyles.tableHeader.copyWith(fontWeight: FontWeight.w700, fontSize: 11)),
                                     )),
                               ],
                               rows: ErpModule.values.map((mod) {

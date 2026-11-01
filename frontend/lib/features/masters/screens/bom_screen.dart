@@ -21,6 +21,7 @@ import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/storage/form_draft_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class _BomItemDraft {
@@ -100,7 +101,15 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(databaseServiceProvider).loadBoms());
+    _bomNumberCtrl.addListener(_saveDraftToStorage);
+    _bomNameCtrl.addListener(_saveDraftToStorage);
+    _prodQtyCtrl.addListener(_saveDraftToStorage);
+    _unitCtrl.addListener(_saveDraftToStorage);
+    _productCodeCtrl.addListener(_saveDraftToStorage);
+    Future.microtask(() async {
+      await ref.read(databaseServiceProvider).loadBoms();
+      await _restoreDraftFromStorage();
+    });
   }
   // Navigation / View state
   bool _isCreateMode = false;
@@ -135,6 +144,11 @@ class _BomScreenState extends ConsumerState<BomScreen> {
 
   @override
   void dispose() {
+    _bomNumberCtrl.removeListener(_saveDraftToStorage);
+    _bomNameCtrl.removeListener(_saveDraftToStorage);
+    _prodQtyCtrl.removeListener(_saveDraftToStorage);
+    _unitCtrl.removeListener(_saveDraftToStorage);
+    _productCodeCtrl.removeListener(_saveDraftToStorage);
     _bomNumberCtrl.dispose();
     _bomNameCtrl.dispose();
     _prodQtyCtrl.dispose();
@@ -144,6 +158,94 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       item.dispose();
     }
     super.dispose();
+  }
+
+  void _saveDraftToStorage() {
+    if (!mounted) return;
+    final data = {
+      'isCreateMode': _isCreateMode,
+      'editingBomId': _editingBom?.id,
+      'bomNumber': _bomNumberCtrl.text,
+      'bomName': _bomNameCtrl.text,
+      'prodQty': _prodQtyCtrl.text,
+      'unit': _unitCtrl.text,
+      'productCode': _productCodeCtrl.text,
+      'selectedProductId': _selectedProductId,
+      'selectedStatus': _selectedStatus,
+      'searchQuery': _searchQuery,
+      'selectedProductFilter': _selectedProductFilter,
+      'statusFilter': _statusFilter,
+      'currentPage': _currentPage,
+      'draftItems': _draftItems.map((it) => {
+        'rawMaterialId': it.rawMaterialId,
+        'rawMaterialName': it.rawMaterialName,
+        'rawMaterialCode': it.rawMaterialCode,
+        'unit': it.unit,
+        'quantityPerUnit': it.quantityPerUnit,
+        'unitCost': it.unitCost,
+      }).toList(),
+    };
+    FormDraftService.instance.saveFormDraft(
+      module: 'masters',
+      formId: 'bom_screen',
+      userId: ref.read(currentUserProvider)?.id,
+      data: data,
+    );
+  }
+
+  Future<void> _restoreDraftFromStorage() async {
+    try {
+      final draft = await FormDraftService.instance.loadFormDraft(
+        module: 'masters',
+        formId: 'bom_screen',
+        userId: ref.read(currentUserProvider)?.id,
+      );
+      if (draft != null && mounted) {
+        setState(() {
+          if (draft['searchQuery'] != null) _searchQuery = draft['searchQuery'] as String;
+          if (draft['selectedProductFilter'] != null) _selectedProductFilter = draft['selectedProductFilter'] as String;
+          if (draft['statusFilter'] != null) _statusFilter = draft['statusFilter'] as String;
+          if (draft['currentPage'] != null) _currentPage = draft['currentPage'] as int;
+
+          final isCreate = draft['isCreateMode'] as bool? ?? false;
+          if (isCreate) {
+            _isCreateMode = true;
+            final editingId = draft['editingBomId'] as String?;
+            if (editingId != null) {
+              final db = ref.read(databaseServiceProvider);
+              _editingBom = db.boms.where((b) => b.id == editingId).firstOrNull;
+            }
+            if (draft['bomNumber'] != null) _bomNumberCtrl.text = draft['bomNumber'] as String;
+            if (draft['bomName'] != null) _bomNameCtrl.text = draft['bomName'] as String;
+            if (draft['prodQty'] != null) _prodQtyCtrl.text = draft['prodQty'] as String;
+            if (draft['unit'] != null) _unitCtrl.text = draft['unit'] as String;
+            if (draft['productCode'] != null) _productCodeCtrl.text = draft['productCode'] as String;
+            if (draft['selectedProductId'] != null) _selectedProductId = draft['selectedProductId'] as String?;
+            if (draft['selectedStatus'] != null) _selectedStatus = draft['selectedStatus'] as String;
+
+            final rawItems = draft['draftItems'];
+            if (rawItems is List && rawItems.isNotEmpty) {
+              for (final it in _draftItems) {
+                it.dispose();
+              }
+              _draftItems.clear();
+              for (final it in rawItems) {
+                if (it is Map<String, dynamic>) {
+                  _draftItems.add(_BomItemDraft(
+                    rawMaterialId: it['rawMaterialId'] as String? ?? '',
+                    rawMaterialName: it['rawMaterialName'] as String? ?? '',
+                    rawMaterialCode: it['rawMaterialCode'] as String? ?? '',
+                    unit: it['unit'] as String? ?? 'PCS',
+                    quantityPerUnit: (it['quantityPerUnit'] as num?)?.toDouble() ?? 1.0,
+                    unitCost: (it['unitCost'] as num?)?.toDouble() ?? 0.0,
+                  ));
+                }
+              }
+            }
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _startCreate() {
@@ -175,6 +277,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     setState(() {
       _isCreateMode = true;
     });
+    _saveDraftToStorage();
   }
 
   void _startEdit(BillOfMaterial bom) {
@@ -222,6 +325,19 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     setState(() {
       _isCreateMode = true;
     });
+    _saveDraftToStorage();
+  }
+
+  void _cancelCreateMode() {
+    setState(() {
+      _isCreateMode = false;
+      _editingBom = null;
+    });
+    FormDraftService.instance.clearFormDraft(
+      module: 'masters',
+      formId: 'bom_screen',
+      userId: ref.read(currentUserProvider)?.id,
+    );
   }
 
   void _openChangeStatusDialog(BillOfMaterial bom) {
@@ -520,14 +636,15 @@ ErpToast.showError(context, e is ApiException
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
                         headingRowColor: WidgetStateProperty.all(AppColors.background),
-                        columns: const [
-                          DataColumn(label: Text('#', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Component', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Code', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Qty/Unit', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Unit', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Line Total', style: TextStyle(fontWeight: FontWeight.bold))),
+                        headingTextStyle: AppTextStyles.tableHeader,
+                        columns: [
+                          DataColumn(label: Text('#', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Component', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Code', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Qty/Unit', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Unit', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Rate', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Line Total', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
                         ],
                         rows: bom.items.asMap().entries.map((entry) {
                           final i = entry.key;
@@ -684,6 +801,12 @@ ErpToast.showWarning(context, 'Finished product not found. Please refresh and tr
         await db.addBomAsync(saved);
       }
 
+      await FormDraftService.instance.clearFormDraft(
+        module: 'masters',
+        formId: 'bom_screen',
+        userId: ref.read(currentUserProvider)?.id,
+      );
+
       if (!mounted) return;
 
       setState(() {
@@ -700,46 +823,6 @@ ErpToast.showError(context, e is ApiException
               ? 'Failed to save BOM: ${e.message}'
               : 'Failed to save BOM. Please try again.');
     }
-  }
-
-  void _confirmDeleteBom(BillOfMaterial bom) {
-    final db = ref.read(databaseServiceProvider);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Delete BOM Recipe', style: AppTextStyles.h2.copyWith(color: AppColors.danger)),
-        content: Text(
-          'Are you sure you want to retire recipe "${bom.safeName}" (${bom.displayNumber}) for product "${bom.safeProductName}"?\n\n'
-          'The backend keeps versioned history, so the recipe will be marked Obsolete and removed from active manufacturing use.',
-        ),
-        actions: [
-          ErpButton(
-            text: 'Cancel',
-            isOutlined: true,
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          ErpButton(
-            text: 'Retire Recipe',
-            isDanger: true,
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await db.deleteBomAsync(bom.id);
-                if (mounted) {
-ErpToast.showError(context, 'BOM recipe retired successfully!');
-                }
-              } catch (e) {
-                if (mounted) {
-ErpToast.showError(context, e is ApiException
-                          ? 'Failed to retire recipe: ${e.message}'
-                          : 'Failed to retire recipe. Please try again.');
-                }
-              }
-            },
-          ),
-        ],
-      ),
-    );
   }
 
   void _onProduce(BillOfMaterial bom) {
@@ -1095,6 +1178,7 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
           _draftItems.add(draft);
         }
       });
+      _saveDraftToStorage();
     }
   }
 
@@ -1492,9 +1576,6 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
                         case 'edit':
                           _startEdit(bom);
                           break;
-                        case 'delete':
-                          _confirmDeleteBom(bom);
-                          break;
                       }
                     },
                     itemBuilder: (context) => const [
@@ -1535,16 +1616,6 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
                             Icon(Icons.edit_outlined, size: 18),
                             SizedBox(width: 8),
                             Text('Edit Recipe'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                            SizedBox(width: 8),
-                            Text('Delete Recipe', style: TextStyle(color: AppColors.danger)),
                           ],
                         ),
                       ),
@@ -1617,7 +1688,7 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
                               text: 'Back',
                               icon: Icons.arrow_back,
                               isOutlined: true,
-                              onPressed: () => setState(() => _isCreateMode = false),
+                              onPressed: _cancelCreateMode,
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -1638,7 +1709,7 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
                             text: 'Back',
                             icon: Icons.arrow_back,
                             isOutlined: true,
-                            onPressed: () => setState(() => _isCreateMode = false),
+                            onPressed: _cancelCreateMode,
                           ),
                           const SizedBox(width: 10),
                           ErpButton(
@@ -1976,6 +2047,7 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
                                         item.dispose();
                                         _draftItems.removeAt(index);
                                       });
+                                      _saveDraftToStorage();
                                     },
                                   ),
                                 ],
@@ -2287,6 +2359,7 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
                                         item.dispose();
                                         _draftItems.removeAt(index);
                                       });
+                                      _saveDraftToStorage();
                                     },
                                   ),
                                 ],
@@ -2374,7 +2447,7 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
                     child: ErpButton(
                       text: 'Cancel',
                       isOutlined: true,
-                      onPressed: () => setState(() => _isCreateMode = false),
+                      onPressed: _cancelCreateMode,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -2395,7 +2468,7 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
                   ErpButton(
                     text: 'Cancel',
                     isOutlined: true,
-                    onPressed: () => setState(() => _isCreateMode = false),
+                    onPressed: _cancelCreateMode,
                   ),
                   const SizedBox(width: 12),
                   ErpButton(

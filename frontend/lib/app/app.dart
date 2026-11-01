@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../shared/providers/app_state_providers.dart';
 import '../shared/providers/subscription_provider.dart';
+import '../shared/widgets/user_activity_detector.dart';
 import 'app_shell.dart';
 import 'constants/app_constants.dart';
 import 'theme/app_colors.dart';
@@ -45,24 +46,32 @@ class _ErpApplicationState extends ConsumerState<ErpApplication> {
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: SelectionArea(
-        child: !isBootstrapComplete
-            ? const Scaffold(
-                backgroundColor: AppColors.background,
-                body: Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.primary,
-                  ),
+      builder: (context, child) {
+        return UserActivityDetector(
+          onUserActivity: () {
+            if (ref.read(isAuthenticatedProvider)) {
+              ref.read(authStateProvider.notifier).recordUserActivity();
+            }
+          },
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+      home: !isBootstrapComplete
+          ? const Scaffold(
+              backgroundColor: AppColors.background,
+              body: Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.primary,
                 ),
-              )
-            : (isAuthenticated
-                ? const AppShell()
-                : LoginScreen(
-                    onLoginSuccess: () {
-                      ref.read(subscriptionProvider.notifier).fetchStatus();
-                    },
-                  )),
-      ),
+              ),
+            )
+          : (isAuthenticated
+              ? const AppShell()
+              : LoginScreen(
+                  onLoginSuccess: () {
+                    ref.read(subscriptionProvider.notifier).fetchStatus();
+                  },
+                )),
     );
   }
 }

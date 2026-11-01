@@ -1,4 +1,4 @@
-enum PurchaseStatus {
+﻿enum PurchaseStatus {
   draft,
   saved,
   partialPaid,

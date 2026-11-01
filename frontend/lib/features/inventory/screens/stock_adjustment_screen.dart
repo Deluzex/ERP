@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,7 @@ import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/stock_movement_icons.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_toast.dart';
+import '../../../core/storage/tab_session_storage.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class StockAdjustmentScreen extends ConsumerStatefulWidget {
@@ -37,15 +39,38 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreFilters();
       ref.read(databaseServiceProvider).loadStockAdjustments();
     });
+  }
+
+  void _persistFilters() {
+    TabSessionStorage.setItem('erp_filter_stock_adj', jsonEncode({
+      'search': _searchQuery,
+      'page': _currentPage,
+    }));
+  }
+
+  Future<void> _restoreFilters() async {
+    try {
+      final raw = await TabSessionStorage.getItem('erp_filter_stock_adj');
+      if (raw != null && raw.isNotEmpty && mounted) {
+        final data = jsonDecode(raw);
+        setState(() {
+          _searchQuery = data['search'] as String? ?? '';
+          _currentPage = data['page'] as int? ?? 0;
+        });
+      }
+    } catch (_) {}
   }
 
   void _openCreateAdjustmentDialog() {
     final db = ref.read(databaseServiceProvider);
     ItemType selectedItemType = ItemType.finishedProduct;
-    String selectedItemId = db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : '';
+    String selectedItemId = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty
+        ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id
+        : '';
     AdjustmentReason selectedReason = AdjustmentReason.damagedGoods;
     bool isReduction = true;
     final adjQtyCtrl = TextEditingController();
@@ -108,7 +133,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                                       if (val != null) {
                                         setDlgState(() {
                                           selectedItemType = val;
-                                          selectedItemId = db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : '';
+                                          selectedItemId = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : '';
                                         });
                                       }
                                     },
@@ -122,7 +147,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                                       if (val != null) {
                                         setDlgState(() {
                                           selectedItemType = val;
-                                          selectedItemId = db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : '';
+                                          selectedItemId = db.rawMaterials.where((r) => !r.isDeleted && r.isActive).isNotEmpty ? db.rawMaterials.where((r) => !r.isDeleted && r.isActive).first.id : '';
                                         });
                                       }
                                     },
@@ -142,7 +167,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                                       if (val != null) {
                                         setDlgState(() {
                                           selectedItemType = val;
-                                          selectedItemId = db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : '';
+                                          selectedItemId = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : '';
                                         });
                                       }
                                     },
@@ -158,7 +183,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                                       if (val != null) {
                                         setDlgState(() {
                                           selectedItemType = val;
-                                          selectedItemId = db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : '';
+                                          selectedItemId = db.rawMaterials.where((r) => !r.isDeleted && r.isActive).isNotEmpty ? db.rawMaterials.where((r) => !r.isDeleted && r.isActive).first.id : '';
                                         });
                                       }
                                     },
@@ -174,18 +199,32 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Select Item *'),
                           items: selectedItemType == ItemType.rawMaterial
-                              ? db.rawMaterials.map((rm) {
-                                  return DropdownMenuItem(
-                                    value: rm.id,
-                                    child: Text('${rm.itemCode} - ${rm.name} (Stock: ${rm.currentStock} ${rm.unit})', overflow: TextOverflow.ellipsis),
-                                  );
-                                }).toList()
-                              : db.finishedProducts.map((fp) {
-                                  return DropdownMenuItem(
-                                    value: fp.id,
-                                    child: Text('${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})', overflow: TextOverflow.ellipsis),
-                                  );
-                                }).toList(),
+                              ? [
+                                  if (selectedItemId.isNotEmpty && db.rawMaterials.any((r) => r.id == selectedItemId && !r.isActive))
+                                    DropdownMenuItem(
+                                      value: selectedItemId,
+                                      child: Text('${db.rawMaterials.firstWhere((r) => r.id == selectedItemId).itemCode} - ${db.rawMaterials.firstWhere((r) => r.id == selectedItemId).name} (Inactive)', overflow: TextOverflow.ellipsis),
+                                    ),
+                                  ...db.rawMaterials.where((rm) => !rm.isDeleted && rm.isActive).map((rm) {
+                                    return DropdownMenuItem(
+                                      value: rm.id,
+                                      child: Text('${rm.itemCode} - ${rm.name} (Stock: ${rm.currentStock} ${rm.unit})', overflow: TextOverflow.ellipsis),
+                                    );
+                                  }),
+                                ]
+                              : [
+                                  if (selectedItemId.isNotEmpty && db.finishedProducts.any((p) => p.id == selectedItemId && !p.isActive))
+                                    DropdownMenuItem(
+                                      value: selectedItemId,
+                                      child: Text('${db.finishedProducts.firstWhere((p) => p.id == selectedItemId).itemCode} - ${db.finishedProducts.firstWhere((p) => p.id == selectedItemId).name} (Inactive)', overflow: TextOverflow.ellipsis),
+                                    ),
+                                  ...db.finishedProducts.where((fp) => !fp.isDeleted && fp.isActive).map((fp) {
+                                    return DropdownMenuItem(
+                                      value: fp.id,
+                                      child: Text('${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})', overflow: TextOverflow.ellipsis),
+                                    );
+                                  }),
+                                ],
                           onChanged: (val) {
                             if (val != null) setDlgState(() => selectedItemId = val);
                           },
@@ -577,10 +616,13 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                           ErpSearchInput(
                             hintText: 'Search adjustments by number, item, reason...',
                             value: _searchQuery,
-                            onChanged: (val) => setState(() {
-                              _searchQuery = val;
-                              _currentPage = 0;
-                            }),
+                            onChanged: (val) {
+                              setState(() {
+                                _searchQuery = val;
+                                _currentPage = 0;
+                              });
+                              _persistFilters();
+                            },
                           ),
                           const SizedBox(height: 10),
                           ErpDateFilterBox(
@@ -593,6 +635,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                                 _endDate = end;
                                 _currentPage = 0;
                               });
+                              _persistFilters();
                             },
                           ),
                         ],
@@ -609,10 +652,13 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                           child: ErpSearchInput(
                             hintText: 'Search adjustments by number, item, reason...',
                             value: _searchQuery,
-                            onChanged: (val) => setState(() {
-                              _searchQuery = val;
-                              _currentPage = 0;
-                            }),
+                            onChanged: (val) {
+                              setState(() {
+                                _searchQuery = val;
+                                _currentPage = 0;
+                              });
+                              _persistFilters();
+                            },
                           ),
                         ),
                         ErpDateFilterBox(
@@ -624,6 +670,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                               _endDate = end;
                               _currentPage = 0;
                             });
+                            _persistFilters();
                           },
                         ),
                       ],
@@ -707,11 +754,17 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                             currentPage: _currentPage,
                             pageSize: _pageSize,
                             totalRecords: totalRecords,
-                            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-                            onPageSizeChanged: (newSize) => setState(() {
-                              _pageSize = newSize;
-                              _currentPage = 0;
-                            }),
+                            onPageChanged: (newPage) {
+                              setState(() => _currentPage = newPage);
+                              _persistFilters();
+                            },
+                            onPageSizeChanged: (newSize) {
+                              setState(() {
+                                _pageSize = newSize;
+                                _currentPage = 0;
+                              });
+                              _persistFilters();
+                            },
                           ),
                         ],
                       ],

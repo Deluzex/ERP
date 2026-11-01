@@ -15,20 +15,26 @@ const emptyToUndefined = ({ value }: { value: unknown }) =>
 
 export class CreateArchitectDto {
   @IsString()
-  @IsNotEmpty()
-  name!: string;
+  @IsOptional()
+  id?: string;
 
   @IsString()
   @IsNotEmpty()
-  companyName!: string;
+  name!: string;
+
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  companyName?: string;
 
   @IsString()
   @IsNotEmpty()
   mobile!: string;
 
+  @Transform(emptyToUndefined)
   @IsEmail()
-  @IsNotEmpty()
-  email!: string;
+  @IsOptional()
+  email?: string;
 
   @Transform(emptyToUndefined)
   @IsString()
@@ -75,9 +81,17 @@ export class CreateArchitectDto {
   @IsBoolean()
   @IsOptional()
   isAlsoCustomer?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class UpdateArchitectDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsOptional()
   name?: string;
@@ -139,6 +153,10 @@ export class UpdateArchitectDto {
   @IsBoolean()
   @IsOptional()
   isAlsoCustomer?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class LinkArchitectCustomerDto {

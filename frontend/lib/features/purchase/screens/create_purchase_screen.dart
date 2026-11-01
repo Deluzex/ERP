@@ -13,6 +13,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
+import '../../../core/storage/form_draft_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class _MaxAmountTextInputFormatter extends TextInputFormatter {
@@ -217,11 +218,16 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         ));
       }
     } else {
-      final activeVendors = db.vendors.where((v) => !v.isDeleted).toList();
+      final activeVendors = db.vendors.where((v) => !v.isDeleted && v.isActive).toList();
       if (activeVendors.isNotEmpty) {
         _selectedVendorId = activeVendors.first.id;
       }
     }
+
+    _vendorInvoiceCtrl.addListener(_saveDraftToStorage);
+    _paidAmountCtrl.addListener(_saveDraftToStorage);
+    _transportationChargesCtrl.addListener(_saveDraftToStorage);
+    _notesCtrl.addListener(_saveDraftToStorage);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final database = ref.read(databaseServiceProvider);
@@ -231,10 +237,11 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         database.loadRawMaterials(forceRefresh: false),
         database.loadFinishedProducts(forceRefresh: false),
       ]);
+      await _restoreDraftFromStorage();
       if (mounted) {
         setState(() {
           if ((widget.existingPurchase ?? ref.read(editingPurchaseProvider)) == null && _selectedVendorId == null) {
-            final freshVendors = database.vendors.where((v) => !v.isDeleted).toList();
+            final freshVendors = database.vendors.where((v) => !v.isDeleted && v.isActive).toList();
             if (freshVendors.isNotEmpty) {
               _selectedVendorId = freshVendors.first.id;
             }
@@ -242,6 +249,133 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         });
       }
     });
+  }
+
+  void _saveDraftToStorage() {
+    if (!mounted) return;
+    final p = widget.existingPurchase ?? ref.read(editingPurchaseProvider);
+    final isEdit = p != null;
+    final recordId = isEdit ? p.id : null;
+
+    if (_items.isEmpty &&
+        _selectedVendorId == null &&
+        _vendorInvoiceCtrl.text.isEmpty &&
+        _notesCtrl.text.isEmpty) {
+      return;
+    }
+
+    final data = {
+      'selectedVendorId': _selectedVendorId,
+      'selectedProjectId': _selectedProjectId,
+      'vendorInvoice': _vendorInvoiceCtrl.text,
+      'paidAmount': _paidAmountCtrl.text,
+      'transportationCharges': _transportationChargesCtrl.text,
+      'notes': _notesCtrl.text,
+      'purchaseDate': _purchaseDate.toIso8601String(),
+      'invoiceDate': _invoiceDate.toIso8601String(),
+      'paymentMode': _paymentMode?.name,
+      'isInterStateTax': _isInterStateTax,
+      'isManualTransportation': _isManualTransportation,
+      'items': _items.map((it) => {
+        'itemType': it.itemType.name,
+        'itemId': it.itemId,
+        'itemName': it.itemName,
+        'itemCode': it.itemCode,
+        'unit': it.unit,
+        'quantity': it.quantity,
+        'rate': it.rate,
+        'discount': it.discount,
+        'gstPercent': it.gstPercent,
+        'transportationCharge': it.transportationCharge,
+      }).toList(),
+    };
+
+    FormDraftService.instance.saveFormDraft(
+      module: 'purchase',
+      formId: 'create_purchase',
+      recordId: recordId,
+      userId: ref.read(currentUserProvider)?.id,
+      data: data,
+    );
+  }
+
+  Future<void> _restoreDraftFromStorage() async {
+    try {
+      final p = widget.existingPurchase ?? ref.read(editingPurchaseProvider);
+      final isEdit = p != null;
+      final recordId = isEdit ? p.id : null;
+
+      final draft = await FormDraftService.instance.loadFormDraft(
+        module: 'purchase',
+        formId: 'create_purchase',
+        recordId: recordId,
+        userId: ref.read(currentUserProvider)?.id,
+      );
+
+      if (draft != null && mounted) {
+        setState(() {
+          if (draft['selectedVendorId'] != null) {
+            _selectedVendorId = draft['selectedVendorId'] as String?;
+          }
+          if (draft['selectedProjectId'] != null) {
+            _selectedProjectId = draft['selectedProjectId'] as String?;
+          }
+          if (draft['vendorInvoice'] != null) {
+            _vendorInvoiceCtrl.text = draft['vendorInvoice'] as String;
+          }
+          if (draft['paidAmount'] != null) {
+            _paidAmountCtrl.text = draft['paidAmount'] as String;
+          }
+          if (draft['transportationCharges'] != null) {
+            _transportationChargesCtrl.text = draft['transportationCharges'] as String;
+            _validTransportationCharges = double.tryParse(_transportationChargesCtrl.text) ?? 0.0;
+          }
+          if (draft['notes'] != null) {
+            _notesCtrl.text = draft['notes'] as String;
+          }
+          if (draft['purchaseDate'] != null) {
+            _purchaseDate = DateTime.tryParse(draft['purchaseDate'] as String) ?? _purchaseDate;
+          }
+          if (draft['invoiceDate'] != null) {
+            _invoiceDate = DateTime.tryParse(draft['invoiceDate'] as String) ?? _invoiceDate;
+          }
+          if (draft['paymentMode'] != null) {
+            _paymentMode = PaymentMode.values.where((m) => m.name == draft['paymentMode']).firstOrNull;
+          }
+          if (draft['isInterStateTax'] != null) {
+            _isInterStateTax = draft['isInterStateTax'] as bool;
+          }
+          if (draft['isManualTransportation'] != null) {
+            _isManualTransportation = draft['isManualTransportation'] as bool;
+          }
+
+          final rawItems = draft['items'];
+          if (rawItems is List && rawItems.isNotEmpty) {
+            _items.clear();
+            for (final it in rawItems) {
+              if (it is Map<String, dynamic>) {
+                final itTypeStr = it['itemType'] as String? ?? 'rawMaterial';
+                final itType = itTypeStr == 'finishedProduct'
+                    ? PurchaseItemType.finishedProduct
+                    : PurchaseItemType.rawMaterial;
+                _items.add(_LineItemDraft(
+                  itemType: itType,
+                  itemId: it['itemId'] as String? ?? '',
+                  itemName: it['itemName'] as String? ?? '',
+                  itemCode: it['itemCode'] as String? ?? '',
+                  unit: it['unit'] as String? ?? 'PCS',
+                  quantity: (it['quantity'] as num?)?.toDouble() ?? 1.0,
+                  rate: (it['rate'] as num?)?.toDouble() ?? 0.0,
+                  discount: (it['discount'] as num?)?.toDouble() ?? 0.0,
+                  gstPercent: (it['gstPercent'] as num?)?.toDouble() ?? 18.0,
+                  transportationCharge: (it['transportationCharge'] as num?)?.toDouble() ?? 0.0,
+                ));
+              }
+            }
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _onVendorSelected(String? val) {
@@ -257,10 +391,15 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
         _recalculateTransportation(force: true);
       }
     });
+    _saveDraftToStorage();
   }
 
   @override
   void dispose() {
+    _vendorInvoiceCtrl.removeListener(_saveDraftToStorage);
+    _paidAmountCtrl.removeListener(_saveDraftToStorage);
+    _transportationChargesCtrl.removeListener(_saveDraftToStorage);
+    _notesCtrl.removeListener(_saveDraftToStorage);
     _vendorInvoiceCtrl.dispose();
     _paidAmountCtrl.dispose();
     _transportationChargesCtrl.dispose();
@@ -284,7 +423,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
 
     void initForType(PurchaseItemType type) {
       if (type == PurchaseItemType.rawMaterial && db.rawMaterials.isNotEmpty) {
-        final rmList = db.rawMaterials.where((r) => !r.isDeleted).toList();
+        final rmList = db.rawMaterials.where((r) => !r.isDeleted && r.isActive).toList();
         final rm = rmList.isNotEmpty ? rmList.first : db.rawMaterials.first;
         selectedItemId = rm.id;
         selectedItemName = rm.name;
@@ -298,7 +437,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
           itemId: rm.id,
         );
       } else if (type == PurchaseItemType.finishedProduct && db.finishedProducts.isNotEmpty) {
-        final fpList = db.finishedProducts.where((f) => !f.isDeleted).toList();
+        final fpList = db.finishedProducts.where((f) => !f.isDeleted && f.isActive).toList();
         final fp = fpList.isNotEmpty ? fpList.first : db.finishedProducts.first;
         selectedItemId = fp.id;
         selectedItemName = fp.name;
@@ -420,7 +559,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                           value: selectedItemId,
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Select Raw Material *'),
-                          items: db.rawMaterials.where((rm) => !rm.isDeleted).map((rm) {
+                          items: db.rawMaterials.where((rm) => !rm.isDeleted && rm.isActive).map((rm) {
                             return DropdownMenuItem(
                               value: rm.id,
                               child: Text(
@@ -455,7 +594,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                           value: selectedItemId,
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Select Finished Product *'),
-                          items: db.finishedProducts.where((fp) => !fp.isDeleted).map((fp) {
+                          items: db.finishedProducts.where((fp) => !fp.isDeleted && fp.isActive).map((fp) {
                             return DropdownMenuItem(
                               value: fp.id,
                               child: Text(
@@ -680,6 +819,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                     _isManualTransportation = false;
                     _recalculateTransportation(force: true);
                   });
+                  _saveDraftToStorage();
 
                   Navigator.of(ctx).pop();
                 },
@@ -699,6 +839,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
     setState(() {
       _items.removeAt(index);
     });
+    _saveDraftToStorage();
   }
 
   double get _transportationCharges => _validTransportationCharges;
@@ -713,6 +854,13 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
   double get _totalUnits => _items.fold(0.0, (sum, i) => sum + i.quantity);
 
     void _resetForm() {
+    final p = widget.existingPurchase ?? ref.read(editingPurchaseProvider);
+    FormDraftService.instance.clearFormDraft(
+      module: 'purchase',
+      formId: 'create_purchase',
+      recordId: p?.id,
+      userId: ref.read(currentUserProvider)?.id,
+    );
     _formKey.currentState?.reset();
     setState(() {
       _vendorInvoiceCtrl.clear();
@@ -730,7 +878,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
       _attachmentName = null;
       _attachmentSize = null;
       final db = ref.read(databaseServiceProvider);
-      final activeVendors = db.vendors.where((v) => !v.isDeleted).toList();
+      final activeVendors = db.vendors.where((v) => !v.isDeleted && v.isActive).toList();
       _selectedVendorId = activeVendors.isNotEmpty ? activeVendors.first.id : null;
     });
   }
@@ -860,6 +1008,13 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
           isEditMode ? await db.updatePurchaseAsync(purchase) : await db.createPurchaseAsync(purchase);
 
       if (mounted) {
+        final currentP = widget.existingPurchase ?? ref.read(editingPurchaseProvider);
+        await FormDraftService.instance.clearFormDraft(
+          module: 'purchase',
+          formId: 'create_purchase',
+          recordId: currentP?.id,
+          userId: ref.read(currentUserProvider)?.id,
+        );
         ref.read(editingPurchaseProvider.notifier).state = null;
         if (isEditMode) {
           ErpToast.showSuccess(
@@ -1205,16 +1360,27 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                               value: _selectedVendorId,
                               isExpanded: true,
                               decoration: const InputDecoration(labelText: 'Select Vendor *'),
-                              items: db.vendors.where((v) => !v.isDeleted).map((v) {
-                                return DropdownMenuItem(
-                                  value: v.id,
-                                  child: Text(
-                                    '${v.name} (${v.mobile})',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                              items: [
+                                if (_selectedVendorId != null && db.vendors.any((v) => v.id == _selectedVendorId && !v.isActive))
+                                  DropdownMenuItem(
+                                    value: _selectedVendorId,
+                                    child: Text(
+                                      '${db.vendors.firstWhere((v) => v.id == _selectedVendorId).name} (Inactive)',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                );
-                              }).toList(),
+                                ...db.vendors.where((v) => !v.isDeleted && v.isActive).map((v) {
+                                  return DropdownMenuItem(
+                                    value: v.id,
+                                    child: Text(
+                                      '${v.name} (${v.mobile})',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }),
+                              ],
                               onChanged: _onVendorSelected,
                             ),
                             const SizedBox(height: 12),
@@ -1310,16 +1476,27 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                   value: _selectedVendorId,
                                   isExpanded: true,
                                   decoration: const InputDecoration(labelText: 'Select Vendor *'),
-                                  items: db.vendors.where((v) => !v.isDeleted).map((v) {
-                                    return DropdownMenuItem(
-                                      value: v.id,
-                                      child: Text(
-                                        '${v.name} (${v.mobile})',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                  items: [
+                                    if (_selectedVendorId != null && db.vendors.any((v) => v.id == _selectedVendorId && !v.isActive))
+                                      DropdownMenuItem(
+                                        value: _selectedVendorId,
+                                        child: Text(
+                                          '${db.vendors.firstWhere((v) => v.id == _selectedVendorId).name} (Inactive)',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                    );
-                                  }).toList(),
+                                    ...db.vendors.where((v) => !v.isDeleted && v.isActive).map((v) {
+                                      return DropdownMenuItem(
+                                        value: v.id,
+                                        child: Text(
+                                          '${v.name} (${v.mobile})',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }),
+                                  ],
                                   onChanged: _onVendorSelected,
                                 ),
                               ),
@@ -1641,16 +1818,27 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                       labelText: 'Finished Product *',
                                       contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                     ),
-                                    items: db.finishedProducts.map((fp) {
-                                      return DropdownMenuItem(
-                                        value: fp.id,
-                                        child: Text(
-                                          '${fp.itemCode} - ${fp.name}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                    items: [
+                                      if (item.itemId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.itemId && !p.isActive))
+                                        DropdownMenuItem(
+                                          value: item.itemId,
+                                          child: Text(
+                                            '${db.finishedProducts.firstWhere((p) => p.id == item.itemId).itemCode} - ${db.finishedProducts.firstWhere((p) => p.id == item.itemId).name} (Inactive)',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                      );
-                                    }).toList(),
+                                      ...db.finishedProducts.where((fp) => !fp.isDeleted && fp.isActive).map((fp) {
+                                        return DropdownMenuItem(
+                                          value: fp.id,
+                                          child: Text(
+                                            '${fp.itemCode} - ${fp.name}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        );
+                                      }),
+                                    ],
                                     onChanged: (val) {
                                       if (val != null) {
                                         final fp = db.finishedProducts.firstWhere((f) => f.id == val);
@@ -1678,16 +1866,27 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                       labelText: 'Raw Material *',
                                       contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                     ),
-                                    items: db.rawMaterials.map((rm) {
-                                      return DropdownMenuItem(
-                                        value: rm.id,
-                                        child: Text(
-                                          '${rm.itemCode} - ${rm.name}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                    items: [
+                                      if (item.itemId.isNotEmpty && db.rawMaterials.any((r) => r.id == item.itemId && !r.isActive))
+                                        DropdownMenuItem(
+                                          value: item.itemId,
+                                          child: Text(
+                                            '${db.rawMaterials.firstWhere((r) => r.id == item.itemId).itemCode} - ${db.rawMaterials.firstWhere((r) => r.id == item.itemId).name} (Inactive)',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                      );
-                                    }).toList(),
+                                      ...db.rawMaterials.where((rm) => !rm.isDeleted && rm.isActive).map((rm) {
+                                        return DropdownMenuItem(
+                                          value: rm.id,
+                                          child: Text(
+                                            '${rm.itemCode} - ${rm.name}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        );
+                                      }),
+                                    ],
                                     onChanged: (val) {
                                       if (val != null) {
                                         final rm = db.rawMaterials.firstWhere((r) => r.id == val);

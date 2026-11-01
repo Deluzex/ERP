@@ -3713,16 +3713,16 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     if (widget.preselectedPartyId != null) {
       _selectedPartyId = widget.preselectedPartyId;
     } else if (widget.type == PaymentType.customerPayment) {
-      final eligible = db.customers.where((c) => !c.isDeleted && _getCustomerOutstanding(c, db) > 0).toList();
+      final eligible = db.customers.where((c) => !c.isDeleted && c.isActive && _getCustomerOutstanding(c, db) > 0).toList();
       _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
     } else if (widget.type == PaymentType.dealerPayment) {
-      final eligible = db.dealers.where((d) => !d.isDeleted && _getDealerOutstanding(d, db) > 0).toList();
+      final eligible = db.dealers.where((d) => !d.isDeleted && d.isActive && _getDealerOutstanding(d, db) > 0).toList();
       _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
     } else if (widget.type == PaymentType.vendorPayment) {
-      final eligible = db.vendors.where((v) => !v.isDeleted && _getVendorOutstanding(v, db) > 0).toList();
+      final eligible = db.vendors.where((v) => !v.isDeleted && v.isActive && _getVendorOutstanding(v, db) > 0).toList();
       _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
     } else if (widget.type == PaymentType.commissionPayment) {
-      final eligible = db.architects.where((a) => !a.isDeleted && _getArchitectOutstanding(a, db) > 0).toList();
+      final eligible = db.architects.where((a) => !a.isDeleted && a.isActive && _getArchitectOutstanding(a, db) > 0).toList();
       _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
     }
   }
@@ -3744,7 +3744,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     final eligibleCustomers = <Customer>[];
     final seenCustKeys = <String>{};
     for (final c in db.customers) {
-      if (c.isDeleted) continue;
+      if (c.isDeleted || !c.isActive) continue;
       final out = _getCustomerOutstanding(c, db);
       if (out <= 0) continue;
       final key = c.name.trim().toLowerCase().isNotEmpty ? c.name.trim().toLowerCase() : c.id;
@@ -3757,7 +3757,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     final eligibleDealers = <Dealer>[];
     final seenDealerKeys = <String>{};
     for (final d in db.dealers) {
-      if (d.isDeleted) continue;
+      if (d.isDeleted || !d.isActive) continue;
       final out = _getDealerOutstanding(d, db);
       if (out <= 0) continue;
       final key = d.name.trim().toLowerCase().isNotEmpty ? d.name.trim().toLowerCase() : d.id;
@@ -3770,7 +3770,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     final eligibleVendors = <Vendor>[];
     final seenVendorKeys = <String>{};
     for (final v in db.vendors) {
-      if (v.isDeleted) continue;
+      if (v.isDeleted || !v.isActive) continue;
       final out = _getVendorOutstanding(v, db);
       if (out <= 0) continue;
       final key = v.name.trim().toLowerCase().isNotEmpty ? v.name.trim().toLowerCase() : v.id;
@@ -3782,7 +3782,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
 
     final eligibleArchitects = <Architect>[];
     for (final a in db.architects) {
-      if (a.isDeleted) continue;
+      if (a.isDeleted || !a.isActive) continue;
       final out = _getArchitectOutstanding(a, db);
       if (out <= 0) continue;
       eligibleArchitects.add(a);

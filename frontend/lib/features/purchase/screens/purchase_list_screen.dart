@@ -472,7 +472,15 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
   Widget _tableHeaderCell(String text, {TextAlign align = TextAlign.left}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Text(text, textAlign: align, style: AppTextStyles.bodyBold.copyWith(fontSize: 11, color: AppColors.textSecondary)),
+      child: Text(
+        text,
+        textAlign: align,
+        style: AppTextStyles.tableHeader.copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF1E293B),
+        ),
+      ),
     );
   }
 

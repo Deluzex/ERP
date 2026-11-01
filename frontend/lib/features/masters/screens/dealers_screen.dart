@@ -10,6 +10,7 @@ import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_toast.dart';
+import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
@@ -323,29 +324,35 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
     );
   }
 
-  void _confirmDeleteDealer(Dealer dealer) {
-    showDialog(
+  void _confirmToggleStatus(Dealer dealer) {
+    final willActivate = !dealer.isActive;
+    showErpStatusConfirmDialog(
       context: context,
-      builder: (ctx) {
-        return ErpConfirmDeleteDialog(
-          title: 'Delete Dealer Record',
-          message: 'Are you sure you want to deactivate and archive this dealer? A mandatory audit reason is required.',
-          itemName: '${dealer.name} (${dealer.id})',
-          requireReason: true,
-          onConfirm: (reason) async {
-            final db = ref.read(databaseServiceProvider);
-            try {
-              await db.deleteDealerAsync(dealerId: dealer.id, reason: reason);
-              if (mounted) {
-                ErpToast.showSuccess(context, 'Dealer "${dealer.name}" archived with audit reason: $reason');
-              }
-            } catch (e) {
-              if (mounted) {
-                ErpToast.showError(context, 'Delete failed: ${e.toString().replaceFirst("Exception: ", "")}');
-              }
-            }
-          },
-        );
+      title: willActivate ? 'Activate Dealer' : 'Deactivate Dealer',
+      message: willActivate
+          ? 'Activate "${dealer.name}"? It will immediately become available in all transaction dropdowns and lookups.'
+          : 'Are you sure you want to deactivate "${dealer.name}"? This entity will no longer appear in transaction dropdowns for new Sales, Purchases, or Production orders. Historical records will remain intact.',
+      itemName: dealer.name,
+      willActivate: willActivate,
+      confirmLabel: willActivate ? 'Activate' : 'Deactivate',
+      onConfirm: () async {
+        final db = ref.read(databaseServiceProvider);
+        try {
+          await db.toggleDealerStatusAsync(dealer.id, willActivate);
+          if (mounted) {
+            ErpToast.showSuccess(
+              context,
+              'Dealer "${dealer.name}" ${willActivate ? "activated" : "deactivated"} successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ErpToast.showError(
+              context,
+              'Status update failed: ${e.toString().replaceFirst("Exception: ", "")}',
+            );
+          }
+        }
       },
     );
   }
@@ -592,10 +599,12 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
               ErpColumn(title: 'Showroom / Dealer Name'),
               ErpColumn(title: 'Company Entity'),
               ErpColumn(title: 'Contact Person'),
+              ErpColumn(title: 'Address', width: 220),
               ErpColumn(title: 'State'),
               ErpColumn(title: 'Mobile / Email'),
               ErpColumn(title: 'GST Number'),
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
+              ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
             rows: pagedDealers.map((d) {
@@ -604,33 +613,24 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                   onTap: () {
                     ref.read(activeRecordDetailsStackProvider.notifier).push(d.id, 'dealer', ErpNavSection.dealers);
                   },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        d.name,
-                        style: AppTextStyles.bodyBold.copyWith(
-                          fontSize: 13,
-                          color: const Color(0xFF1E293B),
-                        ),
-                      ),
-                      if (d.address.isNotEmpty || d.state.isNotEmpty || d.pincode.isNotEmpty)
-                        Text(
-                          [
-                            if (d.address.isNotEmpty) d.address,
-                            if (d.state.isNotEmpty) d.state,
-                            if (d.pincode.isNotEmpty) d.pincode,
-                          ].join(', '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                        ),
-                    ],
+                  child: Text(
+                    d.name,
+                    style: AppTextStyles.bodyBold.copyWith(
+                      fontSize: 13,
+                      color: const Color(0xFF1E293B),
+                    ),
                   ),
                 ),
                 Text(d.companyName, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
                 Text(d.contactPerson, style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 160, maxWidth: 240),
+                  child: Text(
+                    d.address.isNotEmpty ? d.address : '-',
+                    softWrap: true,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.35),
+                  ),
+                ),
                 Text(d.state.isNotEmpty ? d.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -649,6 +649,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                     color: d.outstandingAmount > 0 ? AppColors.danger : const Color(0xFF1E293B),
                   ),
                 ),
+                d.isActive ? ErpStatusBadge.active() : ErpStatusBadge.inactive(),
                 PopupMenuButton<String>(
                   tooltip: 'Actions',
                   icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
@@ -669,12 +670,12 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                       case 'edit':
                         _openAddEditDealerDialog(d);
                         break;
-                      case 'delete':
-                        _confirmDeleteDealer(d);
+                      case 'toggle_status':
+                        _confirmToggleStatus(d);
                         break;
                     }
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'view',
                       child: Row(
@@ -706,12 +707,21 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                       ),
                     ),
                     PopupMenuItem(
-                      value: 'delete',
+                      value: 'toggle_status',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                          SizedBox(width: 8),
-                          Text('Delete Dealer', style: TextStyle(color: AppColors.danger)),
+                          Icon(
+                            d.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                            size: 18,
+                            color: d.isActive ? AppColors.warning : AppColors.success,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            d.isActive ? 'Deactivate Dealer' : 'Activate Dealer',
+                            style: TextStyle(
+                              color: d.isActive ? AppColors.warning : AppColors.success,
+                            ),
+                          ),
                         ],
                       ),
                     ),

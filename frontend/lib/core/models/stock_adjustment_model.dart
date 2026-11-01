@@ -1,4 +1,4 @@
-import 'stock_movement_model.dart';
+﻿import 'stock_movement_model.dart';
 
 enum AdjustmentReason {
   physicalCountMismatch,

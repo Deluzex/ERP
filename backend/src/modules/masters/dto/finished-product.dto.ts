@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -25,6 +26,10 @@ export class BulkImportFinishedProductsDto {
 }
 
 export class CreateFinishedProductDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsNotEmpty()
   name!: string;
@@ -79,9 +84,17 @@ export class CreateFinishedProductDto {
   @Min(0)
   @IsOptional()
   gstPercent?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class UpdateFinishedProductDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsOptional()
   name?: string;
@@ -149,4 +162,8 @@ export class UpdateFinishedProductDto {
   @Min(0)
   @IsOptional()
   gstPercent?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }

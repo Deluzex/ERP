@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -10,15 +11,16 @@ import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_toast.dart';
+import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
-import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/storage/tab_session_storage.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
 
@@ -40,9 +42,32 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreFilters();
       ref.read(databaseServiceProvider).loadVendors();
     });
+  }
+
+  void _persistFilters() {
+    TabSessionStorage.setItem('erp_filter_vendors', jsonEncode({
+      'search': _searchQuery,
+      'dues': _duesFilter,
+      'page': _currentPage,
+    }));
+  }
+
+  Future<void> _restoreFilters() async {
+    try {
+      final raw = await TabSessionStorage.getItem('erp_filter_vendors');
+      if (raw != null && raw.isNotEmpty && mounted) {
+        final data = jsonDecode(raw);
+        setState(() {
+          _searchQuery = data['search'] as String? ?? '';
+          _duesFilter = data['dues'] as String? ?? 'ALL';
+          _currentPage = data['page'] as int? ?? 0;
+        });
+      }
+    } catch (_) {}
   }
 
   void _openAddEditVendorDialog([Vendor? existing]) {
@@ -378,29 +403,35 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
     );
   }
 
-  void _confirmDeleteVendor(Vendor vendor) {
-    showDialog(
+  void _confirmToggleStatus(Vendor vendor) {
+    final willActivate = !vendor.isActive;
+    showErpStatusConfirmDialog(
       context: context,
-      builder: (ctx) {
-        return ErpConfirmDeleteDialog(
-          title: 'Delete Vendor Record',
-          message: 'Are you sure you want to deactivate and archive this vendor? A mandatory audit reason is required.',
-          itemName: '${vendor.name} (${vendor.id})',
-          requireReason: true,
-          onConfirm: (reason) async {
-            final db = ref.read(databaseServiceProvider);
-            try {
-              await db.deleteVendorAsync(vendorId: vendor.id, reason: reason);
-              if (mounted) {
-                ErpToast.showSuccess(context, 'Vendor "${vendor.name}" archived with audit reason: $reason');
-              }
-            } catch (e) {
-              if (mounted) {
-                ErpToast.showError(context, 'Delete failed: ${e.toString().replaceFirst("Exception: ", "")}');
-              }
-            }
-          },
-        );
+      title: willActivate ? 'Activate Vendor' : 'Deactivate Vendor',
+      message: willActivate
+          ? 'Activate "${vendor.name}"? It will immediately become available in all transaction dropdowns and lookups.'
+          : 'Are you sure you want to deactivate "${vendor.name}"? This entity will no longer appear in transaction dropdowns for new Sales, Purchases, or Production orders. Historical records will remain intact.',
+      itemName: vendor.name,
+      willActivate: willActivate,
+      confirmLabel: willActivate ? 'Activate' : 'Deactivate',
+      onConfirm: () async {
+        final db = ref.read(databaseServiceProvider);
+        try {
+          await db.toggleVendorStatusAsync(vendor.id, willActivate);
+          if (mounted) {
+            ErpToast.showSuccess(
+              context,
+              'Vendor "${vendor.name}" ${willActivate ? "activated" : "deactivated"} successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ErpToast.showError(
+              context,
+              'Status update failed: ${e.toString().replaceFirst("Exception: ", "")}',
+            );
+          }
+        }
       },
     );
   }
@@ -416,10 +447,13 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
               ErpSearchInput(
                 hintText: 'Search vendors by name, contact, GST...',
                 initialValue: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
               ),
               const SizedBox(height: 10),
               ErpFilterDropdown<String>(
@@ -437,6 +471,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                       _duesFilter = val;
                       _currentPage = 0;
                     });
+                    _persistFilters();
                   }
                 },
               ),
@@ -444,11 +479,14 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
               ErpDateFilterBox(
                 startDate: _startDate,
                 endDate: _endDate,
-                onDateRangeSelected: (start, end) => setState(() {
-                  _startDate = start;
-                  _endDate = end;
-                  _currentPage = 0;
-                }),
+                onDateRangeSelected: (start, end) {
+                  setState(() {
+                    _startDate = start;
+                    _endDate = end;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
               ),
             ],
           );
@@ -463,10 +501,13 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
               child: ErpSearchInput(
                 hintText: 'Search vendors by name, contact, GST...',
                 initialValue: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
               ),
             ),
             ErpFilterDropdown<String>(
@@ -482,17 +523,21 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                     _duesFilter = val;
                     _currentPage = 0;
                   });
+                  _persistFilters();
                 }
               },
             ),
             ErpDateFilterBox(
               startDate: _startDate,
               endDate: _endDate,
-              onDateRangeSelected: (start, end) => setState(() {
-                _startDate = start;
-                _endDate = end;
-                _currentPage = 0;
-              }),
+              onDateRangeSelected: (start, end) {
+                setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                });
+                _persistFilters();
+              },
             ),
           ],
         );
@@ -646,6 +691,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
             columns: const [
               ErpColumn(title: 'Vendor Name'),
               ErpColumn(title: 'Contact Person'),
+              ErpColumn(title: 'Address', width: 220),
               ErpColumn(title: 'Mobile / Email'),
               ErpColumn(title: 'State'),
               ErpColumn(title: 'GST Number'),
@@ -659,32 +705,23 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                   onTap: () {
                     ref.read(activeRecordDetailsStackProvider.notifier).push(v.id, 'vendor', ErpNavSection.vendors);
                   },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        v.name,
-                        style: AppTextStyles.bodyBold.copyWith(
-                          fontSize: 13,
-                          color: const Color(0xFF1E293B),
-                        ),
-                      ),
-                      if (v.address.isNotEmpty || v.state.isNotEmpty || v.pincode.isNotEmpty)
-                        Text(
-                          [
-                            if (v.address.isNotEmpty) v.address,
-                            if (v.state.isNotEmpty) v.state,
-                            if (v.pincode.isNotEmpty) v.pincode,
-                          ].join(', '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                        ),
-                    ],
+                  child: Text(
+                    v.name,
+                    style: AppTextStyles.bodyBold.copyWith(
+                      fontSize: 13,
+                      color: const Color(0xFF1E293B),
+                    ),
                   ),
                 ),
                 Text(v.contactPerson, style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 160, maxWidth: 240),
+                  child: Text(
+                    v.address.isNotEmpty ? v.address : '-',
+                    softWrap: true,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.35),
+                  ),
+                ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -708,7 +745,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                         message: v.deleteReason != null ? 'Deleted: ${v.deleteReason}' : 'Deleted vendor',
                         child: ErpStatusBadge.danger('DELETED'),
                       )
-                    : ErpStatusBadge.success('ACTIVE'),
+                    : (!v.isActive ? ErpStatusBadge.inactive() : ErpStatusBadge.active()),
                 PopupMenuButton<String>(
                   tooltip: 'Actions',
                   icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
@@ -729,8 +766,8 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                       case 'edit':
                         if (!v.isDeleted) _openAddEditVendorDialog(v);
                         break;
-                      case 'delete':
-                        if (!v.isDeleted) _confirmDeleteVendor(v);
+                      case 'toggle_status':
+                        if (!v.isDeleted) _confirmToggleStatus(v);
                         break;
                     }
                   },
@@ -767,13 +804,22 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                       ),
                     ),
                     PopupMenuItem(
-                      value: 'delete',
+                      value: 'toggle_status',
                       enabled: !v.isDeleted,
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, color: v.isDeleted ? Colors.grey : AppColors.danger, size: 18),
+                          Icon(
+                            v.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                            size: 18,
+                            color: v.isDeleted ? Colors.grey : (v.isActive ? AppColors.warning : AppColors.success),
+                          ),
                           const SizedBox(width: 8),
-                          Text('Delete with Reason', style: TextStyle(color: v.isDeleted ? Colors.grey : AppColors.danger)),
+                          Text(
+                            v.isActive ? 'Deactivate Vendor' : 'Activate Vendor',
+                            style: TextStyle(
+                              color: v.isDeleted ? Colors.grey : (v.isActive ? AppColors.warning : AppColors.success),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -787,11 +833,17 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                   currentPage: safeCurrentPage,
                   pageSize: safePageSize,
                   totalRecords: totalRecords,
-                  onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-                  onPageSizeChanged: (newSize) => setState(() {
-                    _pageSize = newSize;
-                    _currentPage = 0;
-                  }),
+                  onPageChanged: (newPage) {
+                    setState(() => _currentPage = newPage);
+                    _persistFilters();
+                  },
+                  onPageSizeChanged: (newSize) {
+                    setState(() {
+                      _pageSize = newSize;
+                      _currentPage = 0;
+                    });
+                    _persistFilters();
+                  },
                 ),
               ],
             ),

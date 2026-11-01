@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -18,6 +19,8 @@ import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/bulk_upload_dialog.dart';
 import '../../../core/widgets/bulk_upload_history_dialog.dart';
+import '../../../core/widgets/erp_confirm_dialog.dart';
+import '../../../core/storage/tab_session_storage.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class RawMaterialMasterScreen extends ConsumerStatefulWidget {
@@ -39,12 +42,37 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreFilters();
       ref.read(databaseServiceProvider).loadRawMaterials();
       ref.read(databaseServiceProvider).loadCategories();
       ref.read(databaseServiceProvider).loadUnits();
       ref.read(databaseServiceProvider).loadVendors();
     });
+  }
+
+  void _persistFilters() {
+    TabSessionStorage.setItem('erp_filter_raw_materials', jsonEncode({
+      'search': _searchQuery,
+      'category': _selectedCategoryFilter,
+      'stock': _stockFilter,
+      'page': _currentPage,
+    }));
+  }
+
+  Future<void> _restoreFilters() async {
+    try {
+      final raw = await TabSessionStorage.getItem('erp_filter_raw_materials');
+      if (raw != null && raw.isNotEmpty && mounted) {
+        final data = jsonDecode(raw);
+        setState(() {
+          _searchQuery = data['search'] as String? ?? '';
+          _selectedCategoryFilter = data['category'] as String? ?? 'ALL';
+          _stockFilter = data['stock'] as String? ?? 'ALL';
+          _currentPage = data['page'] as int? ?? 0;
+        });
+      }
+    } catch (_) {}
   }
 
   void _openAddEditDialog([RawMaterial? existing]) {
@@ -452,39 +480,34 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
     );
   }
 
-  void _confirmDelete(RawMaterial rm) {
-    showDialog(
+  void _confirmToggleStatus(RawMaterial rm) {
+    final willActivate = !rm.isActive;
+    showErpStatusConfirmDialog(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text('Delete Raw Material', style: AppTextStyles.h2),
-          content: Text(
-            'Are you sure you want to delete "${rm.name}" (${rm.itemCode})? This cannot be undone.',
-            style: AppTextStyles.bodyMedium,
-          ),
-          actions: [
-            ErpButton(
-              text: 'Cancel',
-              isOutlined: true,
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ErpButton(
-              text: 'Delete',
-              isDanger: true,
-              onPressed: () async {
-                Navigator.of(ctx).pop();
-                try {
-                  await ref.read(databaseServiceProvider).deleteRawMaterialAsync(rm.id);
-                  if (!mounted) return;
-                  ErpToast.showSuccess(context, 'Raw material "${rm.name}" deleted successfully!');
-                } catch (e) {
-                  if (!mounted) return;
-                  ErpToast.showError(context, 'Failed to delete "${rm.name}": $e');
-                }
-              },
-            ),
-          ],
-        );
+      title: willActivate ? 'Activate Raw Material' : 'Deactivate Raw Material',
+      message: willActivate
+          ? 'Activate "${rm.name}"? It will immediately become available in all transaction dropdowns and lookups.'
+          : 'Are you sure you want to deactivate "${rm.name}"? This entity will no longer appear in transaction dropdowns for new Sales, Purchases, or Production orders. Historical records will remain intact.',
+      itemName: '${rm.name} (${rm.itemCode})',
+      willActivate: willActivate,
+      confirmLabel: willActivate ? 'Activate' : 'Deactivate',
+      onConfirm: () async {
+        try {
+          await ref.read(databaseServiceProvider).toggleRawMaterialStatusAsync(rm.id, willActivate);
+          if (mounted) {
+            ErpToast.showSuccess(
+              context,
+              'Raw material "${rm.name}" ${willActivate ? "activated" : "deactivated"} successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ErpToast.showError(
+              context,
+              'Status update failed: ${e.toString().replaceFirst("Exception: ", "")}',
+            );
+          }
+        }
       },
     );
   }
@@ -517,10 +540,13 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
               ErpSearchInput(
                 hintText: 'Search raw materials by SKU, name, vendor...',
                 initialValue: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
               ),
               const SizedBox(height: 10),
               ErpFilterDropdown<String>(
@@ -534,6 +560,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                       _selectedCategoryFilter = val;
                       _currentPage = 0;
                     });
+                    _persistFilters();
                   }
                 },
               ),
@@ -554,6 +581,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                       _stockFilter = val;
                       _currentPage = 0;
                     });
+                    _persistFilters();
                   }
                 },
               ),
@@ -580,10 +608,13 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
               child: ErpSearchInput(
                 hintText: 'Search raw materials by SKU, name, vendor...',
                 initialValue: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
               ),
             ),
             ErpFilterDropdown<String>(
@@ -595,6 +626,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                     _selectedCategoryFilter = val;
                     _currentPage = 0;
                   });
+                  _persistFilters();
                 }
               },
             ),
@@ -612,17 +644,21 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                     _stockFilter = val;
                     _currentPage = 0;
                   });
+                  _persistFilters();
                 }
               },
             ),
             ErpDateFilterBox(
               startDate: _startDate,
               endDate: _endDate,
-              onDateRangeSelected: (start, end) => setState(() {
-                _startDate = start;
-                _endDate = end;
-                _currentPage = 0;
-              }),
+              onDateRangeSelected: (start, end) {
+                setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                });
+                _persistFilters();
+              },
             ),
           ],
         );
@@ -858,9 +894,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                   Formatters.formatCurrency(rm.defaultPurchasePrice),
                   style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
                 ),
-                rm.isLowStock
-                    ? ErpStatusBadge.warning('Low Stock')
-                    : (rm.currentStock <= 0 ? ErpStatusBadge.danger('Out of Stock') : ErpStatusBadge.success('In Stock')),
+                !rm.isActive
+                    ? ErpStatusBadge.inactive()
+                    : (rm.isLowStock
+                        ? ErpStatusBadge.warning('Low Stock')
+                        : (rm.currentStock <= 0 ? ErpStatusBadge.danger('Out of Stock') : ErpStatusBadge.active())),
                 // Previous Single Action Button
                 PopupMenuButton<String>(
                   tooltip: 'Actions',
@@ -875,12 +913,12 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                       case 'edit':
                         _openAddEditDialog(rm);
                         break;
-                      case 'delete':
-                        _confirmDelete(rm);
+                      case 'toggle_status':
+                        _confirmToggleStatus(rm);
                         break;
                     }
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'view',
                       child: Row(
@@ -902,12 +940,21 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                       ),
                     ),
                     PopupMenuItem(
-                      value: 'delete',
+                      value: 'toggle_status',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                          SizedBox(width: 8),
-                          Text('Delete Material', style: TextStyle(color: AppColors.danger)),
+                          Icon(
+                            rm.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                            color: rm.isActive ? AppColors.warning : AppColors.success,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            rm.isActive ? 'Deactivate Material' : 'Activate Material',
+                            style: TextStyle(
+                              color: rm.isActive ? AppColors.warning : AppColors.success,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -921,11 +968,17 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                   currentPage: safeCurrentPage,
                   pageSize: safePageSize,
                   totalRecords: totalRecords,
-                  onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-                  onPageSizeChanged: (newSize) => setState(() {
-                    _pageSize = newSize;
-                    _currentPage = 0;
-                  }),
+                  onPageChanged: (newPage) {
+                    setState(() => _currentPage = newPage);
+                    _persistFilters();
+                  },
+                  onPageSizeChanged: (newSize) {
+                    setState(() {
+                      _pageSize = newSize;
+                      _currentPage = 0;
+                    });
+                    _persistFilters();
+                  },
                 ),
               ],
             ),

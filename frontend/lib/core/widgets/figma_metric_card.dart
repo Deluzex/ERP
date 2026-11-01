@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_text_styles.dart';
 
 class FigmaMetricCard extends StatelessWidget {
   final IconData? icon;
@@ -9,6 +10,8 @@ class FigmaMetricCard extends StatelessWidget {
   final String value;
   final String subtext;
   final Color? subtextColor;
+  final double titleValueSpacing;
+  final double valueSubtextSpacing;
 
   const FigmaMetricCard({
     super.key,
@@ -19,13 +22,15 @@ class FigmaMetricCard extends StatelessWidget {
     required this.value,
     required this.subtext,
     this.subtextColor,
+    this.titleValueSpacing = 6,
+    this.valueSubtextSpacing = 4,
   }) : assert(icon != null || iconWidget != null, 'Either icon or iconWidget must be provided');
 
   @override
   Widget build(BuildContext context) {
     return Container(
       constraints: const BoxConstraints(minWidth: 140),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(10),
@@ -49,6 +54,7 @@ class FigmaMetricCard extends StatelessWidget {
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: Color(0xFF4B5563),
+                    height: 1.2,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -56,25 +62,30 @@ class FigmaMetricCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF111827),
-              height: 1.1,
+          SizedBox(height: titleValueSpacing),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: AppTextStyles.metricValue.copyWith(
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF111827),
+                height: 1.15,
+                letterSpacing: -0.5,
+              ),
+              maxLines: 1,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: valueSubtextSpacing),
           Text(
             subtext,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w500,
               color: subtextColor ?? const Color(0xFF737686),
+              height: 1.2,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -84,4 +95,3 @@ class FigmaMetricCard extends StatelessWidget {
     );
   }
 }
-

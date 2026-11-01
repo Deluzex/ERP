@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'api_config.dart';
@@ -33,10 +33,6 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          if (TokenStorage.instance.isTokenExpired) {
-            TokenStorage.instance.clear();
-            onSessionExpired?.call();
-          }
 
           final token = TokenStorage.instance.accessToken;
           if (token != null && token.isNotEmpty) {

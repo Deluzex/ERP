@@ -11,7 +11,7 @@ class PartiesApiService {
   // CUSTOMERS CRUD
   // -------------------------------------------------------------
 
-  Future<List<Customer>> getCustomers({String? search, bool includeDeleted = false}) async {
+  Future<List<Customer>> getCustomers({String? search, bool includeDeleted = false, bool? isActive}) async {
     try {
       final queryParams = <String, dynamic>{};
       if (search != null && search.trim().isNotEmpty) {
@@ -19,6 +19,9 @@ class PartiesApiService {
       }
       if (includeDeleted) {
         queryParams['includeDeleted'] = 'true';
+      }
+      if (isActive != null) {
+        queryParams['isActive'] = isActive.toString();
       }
 
       final response = await _client.dio.get(
@@ -48,9 +51,13 @@ class PartiesApiService {
 
   Future<Customer> createCustomer(Customer customer) async {
     try {
+      final payload = customer.toJson();
+      if (customer.id.startsWith('CUST-') || customer.id.isEmpty) {
+        payload.remove('id');
+      }
       final response = await _client.dio.post(
         '/masters/customers',
-        data: customer.toJson(),
+        data: payload,
       );
       final data = _client.unwrap<Map<String, dynamic>>(response);
       return Customer.fromJson(data);
@@ -83,11 +90,22 @@ class PartiesApiService {
     }
   }
 
+  Future<void> toggleCustomerStatus(String id, bool isActive) async {
+    try {
+      await _client.dio.patch(
+        '/masters/customers/$id/status',
+        data: {'isActive': isActive},
+      );
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
   // -------------------------------------------------------------
   // DEALERS CRUD
   // -------------------------------------------------------------
 
-  Future<List<Dealer>> getDealers({String? search, bool includeDeleted = false}) async {
+  Future<List<Dealer>> getDealers({String? search, bool includeDeleted = false, bool? isActive}) async {
     try {
       final queryParams = <String, dynamic>{};
       if (search != null && search.trim().isNotEmpty) {
@@ -95,6 +113,9 @@ class PartiesApiService {
       }
       if (includeDeleted) {
         queryParams['includeDeleted'] = 'true';
+      }
+      if (isActive != null) {
+        queryParams['isActive'] = isActive.toString();
       }
 
       final response = await _client.dio.get(
@@ -124,9 +145,13 @@ class PartiesApiService {
 
   Future<Dealer> createDealer(Dealer dealer) async {
     try {
+      final payload = dealer.toJson();
+      if (dealer.id.startsWith('DLR-') || dealer.id.isEmpty) {
+        payload.remove('id');
+      }
       final response = await _client.dio.post(
         '/masters/dealers',
-        data: dealer.toJson(),
+        data: payload,
       );
       final data = _client.unwrap<Map<String, dynamic>>(response);
       return Dealer.fromJson(data);
@@ -159,11 +184,22 @@ class PartiesApiService {
     }
   }
 
+  Future<void> toggleDealerStatus(String id, bool isActive) async {
+    try {
+      await _client.dio.patch(
+        '/masters/dealers/$id/status',
+        data: {'isActive': isActive},
+      );
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
   // -------------------------------------------------------------
   // ARCHITECTS CRUD
   // -------------------------------------------------------------
 
-  Future<List<Architect>> getArchitects({String? search, bool includeDeleted = false}) async {
+  Future<List<Architect>> getArchitects({String? search, bool includeDeleted = false, bool? isActive}) async {
     try {
       final queryParams = <String, dynamic>{};
       if (search != null && search.trim().isNotEmpty) {
@@ -171,6 +207,9 @@ class PartiesApiService {
       }
       if (includeDeleted) {
         queryParams['includeDeleted'] = 'true';
+      }
+      if (isActive != null) {
+        queryParams['isActive'] = isActive.toString();
       }
 
       final response = await _client.dio.get(
@@ -200,9 +239,13 @@ class PartiesApiService {
 
   Future<Architect> createArchitect(Architect architect) async {
     try {
+      final payload = architect.toJson();
+      if (architect.id.startsWith('ARCH-') || architect.id.isEmpty) {
+        payload.remove('id');
+      }
       final response = await _client.dio.post(
         '/masters/architects',
-        data: architect.toJson(),
+        data: payload,
       );
       final data = _client.unwrap<Map<String, dynamic>>(response);
       return Architect.fromJson(data);
@@ -229,6 +272,17 @@ class PartiesApiService {
       await _client.dio.delete(
         '/masters/architects/$id',
         data: {'deleteReason': reason.trim()},
+      );
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
+  Future<void> toggleArchitectStatus(String id, bool isActive) async {
+    try {
+      await _client.dio.patch(
+        '/masters/architects/$id/status',
+        data: {'isActive': isActive},
       );
     } catch (e) {
       throw _client.handleDioError(e);

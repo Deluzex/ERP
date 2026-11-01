@@ -5598,6 +5598,23 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  void toggleRawMaterialStatus(String id, bool isActive) {
+    final idx = rawMaterials.indexWhere((item) => item.id == id);
+    if (idx != -1) {
+      rawMaterials[idx] = rawMaterials[idx].copyWith(isActive: isActive);
+      notifyListeners();
+    }
+  }
+
+  Future<void> toggleRawMaterialStatusAsync(String id, bool isActive) async {
+    try {
+      await _rawMaterialsApi.toggleRawMaterialStatus(id, isActive);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] toggleRawMaterialStatus remote failed: $e');
+    }
+    toggleRawMaterialStatus(id, isActive);
+  }
+
   void recordBulkUploadHistory({
     required String fileName,
     required String masterType,
@@ -5729,6 +5746,23 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  void toggleProductStatus(String id, bool isActive) {
+    final idx = finishedProducts.indexWhere((item) => item.id == id);
+    if (idx != -1) {
+      finishedProducts[idx] = finishedProducts[idx].copyWith(isActive: isActive);
+      notifyListeners();
+    }
+  }
+
+  Future<void> toggleProductStatusAsync(String id, bool isActive) async {
+    try {
+      await _finishedProductsApi.toggleProductStatus(id, isActive);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] toggleProductStatus remote failed: $e');
+    }
+    toggleProductStatus(id, isActive);
+  }
+
   Future<Map<String, dynamic>> bulkImportFinishedProductsAsync(
     List<Map<String, dynamic>> items, {
     String duplicatePolicy = 'SKIP',
@@ -5826,6 +5860,23 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  void toggleCustomerStatus(String id, bool isActive) {
+    final idx = customers.indexWhere((c) => c.id == id);
+    if (idx != -1) {
+      customers[idx] = customers[idx].copyWith(isActive: isActive);
+      notifyListeners();
+    }
+  }
+
+  Future<void> toggleCustomerStatusAsync(String id, bool isActive) async {
+    try {
+      await _partiesApi.toggleCustomerStatus(id, isActive);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] toggleCustomerStatus remote failed: $e');
+    }
+    toggleCustomerStatus(id, isActive);
+  }
+
   // -------------------------------------------------------------
   // Dealers Live API
   // -------------------------------------------------------------
@@ -5865,6 +5916,23 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  void toggleDealerStatus(String id, bool isActive) {
+    final idx = dealers.indexWhere((d) => d.id == id);
+    if (idx != -1) {
+      dealers[idx] = dealers[idx].copyWith(isActive: isActive);
+      notifyListeners();
+    }
+  }
+
+  Future<void> toggleDealerStatusAsync(String id, bool isActive) async {
+    try {
+      await _partiesApi.toggleDealerStatus(id, isActive);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] toggleDealerStatus remote failed: $e');
+    }
+    toggleDealerStatus(id, isActive);
+  }
+
   // -------------------------------------------------------------
   // Architects & Dual Linking Live API
   // -------------------------------------------------------------
@@ -5902,6 +5970,23 @@ class MockDatabaseService extends ChangeNotifier {
       architects[idx] = architects[idx].copyWith(isDeleted: true, deletedAt: DateTime.now());
       notifyListeners();
     }
+  }
+
+  void toggleArchitectStatus(String id, bool isActive) {
+    final idx = architects.indexWhere((a) => a.id == id);
+    if (idx != -1) {
+      architects[idx] = architects[idx].copyWith(isActive: isActive);
+      notifyListeners();
+    }
+  }
+
+  Future<void> toggleArchitectStatusAsync(String id, bool isActive) async {
+    try {
+      await _partiesApi.toggleArchitectStatus(id, isActive);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] toggleArchitectStatus remote failed: $e');
+    }
+    toggleArchitectStatus(id, isActive);
   }
 
   Future<void> linkArchitectAndCustomerAsync({required String architectId, required String customerId}) async {
@@ -5978,6 +6063,23 @@ class MockDatabaseService extends ChangeNotifier {
       }
       rethrow;
     }
+  }
+
+  void toggleVendorStatus(String id, bool isActive) {
+    final idx = vendors.indexWhere((v) => v.id == id);
+    if (idx != -1) {
+      vendors[idx] = vendors[idx].copyWith(isActive: isActive);
+      notifyListeners();
+    }
+  }
+
+  Future<void> toggleVendorStatusAsync(String id, bool isActive) async {
+    try {
+      await _vendorsApi.toggleVendorStatus(id, isActive);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] toggleVendorStatus remote failed: $e');
+    }
+    toggleVendorStatus(id, isActive);
   }
 
   // -------------------------------------------------------------

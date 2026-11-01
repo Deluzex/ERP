@@ -1,3 +1,6 @@
+import 'package:flutter/material.dart';
+import '../../app/app.dart';
+import '../widgets/inactivity_warning_dialog.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +13,8 @@ import '../../core/models/purchase_model.dart';
 import '../../core/models/rbac_models.dart';
 import '../../core/models/sale_model.dart';
 import '../../core/models/stock_movement_model.dart';
+import '../../core/storage/form_draft_service.dart';
+import '../../core/storage/tab_session_storage.dart';
 import '../../core/api/auth_api_service.dart';
 import '../services/mock_database_service.dart';
 
@@ -33,14 +38,20 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
   static const String _kLastNavSectionKey = 'erp_last_nav_section';
   static const String _kSessionTimestampKey = 'erp_session_timestamp';
   static const int _kSessionTimeoutMinutes = 30;
+  static const int _kSessionWarningMinutes = 28;
 
   Timer? _sessionExpiryTimer;
-  DateTime? _lastActivityRecord;
+  DateTime _lastUserActivityTime = DateTime.now();
+  DateTime? _lastPersistedActivityTime;
   bool _isLoggingOutDueToExpiry = false;
+  bool _isWarningDialogShowing = false;
+
+  DateTime get lastUserActivityTime => _lastUserActivityTime;
+  bool get isWarningDialogShowing => _isWarningDialogShowing;
 
   void _startSessionTimer() {
     _sessionExpiryTimer?.cancel();
-    _sessionExpiryTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
+    _sessionExpiryTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
       await _checkSessionExpiry();
     });
   }
@@ -53,23 +64,69 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     }
 
     try {
-      // 1. Check if token lifetime has expired (30 minutes)
-      if (TokenStorage.instance.isTokenExpired) {
+      // 1. Multi-tab activity sync
+      final prefs = await SharedPreferences.getInstance();
+      final sessionTimestamp = prefs.getInt(_kSessionTimestampKey);
+      if (sessionTimestamp != null) {
+        final crossTabActive = DateTime.fromMillisecondsSinceEpoch(sessionTimestamp);
+        if (crossTabActive.isAfter(_lastUserActivityTime)) {
+          _lastUserActivityTime = crossTabActive;
+          _dismissWarningDialog();
+        }
+      }
+
+      final now = DateTime.now();
+      final inactiveSeconds = now.difference(_lastUserActivityTime).inSeconds;
+      final timeoutSeconds = _kSessionTimeoutMinutes * 60;
+      final warningSeconds = _kSessionWarningMinutes * 60;
+
+      // 2. Check 30 minutes of continuous inactivity
+      if (inactiveSeconds >= timeoutSeconds) {
+        _dismissWarningDialog();
         await handleSessionExpired();
         return;
       }
 
-      // 2. Check inactivity duration against 30 minutes
-      final prefs = await SharedPreferences.getInstance();
-      final sessionTimestamp = prefs.getInt(_kSessionTimestampKey);
-      if (sessionTimestamp != null) {
-        final lastActive = DateTime.fromMillisecondsSinceEpoch(sessionTimestamp);
-        if (DateTime.now().difference(lastActive).inMinutes >= _kSessionTimeoutMinutes) {
-          await handleSessionExpired();
-          return;
-        }
+      // 3. Show warning dialog shortly before 30-minute inactivity limit (at 28 minutes)
+      if (inactiveSeconds >= warningSeconds) {
+        _showInactivityWarningDialog();
+      } else {
+        _dismissWarningDialog();
       }
     } catch (_) {}
+  }
+
+  void _showInactivityWarningDialog() {
+    if (_isWarningDialogShowing || state == null) return;
+    final context = appNavigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+
+    _isWarningDialogShowing = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => InactivityWarningDialog(
+        onContinue: () {
+          recordUserActivity();
+          _dismissWarningDialog();
+        },
+        onLogout: () {
+          _dismissWarningDialog();
+          logout();
+        },
+      ),
+    ).then((_) {
+      _isWarningDialogShowing = false;
+    });
+  }
+
+  void _dismissWarningDialog() {
+    if (!_isWarningDialogShowing) return;
+    _isWarningDialogShowing = false;
+    final nav = appNavigatorKey.currentState;
+    if (nav != null && nav.canPop()) {
+      nav.pop();
+    }
   }
 
   Future<void> handleSessionExpired() async {
@@ -78,10 +135,11 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     try {
       _sessionExpiryTimer?.cancel();
       _sessionExpiryTimer = null;
+      _dismissWarningDialog();
       await logout();
       ErpToast.showWarning(
         null,
-        'Your login session has expired after 30 minutes. Please sign in again.',
+        'Your login session has expired after 30 minutes of inactivity. Please sign in again.',
       );
     } finally {
       _isLoggingOutDueToExpiry = false;
@@ -91,13 +149,17 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
   void recordUserActivity() {
     if (state == null) return;
     final now = DateTime.now();
-    if (_lastActivityRecord != null && now.difference(_lastActivityRecord!).inSeconds < 30) {
-      return;
+    _lastUserActivityTime = now;
+    if (_isWarningDialogShowing) {
+      _dismissWarningDialog();
     }
-    _lastActivityRecord = now;
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setInt(_kSessionTimestampKey, now.millisecondsSinceEpoch);
-    }).catchError((_) {});
+    // Throttle writing to SharedPreferences to at most once every 10 seconds
+    if (_lastPersistedActivityTime == null || now.difference(_lastPersistedActivityTime!).inSeconds >= 10) {
+      _lastPersistedActivityTime = now;
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setInt(_kSessionTimestampKey, now.millisecondsSinceEpoch);
+      }).catchError((_) {});
+    }
   }
 
   Future<void> _persistSession(AppUser user, ErpNavSection? section) async {
@@ -118,17 +180,16 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final userJsonStr = prefs.getString(_kSessionUserKey);
       final lastSectionName = prefs.getString(_kLastNavSectionKey);
 
-      // Enforce 30-minute session expiry threshold
+      // Enforce 30-minute session expiry threshold based on last user activity
       final sessionTimestamp = prefs.getInt(_kSessionTimestampKey);
       if (sessionTimestamp != null) {
         final lastActive = DateTime.fromMillisecondsSinceEpoch(sessionTimestamp);
-        if (DateTime.now().difference(lastActive).inMinutes >= _kSessionTimeoutMinutes ||
-            TokenStorage.instance.isTokenExpired) {
+        if (DateTime.now().difference(lastActive).inMinutes >= _kSessionTimeoutMinutes) {
           // Session expired after 30 minutes of tab close or inactivity
           await logout();
           ErpToast.showWarning(
             null,
-            'Your login session has expired after 30 minutes. Please sign in again.',
+            'Your login session has expired after 30 minutes of inactivity. Please sign in again.',
           );
           return false;
         }
@@ -174,6 +235,31 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
             ref.read(currentNavSectionProvider.notifier).state = user.getAccessibleLandingSection(db.roles);
           }
         }
+
+        // Rehydrate editing and contextual states
+        try {
+          final editingPurchaseId = await TabSessionStorage.getItem('erp_editing_purchase_id');
+          if (editingPurchaseId != null && editingPurchaseId.isNotEmpty) {
+            final p = db.purchases.where((x) => x.id == editingPurchaseId).firstOrNull;
+            if (p != null) {
+              ref.read(editingPurchaseProvider.notifier).state = p;
+            }
+          }
+          final docTypeName = await TabSessionStorage.getItem('erp_sales_create_doc_type');
+          if (docTypeName != null && docTypeName.isNotEmpty) {
+            final dt = SalesDocumentType.values.where((d) => d.name == docTypeName).firstOrNull;
+            if (dt != null) ref.read(salesCreateDocTypeProvider.notifier).state = dt;
+          }
+          final sourceDocId = await TabSessionStorage.getItem('erp_sales_create_source_doc_id');
+          if (sourceDocId != null && sourceDocId.isNotEmpty) {
+            ref.read(salesCreateSourceDocIdProvider.notifier).state = sourceDocId;
+          }
+          final prodProductId = await TabSessionStorage.getItem('erp_selected_prod_product_id');
+          if (prodProductId != null && prodProductId.isNotEmpty) {
+            ref.read(selectedProductionProductIdProvider.notifier).state = prodProductId;
+          }
+          await ref.read(activeRecordDetailsStackProvider.notifier).loadFromStorage();
+        } catch (_) {}
         _startSessionTimer();
         return true;
       }
@@ -269,8 +355,11 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
   Future<void> logout() async {
     _sessionExpiryTimer?.cancel();
     _sessionExpiryTimer = null;
+    _dismissWarningDialog();
     _authApi.logout();
-    state = null;
+    if (mounted) {
+      state = null;
+    }
     ref.read(activeRecordDetailsStackProvider.notifier).clear();
     try {
       final db = ref.read(databaseServiceProvider);
@@ -280,12 +369,20 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       await prefs.remove(_kLastNavSectionKey);
       await prefs.remove(_kSessionTimestampKey);
       TokenStorage.instance.clear();
+      await FormDraftService.instance.clearAllDrafts();
+      await TabSessionStorage.removeItem('erp_active_details_stack');
+      await TabSessionStorage.removeItem('erp_editing_purchase_id');
+      await TabSessionStorage.removeItem('erp_sales_create_doc_type');
+      await TabSessionStorage.removeItem('erp_sales_create_source_doc_id');
+      await TabSessionStorage.removeItem('erp_selected_prod_product_id');
     } catch (_) {}
   }
 
   @override
   void dispose() {
     _sessionExpiryTimer?.cancel();
+    _sessionExpiryTimer = null;
+    _dismissWarningDialog();
     super.dispose();
   }
 }
@@ -350,26 +447,72 @@ class ActiveRecordDetails {
     required this.recordType,
     required this.parentSection,
   });
+
+  Map<String, dynamic> toJson() => {
+    'recordId': recordId,
+    'recordType': recordType,
+    'parentSection': parentSection.name,
+  };
+
+  factory ActiveRecordDetails.fromJson(Map<String, dynamic> json) {
+    final parentName = json['parentSection'] as String?;
+    return ActiveRecordDetails(
+      recordId: json['recordId'] as String? ?? '',
+      recordType: json['recordType'] as String? ?? '',
+      parentSection: ErpNavSection.values.where((e) => e.name == parentName).firstOrNull ?? ErpNavSection.dashboard,
+    );
+  }
 }
 
 class RecordDetailsStackNotifier extends StateNotifier<List<ActiveRecordDetails>> {
-  RecordDetailsStackNotifier() : super([]);
+  static const String _kStorageKey = 'erp_active_details_stack';
 
-  void push(String recordId, String recordType, ErpNavSection parentSection) {
+  RecordDetailsStackNotifier() : super([]) {
+    loadFromStorage();
+  }
+
+  Future<void> loadFromStorage() async {
+    try {
+      final jsonStr = await TabSessionStorage.getItem(_kStorageKey);
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final List decoded = jsonDecode(jsonStr);
+        final list = decoded.map((e) => ActiveRecordDetails.fromJson(e as Map<String, dynamic>)).toList();
+        if (mounted && list.isNotEmpty) {
+          state = list;
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> persist() async {
+    try {
+      if (state.isEmpty) {
+        await TabSessionStorage.removeItem(_kStorageKey);
+      } else {
+        final encoded = jsonEncode(state.map((e) => e.toJson()).toList());
+        await TabSessionStorage.setItem(_kStorageKey, encoded);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> push(String recordId, String recordType, ErpNavSection parentSection) async {
     state = [
       ...state,
       ActiveRecordDetails(recordId: recordId, recordType: recordType, parentSection: parentSection),
     ];
+    await persist();
   }
 
-  void pop() {
+  Future<void> pop() async {
     if (state.isNotEmpty) {
       state = state.sublist(0, state.length - 1);
+      await persist();
     }
   }
 
-  void clear() {
+  Future<void> clear() async {
     state = [];
+    await persist();
   }
 }
 

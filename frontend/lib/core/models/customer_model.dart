@@ -13,6 +13,7 @@ class Customer {
   final String? linkedArchitectId;
   final bool isAlsoArchitect;
   final bool isDeleted;
+  final bool isActive;
   final DateTime? deletedAt;
   final DateTime createdAt;
 
@@ -31,6 +32,7 @@ class Customer {
     this.linkedArchitectId,
     this.isAlsoArchitect = false,
     this.isDeleted = false,
+    this.isActive = true,
     this.deletedAt,
     required this.createdAt,
   });
@@ -50,6 +52,7 @@ class Customer {
     String? linkedArchitectId,
     bool? isAlsoArchitect,
     bool? isDeleted,
+    bool? isActive,
     DateTime? deletedAt,
     DateTime? createdAt,
   }) {
@@ -68,6 +71,7 @@ class Customer {
       linkedArchitectId: linkedArchitectId ?? this.linkedArchitectId,
       isAlsoArchitect: isAlsoArchitect ?? this.isAlsoArchitect,
       isDeleted: isDeleted ?? this.isDeleted,
+      isActive: isActive ?? this.isActive,
       deletedAt: deletedAt ?? this.deletedAt,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -89,6 +93,9 @@ class Customer {
       linkedArchitectId: json['linkedArchitectId']?.toString() ?? json['linked_architect_id']?.toString(),
       isAlsoArchitect: json['isAlsoArchitect'] == true || json['is_also_architect'] == true,
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
+      isActive: json['isActive'] != null
+          ? (json['isActive'] == true || json['isActive'].toString() == 'true')
+          : (json['is_active'] != null ? (json['is_active'] == true || json['is_active'].toString() == 'true') : true),
       deletedAt: json['deletedAt'] != null ? DateTime.tryParse(json['deletedAt'].toString()) : null,
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now() : DateTime.now(),
     );
@@ -96,6 +103,7 @@ class Customer {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'mobile': mobile,
       'email': email,
@@ -107,6 +115,7 @@ class Customer {
       if (linkedArchitectId != null && linkedArchitectId!.isNotEmpty)
         'linkedArchitectId': linkedArchitectId,
       'isAlsoArchitect': isAlsoArchitect,
+      'isActive': isActive,
     };
   }
 }

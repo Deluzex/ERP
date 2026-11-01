@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -17,6 +18,7 @@ import {
   CreateRawMaterialDto,
   UpdateRawMaterialDto,
 } from '../dto/raw-material.dto';
+import { UpdateMasterStatusDto } from '../dto/master-status.dto';
 import { RawMaterialsService } from '../services/raw-materials.service';
 
 @ApiTags('Masters - Raw Materials')
@@ -45,12 +47,14 @@ export class RawMaterialsController {
     @Query('categoryId') categoryId?: string,
     @Query('lowStockOnly') lowStockOnly?: string,
     @Query('includeDeleted') includeDeleted?: string,
+    @Query('isActive') isActive?: string,
   ) {
     return this.rawMaterialsService.findAll(
       search,
       categoryId,
       lowStockOnly === 'true',
       includeDeleted === 'true',
+      isActive === undefined ? undefined : isActive === 'true',
     );
   }
 
@@ -76,6 +80,21 @@ export class RawMaterialsController {
     return this.rawMaterialsService.update(
       id,
       dto,
+      ctx.userId,
+      ctx.correlationId,
+    );
+  }
+
+  @Patch(':id/status')
+  @RequirePermission('masters.edit')
+  toggleStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateMasterStatusDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.rawMaterialsService.toggleStatus(
+      id,
+      dto.isActive,
       ctx.userId,
       ctx.correlationId,
     );

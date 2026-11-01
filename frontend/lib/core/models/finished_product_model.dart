@@ -19,6 +19,7 @@ class FinishedProduct {
   final double customerSellingPrice;
   final double gstPercent;
   final bool isDeleted;
+  final bool isActive;
   final DateTime? deletedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -44,6 +45,7 @@ class FinishedProduct {
     required this.customerSellingPrice,
     required this.gstPercent,
     this.isDeleted = false,
+    this.isActive = true,
     this.deletedAt,
     required this.createdAt,
     required this.updatedAt,
@@ -77,6 +79,7 @@ class FinishedProduct {
     double? customerSellingPrice,
     double? gstPercent,
     bool? isDeleted,
+    bool? isActive,
     DateTime? deletedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -102,6 +105,7 @@ class FinishedProduct {
       customerSellingPrice: customerSellingPrice ?? this.customerSellingPrice,
       gstPercent: gstPercent ?? this.gstPercent,
       isDeleted: isDeleted ?? this.isDeleted,
+      isActive: isActive ?? this.isActive,
       deletedAt: deletedAt ?? this.deletedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -130,6 +134,9 @@ class FinishedProduct {
       customerSellingPrice: double.tryParse(json['customerSellingPrice']?.toString() ?? json['customer_selling_price']?.toString() ?? '0') ?? 0.0,
       gstPercent: double.tryParse(json['gstPercent']?.toString() ?? json['gst_percent']?.toString() ?? '18') ?? 18.0,
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
+      isActive: json['isActive'] != null
+          ? (json['isActive'] == true || json['isActive'].toString() == 'true')
+          : (json['is_active'] != null ? (json['is_active'] == true || json['is_active'].toString() == 'true') : true),
       deletedAt: json['deletedAt'] != null ? DateTime.tryParse(json['deletedAt'].toString()) : null,
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now() : DateTime.now(),
       updatedAt: json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt'].toString()) ?? DateTime.now() : DateTime.now(),
@@ -138,6 +145,7 @@ class FinishedProduct {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'itemCode': itemCode,
       'categoryId': categoryId,
@@ -150,6 +158,7 @@ class FinishedProduct {
       'dealerSellingPrice': dealerSellingPrice,
       'customerSellingPrice': customerSellingPrice,
       'gstPercent': gstPercent,
+      'isActive': isActive,
     };
   }
 
@@ -166,6 +175,7 @@ class FinishedProduct {
       'dealerSellingPrice': dealerSellingPrice,
       'customerSellingPrice': customerSellingPrice,
       'gstPercent': gstPercent,
+      'isActive': isActive,
     };
   }
 }

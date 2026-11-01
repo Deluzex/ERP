@@ -10,6 +10,7 @@ class FinishedProductsApiService {
     String? categoryId,
     bool? lowStock,
     bool includeDeleted = false,
+    bool? isActive,
   }) async {
     try {
       final queryParams = <String, dynamic>{};
@@ -24,6 +25,9 @@ class FinishedProductsApiService {
       }
       if (includeDeleted) {
         queryParams['includeDeleted'] = 'true';
+      }
+      if (isActive != null) {
+        queryParams['isActive'] = isActive.toString();
       }
 
       final response = await _client.dio.get(
@@ -80,6 +84,17 @@ class FinishedProductsApiService {
   Future<void> deleteFinishedProduct(String id) async {
     try {
       await _client.dio.delete('/masters/finished-products/$id');
+    } catch (e) {
+      throw _client.handleDioError(e);
+    }
+  }
+
+  Future<void> toggleProductStatus(String id, bool isActive) async {
+    try {
+      await _client.dio.patch(
+        '/masters/finished-products/$id/status',
+        data: {'isActive': isActive},
+      );
     } catch (e) {
       throw _client.handleDioError(e);
     }

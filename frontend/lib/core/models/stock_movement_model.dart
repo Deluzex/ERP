@@ -1,4 +1,4 @@
-enum StockMovementType {
+﻿enum StockMovementType {
   purchase,
   productionConsumption,
   productionOutput,

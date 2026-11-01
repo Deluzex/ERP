@@ -1456,7 +1456,7 @@ ErpToast.showError(context, 'Failed to process refund: $e');
                 value: (_selectedCustomerFilter != null && db.customers.any((c) => c.id == _selectedCustomerFilter)) ? _selectedCustomerFilter : null,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('All Customers')),
-                  ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                  ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                 ],
                 onChanged: (val) => setState(() {
                   _selectedCustomerFilter = val;

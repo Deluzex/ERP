@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
@@ -17,6 +18,8 @@ import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/bulk_upload_dialog.dart';
 import '../../../core/widgets/bulk_upload_history_dialog.dart';
+import '../../../core/widgets/erp_confirm_dialog.dart';
+import '../../../core/storage/tab_session_storage.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class ProductMasterScreen extends ConsumerStatefulWidget {
@@ -38,11 +41,36 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreFilters();
       ref.read(databaseServiceProvider).loadFinishedProducts();
       ref.read(databaseServiceProvider).loadCategories();
       ref.read(databaseServiceProvider).loadUnits();
     });
+  }
+
+  void _persistFilters() {
+    TabSessionStorage.setItem('erp_filter_products', jsonEncode({
+      'search': _searchQuery,
+      'category': _selectedCategoryFilter,
+      'stock': _stockFilter,
+      'page': _currentPage,
+    }));
+  }
+
+  Future<void> _restoreFilters() async {
+    try {
+      final raw = await TabSessionStorage.getItem('erp_filter_products');
+      if (raw != null && raw.isNotEmpty && mounted) {
+        final data = jsonDecode(raw);
+        setState(() {
+          _searchQuery = data['search'] as String? ?? '';
+          _selectedCategoryFilter = data['category'] as String? ?? 'ALL';
+          _stockFilter = data['stock'] as String? ?? 'ALL';
+          _currentPage = data['page'] as int? ?? 0;
+        });
+      }
+    } catch (_) {}
   }
 
   void _openAddEditDialog([FinishedProduct? existing]) {
@@ -478,51 +506,34 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
     );
   }
 
-  void _confirmDelete(FinishedProduct fp) {
-    bool isDeleting = false;
-    showDialog(
+  void _confirmToggleStatus(FinishedProduct fp) {
+    final willActivate = !fp.isActive;
+    showErpStatusConfirmDialog(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDlgState) {
-            return AlertDialog(
-              title: Text('Delete Product Item', style: AppTextStyles.h2),
-              content: Text(
-                'Are you sure you want to delete "${fp.name}" (${fp.itemCode})? This cannot be undone.',
-                style: AppTextStyles.bodyMedium,
-              ),
-              actions: [
-                ErpButton(
-                  text: 'Cancel',
-                  isOutlined: true,
-                  onPressed: isDeleting ? null : () => Navigator.of(ctx).pop(),
-                ),
-                ErpButton(
-                  text: 'Delete',
-                  isDanger: true,
-                  isLoading: isDeleting,
-                  onPressed: isDeleting
-                      ? null
-                      : () async {
-                          setDlgState(() => isDeleting = true);
-                          try {
-                            await ref.read(databaseServiceProvider).deleteFinishedProductAsync(fp.id);
-                            if (ctx.mounted) Navigator.of(ctx).pop();
-                            if (mounted) {
-                              ErpToast.showSuccess(context, 'Product "${fp.name}" deleted successfully!');
-                            }
-                          } catch (e) {
-                            setDlgState(() => isDeleting = false);
-                            if (mounted) {
-                              ErpToast.showError(context, 'Failed to delete: $e');
-                            }
-                          }
-                        },
-                ),
-              ],
+      title: willActivate ? 'Activate Finished Product' : 'Deactivate Finished Product',
+      message: willActivate
+          ? 'Activate "${fp.name}"? It will immediately become available in all transaction dropdowns and lookups.'
+          : 'Are you sure you want to deactivate "${fp.name}"? This entity will no longer appear in transaction dropdowns for new Sales, Purchases, or Production orders. Historical records will remain intact.',
+      itemName: '${fp.name} (${fp.itemCode})',
+      willActivate: willActivate,
+      confirmLabel: willActivate ? 'Activate' : 'Deactivate',
+      onConfirm: () async {
+        try {
+          await ref.read(databaseServiceProvider).toggleProductStatusAsync(fp.id, willActivate);
+          if (mounted) {
+            ErpToast.showSuccess(
+              context,
+              'Product "${fp.name}" ${willActivate ? "activated" : "deactivated"} successfully',
             );
-          },
-        );
+          }
+        } catch (e) {
+          if (mounted) {
+            ErpToast.showError(
+              context,
+              'Status update failed: ${e.toString().replaceFirst("Exception: ", "")}',
+            );
+          }
+        }
       },
     );
   }
@@ -555,10 +566,13 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
               ErpSearchInput(
                 hintText: 'Search by name, SKU, barcode...',
                 initialValue: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
               ),
               const SizedBox(height: 10),
               ErpFilterDropdown<String>(
@@ -572,6 +586,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                       _selectedCategoryFilter = val;
                       _currentPage = 0;
                     });
+                    _persistFilters();
                   }
                 },
               ),
@@ -592,6 +607,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                       _stockFilter = val;
                       _currentPage = 0;
                     });
+                    _persistFilters();
                   }
                 },
               ),
@@ -618,10 +634,13 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
               child: ErpSearchInput(
                 hintText: 'Search by name, SKU, barcode...',
                 initialValue: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
               ),
             ),
             ErpFilterDropdown<String>(
@@ -633,6 +652,7 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                     _selectedCategoryFilter = val;
                     _currentPage = 0;
                   });
+                  _persistFilters();
                 }
               },
             ),
@@ -650,17 +670,21 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                     _stockFilter = val;
                     _currentPage = 0;
                   });
+                  _persistFilters();
                 }
               },
             ),
             ErpDateFilterBox(
               startDate: _startDate,
               endDate: _endDate,
-              onDateRangeSelected: (start, end) => setState(() {
-                _startDate = start;
-                _endDate = end;
-                _currentPage = 0;
-              }),
+              onDateRangeSelected: (start, end) {
+                setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                });
+                _persistFilters();
+              },
             ),
           ],
         );
@@ -894,9 +918,11 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                   Formatters.formatCurrency(fp.customerSellingPrice),
                   style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
                 ),
-                fp.isLowStock
-                    ? ErpStatusBadge.warning('Low Stock')
-                    : (fp.currentStock <= 0 ? ErpStatusBadge.danger('Out of Stock') : ErpStatusBadge.success('Active')),
+                !fp.isActive
+                    ? ErpStatusBadge.inactive()
+                    : (fp.isLowStock
+                        ? ErpStatusBadge.warning('Low Stock')
+                        : (fp.currentStock <= 0 ? ErpStatusBadge.danger('Out of Stock') : ErpStatusBadge.active())),
                 // Previous Single Action Button
                 PopupMenuButton<String>(
                   tooltip: 'Actions',
@@ -908,12 +934,12 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                       case 'edit':
                         _openAddEditDialog(fp);
                         break;
-                      case 'delete':
-                        _confirmDelete(fp);
+                      case 'toggle_status':
+                        _confirmToggleStatus(fp);
                         break;
                     }
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'edit',
                       child: Row(
@@ -925,12 +951,21 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                       ),
                     ),
                     PopupMenuItem(
-                      value: 'delete',
+                      value: 'toggle_status',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                          SizedBox(width: 8),
-                          Text('Delete Product'),
+                          Icon(
+                            fp.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                            color: fp.isActive ? AppColors.warning : AppColors.success,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            fp.isActive ? 'Deactivate Product' : 'Activate Product',
+                            style: TextStyle(
+                              color: fp.isActive ? AppColors.warning : AppColors.success,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -944,11 +979,17 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                   currentPage: safeCurrentPage,
                   pageSize: safePageSize,
                   totalRecords: totalRecords,
-                  onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-                  onPageSizeChanged: (newSize) => setState(() {
-                    _pageSize = newSize;
-                    _currentPage = 0;
-                  }),
+                  onPageChanged: (newPage) {
+                    setState(() => _currentPage = newPage);
+                    _persistFilters();
+                  },
+                  onPageSizeChanged: (newSize) {
+                    setState(() {
+                      _pageSize = newSize;
+                      _currentPage = 0;
+                    });
+                    _persistFilters();
+                  },
                 ),
               ],
             ),

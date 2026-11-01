@@ -36,7 +36,7 @@ class StatCard extends StatelessWidget {
         border: Border.all(color: AppColors.border, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -69,13 +69,14 @@ class StatCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              style: AppTextStyles.metricValue.copyWith(fontSize: 22),
+              style: AppTextStyles.metricValue.copyWith(fontSize: 26),
+              maxLines: 1,
             ),
           ),
           if (trendText != null) ...[

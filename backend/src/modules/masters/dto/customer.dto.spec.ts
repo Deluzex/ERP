@@ -87,4 +87,22 @@ describe('Customer email (DTO)', () => {
     const omitted = plainToInstance(UpdateCustomerDto, { name: 'X' });
     expect(await validate(omitted)).toHaveLength(0);
   });
+
+  it('validates full frontend creation payloads with id and isActive without whitelist errors', async () => {
+    const payload = {
+      id: 'CUST-123456',
+      name: 'Acme Corp',
+      mobile: '9876543210',
+      email: 'acme@gmail.com',
+      address: '123 Main St',
+      state: 'Gujarat',
+      pincode: '380001',
+      stateCode: '24',
+      isActive: true,
+      isAlsoArchitect: false,
+    };
+    const dto = plainToInstance(CreateCustomerDto, payload);
+    const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
+    expect(errors).toHaveLength(0);
+  });
 });

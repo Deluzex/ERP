@@ -133,12 +133,7 @@ class _ErpDataTableState extends State<ErpDataTable> {
                               alignment: widget.columns[i].alignment ?? Alignment.centerLeft,
                               child: Text(
                                 widget.columns[i].title.toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF1E293B),
-                                  letterSpacing: 0.5,
-                                ),
+                                style: AppTextStyles.tableHeader,
                               ),
                             ),
                           ),
@@ -237,12 +232,7 @@ class _ErpDataTableState extends State<ErpDataTable> {
             ),
             child: DataTable(
               headingRowColor: WidgetStateProperty.all(const Color(0xFFF8F9FA)),
-              headingTextStyle: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B),
-                letterSpacing: 0.5,
-              ),
+              headingTextStyle: AppTextStyles.tableHeader,
               dataTextStyle: AppTextStyles.tableCell,
               dividerThickness: 1,
               border: const TableBorder(
@@ -251,17 +241,12 @@ class _ErpDataTableState extends State<ErpDataTable> {
               horizontalMargin: widget.horizontalMargin ?? 16,
               columnSpacing: widget.columnSpacing ?? 24,
               dataRowMinHeight: widget.dataRowMinHeight ?? 56,
-              dataRowMaxHeight: widget.dataRowMaxHeight ?? 66,
+              dataRowMaxHeight: widget.dataRowMaxHeight ?? double.infinity,
               headingRowHeight: 46,
               columns: widget.columns.map((col) {
                 Widget label = Text(
                   col.title.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E293B),
-                    letterSpacing: 0.5,
-                  ),
+                  style: AppTextStyles.tableHeader,
                 );
                 if (col.width != null || col.alignment != null) {
                   label = SizedBox(

@@ -14,6 +14,7 @@ class Vendor {
   final double outstandingBalance;
   final double defaultTransportationCharges;
   final bool isDeleted;
+  final bool isActive;
   final String? deleteReason;
   final DateTime? deletedAt;
   final DateTime createdAt;
@@ -34,6 +35,7 @@ class Vendor {
     this.outstandingBalance = 0.0,
     this.defaultTransportationCharges = 0.0,
     this.isDeleted = false,
+    this.isActive = true,
     this.deleteReason,
     this.deletedAt,
     required this.createdAt,
@@ -55,6 +57,7 @@ class Vendor {
     double? outstandingBalance,
     double? defaultTransportationCharges,
     bool? isDeleted,
+    bool? isActive,
     String? deleteReason,
     DateTime? deletedAt,
     DateTime? createdAt,
@@ -75,6 +78,7 @@ class Vendor {
       outstandingBalance: outstandingBalance ?? this.outstandingBalance,
       defaultTransportationCharges: defaultTransportationCharges ?? this.defaultTransportationCharges,
       isDeleted: isDeleted ?? this.isDeleted,
+      isActive: isActive ?? this.isActive,
       deleteReason: deleteReason ?? this.deleteReason,
       deletedAt: deletedAt ?? this.deletedAt,
       createdAt: createdAt ?? this.createdAt,
@@ -98,6 +102,9 @@ class Vendor {
       outstandingBalance: double.tryParse(json['outstandingBalance']?.toString() ?? json['outstanding_balance']?.toString() ?? '0') ?? 0.0,
       defaultTransportationCharges: double.tryParse(json['defaultTransportationCharges']?.toString() ?? json['default_transportation_charges']?.toString() ?? '0') ?? 0.0,
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
+      isActive: json['isActive'] != null
+          ? (json['isActive'] == true || json['isActive'].toString() == 'true')
+          : (json['is_active'] != null ? (json['is_active'] == true || json['is_active'].toString() == 'true') : true),
       deleteReason: json['deleteReason']?.toString() ?? json['delete_reason']?.toString(),
       deletedAt: json['deletedAt'] != null
           ? DateTime.tryParse(json['deletedAt'].toString())
@@ -110,6 +117,7 @@ class Vendor {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'contactPerson': contactPerson,
       'mobile': mobile,
@@ -122,6 +130,7 @@ class Vendor {
       'paymentTerms': paymentTerms,
       'creditLimit': creditLimit,
       'defaultTransportationCharges': defaultTransportationCharges,
+      'isActive': isActive,
     };
   }
 }

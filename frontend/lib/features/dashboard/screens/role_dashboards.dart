@@ -36,7 +36,6 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
     final lowStockFP = db.lowStockFinishedProducts;
     final activeRawMaterials = db.rawMaterials.where((r) => !r.isDeleted).toList();
     final activeFinishedProducts = db.finishedProducts.where((p) => !p.isDeleted).toList();
-    final recentMovements = db.stockMovements.take(6).toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -137,6 +136,8 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
               subtitle: '${activeRawMaterials.length} Unique items',
               icon: Icons.view_in_ar_rounded,
               color: Colors.blue,
+              titleValueSpacing: 6,
+              valueSubtitleSpacing: 4,
             ),
             _buildMetricCard(
               title: 'Finished Goods Valuation',
@@ -144,6 +145,8 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
               subtitle: '${activeFinishedProducts.length} Product SKUs',
               icon: Icons.inventory_outlined,
               color: Colors.teal,
+              titleValueSpacing: 6,
+              valueSubtitleSpacing: 4,
             ),
             _buildMetricCard(
               title: 'Total Stock Valuation',
@@ -151,6 +154,8 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
               subtitle: 'Combined Warehouse Assets',
               icon: Icons.account_balance_wallet_outlined,
               color: Colors.indigo,
+              titleValueSpacing: 6,
+              valueSubtitleSpacing: 4,
             ),
             _buildMetricCard(
               title: 'Low Stock Alerts',
@@ -158,6 +163,8 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
               subtitle: '${lowStockRM.length} RM • ${lowStockFP.length} FP below min level',
               icon: Icons.warning_amber_rounded,
               color: db.totalLowStockCount > 0 ? AppColors.danger : AppColors.success,
+              titleValueSpacing: 6,
+              valueSubtitleSpacing: 4,
             ),
           ]),
           const SizedBox(height: 28),
@@ -1752,40 +1759,60 @@ Widget _buildMetricCard({
   required String subtitle,
   required IconData icon,
   required Color color,
+  double titleValueSpacing = 6,
+  double valueSubtitleSpacing = 4,
 }) {
   return Container(
-    padding: const EdgeInsets.all(18),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     decoration: BoxDecoration(
       color: AppColors.surface,
       borderRadius: AppRadius.lgBorderRadius,
       border: Border.all(color: AppColors.border),
     ),
-    child: Column(
+    child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
                 title,
-                style: AppTextStyles.tableHeader.copyWith(fontSize: 12),
+                style: AppTextStyles.tableHeader.copyWith(fontSize: 12, height: 1.2),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-              child: Icon(icon, size: 18, color: color),
-            ),
-          ],
+              SizedBox(height: titleValueSpacing),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: AppTextStyles.metricValue.copyWith(
+                    fontSize: 26,
+                    color: color,
+                    height: 1.15,
+                  ),
+                  maxLines: 1,
+                ),
+              ),
+              SizedBox(height: valueSubtitleSpacing),
+              Text(
+                subtitle,
+                style: AppTextStyles.caption.copyWith(color: AppColors.textMuted, height: 1.2),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 10),
-        Text(value, style: AppTextStyles.metricValue.copyWith(fontSize: 20, color: color)),
-        const SizedBox(height: 4),
-        Text(subtitle, style: AppTextStyles.caption.copyWith(color: AppColors.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+          child: Icon(icon, size: 18, color: color),
+        ),
       ],
     ),
   );

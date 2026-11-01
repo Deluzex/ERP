@@ -1,4 +1,4 @@
-enum ProjectStatus {
+﻿enum ProjectStatus {
   planned,
   active,
   completed,

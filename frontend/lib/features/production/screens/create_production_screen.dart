@@ -16,6 +16,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_toast.dart';
+import '../../../core/storage/form_draft_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class _RawMaterialUsageDraft {
@@ -104,7 +105,7 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
     super.initState();
     final db = ref.read(databaseServiceProvider);
     final preselectedId = ref.read(selectedProductionProductIdProvider);
-    final activeProducts = db.finishedProducts.where((p) => !p.isDeleted).toList();
+    final activeProducts = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).toList();
     if (preselectedId != null && activeProducts.any((p) => p.id == preselectedId)) {
       _selectedFinishedProductId = preselectedId;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -112,17 +113,27 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
       });
     } else if (activeProducts.isNotEmpty) {
       _selectedFinishedProductId = activeProducts.first.id;
-    } else if (db.finishedProducts.isNotEmpty) {
-      _selectedFinishedProductId = db.finishedProducts.first.id;
     }
     _loadBomForSelectedProduct();
 
     _actualQtyCtrl.addListener(_onActualQtyChanged);
+    _actualQtyCtrl.addListener(_saveDraftToStorage);
+    _labourCostCtrl.addListener(_saveDraftToStorage);
+    _otherExpensesCtrl.addListener(_saveDraftToStorage);
+    _notesCtrl.addListener(_saveDraftToStorage);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreDraftFromStorage();
+    });
   }
 
   @override
   void dispose() {
     _actualQtyCtrl.removeListener(_onActualQtyChanged);
+    _actualQtyCtrl.removeListener(_saveDraftToStorage);
+    _labourCostCtrl.removeListener(_saveDraftToStorage);
+    _otherExpensesCtrl.removeListener(_saveDraftToStorage);
+    _notesCtrl.removeListener(_saveDraftToStorage);
     _actualQtyCtrl.dispose();
     _labourCostCtrl.dispose();
     _otherExpensesCtrl.dispose();
@@ -131,6 +142,83 @@ class _CreateProductionScreenState extends ConsumerState<CreateProductionScreen>
       draft.dispose();
     }
     super.dispose();
+  }
+
+  void _saveDraftToStorage() {
+    if (!mounted) return;
+    final data = {
+      'selectedFinishedProductId': _selectedFinishedProductId,
+      'actualQty': _actualQtyCtrl.text,
+      'labourCost': _labourCostCtrl.text,
+      'otherExpenses': _otherExpensesCtrl.text,
+      'notes': _notesCtrl.text,
+      'isAutoSyncedWithBom': _isAutoSyncedWithBom,
+      'rawMaterialsUsed': _rawMaterialsUsed.map((u) => {
+        'rawMaterialId': u.rawMaterialId,
+        'rawMaterialName': u.rawMaterialName,
+        'rawMaterialCode': u.rawMaterialCode,
+        'unit': u.unit,
+        'quantityUsed': u.quantityUsed,
+        'unitCost': u.unitCost,
+      }).toList(),
+    };
+    FormDraftService.instance.saveFormDraft(
+      module: 'production',
+      formId: 'create_production',
+      userId: ref.read(currentUserProvider)?.id,
+      data: data,
+    );
+  }
+
+  Future<void> _restoreDraftFromStorage() async {
+    try {
+      final draft = await FormDraftService.instance.loadFormDraft(
+        module: 'production',
+        formId: 'create_production',
+        userId: ref.read(currentUserProvider)?.id,
+      );
+      if (draft != null && mounted) {
+        setState(() {
+          if (draft['selectedFinishedProductId'] != null) {
+            _selectedFinishedProductId = draft['selectedFinishedProductId'] as String?;
+          }
+          if (draft['actualQty'] != null) {
+            _actualQtyCtrl.text = draft['actualQty'] as String;
+          }
+          if (draft['labourCost'] != null) {
+            _labourCostCtrl.text = draft['labourCost'] as String;
+          }
+          if (draft['otherExpenses'] != null) {
+            _otherExpensesCtrl.text = draft['otherExpenses'] as String;
+          }
+          if (draft['notes'] != null) {
+            _notesCtrl.text = draft['notes'] as String;
+          }
+          if (draft['isAutoSyncedWithBom'] != null) {
+            _isAutoSyncedWithBom = draft['isAutoSyncedWithBom'] as bool;
+          }
+          final rawUsage = draft['rawMaterialsUsed'];
+          if (rawUsage is List && rawUsage.isNotEmpty) {
+            for (final d in _rawMaterialsUsed) {
+              d.dispose();
+            }
+            _rawMaterialsUsed.clear();
+            for (final u in rawUsage) {
+              if (u is Map<String, dynamic>) {
+                _rawMaterialsUsed.add(_RawMaterialUsageDraft(
+                  rawMaterialId: u['rawMaterialId'] as String? ?? '',
+                  rawMaterialName: u['rawMaterialName'] as String? ?? '',
+                  rawMaterialCode: u['rawMaterialCode'] as String? ?? '',
+                  unit: u['unit'] as String? ?? 'PCS',
+                  quantityUsed: (u['quantityUsed'] as num?)?.toDouble() ?? 1.0,
+                  unitCost: (u['unitCost'] as num?)?.toDouble() ?? 0.0,
+                ));
+              }
+            }
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _loadBomForSelectedProduct({bool showFeedback = false}) {
@@ -454,6 +542,7 @@ ErpToast.showInfo(context, 'Auto-loaded ${bom.items.length} raw materials from B
         }
         _isAutoSyncedWithBom = false;
       });
+      _saveDraftToStorage();
     }
   }
 
@@ -467,6 +556,7 @@ ErpToast.showInfo(context, 'Auto-loaded ${bom.items.length} raw materials from B
       _rawMaterialsUsed.removeAt(index);
       _isAutoSyncedWithBom = false;
     });
+    _saveDraftToStorage();
   }
 
   double get _rawMaterialCost => _rawMaterialsUsed.fold(0.0, (sum, item) => sum + item.totalCost);
@@ -482,6 +572,11 @@ ErpToast.showInfo(context, 'Auto-loaded ${bom.items.length} raw materials from B
   bool get _isSubmitting => _submittingAction != null;
 
     void _resetForm() {
+    FormDraftService.instance.clearFormDraft(
+      module: 'production',
+      formId: 'create_production',
+      userId: ref.read(currentUserProvider)?.id,
+    );
     setState(() {
       _actualQtyCtrl.text = '20';
       _labourCostCtrl.text = '3000';
@@ -809,12 +904,14 @@ ErpToast.showError(context, 'Error saving production order: $e');
                     builder: (context) {
                       final availableProductsMap = <String, FinishedProduct>{};
                       for (final p in db.finishedProducts) {
-                        if (!p.isDeleted && !availableProductsMap.containsKey(p.id)) {
+                        if (!p.isDeleted && p.isActive && !availableProductsMap.containsKey(p.id)) {
                           availableProductsMap[p.id] = p;
                         }
                       }
                       final availableProducts = availableProductsMap.values.toList();
-                      final effectiveProductId = availableProducts.any((p) => p.id == _selectedFinishedProductId)
+                      final currentFp = db.finishedProducts.where((p) => p.id == _selectedFinishedProductId).firstOrNull;
+                      final isCurrentInactive = currentFp != null && !currentFp.isActive;
+                      final effectiveProductId = (currentFp != null)
                           ? _selectedFinishedProductId
                           : (availableProducts.isNotEmpty ? availableProducts.first.id : null);
 
@@ -823,16 +920,27 @@ ErpToast.showError(context, 'Error saving production order: $e');
                           value: effectiveProductId,
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Finished Product *'),
-                          items: availableProducts.map((fp) {
-                            return DropdownMenuItem<String>(
-                              value: fp.id,
-                              child: Text(
-                                '${fp.itemCode} - ${fp.name} (Stock: ${Formatters.formatNumber(fp.currentStock)} ${fp.unit})',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                          items: [
+                            if (isCurrentInactive)
+                              DropdownMenuItem<String>(
+                                value: currentFp!.id,
+                                child: Text(
+                                  '${currentFp.itemCode} - ${currentFp.name} (Inactive)',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            );
-                          }).toList(),
+                            ...availableProducts.map((fp) {
+                              return DropdownMenuItem<String>(
+                                value: fp.id,
+                                child: Text(
+                                  '${fp.itemCode} - ${fp.name} (Stock: ${Formatters.formatNumber(fp.currentStock)} ${fp.unit})',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }),
+                          ],
                           onChanged: (val) {
                             if (val == null || val == _selectedFinishedProductId) return;
                             setState(() {
