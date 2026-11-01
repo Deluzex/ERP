@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/app.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_radius.dart';
 import '../../app/theme/app_text_styles.dart';
@@ -10,35 +11,39 @@ enum ToastType { success, error, warning, info }
 class ErpToast {
   ErpToast._();
 
-  static void showSuccess(BuildContext context, String message) {
+  static void showSuccess(BuildContext? context, String message) {
     show(context, message: message, type: ToastType.success);
   }
 
-  static void showError(BuildContext context, String message) {
+  static void showError(BuildContext? context, String message) {
     show(context, message: message, type: ToastType.error);
   }
 
-  static void showWarning(BuildContext context, String message) {
+  static void showWarning(BuildContext? context, String message) {
     show(context, message: message, type: ToastType.warning);
   }
 
-  static void showInfo(BuildContext context, String message) {
+  static void showInfo(BuildContext? context, String message) {
     show(context, message: message, type: ToastType.info);
   }
 
   static void show(
-    BuildContext context, {
+    BuildContext? context, {
     required String message,
     ToastType type = ToastType.success,
     Duration duration = const Duration(seconds: 3),
   }) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
+    final messenger = (context != null ? ScaffoldMessenger.maybeOf(context) : null) ??
+        appScaffoldMessengerKey.currentState;
     if (messenger == null) return;
 
     // Clear existing notifications to prevent duplicate stacking
     messenger.clearSnackBars();
 
-    final size = MediaQuery.of(context).size;
+    final resolvedContext = context ?? appNavigatorKey.currentContext;
+    final size = resolvedContext != null
+        ? MediaQuery.of(resolvedContext).size
+        : const Size(1280, 800);
     final isDesktop = size.width >= 700;
 
     final (Color bgColor, Color borderColor, Color textColor, IconData icon) = switch (type) {

@@ -64,9 +64,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
   Future<void> _showCreateOrEditSalesReturnDialog(BuildContext context, MockDatabaseService db, {Sale? initialExistingReturn, String? preselectedInvoiceId}) async {
     if (db.salesInvoices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No sales invoices available for return.'), backgroundColor: AppColors.warning),
-      );
+ErpToast.showWarning(context, 'No sales invoices available for return.');
       return;
     }
 
@@ -115,6 +113,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
     final initialInv = db.salesInvoices.firstWhere((i) => i.id == selectedInvoiceId, orElse: () => db.salesInvoices.first);
     initializeControllers(initialInv);
+
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
@@ -288,8 +288,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                         ],
                       )
                     else
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text('Invoiced Line Items & Return Quantities:', style: AppTextStyles.h3.copyWith(fontSize: 14)),
                           Text('Only positive return quantities will be processed', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
@@ -404,15 +405,25 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
                                       // Item condition dropdown
                                       SizedBox(
-                                        width: 160,
+                                        width: 185,
                                         child: DropdownButtonFormField<ReturnCondition>(
                                           value: currentCondition,
                                           isDense: true,
+                                          isExpanded: true,
                                           decoration: const InputDecoration(labelText: 'Condition', isDense: true),
                                           items: const [
-                                            DropdownMenuItem(value: ReturnCondition.resalable, child: Text('Resalable (Restock)', style: TextStyle(fontSize: 12))),
-                                            DropdownMenuItem(value: ReturnCondition.damaged, child: Text('Damaged (Quarantine)', style: TextStyle(fontSize: 12))),
-                                            DropdownMenuItem(value: ReturnCondition.scrap, child: Text('Scrap (Write-off)', style: TextStyle(fontSize: 12))),
+                                            DropdownMenuItem(
+                                              value: ReturnCondition.resalable,
+                                              child: Text('Resalable (Restock)', style: TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: ReturnCondition.damaged,
+                                              child: Text('Damaged (Quarantine)', style: TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: ReturnCondition.scrap,
+                                              child: Text('Scrap (Write-off)', style: TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                                            ),
                                           ],
                                           onChanged: (val) {
                                             if (val != null) {
@@ -564,36 +575,46 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                             ErpButton(
                               text: 'Submit for Inspection',
                               icon: Icons.send_outlined,
-                              onPressed: () => _processReturnSubmission(
-                                context,
-                                db,
-                                selectedInvoice,
-                                returnQtyCtrls,
-                                itemConditions,
-                                reasonCtrl.text.trim(),
-                                financialAction,
-                                notesCtrl.text.trim(),
-                                SalesReturnStatus.submitted,
-                                ctx,
-                              ),
+                              isLoading: isSubmitting,
+                              onPressed: isSubmitting ? null : () {
+                                setDialogState(() => isSubmitting = true);
+                                _processReturnSubmission(
+                                  context,
+                                  db,
+                                  selectedInvoice,
+                                  returnQtyCtrls,
+                                  itemConditions,
+                                  reasonCtrl.text.trim(),
+                                  financialAction,
+                                  notesCtrl.text.trim(),
+                                  SalesReturnStatus.submitted,
+                                  ctx,
+                                  () => setDialogState(() => isSubmitting = false),
+                                );
+                              },
                             ),
                             const SizedBox(height: 8),
                             ErpButton(
                               text: 'Save as Draft',
                               isOutlined: true,
                               icon: Icons.edit_note,
-                              onPressed: () => _processReturnSubmission(
-                                context,
-                                db,
-                                selectedInvoice,
-                                returnQtyCtrls,
-                                itemConditions,
-                                reasonCtrl.text.trim(),
-                                financialAction,
-                                notesCtrl.text.trim(),
-                                SalesReturnStatus.draft,
-                                ctx,
-                              ),
+                              isLoading: isSubmitting,
+                              onPressed: isSubmitting ? null : () {
+                                setDialogState(() => isSubmitting = true);
+                                _processReturnSubmission(
+                                  context,
+                                  db,
+                                  selectedInvoice,
+                                  returnQtyCtrls,
+                                  itemConditions,
+                                  reasonCtrl.text.trim(),
+                                  financialAction,
+                                  notesCtrl.text.trim(),
+                                  SalesReturnStatus.draft,
+                                  ctx,
+                                  () => setDialogState(() => isSubmitting = false),
+                                );
+                              },
                             ),
                             const SizedBox(height: 4),
                           ] else ...[
@@ -601,16 +622,20 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                               text: 'Update Return Draft',
                               icon: Icons.save_outlined,
                               onPressed: () {
-                                Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Sales return updated.'), backgroundColor: AppColors.success),
-                                );
+                                if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                                  Navigator.of(ctx).pop();
+                                }
+                                ErpToast.showSuccess(context, 'Sales return updated.');
                               },
                             ),
                             const SizedBox(height: 4),
                           ],
                           TextButton(
-                            onPressed: () => Navigator.pop(ctx),
+                            onPressed: isSubmitting ? null : () {
+                              if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                                Navigator.of(ctx).pop();
+                              }
+                            },
                             child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
                           ),
                         ],
@@ -618,51 +643,68 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     ),
                   ]
                 : [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: isSubmitting ? null : () {
+                        if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                          Navigator.of(ctx).pop();
+                        }
+                      },
+                      child: const Text('Cancel'),
+                    ),
                     if (!isEdit) ...[
                       ErpButton(
                         text: 'Save as Draft',
                         isOutlined: true,
                         icon: Icons.edit_note,
-                        onPressed: () => _processReturnSubmission(
-                          context,
-                          db,
-                          selectedInvoice,
-                          returnQtyCtrls,
-                          itemConditions,
-                          reasonCtrl.text.trim(),
-                          financialAction,
-                          notesCtrl.text.trim(),
-                          SalesReturnStatus.draft,
-                          ctx,
-                        ),
+                        isLoading: isSubmitting,
+                        onPressed: isSubmitting ? null : () {
+                          setDialogState(() => isSubmitting = true);
+                          _processReturnSubmission(
+                            context,
+                            db,
+                            selectedInvoice,
+                            returnQtyCtrls,
+                            itemConditions,
+                            reasonCtrl.text.trim(),
+                            financialAction,
+                            notesCtrl.text.trim(),
+                            SalesReturnStatus.draft,
+                            ctx,
+                            () => setDialogState(() => isSubmitting = false),
+                          );
+                        },
                       ),
                       const SizedBox(width: 8),
                       ErpButton(
                         text: 'Submit for Inspection',
                         icon: Icons.send_outlined,
-                        onPressed: () => _processReturnSubmission(
-                          context,
-                          db,
-                          selectedInvoice,
-                          returnQtyCtrls,
-                          itemConditions,
-                          reasonCtrl.text.trim(),
-                          financialAction,
-                          notesCtrl.text.trim(),
-                          SalesReturnStatus.submitted,
-                          ctx,
-                        ),
+                        isLoading: isSubmitting,
+                        onPressed: isSubmitting ? null : () {
+                          setDialogState(() => isSubmitting = true);
+                          _processReturnSubmission(
+                            context,
+                            db,
+                            selectedInvoice,
+                            returnQtyCtrls,
+                            itemConditions,
+                            reasonCtrl.text.trim(),
+                            financialAction,
+                            notesCtrl.text.trim(),
+                            SalesReturnStatus.submitted,
+                            ctx,
+                            () => setDialogState(() => isSubmitting = false),
+                          );
+                        },
                       ),
                     ] else ...[
                       ErpButton(
                         text: 'Update Return Draft',
                         icon: Icons.save_outlined,
                         onPressed: () {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Sales return updated.'), backgroundColor: AppColors.success),
-                          );
+                          if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                            Navigator.of(ctx).pop();
+                          }
+                          ErpToast.showSuccess(context, 'Sales return updated.');
                         },
                       ),
                     ],
@@ -706,6 +748,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     String notes,
     SalesReturnStatus targetStatus,
     BuildContext dialogCtx,
+    VoidCallback onFailed,
   ) async {
     List<SaleLineItem> returnItems = [];
 
@@ -715,11 +758,10 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
       final maxReturnable = (item.quantity - item.returnedQuantity).clamp(0.0, double.infinity);
 
       if (qtyToReturn > maxReturnable) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Return quantity for ${item.finishedProductName} exceeds maximum returnable quantity (${maxReturnable.toInt()}).'),
-            backgroundColor: AppColors.danger,
-          ),
+        onFailed();
+        ErpToast.showError(
+          dialogCtx,
+          'Return quantity for ${item.finishedProductName} exceeds maximum returnable quantity (${maxReturnable.toInt()}).',
         );
         return;
       }
@@ -742,16 +784,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     }
 
     if (returnItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please specify a return quantity greater than 0 for at least one item.'), backgroundColor: AppColors.danger),
-      );
+      onFailed();
+      ErpToast.showError(dialogCtx, 'Please specify a return quantity greater than 0 for at least one item.');
       return;
     }
 
     if (returnReason.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please provide a reason for the return.'), backgroundColor: AppColors.danger),
-      );
+      onFailed();
+      ErpToast.showError(dialogCtx, 'Please provide a reason for the return.');
       return;
     }
 
@@ -765,21 +805,30 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
         notes: notes,
       );
 
-      Navigator.pop(dialogCtx);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Sales Return ${returnDoc.invoiceNumber} created as ${(returnDoc.salesReturnStatus ?? targetStatus).name.toUpperCase()}!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      if (dialogCtx.mounted && Navigator.of(dialogCtx).canPop()) {
+        Navigator.of(dialogCtx).pop();
+      }
+      if (context.mounted) {
+        ErpToast.showSuccess(
+          context,
+          'Sales Return ${returnDoc.invoiceNumber} created as ${(returnDoc.salesReturnStatus ?? targetStatus).name.toUpperCase()}!',
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create sales return: $e'), backgroundColor: AppColors.danger),
-      );
+      onFailed();
+      final cleanMsg = e.toString()
+          .replaceFirst('Exception: ', '')
+          .replaceFirst('DioException: ', '')
+          .trim();
+      if (dialogCtx.mounted) {
+        ErpToast.showError(dialogCtx, 'Failed to create sales return: $cleanMsg');
+      }
     }
   }
 
   void _showApproveConfirmationDialog(BuildContext context, Sale returnDoc, MockDatabaseService db) {
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -837,16 +886,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                             Navigator.pop(ctx);
                             try {
                               await db.approveSalesReturnAsync(returnDoc.id);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+ErpToast.showSuccess(context, 'Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.');
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Failed to approve return: $e'), backgroundColor: AppColors.danger),
-                              );
+ErpToast.showError(context, 'Failed to approve return: $e');
                             }
                           },
                         ),
@@ -868,16 +910,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                       Navigator.pop(ctx);
                       try {
                         await db.approveSalesReturnAsync(returnDoc.id);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.'),
-                            backgroundColor: AppColors.success,
-                          ),
-                        );
+ErpToast.showSuccess(context, 'Sales Return ${returnDoc.invoiceNumber} approved! Stock and financials updated.');
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to approve return: $e'), backgroundColor: AppColors.danger),
-                        );
+ErpToast.showError(context, 'Failed to approve return: $e');
                       }
                     },
                   ),
@@ -889,6 +924,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
   void _showRejectConfirmationDialog(BuildContext context, Sale returnDoc, MockDatabaseService db) {
     final reasonCtrl = TextEditingController();
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -931,16 +968,12 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                           icon: Icons.close,
                           onPressed: () {
                             if (reasonCtrl.text.trim().isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please specify a rejection reason.'), backgroundColor: AppColors.danger),
-                              );
+ErpToast.showError(context, 'Please specify a rejection reason.');
                               return;
                             }
                             Navigator.pop(ctx);
                             db.rejectSalesReturn(returnDoc.id, reasonCtrl.text.trim());
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Sales Return ${returnDoc.invoiceNumber} rejected.'), backgroundColor: AppColors.neutral),
-                            );
+ErpToast.showInfo(context, 'Sales Return ${returnDoc.invoiceNumber} rejected.');
                           },
                         ),
                         const SizedBox(height: 6),
@@ -960,16 +993,12 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     icon: Icons.close,
                     onPressed: () {
                       if (reasonCtrl.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please specify a rejection reason.'), backgroundColor: AppColors.danger),
-                        );
+ErpToast.showError(context, 'Please specify a rejection reason.');
                         return;
                       }
                       Navigator.pop(ctx);
                       db.rejectSalesReturn(returnDoc.id, reasonCtrl.text.trim());
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Sales Return ${returnDoc.invoiceNumber} rejected.'), backgroundColor: AppColors.neutral),
-                      );
+ErpToast.showInfo(context, 'Sales Return ${returnDoc.invoiceNumber} rejected.');
                     },
                   ),
                 ],
@@ -984,6 +1013,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
     final amountCtrl = TextEditingController(text: returnDoc.refundAmount.toStringAsFixed(0));
     final refCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
+
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
@@ -1081,6 +1112,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     if (!asCustomerCredit) ...[
                       DropdownButtonFormField<PaymentMode>(
                         value: refundMode,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Disbursement Mode *'),
                         items: const [
                           DropdownMenuItem(value: PaymentMode.bankTransfer, child: Text('Bank Transfer (NEFT / RTGS)')),
@@ -1131,9 +1163,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                             onPressed: () async {
                               final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
                               if (amount <= 0) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Please enter a valid refund amount.'), backgroundColor: AppColors.danger),
-                                );
+ErpToast.showError(context, 'Please enter a valid refund amount.');
                                 return;
                               }
 
@@ -1147,16 +1177,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                                 );
 
                                 Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!'),
-                                    backgroundColor: AppColors.success,
-                                  ),
-                                );
+ErpToast.showSuccess(context, 'Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!');
                               } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Failed to process refund: $e'), backgroundColor: AppColors.danger),
-                                );
+ErpToast.showError(context, 'Failed to process refund: $e');
                               }
                             },
                           ),
@@ -1177,9 +1200,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                       onPressed: () async {
                         final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
                         if (amount <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please enter a valid refund amount.'), backgroundColor: AppColors.danger),
-                          );
+ErpToast.showError(context, 'Please enter a valid refund amount.');
                           return;
                         }
 
@@ -1193,16 +1214,9 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                           );
 
                           Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!'),
-                              backgroundColor: AppColors.success,
-                            ),
-                          );
+ErpToast.showSuccess(context, 'Refund of ${Formatters.formatCurrency(amount)} processed for ${returnDoc.invoiceNumber}!');
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed to process refund: $e'), backgroundColor: AppColors.danger),
-                          );
+ErpToast.showError(context, 'Failed to process refund: $e');
                         }
                       },
                     ),
@@ -1423,24 +1437,26 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
           // 4. Search and Dropdown Filter Row
           LayoutBuilder(
-            builder: (context, filterBox) {
-              final isMobile = filterBox.maxWidth < 650;
-              final isTablet = filterBox.maxWidth < 950;
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 450;
 
-              final searchField = ErpSearchInput(
-                hintText: 'Search return no, customer, reason...',
-                initialValue: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
+              final searchField = SizedBox(
+                width: 280,
+                child: ErpSearchInput(
+                  hintText: 'Search return no, customer, reason...',
+                  initialValue: _searchQuery,
+                  onChanged: (val) => setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  }),
+                ),
               );
 
               final customerDropdown = ErpFilterDropdown<String?>(
                 value: (_selectedCustomerFilter != null && db.customers.any((c) => c.id == _selectedCustomerFilter)) ? _selectedCustomerFilter : null,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('All Customers')),
-                  ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                  ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                 ],
                 onChanged: (val) => setState(() {
                   _selectedCustomerFilter = val;
@@ -1477,7 +1493,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    searchField,
+                    ErpSearchInput(
+                      hintText: 'Search return no, customer, reason...',
+                      initialValue: _searchQuery,
+                      onChanged: (val) => setState(() {
+                        _searchQuery = val;
+                        _currentPage = 0;
+                      }),
+                    ),
                     const SizedBox(height: 10),
                     customerDropdown,
                     const SizedBox(height: 10),
@@ -1488,36 +1511,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                 );
               }
 
-              if (isTablet) {
-                return Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: searchField),
-                        const SizedBox(width: 12),
-                        dateBox,
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(child: customerDropdown),
-                        const SizedBox(width: 12),
-                        Expanded(child: typeDropdown),
-                      ],
-                    ),
-                  ],
-                );
-              }
-
-              return Row(
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(flex: 3, child: searchField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: customerDropdown),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: typeDropdown),
-                  const SizedBox(width: 12),
+                  searchField,
+                  customerDropdown,
+                  typeDropdown,
                   dateBox,
                 ],
               );
@@ -1700,8 +1701,8 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                     ErpColumn(title: 'Return Value', isNumeric: true),
                     ErpColumn(title: 'Refund Status'),
                     ErpColumn(title: 'Return Status'),
-                    ErpColumn(title: 'Created By'),
-                    ErpColumn(title: 'Actions'),
+                    // ErpColumn(title: 'Created By'),
+                    ErpColumn(title: 'Actions', width: 90),
                   ],
                   rows: paginatedReturns.map((ret) {
                     final statusBadge = _getStatusBadge(ret.salesReturnStatus ?? SalesReturnStatus.draft);
@@ -1709,12 +1710,14 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
                     return [
                       InkWell(
-                        onTap: () {
-                          ref.read(activeRecordDetailsStackProvider.notifier).push(ret.id, 'salesReturn', ErpNavSection.salesReturns);
-                        },
+                        onTap: () => SalesPdfGeneratorDialog.show(context, ret, db),
                         child: Text(
                           ret.invoiceNumber,
-                          style: AppTextStyles.bodyBold.copyWith(fontSize: 12, color: AppColors.primary),
+                          style: AppTextStyles.bodyBold.copyWith(
+                            fontSize: 12,
+                            color: AppColors.primary,
+                            decoration: TextDecoration.underline,
+                          ),
                         ),
                       ),
                       Text(Formatters.formatDate(ret.saleDate), style: AppTextStyles.bodySmall),
@@ -1741,7 +1744,7 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
                       Text(Formatters.formatCurrency(ret.totalAmount), style: AppTextStyles.bodyBold),
                       refundBadge,
                       statusBadge,
-                      Text(ret.createdBy ?? 'Staff', style: AppTextStyles.bodySmall),
+                      // Text(ret.createdBy ?? 'Staff', style: AppTextStyles.bodySmall),
                       _buildRowActionMenu(context, ret, db),
                     ];
                   }).toList(),
@@ -1807,27 +1810,28 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
 
   Widget _buildRowActionMenu(BuildContext context, Sale ret, MockDatabaseService db) {
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, size: 18),
-      tooltip: 'Workflow Actions',
+      tooltip: 'Actions',
+      icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
       onSelected: (val) {
         switch (val) {
           case 'view':
-            ref.read(activeRecordDetailsStackProvider.notifier).push(ret.id, 'salesReturn', ErpNavSection.salesReturns);
+          case 'pdf':
+            SalesPdfGeneratorDialog.show(context, ret, db);
             break;
           case 'edit':
             _showCreateOrEditSalesReturnDialog(context, db, initialExistingReturn: ret);
             break;
           case 'submit':
             db.updateSalesReturnStatus(ret.id, SalesReturnStatus.submitted);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return submitted for review.'), backgroundColor: AppColors.primary));
+ErpToast.showInfo(context, 'Return submitted for review.');
             break;
           case 'receive':
             db.updateSalesReturnStatus(ret.id, SalesReturnStatus.itemsReceived);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Items marked as received at warehouse.'), backgroundColor: AppColors.info));
+ErpToast.showInfo(context, 'Items marked as received at warehouse.');
             break;
           case 'inspect':
             db.updateSalesReturnStatus(ret.id, SalesReturnStatus.inspection);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return moved to QA inspection.'), backgroundColor: AppColors.warning));
+ErpToast.showWarning(context, 'Return moved to QA inspection.');
             break;
           case 'approve':
             _showApproveConfirmationDialog(context, ret, db);
@@ -1838,34 +1842,118 @@ class _SalesReturnsScreenState extends ConsumerState<SalesReturnsScreen> with Si
           case 'refund':
             _showProcessRefundDialog(context, ret, db);
             break;
-          case 'pdf':
-            SalesPdfGeneratorDialog.show(context, ret, db);
-            break;
           case 'view_invoice':
             if (ret.originalInvoiceId != null) {
-              ref.read(activeRecordDetailsStackProvider.notifier).push(ret.originalInvoiceId!, 'invoice', ErpNavSection.salesReturns);
+              final inv = db.salesInvoices.where((i) => i.id == ret.originalInvoiceId).firstOrNull;
+              if (inv != null) {
+                SalesPdfGeneratorDialog.show(context, inv, db);
+              } else {
+                ref.read(activeRecordDetailsStackProvider.notifier).push(ret.originalInvoiceId!, 'invoice', ErpNavSection.salesReturns);
+              }
             }
             break;
         }
       },
       itemBuilder: (ctx) => [
-        const PopupMenuItem(value: 'view', child: Row(children: [Icon(Icons.visibility_outlined, size: 16), SizedBox(width: 8), Text('View Full Details')])),
+        const PopupMenuItem(
+          value: 'view',
+          child: Row(
+            children: [
+              Icon(Icons.description_outlined, size: 16, color: AppColors.primary),
+              SizedBox(width: 8),
+              Expanded(child: Text('View Details')),
+            ],
+          ),
+        ),
         if (ret.salesReturnStatus == SalesReturnStatus.draft) ...[
-          const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 16), SizedBox(width: 8), Text('Edit Draft')])),
-          const PopupMenuItem(value: 'submit', child: Row(children: [Icon(Icons.send_outlined, size: 16, color: AppColors.primary), SizedBox(width: 8), Text('Submit for Review')])),
+          const PopupMenuItem(
+            value: 'edit',
+            child: Row(
+              children: [
+                Icon(Icons.edit_outlined, size: 16),
+                SizedBox(width: 8),
+                Expanded(child: Text('Edit Draft')),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'submit',
+            child: Row(
+              children: [
+                Icon(Icons.send_outlined, size: 16, color: AppColors.primary),
+                SizedBox(width: 8),
+                Expanded(child: Text('Submit for Review')),
+              ],
+            ),
+          ),
         ],
         if (ret.salesReturnStatus == SalesReturnStatus.submitted)
-          const PopupMenuItem(value: 'receive', child: Row(children: [Icon(Icons.inventory_2_outlined, size: 16, color: AppColors.info), SizedBox(width: 8), Text('Mark Items Received')])),
+          const PopupMenuItem(
+            value: 'receive',
+            child: Row(
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 16, color: AppColors.info),
+                SizedBox(width: 8),
+                Expanded(child: Text('Mark Items Received')),
+              ],
+            ),
+          ),
         if (ret.salesReturnStatus == SalesReturnStatus.itemsReceived)
-          const PopupMenuItem(value: 'inspect', child: Row(children: [Icon(Icons.find_in_page_outlined, size: 16, color: AppColors.warning), SizedBox(width: 8), Text('Start QA Inspection')])),
-        if (ret.salesReturnStatus != SalesReturnStatus.approved && ret.salesReturnStatus != SalesReturnStatus.completed && ret.salesReturnStatus != SalesReturnStatus.rejected) ...[
-          const PopupMenuItem(value: 'approve', child: Row(children: [Icon(Icons.check_circle_outline, size: 16, color: AppColors.success), SizedBox(width: 8), Text('Approve & Restock')])),
-          const PopupMenuItem(value: 'reject', child: Row(children: [Icon(Icons.cancel_outlined, size: 16, color: AppColors.danger), SizedBox(width: 8), Text('Reject Return')])),
+          const PopupMenuItem(
+            value: 'inspect',
+            child: Row(
+              children: [
+                Icon(Icons.find_in_page_outlined, size: 16, color: AppColors.warning),
+                SizedBox(width: 8),
+                Expanded(child: Text('Start QA Inspection')),
+              ],
+            ),
+          ),
+        if (ret.salesReturnStatus != SalesReturnStatus.approved &&
+            ret.salesReturnStatus != SalesReturnStatus.completed &&
+            ret.salesReturnStatus != SalesReturnStatus.rejected) ...[
+          const PopupMenuItem(
+            value: 'approve',
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_outline, size: 16, color: AppColors.success),
+                SizedBox(width: 8),
+                Expanded(child: Text('Approve & Restock')),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'reject',
+            child: Row(
+              children: [
+                Icon(Icons.cancel_outlined, size: 16, color: AppColors.danger),
+                SizedBox(width: 8),
+                Expanded(child: Text('Reject Return')),
+              ],
+            ),
+          ),
         ],
         if (ret.refundStatus == RefundStatus.pending || ret.refundStatus == RefundStatus.approved)
-          const PopupMenuItem(value: 'refund', child: Row(children: [Icon(Icons.payments_outlined, size: 16, color: AppColors.success), SizedBox(width: 8), Text('Process Refund / Credit')])),
-        const PopupMenuItem(value: 'view_invoice', child: Row(children: [Icon(Icons.receipt_long_outlined, size: 16), SizedBox(width: 8), Text('View Original Invoice')])),
-        const PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf, size: 16, color: AppColors.primary), SizedBox(width: 8), Text('Credit Note PDF')])),
+          const PopupMenuItem(
+            value: 'refund',
+            child: Row(
+              children: [
+                Icon(Icons.payments_outlined, size: 16, color: AppColors.success),
+                SizedBox(width: 8),
+                Expanded(child: Text('Process Refund / Credit')),
+              ],
+            ),
+          ),
+        const PopupMenuItem(
+          value: 'view_invoice',
+          child: Row(
+            children: [
+              Icon(Icons.receipt_long_outlined, size: 16),
+              SizedBox(width: 8),
+              Expanded(child: Text('View Original Invoice')),
+            ],
+          ),
+        ),
       ],
     );
   }

@@ -1,3 +1,4 @@
+import '../../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -57,19 +58,12 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
       await db.updateProductionOrderStatusAsync(orderId: o.id, newStatus: ProductionStatus.inProgress);
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Production Order ${o.productionNumber} started. Status is now In Progress.'),
-            backgroundColor: AppColors.info,
-          ),
-        );
+ErpToast.showInfo(context, 'Production Order ${o.productionNumber} started. Status is now In Progress.');
       }
     } catch (e) {
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start production: $e'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'Failed to start production: $e');
       }
     }
   }
@@ -250,19 +244,12 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
       );
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Production Batch ${targetOrder.productionNumber} completed! Stock has been updated.'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+ErpToast.showSuccess(context, 'Production Batch ${targetOrder.productionNumber} completed! Stock has been updated.');
       }
     } catch (e) {
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error completing batch: $e'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'Error completing batch: $e');
       }
     }
   }
@@ -373,18 +360,12 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                 await db.updateProductionOrderStatusAsync(orderId: o.id, newStatus: ProductionStatus.cancelled, reason: reason);
                 if (mounted) {
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Order ${o.productionNumber} cancelled${o.status == ProductionStatus.completed ? ' and stock rolled back' : ''}.'),
-                    ),
-                  );
+ErpToast.showSuccess(context, 'Order ${o.productionNumber} cancelled${o.status == ProductionStatus.completed ? ' and stock rolled back' : ''}.');
                 }
               } catch (e) {
                 if (mounted) {
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error cancelling order: $e'), backgroundColor: AppColors.danger),
-                  );
+ErpToast.showError(context, 'Error cancelling order: $e');
                 }
               }
             },
@@ -743,7 +724,15 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
   Widget _tableHeaderCell(String text, {TextAlign align = TextAlign.left}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Text(text, textAlign: align, style: AppTextStyles.bodyBold.copyWith(fontSize: 11, color: AppColors.textSecondary)),
+      child: Text(
+        text,
+        textAlign: align,
+        style: AppTextStyles.tableHeader.copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF1E293B),
+        ),
+      ),
     );
   }
 
@@ -882,7 +871,8 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
-    final orders = db.productionOrders.where((o) => !o.isDeleted).where((o) {
+    final allOrders = db.productionOrders.where((o) => !o.isDeleted).toList();
+    final orders = allOrders.where((o) {
       if (_statusFilter != 'ALL') {
         switch (_statusFilter) {
           case 'PLANNED':
@@ -937,7 +927,7 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
           const SizedBox(height: 24),
 
           // 4 KPI Metrics Strip
-          _buildProductionKpiStrip(context, orders),
+          _buildProductionKpiStrip(context, allOrders),
           const SizedBox(height: 24),
 
           // Table and Filters Enclosed in Card
@@ -962,7 +952,7 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                   padding: const EdgeInsets.all(18),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final isMobile = constraints.maxWidth < 650;
+                      final isMobile = constraints.maxWidth < 450;
                       if (isMobile) {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1147,16 +1137,16 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                     onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
                   ),
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ErpButton(
-                    text: 'Refresh',
-                    icon: Icons.refresh,
-                    isOutlined: true,
-                    onPressed: () => ref.read(databaseServiceProvider).loadProductionOrders(forceRefresh: true),
-                  ),
-                ),
+                // const SizedBox(height: 8),
+                // SizedBox(
+                //   width: double.infinity,
+                //   child: ErpButton(
+                //     text: 'Refresh',
+                //     icon: Icons.refresh,
+                //     isOutlined: true,
+                //     onPressed: () => ref.read(databaseServiceProvider).loadProductionOrders(forceRefresh: true),
+                //   ),
+                // ),
               ],
             );
           }
@@ -1171,12 +1161,12 @@ class _ProductionOrdersScreenState extends ConsumerState<ProductionOrdersScreen>
                 icon: Icons.add,
                 onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createProduction,
               ),
-              ErpButton(
-                text: 'Refresh',
-                icon: Icons.refresh,
-                isOutlined: true,
-                onPressed: () => ref.read(databaseServiceProvider).loadProductionOrders(forceRefresh: true),
-              ),
+              // ErpButton(
+              //   text: 'Refresh',
+              //   icon: Icons.refresh,
+              //   isOutlined: true,
+              //   onPressed: () => ref.read(databaseServiceProvider).loadProductionOrders(forceRefresh: true),
+              // ),
             ],
           );
         },

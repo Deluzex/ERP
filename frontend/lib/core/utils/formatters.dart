@@ -8,15 +8,15 @@ class Formatters {
   static final DateFormat _dateTimeFormat = DateFormat('dd MMM yyyy, hh:mm a');
 
   static String formatDate(DateTime date) {
-    return _dateFormat.format(date);
+    return _dateFormat.format(date.toLocal());
   }
 
   static String formatTime(DateTime date) {
-    return _timeFormat.format(date);
+    return _timeFormat.format(date.toLocal());
   }
 
   static String formatDateTime(DateTime date) {
-    return _dateTimeFormat.format(date);
+    return _dateTimeFormat.format(date.toLocal());
   }
 
   static String formatCurrency(double amount) {

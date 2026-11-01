@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { CoreAuthModule } from '../../core/auth/auth.module';
 import { CategoriesController } from './controllers/categories.controller';
 import { FinishedProductsController } from './controllers/finished-products.controller';

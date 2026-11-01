@@ -1,4 +1,4 @@
-class ItemCategory {
+﻿class ItemCategory {
   final String id;
   final String name;
   final String description;

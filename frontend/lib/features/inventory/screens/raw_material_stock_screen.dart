@@ -17,6 +17,8 @@ import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../core/models/purchase_model.dart';
+import '../../../shared/services/mock_database_service.dart';
 
 class RawMaterialStockScreen extends ConsumerStatefulWidget {
   const RawMaterialStockScreen({super.key});
@@ -36,8 +38,35 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(databaseServiceProvider).loadRawMaterials();
+      final db = ref.read(databaseServiceProvider);
+      db.loadRawMaterials();
+      db.loadPurchases();
     });
+  }
+
+  double _getLatestTransportationCharge(RawMaterial rm, MockDatabaseService db) {
+    final sortedPurchases = List<Purchase>.from(db.purchases)
+      ..sort((a, b) => b.purchaseDate.compareTo(a.purchaseDate));
+
+    for (final purchase in sortedPurchases) {
+      if (purchase.status == PurchaseStatus.cancelled) continue;
+      for (final item in purchase.items) {
+        final matches = (item.itemType == PurchaseItemType.rawMaterial) &&
+            (item.rawMaterialId == rm.id ||
+                (item.rawMaterialCode != null && item.rawMaterialCode == rm.itemCode) ||
+                item.itemId == rm.id);
+        if (matches) {
+          if (item.transportationCost > 0) {
+            return item.transportationCost;
+          }
+          if (purchase.transportationCharges > 0 && purchase.items.length == 1) {
+            return purchase.transportationCharges;
+          }
+          return 0.0;
+        }
+      }
+    }
+    return rm.transportationCharge;
   }
 
   void _openAddEditDialog([RawMaterial? existing]) {
@@ -101,10 +130,14 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    isExpanded: true,
                                     value: selectedUnit,
                                     decoration: const InputDecoration(labelText: 'Unit'),
                                     items: db.units.map((u) {
-                                      return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
+                                      return DropdownMenuItem(
+                                        value: u.symbol,
+                                        child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis, maxLines: 1),
+                                      );
                                     }).toList(),
                                     onChanged: (val) {
                                       if (val != null) setDlgState(() => selectedUnit = val);
@@ -166,10 +199,14 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                                   children: [
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
                                         value: selectedUnit,
                                         decoration: const InputDecoration(labelText: 'Unit'),
                                         items: db.units.map((u) {
-                                          return DropdownMenuItem(value: u.symbol, child: Text('${u.name} (${u.symbol})'));
+                                          return DropdownMenuItem(
+                                            value: u.symbol,
+                                            child: Text('${u.name} (${u.symbol})', overflow: TextOverflow.ellipsis, maxLines: 1),
+                                          );
                                         }).toList(),
                                         onChanged: (val) {
                                           if (val != null) setDlgState(() => selectedUnit = val);
@@ -342,16 +379,16 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                           onPressed: () => _openAddEditDialog(),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'Refresh',
-                          icon: Icons.refresh,
-                          isOutlined: true,
-                          onPressed: () => db.loadRawMaterials(forceRefresh: true),
-                        ),
-                      ),
+                      // const SizedBox(height: 8),
+                      // SizedBox(
+                      //   width: double.infinity,
+                      //   child: ErpButton(
+                      //     text: 'Refresh',
+                      //     icon: Icons.refresh,
+                      //     isOutlined: true,
+                      //     onPressed: () => db.loadRawMaterials(forceRefresh: true),
+                      //   ),
+                      // ),
                     ],
                   );
                 }
@@ -365,12 +402,12 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                       icon: Icons.add,
                       onPressed: () => _openAddEditDialog(),
                     ),
-                    ErpButton(
-                      text: 'Refresh',
-                      icon: Icons.refresh,
-                      isOutlined: true,
-                      onPressed: () => db.loadRawMaterials(forceRefresh: true),
-                    ),
+                    // ErpButton(
+                    //   text: 'Refresh',
+                    //   icon: Icons.refresh,
+                    //   isOutlined: true,
+                    //   onPressed: () => db.loadRawMaterials(forceRefresh: true),
+                    // ),
                   ],
                 );
               },
@@ -456,7 +493,7 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                 // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 650;
+                    final isMobile = constraints.maxWidth < 450;
                     if (isMobile) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -581,11 +618,13 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                             ErpColumn(title: 'Current Stock', isNumeric: true),
                             ErpColumn(title: 'Min Stock', isNumeric: true),
                             ErpColumn(title: 'Purchase Rate', isNumeric: true),
+                            ErpColumn(title: 'Transportation Charges', isNumeric: true),
                             ErpColumn(title: 'Total Value', isNumeric: true),
                             ErpColumn(title: 'Status'),
                             ErpColumn(title: 'Actions'),
                           ],
                           rows: pageRawMaterials.map((rm) {
+                            final transportCharge = _getLatestTransportationCharge(rm, db);
                             return [
                               Text(rm.itemCode, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
                               Text(rm.name, style: AppTextStyles.bodyMedium),
@@ -598,6 +637,7 @@ class _RawMaterialStockScreenState extends ConsumerState<RawMaterialStockScreen>
                               ),
                               Text('${Formatters.formatNumber(rm.minimumStock)} ${rm.unit}', style: AppTextStyles.bodySmall),
                               Text(Formatters.formatCurrency(rm.defaultPurchasePrice), style: AppTextStyles.bodyMedium),
+                              Text(Formatters.formatCurrency(transportCharge), style: AppTextStyles.bodySmall),
                               Text(Formatters.formatCurrency(rm.totalValuation), style: AppTextStyles.bodyBold),
                               rm.isLowStock ? ErpStatusBadge.danger('LOW STOCK') : ErpStatusBadge.success('IN STOCK'),
                               Row(

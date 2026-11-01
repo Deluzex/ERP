@@ -14,12 +14,14 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/figma_metric_card.dart';
+import '../../../core/storage/form_draft_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class _BomItemDraft {
@@ -99,7 +101,15 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(databaseServiceProvider).loadBoms());
+    _bomNumberCtrl.addListener(_saveDraftToStorage);
+    _bomNameCtrl.addListener(_saveDraftToStorage);
+    _prodQtyCtrl.addListener(_saveDraftToStorage);
+    _unitCtrl.addListener(_saveDraftToStorage);
+    _productCodeCtrl.addListener(_saveDraftToStorage);
+    Future.microtask(() async {
+      await ref.read(databaseServiceProvider).loadBoms();
+      await _restoreDraftFromStorage();
+    });
   }
   // Navigation / View state
   bool _isCreateMode = false;
@@ -134,6 +144,11 @@ class _BomScreenState extends ConsumerState<BomScreen> {
 
   @override
   void dispose() {
+    _bomNumberCtrl.removeListener(_saveDraftToStorage);
+    _bomNameCtrl.removeListener(_saveDraftToStorage);
+    _prodQtyCtrl.removeListener(_saveDraftToStorage);
+    _unitCtrl.removeListener(_saveDraftToStorage);
+    _productCodeCtrl.removeListener(_saveDraftToStorage);
     _bomNumberCtrl.dispose();
     _bomNameCtrl.dispose();
     _prodQtyCtrl.dispose();
@@ -143,6 +158,94 @@ class _BomScreenState extends ConsumerState<BomScreen> {
       item.dispose();
     }
     super.dispose();
+  }
+
+  void _saveDraftToStorage() {
+    if (!mounted) return;
+    final data = {
+      'isCreateMode': _isCreateMode,
+      'editingBomId': _editingBom?.id,
+      'bomNumber': _bomNumberCtrl.text,
+      'bomName': _bomNameCtrl.text,
+      'prodQty': _prodQtyCtrl.text,
+      'unit': _unitCtrl.text,
+      'productCode': _productCodeCtrl.text,
+      'selectedProductId': _selectedProductId,
+      'selectedStatus': _selectedStatus,
+      'searchQuery': _searchQuery,
+      'selectedProductFilter': _selectedProductFilter,
+      'statusFilter': _statusFilter,
+      'currentPage': _currentPage,
+      'draftItems': _draftItems.map((it) => {
+        'rawMaterialId': it.rawMaterialId,
+        'rawMaterialName': it.rawMaterialName,
+        'rawMaterialCode': it.rawMaterialCode,
+        'unit': it.unit,
+        'quantityPerUnit': it.quantityPerUnit,
+        'unitCost': it.unitCost,
+      }).toList(),
+    };
+    FormDraftService.instance.saveFormDraft(
+      module: 'masters',
+      formId: 'bom_screen',
+      userId: ref.read(currentUserProvider)?.id,
+      data: data,
+    );
+  }
+
+  Future<void> _restoreDraftFromStorage() async {
+    try {
+      final draft = await FormDraftService.instance.loadFormDraft(
+        module: 'masters',
+        formId: 'bom_screen',
+        userId: ref.read(currentUserProvider)?.id,
+      );
+      if (draft != null && mounted) {
+        setState(() {
+          if (draft['searchQuery'] != null) _searchQuery = draft['searchQuery'] as String;
+          if (draft['selectedProductFilter'] != null) _selectedProductFilter = draft['selectedProductFilter'] as String;
+          if (draft['statusFilter'] != null) _statusFilter = draft['statusFilter'] as String;
+          if (draft['currentPage'] != null) _currentPage = draft['currentPage'] as int;
+
+          final isCreate = draft['isCreateMode'] as bool? ?? false;
+          if (isCreate) {
+            _isCreateMode = true;
+            final editingId = draft['editingBomId'] as String?;
+            if (editingId != null) {
+              final db = ref.read(databaseServiceProvider);
+              _editingBom = db.boms.where((b) => b.id == editingId).firstOrNull;
+            }
+            if (draft['bomNumber'] != null) _bomNumberCtrl.text = draft['bomNumber'] as String;
+            if (draft['bomName'] != null) _bomNameCtrl.text = draft['bomName'] as String;
+            if (draft['prodQty'] != null) _prodQtyCtrl.text = draft['prodQty'] as String;
+            if (draft['unit'] != null) _unitCtrl.text = draft['unit'] as String;
+            if (draft['productCode'] != null) _productCodeCtrl.text = draft['productCode'] as String;
+            if (draft['selectedProductId'] != null) _selectedProductId = draft['selectedProductId'] as String?;
+            if (draft['selectedStatus'] != null) _selectedStatus = draft['selectedStatus'] as String;
+
+            final rawItems = draft['draftItems'];
+            if (rawItems is List && rawItems.isNotEmpty) {
+              for (final it in _draftItems) {
+                it.dispose();
+              }
+              _draftItems.clear();
+              for (final it in rawItems) {
+                if (it is Map<String, dynamic>) {
+                  _draftItems.add(_BomItemDraft(
+                    rawMaterialId: it['rawMaterialId'] as String? ?? '',
+                    rawMaterialName: it['rawMaterialName'] as String? ?? '',
+                    rawMaterialCode: it['rawMaterialCode'] as String? ?? '',
+                    unit: it['unit'] as String? ?? 'PCS',
+                    quantityPerUnit: (it['quantityPerUnit'] as num?)?.toDouble() ?? 1.0,
+                    unitCost: (it['unitCost'] as num?)?.toDouble() ?? 0.0,
+                  ));
+                }
+              }
+            }
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _startCreate() {
@@ -174,6 +277,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     setState(() {
       _isCreateMode = true;
     });
+    _saveDraftToStorage();
   }
 
   void _startEdit(BillOfMaterial bom) {
@@ -221,6 +325,19 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     setState(() {
       _isCreateMode = true;
     });
+    _saveDraftToStorage();
+  }
+
+  void _cancelCreateMode() {
+    setState(() {
+      _isCreateMode = false;
+      _editingBom = null;
+    });
+    FormDraftService.instance.clearFormDraft(
+      module: 'masters',
+      formId: 'bom_screen',
+      userId: ref.read(currentUserProvider)?.id,
+    );
   }
 
   void _openChangeStatusDialog(BillOfMaterial bom) {
@@ -292,23 +409,13 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                 try {
                   await ref.read(databaseServiceProvider).updateBomStatusAsync(bom.id, selected);
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('BOM "${bom.safeName}" status updated to $selected!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
+ErpToast.showSuccess(context, 'BOM "${bom.safeName}" status updated to $selected!');
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(e is ApiException
+ErpToast.showError(context, e is ApiException
                             ? 'Failed to update status: ${e.message}'
-                            : 'Failed to update status. Please try again.'),
-                        backgroundColor: AppColors.danger,
-                      ),
-                    );
+                            : 'Failed to update status. Please try again.');
                   }
                 }
               },
@@ -529,14 +636,15 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
                         headingRowColor: WidgetStateProperty.all(AppColors.background),
-                        columns: const [
-                          DataColumn(label: Text('#', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Component', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Code', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Qty/Unit', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Unit', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Line Total', style: TextStyle(fontWeight: FontWeight.bold))),
+                        headingTextStyle: AppTextStyles.tableHeader,
+                        columns: [
+                          DataColumn(label: Text('#', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Component', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Code', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Qty/Unit', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Unit', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Rate', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          DataColumn(label: Text('Line Total', style: AppTextStyles.tableHeader.copyWith(fontSize: 11.5, fontWeight: FontWeight.w700))),
                         ],
                         rows: bom.items.asMap().entries.map((entry) {
                           final i = entry.key;
@@ -634,17 +742,16 @@ class _BomScreenState extends ConsumerState<BomScreen> {
   }
 
   Future<void> _saveBom() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ErpToast.showError(context, 'Please fill in all required recipe fields marked with *');
+      return;
+    }
     if (_selectedProductId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a finished product.')),
-      );
+ErpToast.showWarning(context, 'Please select a finished product.');
       return;
     }
     if (_draftItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one raw material to the BOM recipe.')),
-      );
+ErpToast.showWarning(context, 'Please add at least one raw material to the BOM recipe.');
       return;
     }
     if (_isSavingBom) return;
@@ -652,9 +759,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     final db = ref.read(databaseServiceProvider);
     final prod = db.finishedProducts.where((p) => p.id == _selectedProductId).firstOrNull;
     if (prod == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Finished product not found. Please refresh and try again.')),
-      );
+ErpToast.showWarning(context, 'Finished product not found. Please refresh and try again.');
       return;
     }
     final outputQty = double.tryParse(_prodQtyCtrl.text.trim()) ?? 1.0;
@@ -696,6 +801,12 @@ class _BomScreenState extends ConsumerState<BomScreen> {
         await db.addBomAsync(saved);
       }
 
+      await FormDraftService.instance.clearFormDraft(
+        module: 'masters',
+        formId: 'bom_screen',
+        userId: ref.read(currentUserProvider)?.id,
+      );
+
       if (!mounted) return;
 
       setState(() {
@@ -704,71 +815,14 @@ class _BomScreenState extends ConsumerState<BomScreen> {
         _isSavingBom = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(isEdit ? 'BOM updated successfully!' : 'BOM created successfully!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+ErpToast.showSuccess(context, isEdit ? 'BOM updated successfully!' : 'BOM created successfully!');
     } catch (e) {
       setState(() => _isSavingBom = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e is ApiException
+ErpToast.showError(context, e is ApiException
               ? 'Failed to save BOM: ${e.message}'
-              : 'Failed to save BOM. Please try again.'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+              : 'Failed to save BOM. Please try again.');
     }
-  }
-
-  void _confirmDeleteBom(BillOfMaterial bom) {
-    final db = ref.read(databaseServiceProvider);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Delete BOM Recipe', style: AppTextStyles.h2.copyWith(color: AppColors.danger)),
-        content: Text(
-          'Are you sure you want to retire recipe "${bom.safeName}" (${bom.displayNumber}) for product "${bom.safeProductName}"?\n\n'
-          'The backend keeps versioned history, so the recipe will be marked Obsolete and removed from active manufacturing use.',
-        ),
-        actions: [
-          ErpButton(
-            text: 'Cancel',
-            isOutlined: true,
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          ErpButton(
-            text: 'Retire Recipe',
-            isDanger: true,
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await db.deleteBomAsync(bom.id);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('BOM recipe retired successfully!'), backgroundColor: AppColors.danger),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(e is ApiException
-                          ? 'Failed to retire recipe: ${e.message}'
-                          : 'Failed to retire recipe. Please try again.'),
-                      backgroundColor: AppColors.danger,
-                    ),
-                  );
-                }
-              }
-            },
-          ),
-        ],
-      ),
-    );
   }
 
   void _onProduce(BillOfMaterial bom) {
@@ -783,12 +837,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
     final List<RawMaterial> uniqueRms = rawList.where((rm) => rm.id.isNotEmpty && seenRmIds.add(rm.id)).toList();
 
     if (uniqueRms.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No raw materials found in inventory catalog.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
       return;
     }
 
@@ -1129,6 +1178,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
           _draftItems.add(draft);
         }
       });
+      _saveDraftToStorage();
     }
   }
 
@@ -1165,6 +1215,136 @@ class _BomScreenState extends ConsumerState<BomScreen> {
 
   double _effectiveBatchMaterialCost(BillOfMaterial bom, Map<String, double> prices) =>
       _effectiveMaterialCostPerUnit(bom, prices) * bom.outputQuantity;
+
+  Widget _buildControlsRow(dynamic db) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 700;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search by BOM #, recipe name, product...',
+                initialValue: _searchQuery,
+                onChanged: (v) => setState(() {
+                  _searchQuery = v;
+                  _currentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                width: double.infinity,
+                isExpanded: true,
+                value: _selectedProductFilter,
+                items: [
+                  const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
+                  ...db.finishedProducts.map((p) {
+                    return DropdownMenuItem<String>(
+                      value: p.id,
+                      child: Text(p.name, overflow: TextOverflow.ellipsis),
+                    );
+                  }),
+                ],
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() {
+                      _selectedProductFilter = v;
+                      _currentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: ErpFilterDropdown<String>(
+                      width: double.infinity,
+                      isExpanded: true,
+                      value: _statusFilter,
+                      items: const [
+                        DropdownMenuItem(value: 'ALL', child: Text('All Status')),
+                        DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
+                        DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                        DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() {
+                            _statusFilter = v;
+                            _currentPage = 0;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+
+                ],
+              ),
+            ],
+          );
+        }
+
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ErpSearchInput(
+                hintText: 'Search by BOM #, recipe name, product...',
+                initialValue: _searchQuery,
+                onChanged: (v) => setState(() {
+                  _searchQuery = v;
+                  _currentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _selectedProductFilter,
+              items: [
+                const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
+                ...db.finishedProducts.map((p) {
+                  return DropdownMenuItem<String>(
+                    value: p.id,
+                    child: Text(p.name, overflow: TextOverflow.ellipsis),
+                  );
+                }),
+              ],
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() {
+                    _selectedProductFilter = v;
+                    _currentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpFilterDropdown<String>(
+              value: _statusFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Status')),
+                DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
+                DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
+              ],
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() {
+                    _statusFilter = v;
+                    _currentPage = 0;
+                  });
+                }
+              },
+            ),
+
+          ],
+        );
+      },
+    );
+  }
 
   Widget _buildListView() {
     final db = ref.watch(databaseServiceProvider);
@@ -1255,22 +1435,22 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.edit_note_outlined,
-                      iconColor: AppColors.warning,
+                      iconColor: draftBoms > 0 ? AppColors.warning : AppColors.success,
                       title: 'Draft BOMs',
                       value: '$draftBoms',
-                      subtext: 'Under Review',
-                      subtextColor: AppColors.warning,
+                      subtext: draftBoms > 0 ? '$draftBoms of $totalBoms under review' : 'Zero drafts',
+                      subtextColor: draftBoms > 0 ? AppColors.warning : AppColors.success,
                     ),
                   ),
                   SizedBox(
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.cancel_outlined,
-                      iconColor: AppColors.danger,
+                      iconColor: inactiveBoms > 0 ? AppColors.danger : AppColors.success,
                       title: 'Inactive BOMs',
                       value: '$inactiveBoms',
-                      subtext: 'Archived',
-                      subtextColor: AppColors.danger,
+                      subtext: inactiveBoms > 0 ? '$inactiveBoms of $totalBoms archived' : 'No inactive BOMs',
+                      subtextColor: inactiveBoms > 0 ? AppColors.danger : AppColors.success,
                     ),
                   ),
                 ],
@@ -1279,272 +1459,45 @@ class _BomScreenState extends ConsumerState<BomScreen> {
           ),
           const SizedBox(height: 18),
 
-          // Standard ERP Filter Controls Bar (Responsive Mobile & Desktop)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isMobile = constraints.maxWidth < 700;
-              if (isMobile) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ErpSearchInput(
-                      hintText: 'Search by BOM #, recipe name, product...',
-                      initialValue: _searchQuery,
-                      onChanged: (v) => setState(() {
-                        _searchQuery = v;
-                        _currentPage = 0;
-                      }),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildControlsRow(db),
+                const SizedBox(height: 16),
+                if (filteredBoms.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: AppRadius.lgBorderRadius,
+                      border: Border.all(color: AppColors.border),
                     ),
-                    const SizedBox(height: 10),
-                    ErpFilterDropdown<String>(
-                      width: double.infinity,
-                      isExpanded: true,
-                      value: _selectedProductFilter,
-                      items: [
-                        const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
-                        ...db.finishedProducts.map((p) {
-                          return DropdownMenuItem<String>(
-                            value: p.id,
-                            child: Text(p.name, overflow: TextOverflow.ellipsis),
-                          );
-                        }),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) {
-                          setState(() {
-                            _selectedProductFilter = v;
-                            _currentPage = 0;
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
+                    child: Column(
                       children: [
-                        Expanded(
-                          child: ErpFilterDropdown<String>(
-                            width: double.infinity,
-                            isExpanded: true,
-                            value: _statusFilter,
-                            items: const [
-                              DropdownMenuItem(value: 'ALL', child: Text('All Status')),
-                              DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
-                              DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                              DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
-                            ],
-                            onChanged: (v) {
-                              if (v != null) {
-                                setState(() {
-                                  _statusFilter = v;
-                                  _currentPage = 0;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        ErpButton(
-                          text: 'Reset',
-                          icon: Icons.refresh,
-                          isOutlined: true,
-                          onPressed: () {
-                            setState(() {
-                              _searchQuery = '';
-                              _selectedProductFilter = 'ALL';
-                              _statusFilter = 'ALL';
-                              _currentPage = 0;
-                            });
-                          },
-                        ),
+                        const Icon(Icons.description_outlined, size: 40, color: AppColors.textMuted),
+                        const SizedBox(height: 12),
+                        Text('No BOM recipes found matching your query.', style: AppTextStyles.bodyBold),
+                        const SizedBox(height: 6),
+                        Text('Click "Create BOM" above to register a manufacturing recipe.', style: AppTextStyles.caption),
                       ],
                     ),
-                  ],
-                );
-              }
-
-              return Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 280,
-                    child: ErpSearchInput(
-                      hintText: 'Search by BOM #, recipe name, product...',
-                      initialValue: _searchQuery,
-                      onChanged: (v) => setState(() {
-                        _searchQuery = v;
-                        _currentPage = 0;
-                      }),
-                    ),
-                  ),
-                  ErpFilterDropdown<String>(
-                    value: _selectedProductFilter,
-                    items: [
-                      const DropdownMenuItem(value: 'ALL', child: Text('All Products')),
-                      ...db.finishedProducts.map((p) {
-                        return DropdownMenuItem<String>(
-                          value: p.id,
-                          child: Text(p.name, overflow: TextOverflow.ellipsis),
-                        );
-                      }),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) {
-                        setState(() {
-                          _selectedProductFilter = v;
-                          _currentPage = 0;
-                        });
-                      }
-                    },
-                  ),
-                  ErpFilterDropdown<String>(
-                    value: _statusFilter,
-                    items: const [
-                      DropdownMenuItem(value: 'ALL', child: Text('All Status')),
-                      DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
-                      DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                      DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) {
-                        setState(() {
-                          _statusFilter = v;
-                          _currentPage = 0;
-                        });
-                      }
-                    },
-                  ),
-                  ErpButton(
-                    text: 'Reset',
-                    icon: Icons.refresh,
-                    isOutlined: true,
-                    onPressed: () {
-                      setState(() {
-                        _searchQuery = '';
-                        _selectedProductFilter = 'ALL';
-                        _statusFilter = 'ALL';
-                        _currentPage = 0;
-                      });
-                    },
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-
-          // BOM Recipes Data Table
-          if (filteredBoms.isEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.lgBorderRadius,
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                children: [
-                  const Icon(Icons.description_outlined, size: 40, color: AppColors.textMuted),
-                  const SizedBox(height: 12),
-                  Text('No BOM recipes found matching your query.', style: AppTextStyles.bodyBold),
-                  const SizedBox(height: 6),
-                  Text('Click "Create BOM" above to register a manufacturing recipe.', style: AppTextStyles.caption),
-                ],
-              ),
-            )
-          else if (MediaQuery.of(context).size.width < 850) ...[
-            Column(
-              children: pagedBoms.map((bom) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          InkWell(
-                            onTap: () => _openViewBomDialog(bom),
-                            child: Text(
-                              bom.id,
-                              style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
-                            ),
-                          ),
-                          _buildStatusBadge(bom.safeStatus),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(bom.safeName, style: AppTextStyles.bodyBold),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Product: ${bom.safeProductName} (${bom.safeProductCode})',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-                      ),
-                      const Divider(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Batch Cost: ${Formatters.formatCurrency(bom.totalBatchMaterialCost)}', style: AppTextStyles.bodyBold),
-                          Text('Unit: ${Formatters.formatCurrency(bom.totalMaterialCostPerUnit)}', style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Created: ${Formatters.formatDate(bom.createdAt)}', style: AppTextStyles.caption),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.visibility_outlined, size: 20, color: AppColors.primary),
-                                tooltip: 'View Details',
-                                onPressed: () => _openViewBomDialog(bom),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.precision_manufacturing_rounded, size: 20, color: AppColors.primary),
-                                tooltip: 'Produce',
-                                onPressed: () => _onProduce(bom),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
-                                tooltip: 'Edit Recipe',
-                                onPressed: () => _startEdit(bom),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.published_with_changes, size: 20, color: AppColors.textMuted),
-                                tooltip: 'Change Status',
-                                onPressed: () => _openChangeStatusDialog(bom),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            ErpPaginationBar(
-              currentPage: safeCurrentPage,
-              pageSize: safePageSize,
-              totalRecords: totalRecords,
-              onPageChanged: (page) => setState(() => _currentPage = page),
-              onPageSizeChanged: (size) => setState(() {
-                _pageSize = size;
-                _currentPage = 0;
-              }),
-            ),
-          ] else ...[
+                  )
+                else ...[
             ErpDataTable(
               columns: const [
                 ErpColumn(title: 'BOM No.'),
@@ -1623,9 +1576,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                         case 'edit':
                           _startEdit(bom);
                           break;
-                        case 'delete':
-                          _confirmDeleteBom(bom);
-                          break;
                       }
                     },
                     itemBuilder: (context) => const [
@@ -1669,16 +1619,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                           ],
                         ),
                       ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                            SizedBox(width: 8),
-                            Text('Delete Recipe', style: TextStyle(color: AppColors.danger)),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ];
@@ -1697,7 +1637,10 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                 _currentPage = 0;
               }),
             ),
-          ],
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1745,7 +1688,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                               text: 'Back',
                               icon: Icons.arrow_back,
                               isOutlined: true,
-                              onPressed: () => setState(() => _isCreateMode = false),
+                              onPressed: _cancelCreateMode,
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -1766,7 +1709,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                             text: 'Back',
                             icon: Icons.arrow_back,
                             isOutlined: true,
-                            onPressed: () => setState(() => _isCreateMode = false),
+                            onPressed: _cancelCreateMode,
                           ),
                           const SizedBox(width: 10),
                           ErpButton(
@@ -1889,7 +1832,6 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                         const SizedBox(width: 16),
                         // BOM Name
                         Expanded(
-                          flex: isEdit ? 2 : 3,
                           child: TextFormField(
                             controller: _bomNameCtrl,
                             decoration: const InputDecoration(labelText: 'BOM Recipe Name *'),
@@ -1918,35 +1860,42 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Finished Product Picker
+                        // Finished Product Picker (50% - matches BOM Number above)
                         Expanded(
-                          flex: 2,
                           child: _buildFinishedProductPicker(db),
                         ),
                         const SizedBox(width: 16),
-                        // Product Code (Read-only)
+                        // Right half (50% - matches BOM Recipe Name above)
                         Expanded(
-                          child: TextFormField(
-                            controller: _productCodeCtrl,
-                            readOnly: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Product Code / SKU',
-                              filled: true,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // Production Quantity
-                        Expanded(
-                          child: TextFormField(
-                            controller: _prodQtyCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: InputDecoration(
-                              labelText: 'Batch Qty *',
-                              suffixText: _unitCtrl.text.isNotEmpty ? _unitCtrl.text : 'PCS',
-                            ),
-                            validator: (v) => Validators.positiveNumber(v, 'Valid quantity required'),
-                            onChanged: (_) => setState(() {}),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Product Code (Read-only)
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _productCodeCtrl,
+                                  readOnly: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Product Code / SKU',
+                                    filled: true,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              // Production Quantity
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _prodQtyCtrl,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  decoration: InputDecoration(
+                                    labelText: 'Batch Qty *',
+                                    suffixText: _unitCtrl.text.isNotEmpty ? _unitCtrl.text : 'PCS',
+                                  ),
+                                  validator: (v) => Validators.positiveNumber(v, 'Valid quantity required'),
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -2098,6 +2047,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                         item.dispose();
                                         _draftItems.removeAt(index);
                                       });
+                                      _saveDraftToStorage();
                                     },
                                   ),
                                 ],
@@ -2409,6 +2359,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                                         item.dispose();
                                         _draftItems.removeAt(index);
                                       });
+                                      _saveDraftToStorage();
                                     },
                                   ),
                                 ],
@@ -2496,7 +2447,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                     child: ErpButton(
                       text: 'Cancel',
                       isOutlined: true,
-                      onPressed: () => setState(() => _isCreateMode = false),
+                      onPressed: _cancelCreateMode,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -2517,7 +2468,7 @@ class _BomScreenState extends ConsumerState<BomScreen> {
                   ErpButton(
                     text: 'Cancel',
                     isOutlined: true,
-                    onPressed: () => setState(() => _isCreateMode = false),
+                    onPressed: _cancelCreateMode,
                   ),
                   const SizedBox(width: 12),
                   ErpButton(

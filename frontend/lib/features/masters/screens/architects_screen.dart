@@ -14,8 +14,9 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
-import '../../../core/widgets/erp_data_table.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_status_badge.dart';
+import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/figma_metric_card.dart';
@@ -359,7 +360,10 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          if (!formKey.currentState!.validate()) return;
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
                           setDlgState(() {
                             isSubmitting = true;
                             serverError = null;
@@ -403,12 +407,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
 
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Architect "${architect.name}" ${isEdit ? "updated" : "saved"} successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+ErpToast.showSuccess(context, 'Architect "${architect.name}" ${isEdit ? "updated" : "saved"} successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {
@@ -426,39 +425,35 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     );
   }
 
-  void _confirmDeleteArchitect(Architect architect) {
-    showDialog(
+  void _confirmToggleStatus(Architect architect) {
+    final willActivate = !architect.isActive;
+    showErpStatusConfirmDialog(
       context: context,
-      builder: (ctx) {
-        return ErpConfirmDeleteDialog(
-          title: 'Delete Architect Record',
-          message: 'Are you sure you want to deactivate and archive this architect? A mandatory audit reason is required.',
-          itemName: '${architect.name} (${architect.id})',
-          requireReason: true,
-          onConfirm: (reason) async {
-            final db = ref.read(databaseServiceProvider);
-            try {
-              await db.deleteArchitectAsync(architectId: architect.id, reason: reason);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Architect "${architect.name}" archived with audit reason: $reason'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
-              }
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Delete failed: ${e.toString().replaceFirst("Exception: ", "")}'),
-                    backgroundColor: AppColors.danger,
-                  ),
-                );
-              }
-            }
-          },
-        );
+      title: willActivate ? 'Activate Architect' : 'Deactivate Architect',
+      message: willActivate
+          ? 'Activate "${architect.name}"? It will immediately become available in all transaction dropdowns and lookups.'
+          : 'Are you sure you want to deactivate "${architect.name}"? This entity will no longer appear in transaction dropdowns for new Sales, Purchases, or Production orders. Historical records will remain intact.',
+      itemName: architect.name,
+      willActivate: willActivate,
+      confirmLabel: willActivate ? 'Activate' : 'Deactivate',
+      onConfirm: () async {
+        final db = ref.read(databaseServiceProvider);
+        try {
+          await db.toggleArchitectStatusAsync(architect.id, willActivate);
+          if (mounted) {
+            ErpToast.showSuccess(
+              context,
+              'Architect "${architect.name}" ${willActivate ? "activated" : "deactivated"} successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ErpToast.showError(
+              context,
+              'Status update failed: ${e.toString().replaceFirst("Exception: ", "")}',
+            );
+          }
+        }
       },
     );
   }
@@ -528,11 +523,203 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                 }
                 if (ctx.mounted) Navigator.of(ctx).pop();
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Commission Paid & Ledger Updated!'), backgroundColor: AppColors.success),
-                  );
+ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                 }
               },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildArchControlsRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 450;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search architect by name, studio...',
+                initialValue: _archSearchQuery,
+                onChanged: (val) => setState(() {
+                  _archSearchQuery = val;
+                  _archCurrentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _archCustomerFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Architects')),
+                  DropdownMenuItem(value: 'DUAL_CUSTOMER', child: Text('Dual Arch-Customer / Linked')),
+                  DropdownMenuItem(value: 'INDEPENDENT', child: Text('Independent Studios')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _archCustomerFilter = val;
+                      _archCurrentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _archStartDate,
+                endDate: _archEndDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _archStartDate = start;
+                  _archEndDate = end;
+                  _archCurrentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ErpSearchInput(
+                hintText: 'Search architect by name, studio...',
+                initialValue: _archSearchQuery,
+                onChanged: (val) => setState(() {
+                  _archSearchQuery = val;
+                  _archCurrentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _archCustomerFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Architects')),
+                DropdownMenuItem(value: 'DUAL_CUSTOMER', child: Text('Dual Arch-Customer / Linked')),
+                DropdownMenuItem(value: 'INDEPENDENT', child: Text('Independent Studios')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _archCustomerFilter = val;
+                    _archCurrentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _archStartDate,
+              endDate: _archEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _archStartDate = start;
+                _archEndDate = end;
+                _archCurrentPage = 0;
+              }),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCommControlsRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 450;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search voucher, architect, invoice...',
+                initialValue: _commSearchQuery,
+                onChanged: (val) => setState(() {
+                  _commSearchQuery = val;
+                  _commCurrentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _commStatusFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                  DropdownMenuItem(value: 'PENDING', child: Text('Pending Review')),
+                  DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+                  DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+                  DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _commStatusFilter = val;
+                      _commCurrentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _commStartDate,
+                endDate: _commEndDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _commStartDate = start;
+                  _commEndDate = end;
+                  _commCurrentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ErpSearchInput(
+                hintText: 'Search voucher, architect, invoice...',
+                initialValue: _commSearchQuery,
+                onChanged: (val) => setState(() {
+                  _commSearchQuery = val;
+                  _commCurrentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _commStatusFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
+                DropdownMenuItem(value: 'PENDING', child: Text('Pending Review')),
+                DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+                DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+                DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _commStatusFilter = val;
+                    _commCurrentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _commStartDate,
+              endDate: _commEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _commStartDate = start;
+                _commEndDate = end;
+                _commCurrentPage = 0;
+              }),
             ),
           ],
         );
@@ -605,6 +792,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
     final totalArchitectsCount = db.architects.where((a) => !a.isDeleted).length;
     final dualCustomerCount = db.architects.where((a) => !a.isDeleted && (a.isAlsoCustomer || a.linkedCustomerId != null)).length;
     final independentCount = db.architects.where((a) => !a.isDeleted && !a.isAlsoCustomer && a.linkedCustomerId == null).length;
+    final totalCommissionsCount = db.commissions.length;
     final unpaidCommissions = db.commissions.where((c) => c.status != CommissionStatus.paid && c.status != CommissionStatus.rejected).length;
     final totalCommissionPaid = db.commissions.where((c) => c.status == CommissionStatus.paid).fold(0.0, (sum, c) => sum + c.commissionAmount);
 
@@ -669,11 +857,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.pending_actions_outlined,
-                      iconColor: AppColors.warning,
+                      iconColor: unpaidCommissions > 0 ? AppColors.warning : AppColors.success,
                       title: 'Pending Comms',
-                      value: '${unpaidCommissions}',
-                      subtext: 'Awaiting Payout',
-                      subtextColor: AppColors.warning,
+                      value: '$unpaidCommissions',
+                      subtext: unpaidCommissions > 0 ? '$unpaidCommissions of $totalCommissionsCount awaiting payout' : 'All commissions settled',
+                      subtextColor: unpaidCommissions > 0 ? AppColors.warning : AppColors.success,
                     ),
                   ),
                   SizedBox(
@@ -709,60 +897,32 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
 
           if (_tabController.index == 0)
             // Tab 1: Architect Directory
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 280,
-                      child: ErpSearchInput(
-                        hintText: 'Search architect by name, studio...',
-                        initialValue: _archSearchQuery,
-                        onChanged: (val) => setState(() {
-                          _archSearchQuery = val;
-                          _archCurrentPage = 0;
-                        }),
-                      ),
-                    ),
-                    ErpFilterDropdown<String>(
-                      value: _archCustomerFilter,
-                      items: const [
-                        DropdownMenuItem(value: 'ALL', child: Text('All Architects')),
-                        DropdownMenuItem(value: 'DUAL_CUSTOMER', child: Text('Dual Arch-Customer / Linked')),
-                        DropdownMenuItem(value: 'INDEPENDENT', child: Text('Independent Studios')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _archCustomerFilter = val;
-                            _archCurrentPage = 0;
-                          });
-                        }
-                      },
-                    ),
-                    ErpDateFilterBox(
-                      startDate: _archStartDate,
-                      endDate: _archEndDate,
-                      onDateRangeSelected: (start, end) => setState(() {
-                        _archStartDate = start;
-                        _archEndDate = end;
-                        _archCurrentPage = 0;
-                      }),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                ErpDataTable(
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildArchControlsRow(),
+                  const SizedBox(height: 16),
+                  ErpDataTable(
                   dataRowMinHeight: 56,
-                  dataRowMaxHeight: 72,
                   columns: const [
                           ErpColumn(title: 'Architect Name'),
                           ErpColumn(title: 'Architect-Customer Name'),
                           ErpColumn(title: 'Studio / Company'),
+                          ErpColumn(title: 'Address', width: 220),
                           ErpColumn(title: 'State'),
                           ErpColumn(title: 'Contact'),
                           ErpColumn(title: 'Default Rate (%)', isNumeric: true),
@@ -770,6 +930,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                           ErpColumn(title: 'Pending Review', isNumeric: true),
                           ErpColumn(title: 'Approved', isNumeric: true),
                           ErpColumn(title: 'Paid to Date', isNumeric: true),
+                          ErpColumn(title: 'Status'),
                           ErpColumn(title: 'Actions'),
                         ],
                         rows: pagedArchitects.map((a) {
@@ -798,31 +959,12 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                               onTap: () {
                                 ref.read(activeRecordDetailsStackProvider.notifier).push(a.id, 'architect', ErpNavSection.architects);
                               },
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    a.name,
-                                    style: AppTextStyles.bodyBold.copyWith(
-                                      fontSize: 13,
-                                      color: const Color(0xFF1E293B),
-                                    ),
-                                  ),
-                                  if (a.address.isNotEmpty || a.state.isNotEmpty || a.pincode.isNotEmpty)
-                                    Text(
-                                      [
-                                        if (a.address.isNotEmpty) a.address,
-                                        if (a.state.isNotEmpty) a.state,
-                                        if (a.pincode.isNotEmpty) a.pincode,
-                                      ].join(', '),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                    )
-                                  else
-                                    Text('ID: ${a.id}', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                                ],
+                              child: Text(
+                                a.name,
+                                style: AppTextStyles.bodyBold.copyWith(
+                                  fontSize: 13,
+                                  color: const Color(0xFF1E293B),
+                                ),
                               ),
                             ),
                             // 2. Architect-Customer Name (Clickable -> Customer Detail Page or Not Linked)
@@ -867,6 +1009,14 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                     child: const Text('Not Linked', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                                   ),
                             Text(a.companyName.isNotEmpty ? a.companyName : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(minWidth: 160, maxWidth: 240),
+                              child: Text(
+                                a.address.isNotEmpty ? a.address : '-',
+                                softWrap: true,
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.35),
+                              ),
+                            ),
                             Text(a.state.isNotEmpty ? a.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                             Text(a.mobile, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
                             Text('${a.defaultCommissionRate}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563))),
@@ -874,6 +1024,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                             Text(Formatters.formatCurrency(displayPending), style: const TextStyle(fontSize: 12, color: AppColors.warningText)),
                             Text(Formatters.formatCurrency(displayApproved), style: const TextStyle(fontSize: 12, color: AppColors.infoText)),
                             Text(Formatters.formatCurrency(displayPaid), style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: AppColors.successText)),
+                            a.isActive ? ErpStatusBadge.active() : ErpStatusBadge.inactive(),
                             PopupMenuButton<String>(
                               tooltip: 'Actions',
                               icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
@@ -895,12 +1046,12 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                   case 'edit':
                                     _openAddEditArchitectDialog(a);
                                     break;
-                                  case 'delete':
-                                    _confirmDeleteArchitect(a);
+                                  case 'toggle_status':
+                                    _confirmToggleStatus(a);
                                     break;
                                 }
                               },
-                              itemBuilder: (context) => const [
+                              itemBuilder: (context) => [
                                 PopupMenuItem(
                                   value: 'view',
                                   child: Row(
@@ -932,12 +1083,21 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                   ),
                                 ),
                                 PopupMenuItem(
-                                  value: 'delete',
+                                  value: 'toggle_status',
                                   child: Row(
                                     children: [
-                                      Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                                      SizedBox(width: 8),
-                                      Text('Delete Architect', style: TextStyle(color: AppColors.danger)),
+                                      Icon(
+                                        a.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                                        size: 18,
+                                        color: a.isActive ? AppColors.warning : AppColors.success,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        a.isActive ? 'Deactivate Architect' : 'Activate Architect',
+                                        style: TextStyle(
+                                          color: a.isActive ? AppColors.warning : AppColors.success,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -958,59 +1118,30 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                         }),
                       ),
                     ],
-                  )
+                  ),
+                )
           else
             // Tab 2: Commission Ledger & Approvals Lifecycle
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 280,
-                      child: ErpSearchInput(
-                        hintText: 'Search voucher, architect, invoice...',
-                        initialValue: _commSearchQuery,
-                        onChanged: (val) => setState(() {
-                          _commSearchQuery = val;
-                          _commCurrentPage = 0;
-                        }),
-                      ),
-                    ),
-                    ErpFilterDropdown<String>(
-                      value: _commStatusFilter,
-                      items: const [
-                        DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
-                        DropdownMenuItem(value: 'PENDING', child: Text('Pending Review')),
-                        DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
-                        DropdownMenuItem(value: 'PAID', child: Text('Paid')),
-                        DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _commStatusFilter = val;
-                            _commCurrentPage = 0;
-                          });
-                        }
-                      },
-                    ),
-                    ErpDateFilterBox(
-                      startDate: _commStartDate,
-                      endDate: _commEndDate,
-                      onDateRangeSelected: (start, end) => setState(() {
-                        _commStartDate = start;
-                        _commEndDate = end;
-                        _commCurrentPage = 0;
-                      }),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                ErpDataTable(
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildCommControlsRow(),
+                  const SizedBox(height: 16),
+                  ErpDataTable(
                   dataRowMinHeight: 56,
                   dataRowMaxHeight: 72,
                   columns: const [
@@ -1063,17 +1194,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       try {
                                         await db.approveCommissionAsync(comm.id);
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Commission Voucher ${comm.commissionNumber} Approved!'),
-                                            backgroundColor: AppColors.success,
-                                          ));
+ErpToast.showSuccess(context, 'Commission Voucher ${comm.commissionNumber} Approved!');
                                         }
                                       } catch (e) {
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Failed to approve: $e'),
-                                            backgroundColor: AppColors.danger,
-                                          ));
+ErpToast.showError(context, 'Failed to approve: $e');
                                         }
                                       }
                                     },
@@ -1085,17 +1210,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       try {
                                         await db.rejectCommissionAsync(comm.id, reason: 'Declined during partner audit');
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
-                                            backgroundColor: AppColors.danger,
-                                          ));
+ErpToast.showError(context, 'Commission Voucher ${comm.commissionNumber} Rejected.');
                                         }
                                       } catch (e) {
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Failed to reject: $e'),
-                                            backgroundColor: AppColors.danger,
-                                          ));
+ErpToast.showError(context, 'Failed to reject: $e');
                                         }
                                       }
                                     },
@@ -1114,17 +1233,11 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                                       try {
                                         await db.rejectCommissionAsync(comm.id, reason: 'Declined after approval');
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Commission Voucher ${comm.commissionNumber} Rejected.'),
-                                            backgroundColor: AppColors.danger,
-                                          ));
+ErpToast.showError(context, 'Commission Voucher ${comm.commissionNumber} Rejected.');
                                         }
                                       } catch (e) {
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                            content: Text('Failed to reject: $e'),
-                                            backgroundColor: AppColors.danger,
-                                          ));
+ErpToast.showError(context, 'Failed to reject: $e');
                                         }
                                       }
                                     },
@@ -1152,6 +1265,7 @@ class _ArchitectsScreenState extends ConsumerState<ArchitectsScreen> with Single
                       ),
                     ],
                   ),
+                ),
         ],
       ),
     );

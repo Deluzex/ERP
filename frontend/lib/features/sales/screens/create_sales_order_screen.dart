@@ -11,6 +11,8 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
+import '../../../core/storage/form_draft_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class _SoItemDraft {
@@ -85,13 +87,120 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
         availableStock: fp.availableStock,
       ));
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _notesCtrl.addListener(_saveDraftToStorage);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreDraftFromStorage();
       if (mounted) {
         setState(() {
           _resolveTaxClassification();
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _notesCtrl.removeListener(_saveDraftToStorage);
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  void _saveDraftToStorage() {
+    if (!mounted) return;
+    final data = {
+      'partyType': _partyType.name,
+      'selectedPartyId': _selectedPartyId,
+      'selectedProjectId': _selectedProjectId,
+      'selectedArchitectId': _selectedArchitectId,
+      'orderDate': _orderDate.toIso8601String(),
+      'deliveryDate': _deliveryDate.toIso8601String(),
+      'paymentMode': _paymentMode.name,
+      'notes': _notesCtrl.text,
+      'isInterStateTax': _isInterStateTax,
+      'items': _items.map((it) => {
+        'finishedProductId': it.finishedProductId,
+        'finishedProductName': it.finishedProductName,
+        'finishedProductCode': it.finishedProductCode,
+        'unit': it.unit,
+        'quantity': it.quantity,
+        'rate': it.rate,
+        'discount': it.discount,
+        'gstPercent': it.gstPercent,
+        'availableStock': it.availableStock,
+      }).toList(),
+    };
+    FormDraftService.instance.saveFormDraft(
+      module: 'sales',
+      formId: 'create_sales_order',
+      userId: ref.read(currentUserProvider)?.id,
+      data: data,
+    );
+  }
+
+  Future<void> _restoreDraftFromStorage() async {
+    try {
+      final draft = await FormDraftService.instance.loadFormDraft(
+        module: 'sales',
+        formId: 'create_sales_order',
+        userId: ref.read(currentUserProvider)?.id,
+      );
+      if (draft != null && mounted) {
+        setState(() {
+          if (draft['partyType'] != null) {
+            _partyType = PartyType.values.firstWhere(
+              (p) => p.name == draft['partyType'],
+              orElse: () => PartyType.customer,
+            );
+          }
+          if (draft['selectedPartyId'] != null) {
+            _selectedPartyId = draft['selectedPartyId'] as String?;
+          }
+          if (draft['selectedProjectId'] != null) {
+            _selectedProjectId = draft['selectedProjectId'] as String?;
+          }
+          if (draft['selectedArchitectId'] != null) {
+            _selectedArchitectId = draft['selectedArchitectId'] as String?;
+          }
+          if (draft['orderDate'] != null) {
+            _orderDate = DateTime.tryParse(draft['orderDate'] as String) ?? _orderDate;
+          }
+          if (draft['deliveryDate'] != null) {
+            _deliveryDate = DateTime.tryParse(draft['deliveryDate'] as String) ?? _deliveryDate;
+          }
+          if (draft['paymentMode'] != null) {
+            _paymentMode = PaymentMode.values.firstWhere(
+              (m) => m.name == draft['paymentMode'],
+              orElse: () => PaymentMode.bankTransfer,
+            );
+          }
+          if (draft['notes'] != null) {
+            _notesCtrl.text = draft['notes'] as String;
+          }
+          if (draft['isInterStateTax'] != null) {
+            _isInterStateTax = draft['isInterStateTax'] as bool;
+          }
+          final rawItems = draft['items'];
+          if (rawItems is List && rawItems.isNotEmpty) {
+            _items.clear();
+            for (final it in rawItems) {
+              if (it is Map<String, dynamic>) {
+                _items.add(_SoItemDraft(
+                  finishedProductId: it['finishedProductId'] as String? ?? '',
+                  finishedProductName: it['finishedProductName'] as String? ?? '',
+                  finishedProductCode: it['finishedProductCode'] as String? ?? '',
+                  unit: it['unit'] as String? ?? 'PCS',
+                  quantity: (it['quantity'] as num?)?.toDouble() ?? 10.0,
+                  rate: (it['rate'] as num?)?.toDouble() ?? 1000.0,
+                  discount: (it['discount'] as num?)?.toDouble() ?? 0.0,
+                  gstPercent: (it['gstPercent'] as num?)?.toDouble() ?? 18.0,
+                  availableStock: (it['availableStock'] as num?)?.toDouble() ?? 0.0,
+                ));
+              }
+            }
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _resolveTaxClassification() {
@@ -174,11 +283,13 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
         availableStock: fp.availableStock,
       ));
     });
+    _saveDraftToStorage();
   }
 
   void _removeRow(int idx) {
     if (_items.length > 1) {
       setState(() => _items.removeAt(idx));
+      _saveDraftToStorage();
     }
   }
 
@@ -189,7 +300,14 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
   double get _grandTotal => _totalTaxable + _totalGst;
 
   Future<void> _createSalesOrder() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      if (_selectedPartyId == null) {
+        ErpToast.showError(context, 'Please select a customer or dealer');
+      } else {
+        ErpToast.showError(context, 'Please fill in all required fields marked with *');
+      }
+      return;
+    }
     final db = ref.read(databaseServiceProvider);
 
     if (_selectedProjectId != null) {
@@ -198,12 +316,7 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
         final siteState = p.siteState?.trim();
         final siteCode = p.siteStateCode?.trim();
         if ((siteState == null || siteState.isEmpty) && (siteCode == null || siteCode.isEmpty)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cannot finalize sales order: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.'),
-              backgroundColor: AppColors.danger,
-            ),
-          );
+ErpToast.showError(context, 'Cannot finalize sales order: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.');
           return;
         }
       }
@@ -294,20 +407,19 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
     try {
       final createdSO = await db.createSalesOrderAsync(so, autoAllocate: true);
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Sales Order ${createdSO.invoiceNumber} created! Automated inventory check & reservation applied.'),
-          backgroundColor: AppColors.success,
-        ),
+      await FormDraftService.instance.clearFormDraft(
+        module: 'sales',
+        formId: 'create_sales_order',
+        userId: ref.read(currentUserProvider)?.id,
       );
+
+      if (!mounted) return;
+ErpToast.showSuccess(context, 'Sales Order ${createdSO.invoiceNumber} created! Automated inventory check & reservation applied.');
 
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesOrders;
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create sales order: $e'), backgroundColor: AppColors.danger),
-      );
+ErpToast.showError(context, 'Failed to create sales order: $e');
     }
   }
 
@@ -376,11 +488,20 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
                                   ? 'Dealer *'
                                   : 'Architect *',
                         ),
-                        items: _partyType == PartyType.customer
-                            ? db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList()
-                            : _partyType == PartyType.dealer
-                                ? db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name))).toList()
-                                : db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})'))).toList(),
+                        items: [
+                          if (_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId && !c.isActive))
+                            DropdownMenuItem(value: _selectedPartyId!, child: Text('${db.customers.firstWhere((c) => c.id == _selectedPartyId).name} (Inactive)'))
+                          else if (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId && !d.isActive))
+                            DropdownMenuItem(value: _selectedPartyId!, child: Text('${db.dealers.firstWhere((d) => d.id == _selectedPartyId).name} (Inactive)'))
+                          else if (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId && !a.isActive))
+                            DropdownMenuItem(value: _selectedPartyId!, child: Text('${db.architects.firstWhere((a) => a.id == _selectedPartyId).name} (Inactive)')),
+                          if (_partyType == PartyType.customer)
+                            ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                          else if (_partyType == PartyType.dealer)
+                            ...db.dealers.where((d) => !d.isDeleted && d.isActive).map((d) => DropdownMenuItem(value: d.id, child: Text(d.name)))
+                          else
+                            ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.companyName})'))),
+                        ],
                         onChanged: (val) => setState(() {
                           _selectedPartyId = val;
                           _resolveTaxClassification();
@@ -498,17 +619,24 @@ class _CreateSalesOrderScreenState extends ConsumerState<CreateSalesOrderScreen>
                           final isStacked = rowConstraints.maxWidth < 800;
 
                           final productDropdown = DropdownButtonFormField<String>(
-                            value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
+                            value: (item.finishedProductId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.finishedProductId))
                                 ? item.finishedProductId
-                                : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                                : (db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : null),
                             isExpanded: true,
                             decoration: const InputDecoration(labelText: 'Finished Product *'),
-                            items: db.finishedProducts.map((fp) {
-                              return DropdownMenuItem(
-                                value: fp.id,
-                                child: Text('${fp.name} (${fp.itemCode}) - Usable Avail: ${fp.availableStock} ${fp.unit}'),
-                              );
-                            }).toList(),
+                            items: [
+                              if (item.finishedProductId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.finishedProductId && !p.isActive))
+                                DropdownMenuItem(
+                                  value: item.finishedProductId,
+                                  child: Text('${db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId).name} (${db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId).itemCode}) (Inactive)'),
+                                ),
+                              ...db.finishedProducts.where((p) => !p.isDeleted && p.isActive).map((fp) {
+                                return DropdownMenuItem(
+                                  value: fp.id,
+                                  child: Text('${fp.name} (${fp.itemCode}) - Usable Avail: ${fp.availableStock} ${fp.unit}'),
+                                );
+                              }),
+                            ],
                             onChanged: (val) {
                               if (val != null) {
                                 final fp = db.finishedProducts.firstWhere((p) => p.id == val);

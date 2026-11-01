@@ -1,4 +1,4 @@
-enum ProductionStatus {
+﻿enum ProductionStatus {
   planned,
   inProgress,
   completed,

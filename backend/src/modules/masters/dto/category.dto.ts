@@ -2,6 +2,10 @@ import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateCategoryDto {
   @IsString()
+  @IsOptional()
+  id?: string;
+
+  @IsString()
   @IsNotEmpty()
   name!: string;
 
@@ -11,6 +15,10 @@ export class CreateCategoryDto {
 }
 
 export class UpdateCategoryDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsOptional()
   name?: string;

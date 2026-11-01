@@ -26,6 +26,7 @@ import {
   RecordInvoicePaymentDto,
   SalesQueryDto,
   UpdateDeliveryTrackingDto,
+  UpdateProformaStatusDto,
   UpdateQuotationStatusDto,
   UpdateSalesOrderStatusDto,
 } from '../dto/sales.dto';
@@ -127,6 +128,17 @@ export class SalesController {
     @Ctx() ctx: RequestContext,
   ) {
     return this.salesService.recordAdvancePayment(id, dto, ctx.userId, ctx.correlationId);
+  }
+
+  @Patch('proforma/:id/status')
+  @RequirePermission('sales.edit')
+  @ApiOperation({ summary: 'Update proforma invoice lifecycle status' })
+  updateProformaStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateProformaStatusDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.salesService.updateProformaStatus(id, dto, ctx.userId, ctx.correlationId);
   }
 
   // ==========================================================================

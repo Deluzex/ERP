@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -17,6 +18,7 @@ import {
   DeleteVendorDto,
   UpdateVendorDto,
 } from '../dto/vendor.dto';
+import { UpdateMasterStatusDto } from '../dto/master-status.dto';
 import { VendorsService } from '../services/vendors.service';
 
 @ApiTags('Masters - Vendors')
@@ -30,8 +32,13 @@ export class VendorsController {
   findAll(
     @Query('search') search?: string,
     @Query('includeDeleted') includeDeleted?: string,
+    @Query('isActive') isActive?: string,
   ) {
-    return this.vendorsService.findAll(search, includeDeleted === 'true');
+    return this.vendorsService.findAll(
+      search,
+      includeDeleted === 'true',
+      isActive === undefined ? undefined : isActive === 'true',
+    );
   }
 
   @Get(':id')
@@ -54,6 +61,16 @@ export class VendorsController {
     @Ctx() ctx: RequestContext,
   ) {
     return this.vendorsService.update(id, dto, ctx.userId, ctx.correlationId);
+  }
+
+  @Patch(':id/status')
+  @RequirePermission('masters.edit')
+  toggleStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateMasterStatusDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.vendorsService.toggleStatus(id, dto.isActive, ctx.userId, ctx.correlationId);
   }
 
   @Delete(':id')

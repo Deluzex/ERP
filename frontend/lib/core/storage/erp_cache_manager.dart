@@ -284,6 +284,7 @@ class ErpCacheManager {
         'creditBalance': c.creditBalance,
         'createdAt': c.createdAt.toIso8601String(),
         'isDeleted': c.isDeleted,
+        'isActive': c.isActive,
         'deletedAt': c.deletedAt?.toIso8601String(),
       };
 
@@ -303,6 +304,7 @@ class ErpCacheManager {
         'outstandingBalance': v.outstandingBalance,
         'defaultTransportationCharges': v.defaultTransportationCharges,
         'isDeleted': v.isDeleted,
+        'isActive': v.isActive,
         'deleteReason': v.deleteReason,
         'deletedAt': v.deletedAt?.toIso8601String(),
         'createdAt': v.createdAt.toIso8601String(),
@@ -322,6 +324,7 @@ class ErpCacheManager {
         'stateCode': d.stateCode,
         'outstandingAmount': d.outstandingAmount,
         'isDeleted': d.isDeleted,
+        'isActive': d.isActive,
         'deletedAt': d.deletedAt?.toIso8601String(),
         'createdAt': d.createdAt.toIso8601String(),
       };
@@ -345,6 +348,7 @@ class ErpCacheManager {
         'linkedCustomerId': a.linkedCustomerId,
         'isAlsoCustomer': a.isAlsoCustomer,
         'isDeleted': a.isDeleted,
+        'isActive': a.isActive,
         'deletedAt': a.deletedAt?.toIso8601String(),
         'createdAt': a.createdAt.toIso8601String(),
       };
@@ -368,6 +372,7 @@ class ErpCacheManager {
         'preferredVendorIds': rm.preferredVendorIds,
         'preferredVendorNames': rm.preferredVendorNames,
         'isDeleted': rm.isDeleted,
+        'isActive': rm.isActive,
         'deletedAt': rm.deletedAt?.toIso8601String(),
         'createdAt': rm.createdAt.toIso8601String(),
         'updatedAt': rm.updatedAt.toIso8601String(),
@@ -394,6 +399,7 @@ class ErpCacheManager {
         'customerSellingPrice': fp.customerSellingPrice,
         'gstPercent': fp.gstPercent,
         'isDeleted': fp.isDeleted,
+        'isActive': fp.isActive,
         'deletedAt': fp.deletedAt?.toIso8601String(),
         'createdAt': fp.createdAt.toIso8601String(),
         'updatedAt': fp.updatedAt.toIso8601String(),

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,7 @@ import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/stock_movement_icons.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_toast.dart';
+import '../../../core/storage/tab_session_storage.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class StockAdjustmentScreen extends ConsumerStatefulWidget {
@@ -37,17 +39,41 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreFilters();
       ref.read(databaseServiceProvider).loadStockAdjustments();
     });
+  }
+
+  void _persistFilters() {
+    TabSessionStorage.setItem('erp_filter_stock_adj', jsonEncode({
+      'search': _searchQuery,
+      'page': _currentPage,
+    }));
+  }
+
+  Future<void> _restoreFilters() async {
+    try {
+      final raw = await TabSessionStorage.getItem('erp_filter_stock_adj');
+      if (raw != null && raw.isNotEmpty && mounted) {
+        final data = jsonDecode(raw);
+        setState(() {
+          _searchQuery = data['search'] as String? ?? '';
+          _currentPage = data['page'] as int? ?? 0;
+        });
+      }
+    } catch (_) {}
   }
 
   void _openCreateAdjustmentDialog() {
     final db = ref.read(databaseServiceProvider);
     ItemType selectedItemType = ItemType.finishedProduct;
-    String selectedItemId = db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : '';
-    AdjustmentReason selectedReason = AdjustmentReason.physicalCountMismatch;
-    final newQtyCtrl = TextEditingController();
+    String selectedItemId = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty
+        ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id
+        : '';
+    AdjustmentReason selectedReason = AdjustmentReason.damagedGoods;
+    bool isReduction = true;
+    final adjQtyCtrl = TextEditingController();
     final remarksCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
@@ -75,8 +101,9 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
               itemCode = fp.itemCode;
             }
 
-            final parsedNewQty = double.tryParse(newQtyCtrl.text.trim()) ?? currentStock;
-            final diff = parsedNewQty - currentStock;
+            final rawQty = double.tryParse(adjQtyCtrl.text.trim())?.abs() ?? 0.0;
+            final effectiveDiff = isReduction ? -rawQty : rawQty;
+            final newResultingStock = currentStock + (adjQtyCtrl.text.trim().isEmpty ? 0.0 : effectiveDiff);
 
             return AlertDialog(
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -106,7 +133,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                                       if (val != null) {
                                         setDlgState(() {
                                           selectedItemType = val;
-                                          selectedItemId = db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : '';
+                                          selectedItemId = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : '';
                                         });
                                       }
                                     },
@@ -120,7 +147,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                                       if (val != null) {
                                         setDlgState(() {
                                           selectedItemType = val;
-                                          selectedItemId = db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : '';
+                                          selectedItemId = db.rawMaterials.where((r) => !r.isDeleted && r.isActive).isNotEmpty ? db.rawMaterials.where((r) => !r.isDeleted && r.isActive).first.id : '';
                                         });
                                       }
                                     },
@@ -140,7 +167,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                                       if (val != null) {
                                         setDlgState(() {
                                           selectedItemType = val;
-                                          selectedItemId = db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : '';
+                                          selectedItemId = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : '';
                                         });
                                       }
                                     },
@@ -156,7 +183,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                                       if (val != null) {
                                         setDlgState(() {
                                           selectedItemType = val;
-                                          selectedItemId = db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : '';
+                                          selectedItemId = db.rawMaterials.where((r) => !r.isDeleted && r.isActive).isNotEmpty ? db.rawMaterials.where((r) => !r.isDeleted && r.isActive).first.id : '';
                                         });
                                       }
                                     },
@@ -172,18 +199,32 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Select Item *'),
                           items: selectedItemType == ItemType.rawMaterial
-                              ? db.rawMaterials.map((rm) {
-                                  return DropdownMenuItem(
-                                    value: rm.id,
-                                    child: Text('${rm.itemCode} - ${rm.name} (Stock: ${rm.currentStock} ${rm.unit})', overflow: TextOverflow.ellipsis),
-                                  );
-                                }).toList()
-                              : db.finishedProducts.map((fp) {
-                                  return DropdownMenuItem(
-                                    value: fp.id,
-                                    child: Text('${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})', overflow: TextOverflow.ellipsis),
-                                  );
-                                }).toList(),
+                              ? [
+                                  if (selectedItemId.isNotEmpty && db.rawMaterials.any((r) => r.id == selectedItemId && !r.isActive))
+                                    DropdownMenuItem(
+                                      value: selectedItemId,
+                                      child: Text('${db.rawMaterials.firstWhere((r) => r.id == selectedItemId).itemCode} - ${db.rawMaterials.firstWhere((r) => r.id == selectedItemId).name} (Inactive)', overflow: TextOverflow.ellipsis),
+                                    ),
+                                  ...db.rawMaterials.where((rm) => !rm.isDeleted && rm.isActive).map((rm) {
+                                    return DropdownMenuItem(
+                                      value: rm.id,
+                                      child: Text('${rm.itemCode} - ${rm.name} (Stock: ${rm.currentStock} ${rm.unit})', overflow: TextOverflow.ellipsis),
+                                    );
+                                  }),
+                                ]
+                              : [
+                                  if (selectedItemId.isNotEmpty && db.finishedProducts.any((p) => p.id == selectedItemId && !p.isActive))
+                                    DropdownMenuItem(
+                                      value: selectedItemId,
+                                      child: Text('${db.finishedProducts.firstWhere((p) => p.id == selectedItemId).itemCode} - ${db.finishedProducts.firstWhere((p) => p.id == selectedItemId).name} (Inactive)', overflow: TextOverflow.ellipsis),
+                                    ),
+                                  ...db.finishedProducts.where((fp) => !fp.isDeleted && fp.isActive).map((fp) {
+                                    return DropdownMenuItem(
+                                      value: fp.id,
+                                      child: Text('${fp.itemCode} - ${fp.name} (Stock: ${fp.currentStock} ${fp.unit})', overflow: TextOverflow.ellipsis),
+                                    );
+                                  }),
+                                ],
                           onChanged: (val) {
                             if (val != null) setDlgState(() => selectedItemId = val);
                           },
@@ -208,22 +249,151 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                           ),
                         ),
                         const SizedBox(height: 14),
+
+                        // Adjustment Mode Toggle (Excess / Addition and Damage / Reduction buttons commented out)
+                        // Row(
+                        //   children: [
+                        //     Expanded(
+                        //       child: InkWell(
+                        //         onTap: () => setDlgState(() => isReduction = true),
+                        //         borderRadius: BorderRadius.circular(8),
+                        //         child: Container(
+                        //           padding: const EdgeInsets.symmetric(vertical: 9),
+                        //           decoration: BoxDecoration(
+                        //             color: isReduction ? const Color(0xFFFEF2F2) : Colors.transparent,
+                        //             borderRadius: BorderRadius.circular(8),
+                        //             border: Border.all(
+                        //               color: isReduction ? const Color(0xFFEF4444) : AppColors.border,
+                        //               width: isReduction ? 1.5 : 1,
+                        //             ),
+                        //           ),
+                        //           child: Row(
+                        //             mainAxisAlignment: MainAxisAlignment.center,
+                        //             children: [
+                        //               Icon(
+                        //                 Icons.remove_circle_outline,
+                        //                 size: 16,
+                        //                 color: isReduction ? const Color(0xFFEF4444) : AppColors.textSecondary,
+                        //               ),
+                        //               const SizedBox(width: 6),
+                        //               Text(
+                        //                 'Damage / Reduction (-)',
+                        //                 style: AppTextStyles.bodyBold.copyWith(
+                        //                   fontSize: 12,
+                        //                   color: isReduction ? const Color(0xFFEF4444) : AppColors.textSecondary,
+                        //                 ),
+                        //               ),
+                        //             ],
+                        //           ),
+                        //         ),
+                        //       ),
+                        //     ),
+                        //     const SizedBox(width: 10),
+                        //     Expanded(
+                        //       child: InkWell(
+                        //         onTap: () => setDlgState(() => isReduction = false),
+                        //         borderRadius: BorderRadius.circular(8),
+                        //         child: Container(
+                        //           padding: const EdgeInsets.symmetric(vertical: 9),
+                        //           decoration: BoxDecoration(
+                        //             color: !isReduction ? const Color(0xFFF0FDF4) : Colors.transparent,
+                        //             borderRadius: BorderRadius.circular(8),
+                        //             border: Border.all(
+                        //               color: !isReduction ? const Color(0xFF16A34A) : AppColors.border,
+                        //               width: !isReduction ? 1.5 : 1,
+                        //             ),
+                        //           ),
+                        //           child: Row(
+                        //             mainAxisAlignment: MainAxisAlignment.center,
+                        //             children: [
+                        //               Icon(
+                        //                 Icons.add_circle_outline,
+                        //                 size: 16,
+                        //                 color: !isReduction ? const Color(0xFF16A34A) : AppColors.textSecondary,
+                        //               ),
+                        //               const SizedBox(width: 6),
+                        //               Text(
+                        //                 'Excess / Addition (+)',
+                        //                 style: AppTextStyles.bodyBold.copyWith(
+                        //                   fontSize: 12,
+                        //                   color: !isReduction ? const Color(0xFF16A34A) : AppColors.textSecondary,
+                        //                 ),
+                        //               ),
+                        //             ],
+                        //           ),
+                        //         ),
+                        //       ),
+                        //     ),
+                        //   ],
+                        // ),
+                        // const SizedBox(height: 14),
+
                         TextFormField(
-                          controller: newQtyCtrl,
-                          keyboardType: TextInputType.number,
-                          validator: Validators.nonNegativeNumber,
+                          controller: adjQtyCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Please enter damage pieces';
+                            }
+                            final parsed = double.tryParse(v.trim());
+                            if (parsed == null) return 'Please enter a valid number';
+                            if (parsed.abs() == 0) return 'Damage quantity cannot be 0';
+                            return null;
+                          },
                           onChanged: (_) => setDlgState(() {}),
                           decoration: InputDecoration(
-                            labelText: 'New Actual Physical Stock ($unit) *',
-                            hintText: 'Enter physical count',
+                            labelText: 'Damage Pieces ($unit) *',
+                            hintText: 'Enter damage pieces to deduct (e.g. 20)',
                           ),
                         ),
-                        if (newQtyCtrl.text.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Adjustment Quantity: ${diff >= 0 ? "+${Formatters.formatNumber(diff)}" : Formatters.formatNumber(diff)} $unit',
-                            style: AppTextStyles.bodyBold.copyWith(
-                              color: diff >= 0 ? AppColors.successText : AppColors.dangerText,
+                        if (adjQtyCtrl.text.trim().isNotEmpty && double.tryParse(adjQtyCtrl.text.trim()) != null) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isReduction ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isReduction ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Resulting Stock After Adjustment:',
+                                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                                    ),
+                                    Text(
+                                      '${Formatters.formatNumber(newResultingStock)} $unit',
+                                      style: AppTextStyles.bodyBold.copyWith(
+                                        fontSize: 15,
+                                        color: newResultingStock < 0 ? const Color(0xFFDC2626) : const Color(0xFF111827),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: isReduction ? const Color(0xFFFCA5A5) : const Color(0xFF86EFAC),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${effectiveDiff >= 0 ? "+" : ""}${Formatters.formatNumber(effectiveDiff)} $unit',
+                                    style: AppTextStyles.bodyBold.copyWith(
+                                      fontSize: 12,
+                                      color: isReduction ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -239,7 +409,17 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                             );
                           }).toList(),
                           onChanged: (val) {
-                            if (val != null) setDlgState(() => selectedReason = val);
+                            if (val != null) {
+                              setDlgState(() {
+                                selectedReason = val;
+                                if (val == AdjustmentReason.damagedGoods ||
+                                    val == AdjustmentReason.theftOrLoss ||
+                                    val == AdjustmentReason.expiry ||
+                                    val == AdjustmentReason.internalConsumption) {
+                                  isReduction = true;
+                                }
+                              });
+                            }
                           },
                         ),
                         const SizedBox(height: 14),
@@ -266,9 +446,13 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                 ErpButton(
                   text: 'Save Adjustment & Update Stock',
                   onPressed: () {
-                    if (!formKey.currentState!.validate()) return;
-                    final targetQty = double.parse(newQtyCtrl.text.trim());
-                    final adjDiff = targetQty - currentStock;
+                    if (!formKey.currentState!.validate()) {
+                      ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                      return;
+                    }
+                    final rawVal = double.parse(adjQtyCtrl.text.trim()).abs();
+                    final adjDiff = isReduction ? -rawVal : rawVal;
+                    final targetQty = currentStock + adjDiff;
 
                     final adjustment = StockAdjustment(
                       id: IdGenerator.generateId('ADJ'),
@@ -424,7 +608,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                 // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 650;
+                    final isMobile = constraints.maxWidth < 450;
                     if (isMobile) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -432,10 +616,13 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                           ErpSearchInput(
                             hintText: 'Search adjustments by number, item, reason...',
                             value: _searchQuery,
-                            onChanged: (val) => setState(() {
-                              _searchQuery = val;
-                              _currentPage = 0;
-                            }),
+                            onChanged: (val) {
+                              setState(() {
+                                _searchQuery = val;
+                                _currentPage = 0;
+                              });
+                              _persistFilters();
+                            },
                           ),
                           const SizedBox(height: 10),
                           ErpDateFilterBox(
@@ -448,6 +635,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                                 _endDate = end;
                                 _currentPage = 0;
                               });
+                              _persistFilters();
                             },
                           ),
                         ],
@@ -464,10 +652,13 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                           child: ErpSearchInput(
                             hintText: 'Search adjustments by number, item, reason...',
                             value: _searchQuery,
-                            onChanged: (val) => setState(() {
-                              _searchQuery = val;
-                              _currentPage = 0;
-                            }),
+                            onChanged: (val) {
+                              setState(() {
+                                _searchQuery = val;
+                                _currentPage = 0;
+                              });
+                              _persistFilters();
+                            },
                           ),
                         ),
                         ErpDateFilterBox(
@@ -479,6 +670,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                               _endDate = end;
                               _currentPage = 0;
                             });
+                            _persistFilters();
                           },
                         ),
                       ],
@@ -562,11 +754,17 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                             currentPage: _currentPage,
                             pageSize: _pageSize,
                             totalRecords: totalRecords,
-                            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-                            onPageSizeChanged: (newSize) => setState(() {
-                              _pageSize = newSize;
-                              _currentPage = 0;
-                            }),
+                            onPageChanged: (newPage) {
+                              setState(() => _currentPage = newPage);
+                              _persistFilters();
+                            },
+                            onPageSizeChanged: (newSize) {
+                              setState(() {
+                                _pageSize = newSize;
+                                _currentPage = 0;
+                              });
+                              _persistFilters();
+                            },
                           ),
                         ],
                       ],

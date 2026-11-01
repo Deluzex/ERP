@@ -6,6 +6,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/models/architect_model.dart';
 import '../../../core/models/commission_model.dart';
 import '../../../core/models/customer_model.dart';
 import '../../../core/models/dealer_model.dart';
@@ -22,6 +23,8 @@ import '../../../core/widgets/erp_pagination_bar.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_toast.dart';
+import '../../../core/widgets/figma_metric_card.dart';
+import '../../../app/theme/app_radius.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
 import '../../../shared/widgets/whatsapp_quick_chat_dialog.dart';
@@ -254,26 +257,36 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
           ),
           const SizedBox(height: 20),
 
-          TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
-            indicatorColor: AppColors.primary,
-            onTap: (index) {
-              if (_currentTabIndex != index) {
-                setState(() {
-                  _currentTabIndex = index;
-                });
-              }
-            },
-            tabs: const [
-              Tab(text: 'Customer Payments'),
-              Tab(text: 'Dealer Payments'),
-              Tab(text: 'Vendor Payments'),
-              Tab(text: 'Commission Payouts'),
-            ],
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.primary,
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              onTap: (index) {
+                if (_currentTabIndex != index) {
+                  setState(() {
+                    _currentTabIndex = index;
+                  });
+                }
+              },
+              tabs: const [
+                Tab(text: 'Customer Payments'),
+                Tab(text: 'Dealer Payments'),
+                Tab(text: 'Vendor Payments'),
+                Tab(text: 'Commission Payouts'),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -302,6 +315,27 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     if (val is double) return val;
     if (val is num) return val.toDouble();
     return double.tryParse(val.toString()) ?? fallback;
+  }
+
+  Widget _buildResponsiveMetricRow(BuildContext context, List<Widget> cards) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final double cardWidth;
+        if (width < 600) {
+          cardWidth = width;
+        } else if (width < 1050) {
+          cardWidth = (width - 12) / 2;
+        } else {
+          cardWidth = (width - (12 * (cards.length - 1))) / cards.length;
+        }
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: cards.map((c) => SizedBox(width: cardWidth, child: c)).toList(),
+        );
+      },
+    );
   }
 
   Widget _buildCustomerCollectionsTab(MockDatabaseService db) {
@@ -341,70 +375,178 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     final endIndex = min(startIndex + pageSize, totalCount);
     final pageSummaries = (startIndex < totalCount) ? filtered.sublist(startIndex, endIndex) : <CustomerAccountSummary>[];
 
+    final totalInvoiced = allSummaries.fold(0.0, (sum, s) => sum + s.saleTotal);
+    final totalCollected = allSummaries.fold(0.0, (sum, s) => sum + s.paidAmount);
+    final totalPending = allSummaries.fold(0.0, (sum, s) => sum + s.pendingAmount);
+    final pendingCount = allSummaries.where((s) => s.pendingAmount > 0).length;
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildCustomerControlsRow(),
-        const SizedBox(height: 16),
-        _buildCustomerAccountsTable(pageSummaries),
-        const SizedBox(height: 16),
-        ErpPaginationBar(
-          currentPage: _safeCustomerCurrentPage,
-          pageSize: _safeCustomerPageSize,
-          totalRecords: totalCount,
-          onPageChanged: (newPage) => setState(() => _customerCurrentPage = newPage),
-          onPageSizeChanged: (newSize) => setState(() {
-            _customerPageSize = newSize;
-            _customerCurrentPage = 0;
-          }),
+        _buildResponsiveMetricRow(context, [
+          FigmaMetricCard(
+            icon: Icons.receipt_long_outlined,
+            iconColor: AppColors.primary,
+            title: 'Total Invoiced',
+            value: Formatters.formatCurrency(totalInvoiced),
+            subtext: 'Gross Customer Sales',
+          ),
+          FigmaMetricCard(
+            icon: Icons.check_circle_outline_rounded,
+            iconColor: const Color(0xFF16A34A),
+            title: 'Total Collected',
+            value: Formatters.formatCurrency(totalCollected),
+            subtext: 'Recovered Receivables',
+          ),
+          FigmaMetricCard(
+            icon: Icons.pending_actions_rounded,
+            iconColor: totalPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+            title: 'Net Outstanding',
+            value: Formatters.formatCurrency(totalPending),
+            subtext: totalPending > 0 ? 'Pending Collection' : 'All Accounts Settled',
+            subtextColor: totalPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+          ),
+          FigmaMetricCard(
+            icon: Icons.people_outline_rounded,
+            iconColor: pendingCount > 0 ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+            title: 'Pending Accounts',
+            value: '$pendingCount',
+            subtext: pendingCount > 0 ? '$pendingCount of ${allSummaries.length} accounts with balance' : 'Zero dues pending',
+            subtextColor: pendingCount > 0 ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+          ),
+        ]),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildCustomerControlsRow(),
+              const SizedBox(height: 16),
+              _buildCustomerAccountsTable(pageSummaries),
+              const SizedBox(height: 16),
+              ErpPaginationBar(
+                currentPage: _safeCustomerCurrentPage,
+                pageSize: _safeCustomerPageSize,
+                totalRecords: totalCount,
+                onPageChanged: (newPage) => setState(() => _customerCurrentPage = newPage),
+                onPageSizeChanged: (newSize) => setState(() {
+                  _customerPageSize = newSize;
+                  _customerCurrentPage = 0;
+                }),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
   Widget _buildCustomerControlsRow() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        SizedBox(
-          width: 280,
-          child: ErpSearchInput(
-            hintText: 'Search customer name, mobile, GST...',
-            initialValue: _safeCustomerSearchQuery,
-            onChanged: (val) => setState(() {
-              _customerSearchQuery = val;
-              _customerCurrentPage = 0;
-            }),
-          ),
-        ),
-        ErpFilterDropdown<String>(
-          value: _safeCustomerBalanceFilter,
-          items: const [
-            DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
-            DropdownMenuItem(value: 'PENDING', child: Text('Has Pending Balance')),
-            DropdownMenuItem(value: 'ZERO', child: Text('Zero Balance / Settled')),
-          ],
-          onChanged: (val) {
-            if (val != null) {
-              setState(() {
-                _customerBalanceFilter = val;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 450;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search customer name, mobile, GST...',
+                initialValue: _safeCustomerSearchQuery,
+                onChanged: (val) => setState(() {
+                  _customerSearchQuery = val;
+                  _customerCurrentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _safeCustomerBalanceFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                  DropdownMenuItem(value: 'PENDING', child: Text('Has Pending Balance')),
+                  DropdownMenuItem(value: 'ZERO', child: Text('Zero Balance / Settled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _customerBalanceFilter = val;
+                      _customerCurrentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _customerStartDate,
+                endDate: _customerEndDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _customerStartDate = start;
+                  _customerEndDate = end;
+                  _customerCurrentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 300,
+              child: ErpSearchInput(
+                hintText: 'Search customer name, mobile, GST...',
+                initialValue: _safeCustomerSearchQuery,
+                onChanged: (val) => setState(() {
+                  _customerSearchQuery = val;
+                  _customerCurrentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _safeCustomerBalanceFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                DropdownMenuItem(value: 'PENDING', child: Text('Has Pending Balance')),
+                DropdownMenuItem(value: 'ZERO', child: Text('Zero Balance / Settled')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _customerBalanceFilter = val;
+                    _customerCurrentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _customerStartDate,
+              endDate: _customerEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _customerStartDate = start;
+                _customerEndDate = end;
                 _customerCurrentPage = 0;
-              });
-            }
-          },
-        ),
-        ErpDateFilterBox(
-          startDate: _customerStartDate,
-          endDate: _customerEndDate,
-          onDateRangeSelected: (start, end) => setState(() {
-            _customerStartDate = start;
-            _customerEndDate = end;
-            _customerCurrentPage = 0;
-          }),
-        ),
-      ],
+              }),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -416,7 +558,7 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -429,240 +571,127 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth > 0 ? constraints.maxWidth : 900),
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                headingTextStyle: AppTextStyles.tableHeader,
-                dataTextStyle: AppTextStyles.tableCell,
-                dividerThickness: 1,
-                horizontalMargin: 20,
-                columnSpacing: 28,
-                headingRowHeight: 46,
-                dataRowMinHeight: 58,
-                dataRowMaxHeight: 64,
-                columns: [
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.person_outline, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('CUSTOMER NAME', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.currency_rupee, size: 14, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text('SALE TOTAL', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.currency_rupee, size: 14, color: Color(0xFF16A34A)),
-                        const SizedBox(width: 4),
-                        Text('PAID AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF16A34A))),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.percent, size: 14, color: Color(0xFF7C3AED)),
-                        const SizedBox(width: 4),
-                        Text('DISCOUNT GIVEN', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF7C3AED))),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.schedule, size: 15, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text('PENDING AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.description_outlined, size: 15, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('ACTIONS', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                ],
-                rows: summaries.map((summary) {
-                  return DataRow(
-                    cells: [
-                      // CUSTOMER NAME
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE0F2FE),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.person, color: Color(0xFF0284C7), size: 18),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  _safeStr(summary.customer.name).isNotEmpty ? summary.customer.name : 'Unnamed Customer',
-                                  style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.description_outlined, size: 11, color: Colors.grey.shade500),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${summary.transactionCount} transactions',
-                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      // SALE TOTAL
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.saleTotal),
-                          style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
-                        ),
-                      ),
-                      // PAID AMOUNT
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.paidAmount),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 13,
-                            color: const Color(0xFF16A34A),
-                          ),
-                        ),
-                      ),
-                      // DISCOUNT GIVEN
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.discountGiven),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 13,
-                            color: const Color(0xFF7C3AED),
-                          ),
-                        ),
-                      ),
-                      // PENDING AMOUNT
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.pendingAmount),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 13,
-                            color: summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
-                          ),
-                        ),
-                      ),
-                      // ACTIONS
-                      DataCell(
-                        PopupMenuButton<String>(
-                          tooltip: 'Actions',
-                          icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onSelected: (val) {
-                            if (val == 'transaction') {
-                              _openRecordPaymentDialog(
-                                PaymentType.customerPayment,
-                                preselectedPartyId: summary.customer.id,
-                              );
-                            } else if (val == 'history') {
-                              _openCustomerHistoryDialog(summary);
-                            } else if (val == 'whatsapp') {
-                              _openCustomerWhatsAppReminder(summary);
-                            }
-                          },
-                          itemBuilder: (ctx) => const [
-                            PopupMenuItem(
-                              value: 'transaction',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit_note_rounded, size: 18, color: Color(0xFF0284C7)),
-                                  SizedBox(width: 8),
-                                  Text('Transaction', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'history',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
-                                  SizedBox(width: 8),
-                                  Text('History', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'whatsapp',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.chat, size: 18, color: Colors.green),
-                                  SizedBox(width: 8),
-                                  Text('WhatsApp Chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }).toList(),
+    return ErpDataTable(
+      columns: const [
+        ErpColumn(title: 'Customer Name', width: 220),
+        ErpColumn(title: 'Sale Total', width: 130),
+        ErpColumn(title: 'Paid Amount', width: 130),
+        ErpColumn(title: 'Discount Given', width: 130),
+        ErpColumn(title: 'Pending Amount', width: 140),
+        ErpColumn(title: 'Actions', width: 90),
+      ],
+      rows: summaries.map((summary) {
+        return [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0F2FE),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.person, color: Color(0xFF0284C7), size: 16),
               ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _safeStr(summary.customer.name).isNotEmpty ? summary.customer.name : 'Unnamed Customer',
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${summary.transactionCount} transactions',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Text(
+            Formatters.formatCurrency(summary.saleTotal),
+            style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+          ),
+          Text(
+            Formatters.formatCurrency(summary.paidAmount),
+            style: AppTextStyles.bodyBold.copyWith(
+              fontSize: 13,
+              color: const Color(0xFF16A34A),
             ),
-          );
-        },
-      ),
+          ),
+          Text(
+            Formatters.formatCurrency(summary.discountGiven),
+            style: AppTextStyles.bodyBold.copyWith(
+              fontSize: 13,
+              color: const Color(0xFF7C3AED),
+            ),
+          ),
+          Text(
+            Formatters.formatCurrency(summary.pendingAmount),
+            style: AppTextStyles.bodyBold.copyWith(
+              fontSize: 13,
+              color: summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Actions',
+            icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onSelected: (val) {
+              if (val == 'transaction') {
+                _openRecordPaymentDialog(
+                  PaymentType.customerPayment,
+                  preselectedPartyId: summary.customer.id,
+                );
+              } else if (val == 'history') {
+                _openCustomerHistoryDialog(summary);
+              } else if (val == 'whatsapp') {
+                _openCustomerWhatsAppReminder(summary);
+              }
+            },
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(
+                value: 'transaction',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_note_rounded, size: 18, color: Color(0xFF0284C7)),
+                    SizedBox(width: 8),
+                    Text('Record Payment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'history',
+                child: Row(
+                  children: [
+                    Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
+                    SizedBox(width: 8),
+                    Text('View History', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'whatsapp',
+                child: Row(
+                  children: [
+                    Icon(Icons.chat, size: 18, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('WhatsApp Reminder', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ];
+      }).toList(),
     );
   }
 
@@ -797,41 +826,89 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     const SizedBox(height: 14),
 
                     // Summary Cards & Date Filter
-                    SizedBox(
-                      width: double.infinity,
-                      child: Wrap(
-                        spacing: 12,
-                        runSpacing: 10,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        alignment: WrapAlignment.spaceBetween,
+                    if (isMobile)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                          Row(
                             children: [
-                              _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
-                              _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
-                              _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
-                              _buildHistoryStatCard(
-                                'Net Pending',
-                                Formatters.formatCurrency(summary.pendingAmount),
-                                summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                              Expanded(
+                                child: _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
                               ),
                             ],
                           ),
-                          ErpDateFilterBox(
-                            startDate: historyStartDate,
-                            endDate: historyEndDate,
-                            onDateRangeSelected: (start, end) {
-                              setModalState(() {
-                                historyStartDate = start;
-                                historyEndDate = end;
-                              });
-                            },
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildHistoryStatCard(
+                                  'Net Pending',
+                                  Formatters.formatCurrency(summary.pendingAmount),
+                                  summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: ErpDateFilterBox(
+                              startDate: historyStartDate,
+                              endDate: historyEndDate,
+                              onDateRangeSelected: (start, end) {
+                                setModalState(() {
+                                  historyStartDate = start;
+                                  historyEndDate = end;
+                                });
+                              },
+                            ),
                           ),
                         ],
+                      )
+                    else
+                      SizedBox(
+                        width: double.infinity,
+                        child: Wrap(
+                          spacing: 12,
+                          runSpacing: 10,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          alignment: WrapAlignment.spaceBetween,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
+                                _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
+                                _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                                _buildHistoryStatCard(
+                                  'Net Pending',
+                                  Formatters.formatCurrency(summary.pendingAmount),
+                                  summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                ),
+                              ],
+                            ),
+                            ErpDateFilterBox(
+                              startDate: historyStartDate,
+                              endDate: historyEndDate,
+                              onDateRangeSelected: (start, end) {
+                                setModalState(() {
+                                  historyStartDate = start;
+                                  historyEndDate = end;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 14),
                     const Divider(height: 1),
                     const SizedBox(height: 12),
@@ -919,38 +996,83 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     const SizedBox(height: 14),
 
                     // Action buttons footer
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 10,
-                      runSpacing: 8,
-                      children: [
-                        ErpButton(
-                          text: 'Close',
-                          isOutlined: true,
-                          onPressed: () {
-                            FocusScope.of(ctx).unfocus();
-                            Navigator.of(ctx).pop();
-                          },
-                        ),
-                        ErpButton(
-                          text: 'WhatsApp Chat',
-                          icon: Icons.chat,
-                          isOutlined: true,
-                          onPressed: () {
-                            _openCustomerWhatsAppReminder(summary);
-                          },
-                        ),
-                        ErpButton(
-                          text: 'Record Transaction',
-                          icon: Icons.edit_note_rounded,
-                          onPressed: () {
-                            FocusScope.of(ctx).unfocus();
-                            Navigator.of(ctx).pop();
-                            _openRecordPaymentDialog(PaymentType.customerPayment, preselectedPartyId: summary.customer.id);
-                          },
-                        ),
-                      ],
-                    ),
+                    if (isMobile)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ErpButton(
+                                  text: 'Close',
+                                  isOutlined: true,
+                                  onPressed: () {
+                                    FocusScope.of(ctx).unfocus();
+                                    Navigator.of(ctx).pop();
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ErpButton(
+                                  text: 'WhatsApp Chat',
+                                  icon: Icons.chat,
+                                  isOutlined: true,
+                                  onPressed: () {
+                                    _openCustomerWhatsAppReminder(summary);
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ErpButton(
+                              text: 'Record Transaction',
+                              icon: Icons.edit_note_rounded,
+                              onPressed: () {
+                                FocusScope.of(ctx).unfocus();
+                                Navigator.of(ctx).pop();
+                                _openRecordPaymentDialog(PaymentType.customerPayment, preselectedPartyId: summary.customer.id);
+                              },
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: [
+                          ErpButton(
+                            text: 'Close',
+                            isOutlined: true,
+                            onPressed: () {
+                              FocusScope.of(ctx).unfocus();
+                              Navigator.of(ctx).pop();
+                            },
+                          ),
+                          ErpButton(
+                            text: 'WhatsApp Chat',
+                            icon: Icons.chat,
+                            isOutlined: true,
+                            onPressed: () {
+                              _openCustomerWhatsAppReminder(summary);
+                            },
+                          ),
+                          ErpButton(
+                            text: 'Record Transaction',
+                            icon: Icons.edit_note_rounded,
+                            onPressed: () {
+                              FocusScope.of(ctx).unfocus();
+                              Navigator.of(ctx).pop();
+                              _openRecordPaymentDialog(PaymentType.customerPayment, preselectedPartyId: summary.customer.id);
+                            },
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -999,70 +1121,178 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     final endIndex = min(startIndex + pageSize, totalCount);
     final pageSummaries = (startIndex < totalCount) ? filtered.sublist(startIndex, endIndex) : <DealerAccountSummary>[];
 
+    final totalInvoiced = allSummaries.fold(0.0, (sum, s) => sum + s.saleTotal);
+    final totalCollected = allSummaries.fold(0.0, (sum, s) => sum + s.paidAmount);
+    final totalPending = allSummaries.fold(0.0, (sum, s) => sum + s.pendingAmount);
+    final pendingCount = allSummaries.where((s) => s.pendingAmount > 0).length;
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildDealerControlsRow(),
-        const SizedBox(height: 16),
-        _buildDealerAccountsTable(pageSummaries),
-        const SizedBox(height: 16),
-        ErpPaginationBar(
-          currentPage: _safeDealerCurrentPage,
-          pageSize: _safeDealerPageSize,
-          totalRecords: totalCount,
-          onPageChanged: (newPage) => setState(() => _dealerCurrentPage = newPage),
-          onPageSizeChanged: (newSize) => setState(() {
-            _dealerPageSize = newSize;
-            _dealerCurrentPage = 0;
-          }),
+        _buildResponsiveMetricRow(context, [
+          FigmaMetricCard(
+            icon: Icons.storefront_outlined,
+            iconColor: AppColors.primary,
+            title: 'Dealer Invoiced',
+            value: Formatters.formatCurrency(totalInvoiced),
+            subtext: 'B2B Channel Sales',
+          ),
+          FigmaMetricCard(
+            icon: Icons.check_circle_outline_rounded,
+            iconColor: const Color(0xFF16A34A),
+            title: 'Dealer Receipts',
+            value: Formatters.formatCurrency(totalCollected),
+            subtext: 'Recovered Balances',
+          ),
+          FigmaMetricCard(
+            icon: Icons.pending_actions_rounded,
+            iconColor: totalPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+            title: 'Dealer Outstanding',
+            value: Formatters.formatCurrency(totalPending),
+            subtext: totalPending > 0 ? 'Pending Collection' : 'All Accounts Settled',
+            subtextColor: totalPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+          ),
+          FigmaMetricCard(
+            icon: Icons.people_outline_rounded,
+            iconColor: pendingCount > 0 ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+            title: 'Pending Dealers',
+            value: '$pendingCount',
+            subtext: pendingCount > 0 ? '$pendingCount of ${allSummaries.length} dealers with balance' : 'Zero dues pending',
+            subtextColor: pendingCount > 0 ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+          ),
+        ]),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildDealerControlsRow(),
+              const SizedBox(height: 16),
+              _buildDealerAccountsTable(pageSummaries),
+              const SizedBox(height: 16),
+              ErpPaginationBar(
+                currentPage: _safeDealerCurrentPage,
+                pageSize: _safeDealerPageSize,
+                totalRecords: totalCount,
+                onPageChanged: (newPage) => setState(() => _dealerCurrentPage = newPage),
+                onPageSizeChanged: (newSize) => setState(() {
+                  _dealerPageSize = newSize;
+                  _dealerCurrentPage = 0;
+                }),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
   Widget _buildDealerControlsRow() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        SizedBox(
-          width: 280,
-          child: ErpSearchInput(
-            hintText: 'Search dealer name, company, GST...',
-            initialValue: _safeDealerSearchQuery,
-            onChanged: (val) => setState(() {
-              _dealerSearchQuery = val;
-              _dealerCurrentPage = 0;
-            }),
-          ),
-        ),
-        ErpFilterDropdown<String>(
-          value: _safeDealerBalanceFilter,
-          items: const [
-            DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
-            DropdownMenuItem(value: 'PENDING', child: Text('Has Pending Balance')),
-            DropdownMenuItem(value: 'ZERO', child: Text('Zero Balance / Settled')),
-          ],
-          onChanged: (val) {
-            if (val != null) {
-              setState(() {
-                _dealerBalanceFilter = val;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 450;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search dealer name, company, GST...',
+                initialValue: _safeDealerSearchQuery,
+                onChanged: (val) => setState(() {
+                  _dealerSearchQuery = val;
+                  _dealerCurrentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _safeDealerBalanceFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                  DropdownMenuItem(value: 'PENDING', child: Text('Has Pending Balance')),
+                  DropdownMenuItem(value: 'ZERO', child: Text('Zero Balance / Settled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _dealerBalanceFilter = val;
+                      _dealerCurrentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _dealerStartDate,
+                endDate: _dealerEndDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _dealerStartDate = start;
+                  _dealerEndDate = end;
+                  _dealerCurrentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 300,
+              child: ErpSearchInput(
+                hintText: 'Search dealer name, company, GST...',
+                initialValue: _safeDealerSearchQuery,
+                onChanged: (val) => setState(() {
+                  _dealerSearchQuery = val;
+                  _dealerCurrentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _safeDealerBalanceFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                DropdownMenuItem(value: 'PENDING', child: Text('Has Pending Balance')),
+                DropdownMenuItem(value: 'ZERO', child: Text('Zero Balance / Settled')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _dealerBalanceFilter = val;
+                    _dealerCurrentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _dealerStartDate,
+              endDate: _dealerEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _dealerStartDate = start;
+                _dealerEndDate = end;
                 _dealerCurrentPage = 0;
-              });
-            }
-          },
-        ),
-        ErpDateFilterBox(
-          startDate: _dealerStartDate,
-          endDate: _dealerEndDate,
-          onDateRangeSelected: (start, end) => setState(() {
-            _dealerStartDate = start;
-            _dealerEndDate = end;
-            _dealerCurrentPage = 0;
-          }),
-        ),
-      ],
+              }),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1087,184 +1317,79 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+    return ErpDataTable(
+      columns: const [
+        ErpColumn(title: 'Dealer Name', width: 220),
+        ErpColumn(title: 'Sale Total', width: 130),
+        ErpColumn(title: 'Paid Amount', width: 130),
+        ErpColumn(title: 'Discount Given', width: 130),
+        ErpColumn(title: 'Pending Amount', width: 140),
+        ErpColumn(title: 'Actions', width: 90),
+      ],
+      rows: summaries.map((summary) {
+        return [
+
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.storefront, color: Color(0xFFD97706), size: 16),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _safeStr(summary.dealer.name).isNotEmpty ? summary.dealer.name : 'Unnamed Dealer',
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      (_safeStr(summary.dealer.companyName).isNotEmpty)
+                          ? '${summary.dealer.companyName} • ${summary.transactionCount} transactions'
+                          : '${summary.transactionCount} transactions',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth > 0 ? constraints.maxWidth : 900),
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                headingTextStyle: AppTextStyles.tableHeader,
-                dataTextStyle: AppTextStyles.tableCell,
-                dividerThickness: 1,
-                horizontalMargin: 20,
-                columnSpacing: 28,
-                headingRowHeight: 46,
-                dataRowMinHeight: 58,
-                dataRowMaxHeight: 64,
-                columns: [
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.storefront_outlined, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('DEALER NAME', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.currency_rupee, size: 14, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text('SALE TOTAL', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.currency_rupee, size: 14, color: Color(0xFF16A34A)),
-                        const SizedBox(width: 4),
-                        Text('PAID AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF16A34A))),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.percent, size: 14, color: Color(0xFF7C3AED)),
-                        const SizedBox(width: 4),
-                        Text('DISCOUNT GIVEN', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF7C3AED))),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.schedule, size: 15, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text('PENDING AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.description_outlined, size: 15, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('ACTIONS', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                ],
-                rows: summaries.map((summary) {
-                  return DataRow(
-                    cells: [
-                      // DEALER NAME
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFDCFCE7),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.storefront_outlined, color: Color(0xFF16A34A), size: 18),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  _safeStr(summary.dealer.name).isNotEmpty ? summary.dealer.name : 'Unnamed Dealer',
-                                  style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.description_outlined, size: 11, color: Colors.grey.shade500),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      (_safeStr(summary.dealer.companyName).isNotEmpty)
-                                          ? '${summary.dealer.companyName} • ${summary.transactionCount} transactions'
-                                          : '${summary.transactionCount} transactions',
-                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      // SALE TOTAL
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.saleTotal),
-                          style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
-                        ),
-                      ),
-                      // PAID AMOUNT
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.paidAmount),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 13,
-                            color: const Color(0xFF16A34A),
-                          ),
-                        ),
-                      ),
-                      // DISCOUNT GIVEN
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.discountGiven),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 13,
-                            color: const Color(0xFF7C3AED),
-                          ),
-                        ),
-                      ),
-                      // PENDING AMOUNT
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.pendingAmount),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 13,
-                            color: summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
-                          ),
-                        ),
-                      ),
-                      // ACTIONS
-                      DataCell(
-                        PopupMenuButton<String>(
+          Text(
+            Formatters.formatCurrency(summary.saleTotal),
+            style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+          ),
+          Text(
+            Formatters.formatCurrency(summary.paidAmount),
+            style: AppTextStyles.bodyBold.copyWith(
+              fontSize: 13,
+              color: const Color(0xFF16A34A),
+            ),
+          ),
+          Text(
+            Formatters.formatCurrency(summary.discountGiven),
+            style: AppTextStyles.bodyBold.copyWith(
+              fontSize: 13,
+              color: const Color(0xFF7C3AED),
+            ),
+          ),
+          Text(
+            Formatters.formatCurrency(summary.pendingAmount),
+            style: AppTextStyles.bodyBold.copyWith(
+              fontSize: 13,
+              color: summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+            ),
+          ),
+          PopupMenuButton<String>(
                           tooltip: 'Actions',
                           icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
                           padding: EdgeInsets.zero,
@@ -1318,15 +1443,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  );
-                }).toList(),
-              ),
-            ),
-          );
-        },
-      ),
+          ];
+      }).toList(),
     );
   }
 
@@ -1425,41 +1543,89 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     const SizedBox(height: 14),
 
                     // Summary Cards & Date Filter
-                    SizedBox(
-                      width: double.infinity,
-                      child: Wrap(
-                        spacing: 12,
-                        runSpacing: 10,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        alignment: WrapAlignment.spaceBetween,
+                    if (isMobile)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                          Row(
                             children: [
-                              _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
-                              _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
-                              _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
-                              _buildHistoryStatCard(
-                                'Net Pending',
-                                Formatters.formatCurrency(summary.pendingAmount),
-                                summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                              Expanded(
+                                child: _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
                               ),
                             ],
                           ),
-                          ErpDateFilterBox(
-                            startDate: historyStartDate,
-                            endDate: historyEndDate,
-                            onDateRangeSelected: (start, end) {
-                              setModalState(() {
-                                historyStartDate = start;
-                                historyEndDate = end;
-                              });
-                            },
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildHistoryStatCard(
+                                  'Net Pending',
+                                  Formatters.formatCurrency(summary.pendingAmount),
+                                  summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: ErpDateFilterBox(
+                              startDate: historyStartDate,
+                              endDate: historyEndDate,
+                              onDateRangeSelected: (start, end) {
+                                setModalState(() {
+                                  historyStartDate = start;
+                                  historyEndDate = end;
+                                });
+                              },
+                            ),
                           ),
                         ],
+                      )
+                    else
+                      SizedBox(
+                        width: double.infinity,
+                        child: Wrap(
+                          spacing: 12,
+                          runSpacing: 10,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          alignment: WrapAlignment.spaceBetween,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _buildHistoryStatCard('Sale Total', Formatters.formatCurrency(summary.saleTotal), Colors.black87),
+                                _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
+                                _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                                _buildHistoryStatCard(
+                                  'Net Pending',
+                                  Formatters.formatCurrency(summary.pendingAmount),
+                                  summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                ),
+                              ],
+                            ),
+                            ErpDateFilterBox(
+                              startDate: historyStartDate,
+                              endDate: historyEndDate,
+                              onDateRangeSelected: (start, end) {
+                                setModalState(() {
+                                  historyStartDate = start;
+                                  historyEndDate = end;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 14),
                     const Divider(height: 1),
                     const SizedBox(height: 12),
@@ -1547,42 +1713,91 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     const SizedBox(height: 14),
 
                     // Action buttons footer
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 10,
-                      runSpacing: 8,
-                      children: [
-                        ErpButton(
-                          text: 'Close',
-                          isOutlined: true,
-                          onPressed: () {
-                            FocusScope.of(ctx).unfocus();
-                            Navigator.of(ctx).pop();
-                          },
-                        ),
-                        ErpButton(
-                          text: 'WhatsApp Chat',
-                          icon: Icons.chat,
-                          isOutlined: true,
-                          onPressed: () {
-                            WhatsAppQuickChatDialog.showCustomerQuickChat(
-                              context,
-                              customerName: summary.dealer.name,
-                              customerPhone: summary.dealer.mobile,
-                            );
-                          },
-                        ),
-                        ErpButton(
-                          text: 'Record Transaction',
-                          icon: Icons.edit_note_rounded,
-                          onPressed: () {
-                            FocusScope.of(ctx).unfocus();
-                            Navigator.of(ctx).pop();
-                            _openRecordPaymentDialog(PaymentType.dealerPayment, preselectedPartyId: summary.dealer.id);
-                          },
-                        ),
-                      ],
-                    ),
+                    if (isMobile)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ErpButton(
+                                  text: 'Close',
+                                  isOutlined: true,
+                                  onPressed: () {
+                                    FocusScope.of(ctx).unfocus();
+                                    Navigator.of(ctx).pop();
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ErpButton(
+                                  text: 'WhatsApp Chat',
+                                  icon: Icons.chat,
+                                  isOutlined: true,
+                                  onPressed: () {
+                                    WhatsAppQuickChatDialog.showCustomerQuickChat(
+                                      context,
+                                      customerName: summary.dealer.name,
+                                      customerPhone: summary.dealer.mobile,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ErpButton(
+                              text: 'Record Transaction',
+                              icon: Icons.edit_note_rounded,
+                              onPressed: () {
+                                FocusScope.of(ctx).unfocus();
+                                Navigator.of(ctx).pop();
+                                _openRecordPaymentDialog(PaymentType.dealerPayment, preselectedPartyId: summary.dealer.id);
+                              },
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: [
+                          ErpButton(
+                            text: 'Close',
+                            isOutlined: true,
+                            onPressed: () {
+                              FocusScope.of(ctx).unfocus();
+                              Navigator.of(ctx).pop();
+                            },
+                          ),
+                          ErpButton(
+                            text: 'WhatsApp Chat',
+                            icon: Icons.chat,
+                            isOutlined: true,
+                            onPressed: () {
+                              WhatsAppQuickChatDialog.showCustomerQuickChat(
+                                context,
+                                customerName: summary.dealer.name,
+                                customerPhone: summary.dealer.mobile,
+                              );
+                            },
+                          ),
+                          ErpButton(
+                            text: 'Record Transaction',
+                            icon: Icons.edit_note_rounded,
+                            onPressed: () {
+                              FocusScope.of(ctx).unfocus();
+                              Navigator.of(ctx).pop();
+                              _openRecordPaymentDialog(PaymentType.dealerPayment, preselectedPartyId: summary.dealer.id);
+                            },
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -1773,70 +1988,178 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     final endIndex = min(startIndex + pageSize, totalCount);
     final pageSummaries = (startIndex < totalCount) ? filtered.sublist(startIndex, endIndex) : <VendorAccountSummary>[];
 
+    final totalPurchased = allSummaries.fold(0.0, (sum, s) => sum + s.purchaseTotal);
+    final totalDisbursed = allSummaries.fold(0.0, (sum, s) => sum + s.paidAmount);
+    final totalPending = allSummaries.fold(0.0, (sum, s) => sum + s.pendingAmount);
+    final pendingCount = allSummaries.where((s) => s.pendingAmount > 0).length;
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildVendorControlsRow(),
-        const SizedBox(height: 16),
-        _buildVendorAccountsTable(pageSummaries),
-        const SizedBox(height: 16),
-        ErpPaginationBar(
-          currentPage: _safeVendorCurrentPage,
-          pageSize: _safeVendorPageSize,
-          totalRecords: totalCount,
-          onPageChanged: (newPage) => setState(() => _vendorCurrentPage = newPage),
-          onPageSizeChanged: (newSize) => setState(() {
-            _vendorPageSize = newSize;
-            _vendorCurrentPage = 0;
-          }),
+        _buildResponsiveMetricRow(context, [
+          FigmaMetricCard(
+            icon: Icons.receipt_long_outlined,
+            iconColor: AppColors.primary,
+            title: 'Total Purchases',
+            value: Formatters.formatCurrency(totalPurchased),
+            subtext: 'Gross Vendor Invoices',
+          ),
+          FigmaMetricCard(
+            icon: Icons.check_circle_outline_rounded,
+            iconColor: const Color(0xFF16A34A),
+            title: 'Total Disbursed',
+            value: Formatters.formatCurrency(totalDisbursed),
+            subtext: 'Settled Payables',
+          ),
+          FigmaMetricCard(
+            icon: Icons.pending_actions_rounded,
+            iconColor: totalPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+            title: 'Vendor Outstanding',
+            value: Formatters.formatCurrency(totalPending),
+            subtext: totalPending > 0 ? 'Pending Disbursements' : 'All Accounts Settled',
+            subtextColor: totalPending > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+          ),
+          FigmaMetricCard(
+            icon: Icons.business_outlined,
+            iconColor: pendingCount > 0 ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+            title: 'Pending Vendors',
+            value: '$pendingCount',
+            subtext: pendingCount > 0 ? '$pendingCount of ${allSummaries.length} vendors awaiting payment' : 'Zero dues pending',
+            subtextColor: pendingCount > 0 ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+          ),
+        ]),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildVendorControlsRow(),
+              const SizedBox(height: 16),
+              _buildVendorAccountsTable(pageSummaries),
+              const SizedBox(height: 16),
+              ErpPaginationBar(
+                currentPage: _safeVendorCurrentPage,
+                pageSize: _safeVendorPageSize,
+                totalRecords: totalCount,
+                onPageChanged: (newPage) => setState(() => _vendorCurrentPage = newPage),
+                onPageSizeChanged: (newSize) => setState(() {
+                  _vendorPageSize = newSize;
+                  _vendorCurrentPage = 0;
+                }),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
   Widget _buildVendorControlsRow() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        SizedBox(
-          width: 280,
-          child: ErpSearchInput(
-            hintText: 'Search vendor name, contact, GST...',
-            initialValue: _safeVendorSearchQuery,
-            onChanged: (val) => setState(() {
-              _vendorSearchQuery = val;
-              _vendorCurrentPage = 0;
-            }),
-          ),
-        ),
-        ErpFilterDropdown<String>(
-          value: _safeVendorBalanceFilter,
-          items: const [
-            DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
-            DropdownMenuItem(value: 'PENDING', child: Text('Has Payable Balance')),
-            DropdownMenuItem(value: 'ZERO', child: Text('Zero Balance / Settled')),
-          ],
-          onChanged: (val) {
-            if (val != null) {
-              setState(() {
-                _vendorBalanceFilter = val;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 450;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search vendor name, contact, GST...',
+                initialValue: _safeVendorSearchQuery,
+                onChanged: (val) => setState(() {
+                  _vendorSearchQuery = val;
+                  _vendorCurrentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _safeVendorBalanceFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                  DropdownMenuItem(value: 'PENDING', child: Text('Has Payable Balance')),
+                  DropdownMenuItem(value: 'ZERO', child: Text('Zero Balance / Settled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _vendorBalanceFilter = val;
+                      _vendorCurrentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _vendorStartDate,
+                endDate: _vendorEndDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _vendorStartDate = start;
+                  _vendorEndDate = end;
+                  _vendorCurrentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 300,
+              child: ErpSearchInput(
+                hintText: 'Search vendor name, contact, GST...',
+                initialValue: _safeVendorSearchQuery,
+                onChanged: (val) => setState(() {
+                  _vendorSearchQuery = val;
+                  _vendorCurrentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _safeVendorBalanceFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                DropdownMenuItem(value: 'PENDING', child: Text('Has Payable Balance')),
+                DropdownMenuItem(value: 'ZERO', child: Text('Zero Balance / Settled')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _vendorBalanceFilter = val;
+                    _vendorCurrentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _vendorStartDate,
+              endDate: _vendorEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _vendorStartDate = start;
+                _vendorEndDate = end;
                 _vendorCurrentPage = 0;
-              });
-            }
-          },
-        ),
-        ErpDateFilterBox(
-          startDate: _vendorStartDate,
-          endDate: _vendorEndDate,
-          onDateRangeSelected: (start, end) => setState(() {
-            _vendorStartDate = start;
-            _vendorEndDate = end;
-            _vendorCurrentPage = 0;
-          }),
-        ),
-      ],
+              }),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1861,184 +2184,78 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+    return ErpDataTable(
+      columns: const [
+        ErpColumn(title: 'Vendor Name', width: 220),
+        ErpColumn(title: 'Purchase Total', width: 130),
+        ErpColumn(title: 'Paid Amount', width: 130),
+        ErpColumn(title: 'Discount Given', width: 130),
+        ErpColumn(title: 'Pending Amount', width: 140),
+        ErpColumn(title: 'Actions', width: 90),
+      ],
+      rows: summaries.map((summary) {
+        return [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB), size: 16),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _safeStr(summary.vendor.name).isNotEmpty ? summary.vendor.name : 'Unnamed Vendor',
+                      style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      (_safeStr(summary.vendor.contactPerson).isNotEmpty)
+                          ? '${summary.vendor.contactPerson} • ${summary.transactionCount} transactions'
+                          : '${summary.transactionCount} transactions',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth > 0 ? constraints.maxWidth : 900),
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                headingTextStyle: AppTextStyles.tableHeader,
-                dataTextStyle: AppTextStyles.tableCell,
-                dividerThickness: 1,
-                horizontalMargin: 20,
-                columnSpacing: 28,
-                headingRowHeight: 46,
-                dataRowMinHeight: 58,
-                dataRowMaxHeight: 64,
-                columns: [
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.inventory_2_outlined, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('VENDOR NAME', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.currency_rupee, size: 14, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text('PURCHASE TOTAL', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.currency_rupee, size: 14, color: Color(0xFF16A34A)),
-                        const SizedBox(width: 4),
-                        Text('PAID AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF16A34A))),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.percent, size: 14, color: Color(0xFF7C3AED)),
-                        const SizedBox(width: 4),
-                        Text('DISCOUNT GIVEN', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF7C3AED))),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.schedule, size: 15, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text('PENDING AMOUNT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.description_outlined, size: 15, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('ACTIONS', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                ],
-                rows: summaries.map((summary) {
-                  return DataRow(
-                    cells: [
-                      // VENDOR NAME
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEFF6FF),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB), size: 18),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  _safeStr(summary.vendor.name).isNotEmpty ? summary.vendor.name : 'Unnamed Vendor',
-                                  style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.description_outlined, size: 11, color: Colors.grey.shade500),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      (_safeStr(summary.vendor.contactPerson).isNotEmpty)
-                                          ? '${summary.vendor.contactPerson} • ${summary.transactionCount} transactions'
-                                          : '${summary.transactionCount} transactions',
-                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      // PURCHASE TOTAL
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.purchaseTotal),
-                          style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
-                        ),
-                      ),
-                      // PAID AMOUNT
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.paidAmount),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 13,
-                            color: const Color(0xFF16A34A),
-                          ),
-                        ),
-                      ),
-                      // DISCOUNT GIVEN
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.discountGiven),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 13,
-                            color: const Color(0xFF7C3AED),
-                          ),
-                        ),
-                      ),
-                      // PENDING AMOUNT
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(summary.pendingAmount),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 13,
-                            color: summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
-                          ),
-                        ),
-                      ),
-                      // ACTIONS
-                      DataCell(
-                        PopupMenuButton<String>(
+          Text(
+            Formatters.formatCurrency(summary.purchaseTotal),
+            style: AppTextStyles.bodyBold.copyWith(fontSize: 13),
+          ),
+          Text(
+            Formatters.formatCurrency(summary.paidAmount),
+            style: AppTextStyles.bodyBold.copyWith(
+              fontSize: 13,
+              color: const Color(0xFF16A34A),
+            ),
+          ),
+          Text(
+            Formatters.formatCurrency(summary.discountGiven),
+            style: AppTextStyles.bodyBold.copyWith(
+              fontSize: 13,
+              color: const Color(0xFF7C3AED),
+            ),
+          ),
+          Text(
+            Formatters.formatCurrency(summary.pendingAmount),
+            style: AppTextStyles.bodyBold.copyWith(
+              fontSize: 13,
+              color: summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+            ),
+          ),
+          PopupMenuButton<String>(
                           tooltip: 'Actions',
                           icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
                           padding: EdgeInsets.zero,
@@ -2092,15 +2309,8 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  );
-                }).toList(),
-              ),
-            ),
-          );
-        },
-      ),
+          ];
+      }).toList(),
     );
   }
 
@@ -2199,41 +2409,89 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     const SizedBox(height: 14),
 
                     // Summary Cards & Date Filter
-                    SizedBox(
-                      width: double.infinity,
-                      child: Wrap(
-                        spacing: 12,
-                        runSpacing: 10,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        alignment: WrapAlignment.spaceBetween,
+                    if (isMobile)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                          Row(
                             children: [
-                              _buildHistoryStatCard('Purchase Total', Formatters.formatCurrency(summary.purchaseTotal), Colors.black87),
-                              _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
-                              _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
-                              _buildHistoryStatCard(
-                                'Net Pending',
-                                Formatters.formatCurrency(summary.pendingAmount),
-                                summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                              Expanded(
+                                child: _buildHistoryStatCard('Purchase Total', Formatters.formatCurrency(summary.purchaseTotal), Colors.black87),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
                               ),
                             ],
                           ),
-                          ErpDateFilterBox(
-                            startDate: historyStartDate,
-                            endDate: historyEndDate,
-                            onDateRangeSelected: (start, end) {
-                              setModalState(() {
-                                historyStartDate = start;
-                                historyEndDate = end;
-                              });
-                            },
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildHistoryStatCard(
+                                  'Net Pending',
+                                  Formatters.formatCurrency(summary.pendingAmount),
+                                  summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: ErpDateFilterBox(
+                              startDate: historyStartDate,
+                              endDate: historyEndDate,
+                              onDateRangeSelected: (start, end) {
+                                setModalState(() {
+                                  historyStartDate = start;
+                                  historyEndDate = end;
+                                });
+                              },
+                            ),
                           ),
                         ],
+                      )
+                    else
+                      SizedBox(
+                        width: double.infinity,
+                        child: Wrap(
+                          spacing: 12,
+                          runSpacing: 10,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          alignment: WrapAlignment.spaceBetween,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _buildHistoryStatCard('Purchase Total', Formatters.formatCurrency(summary.purchaseTotal), Colors.black87),
+                                _buildHistoryStatCard('Paid Amount', Formatters.formatCurrency(summary.paidAmount), const Color(0xFF16A34A)),
+                                _buildHistoryStatCard('Discount Given', Formatters.formatCurrency(summary.discountGiven), const Color(0xFF7C3AED)),
+                                _buildHistoryStatCard(
+                                  'Net Pending',
+                                  Formatters.formatCurrency(summary.pendingAmount),
+                                  summary.pendingAmount > 0 ? const Color(0xFFEF4444) : const Color(0xFF16A34A),
+                                ),
+                              ],
+                            ),
+                            ErpDateFilterBox(
+                              startDate: historyStartDate,
+                              endDate: historyEndDate,
+                              onDateRangeSelected: (start, end) {
+                                setModalState(() {
+                                  historyStartDate = start;
+                                  historyEndDate = end;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 14),
                     const Divider(height: 1),
                     const SizedBox(height: 12),
@@ -2325,42 +2583,91 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
                     const SizedBox(height: 14),
 
                     // Action buttons footer
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 10,
-                      runSpacing: 8,
-                      children: [
-                        ErpButton(
-                          text: 'Close',
-                          isOutlined: true,
-                          onPressed: () {
-                            FocusScope.of(ctx).unfocus();
-                            Navigator.of(ctx).pop();
-                          },
-                        ),
-                        ErpButton(
-                          text: 'WhatsApp Chat',
-                          icon: Icons.chat,
-                          isOutlined: true,
-                          onPressed: () {
-                            WhatsAppQuickChatDialog.showCustomerQuickChat(
-                              context,
-                              customerName: summary.vendor.name,
-                              customerPhone: summary.vendor.mobile,
-                            );
-                          },
-                        ),
-                        ErpButton(
-                          text: 'Record Transaction',
-                          icon: Icons.edit_note_rounded,
-                          onPressed: () {
-                            FocusScope.of(ctx).unfocus();
-                            Navigator.of(ctx).pop();
-                            _openRecordPaymentDialog(PaymentType.vendorPayment, preselectedPartyId: summary.vendor.id);
-                          },
-                        ),
-                      ],
-                    ),
+                    if (isMobile)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ErpButton(
+                                  text: 'Close',
+                                  isOutlined: true,
+                                  onPressed: () {
+                                    FocusScope.of(ctx).unfocus();
+                                    Navigator.of(ctx).pop();
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ErpButton(
+                                  text: 'WhatsApp Chat',
+                                  icon: Icons.chat,
+                                  isOutlined: true,
+                                  onPressed: () {
+                                    WhatsAppQuickChatDialog.showCustomerQuickChat(
+                                      context,
+                                      customerName: summary.vendor.name,
+                                      customerPhone: summary.vendor.mobile,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ErpButton(
+                              text: 'Record Transaction',
+                              icon: Icons.edit_note_rounded,
+                              onPressed: () {
+                                FocusScope.of(ctx).unfocus();
+                                Navigator.of(ctx).pop();
+                                _openRecordPaymentDialog(PaymentType.vendorPayment, preselectedPartyId: summary.vendor.id);
+                              },
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: [
+                          ErpButton(
+                            text: 'Close',
+                            isOutlined: true,
+                            onPressed: () {
+                              FocusScope.of(ctx).unfocus();
+                              Navigator.of(ctx).pop();
+                            },
+                          ),
+                          ErpButton(
+                            text: 'WhatsApp Chat',
+                            icon: Icons.chat,
+                            isOutlined: true,
+                            onPressed: () {
+                              WhatsAppQuickChatDialog.showCustomerQuickChat(
+                                context,
+                                customerName: summary.vendor.name,
+                                customerPhone: summary.vendor.mobile,
+                              );
+                            },
+                          ),
+                          ErpButton(
+                            text: 'Record Transaction',
+                            icon: Icons.edit_note_rounded,
+                            onPressed: () {
+                              FocusScope.of(ctx).unfocus();
+                              Navigator.of(ctx).pop();
+                              _openRecordPaymentDialog(PaymentType.vendorPayment, preselectedPartyId: summary.vendor.id);
+                            },
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -2516,18 +2823,32 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
 
   Widget _buildHistoryStatCard(String label, String value, Color valueColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
-          const SizedBox(height: 2),
-          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: valueColor)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280), fontWeight: FontWeight.w500),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 3),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: valueColor),
+              maxLines: 1,
+            ),
+          ),
         ],
       ),
     );
@@ -2822,94 +3143,221 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
     final endIndex = min(startIndex + pageSize, totalCount);
     final pagePayments = (startIndex < totalCount) ? filtered.sublist(startIndex, endIndex) : <ErpPayment>[];
 
+    final totalDisbursed = allPayments.fold(0.0, (sum, p) => sum + p.amount);
+    final fullCount = allPayments.where((p) => p.isFullPayment).length;
+    final partialCount = allPayments.where((p) => !p.isFullPayment).length;
+    final uniqueSpecifiers = allPayments.map((p) => p.partyId).toSet().length;
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildCommissionControlsRow(),
-        const SizedBox(height: 16),
-        _buildPaymentTable(pagePayments, db),
-        const SizedBox(height: 16),
-        ErpPaginationBar(
-          currentPage: _safeCommissionCurrentPage,
-          pageSize: _safeCommissionPageSize,
-          totalRecords: totalCount,
-          onPageChanged: (newPage) => setState(() => _commissionCurrentPage = newPage),
-          onPageSizeChanged: (newSize) => setState(() {
-            _commissionPageSize = newSize;
-            _commissionCurrentPage = 0;
-          }),
+        _buildResponsiveMetricRow(context, [
+          FigmaMetricCard(
+            icon: Icons.payments_outlined,
+            iconColor: AppColors.primary,
+            title: 'Commission Paid',
+            value: Formatters.formatCurrency(totalDisbursed),
+            subtext: 'Disbursed Specifier Fees',
+          ),
+          FigmaMetricCard(
+            icon: Icons.check_circle_outline_rounded,
+            iconColor: const Color(0xFF16A34A),
+            title: 'Full Settlements',
+            value: '$fullCount',
+            subtext: 'Complete Payouts',
+            subtextColor: const Color(0xFF16A34A),
+          ),
+          FigmaMetricCard(
+            icon: Icons.timelapse_rounded,
+            iconColor: partialCount > 0 ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+            title: 'Partial Settlements',
+            value: '$partialCount',
+            subtext: partialCount > 0 ? 'Remaining Balances Open' : 'No Partial Balance',
+            subtextColor: partialCount > 0 ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+          ),
+          FigmaMetricCard(
+            icon: Icons.badge_outlined,
+            iconColor: const Color(0xFF7C3AED),
+            title: 'Specifiers Paid',
+            value: '$uniqueSpecifiers',
+            subtext: 'Architects & Consultants',
+          ),
+        ]),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildCommissionControlsRow(),
+              const SizedBox(height: 16),
+              _buildPaymentTable(pagePayments, db),
+              const SizedBox(height: 16),
+              ErpPaginationBar(
+                currentPage: _safeCommissionCurrentPage,
+                pageSize: _safeCommissionPageSize,
+                totalRecords: totalCount,
+                onPageChanged: (newPage) => setState(() => _commissionCurrentPage = newPage),
+                onPageSizeChanged: (newSize) => setState(() {
+                  _commissionPageSize = newSize;
+                  _commissionCurrentPage = 0;
+                }),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
   Widget _buildCommissionControlsRow() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        SizedBox(
-          width: 280,
-          child: ErpSearchInput(
-            hintText: 'Search payments by party, ref, UTR...',
-            initialValue: _safeCommissionSearchQuery,
-            onChanged: (val) => setState(() {
-              _commissionSearchQuery = val;
-              _commissionCurrentPage = 0;
-            }),
-          ),
-        ),
-        ErpFilterDropdown<String>(
-          value: _safeCommissionModeFilter,
-          items: const [
-            DropdownMenuItem(value: 'ALL', child: Text('All Payment Modes')),
-            DropdownMenuItem(value: 'CASH', child: Text('Cash')),
-            DropdownMenuItem(value: 'BANK_TRANSFER', child: Text('Bank Transfer / NEFT')),
-            DropdownMenuItem(value: 'UPI', child: Text('UPI')),
-            DropdownMenuItem(value: 'CHEQUE', child: Text('Cheque')),
-          ],
-          onChanged: (val) {
-            if (val != null) {
-              setState(() {
-                _commissionModeFilter = val;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 450;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search payments by party, ref, UTR...',
+                initialValue: _safeCommissionSearchQuery,
+                onChanged: (val) => setState(() {
+                  _commissionSearchQuery = val;
+                  _commissionCurrentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _safeCommissionModeFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Payment Modes')),
+                  DropdownMenuItem(value: 'CASH', child: Text('Cash')),
+                  DropdownMenuItem(value: 'BANK_TRANSFER', child: Text('Bank Transfer / NEFT')),
+                  DropdownMenuItem(value: 'UPI', child: Text('UPI')),
+                  DropdownMenuItem(value: 'CHEQUE', child: Text('Cheque')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _commissionModeFilter = val;
+                      _commissionCurrentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _safeCommissionSettlementFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Settlements')),
+                  DropdownMenuItem(value: 'FULL', child: Text('Full Payment')),
+                  DropdownMenuItem(value: 'PARTIAL', child: Text('Partial Payment')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _commissionSettlementFilter = val;
+                      _commissionCurrentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _commissionStartDate,
+                endDate: _commissionEndDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _commissionStartDate = start;
+                  _commissionEndDate = end;
+                  _commissionCurrentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 300,
+              child: ErpSearchInput(
+                hintText: 'Search payments by party, ref, UTR...',
+                initialValue: _safeCommissionSearchQuery,
+                onChanged: (val) => setState(() {
+                  _commissionSearchQuery = val;
+                  _commissionCurrentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _safeCommissionModeFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Payment Modes')),
+                DropdownMenuItem(value: 'CASH', child: Text('Cash')),
+                DropdownMenuItem(value: 'BANK_TRANSFER', child: Text('Bank Transfer / NEFT')),
+                DropdownMenuItem(value: 'UPI', child: Text('UPI')),
+                DropdownMenuItem(value: 'CHEQUE', child: Text('Cheque')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _commissionModeFilter = val;
+                    _commissionCurrentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpFilterDropdown<String>(
+              value: _safeCommissionSettlementFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Settlements')),
+                DropdownMenuItem(value: 'FULL', child: Text('Full Payment')),
+                DropdownMenuItem(value: 'PARTIAL', child: Text('Partial Payment')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _commissionSettlementFilter = val;
+                    _commissionCurrentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _commissionStartDate,
+              endDate: _commissionEndDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _commissionStartDate = start;
+                _commissionEndDate = end;
                 _commissionCurrentPage = 0;
-              });
-            }
-          },
-        ),
-        ErpFilterDropdown<String>(
-          value: _safeCommissionSettlementFilter,
-          items: const [
-            DropdownMenuItem(value: 'ALL', child: Text('All Settlements')),
-            DropdownMenuItem(value: 'FULL', child: Text('Full Payment')),
-            DropdownMenuItem(value: 'PARTIAL', child: Text('Partial Payment')),
+              }),
+            ),
           ],
-          onChanged: (val) {
-            if (val != null) {
-              setState(() {
-                _commissionSettlementFilter = val;
-                _commissionCurrentPage = 0;
-              });
-            }
-          },
-        ),
-        ErpDateFilterBox(
-          startDate: _commissionStartDate,
-          endDate: _commissionEndDate,
-          onDateRangeSelected: (start, end) => setState(() {
-            _commissionStartDate = start;
-            _commissionEndDate = end;
-            _commissionCurrentPage = 0;
-          }),
-        ),
-      ],
+        );
+      },
     );
   }
 
   Widget _buildPaymentTable(List<ErpPayment> payments, MockDatabaseService db) {
-    final isMobile = MediaQuery.of(context).size.width < 750;
-
     if (payments.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(48),
@@ -2931,303 +3379,105 @@ class _PaymentCenterScreenState extends ConsumerState<PaymentCenterScreen> with 
       );
     }
 
-    if (isMobile) {
-      return ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: payments.length,
-        separatorBuilder: (c, i) => const SizedBox(height: 10),
-        itemBuilder: (context, idx) {
-          final p = payments[idx];
-          final parentSection = switch (p.paymentType) {
-            PaymentType.customerPayment => ErpNavSection.customerPayments,
-            PaymentType.dealerPayment => ErpNavSection.dealerPayments,
-            PaymentType.vendorPayment => ErpNavSection.vendorPaymentsSection,
-            PaymentType.commissionPayment => ErpNavSection.commissionPayments,
-          };
+    return ErpDataTable(
+      columns: const [
+        ErpColumn(title: 'Payment No', width: 140),
+        ErpColumn(title: 'Date', width: 110),
+        ErpColumn(title: 'Party / Beneficiary', width: 180),
+        ErpColumn(title: 'Reference Doc', width: 140),
+        ErpColumn(title: 'Amount (₹)', width: 120),
+        ErpColumn(title: 'Settlement', width: 110),
+        ErpColumn(title: 'Remaining (₹)', width: 120),
+        ErpColumn(title: 'Payment Mode', width: 120),
+        ErpColumn(title: 'UTR / Ref No', width: 140),
+        ErpColumn(title: 'Actions', width: 80),
+      ],
+      rows: payments.map((p) {
+        final parentSection = switch (p.paymentType) {
+          PaymentType.customerPayment => ErpNavSection.customerPayments,
+          PaymentType.dealerPayment => ErpNavSection.dealerPayments,
+          PaymentType.vendorPayment => ErpNavSection.vendorPaymentsSection,
+          PaymentType.commissionPayment => ErpNavSection.commissionPayments,
+        };
 
-          return Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.02),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    InkWell(
-                      onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', parentSection),
-                      child: Text(
-                        p.paymentNumber,
-                        style: AppTextStyles.bodyBold.copyWith(
-                          fontSize: 13,
-                          color: AppColors.primary,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          Formatters.formatCurrency(p.amount),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 13,
-                            color: (p.paymentType == PaymentType.customerPayment || p.paymentType == PaymentType.dealerPayment)
-                                ? AppColors.successText
-                                : AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        PopupMenuButton<String>(
-                          tooltip: 'Actions',
-                          icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onSelected: (val) {
-                            if (val == 'view') {
-                              ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', parentSection);
-                            } else if (val == 'whatsapp') {
-                              final architect = db.architects.where((a) => a.id == p.partyId).firstOrNull;
-                              WhatsAppQuickChatDialog.showArchitectQuickChat(
-                                context,
-                                architectName: architect?.name ?? p.partyName,
-                                architectPhone: architect?.mobile ?? '',
-                                firmName: architect?.companyName,
-                                projectName: p.projectName,
-                                commissionNumber: p.referenceDocumentNumber,
-                              );
-                            }
-                          },
-                          itemBuilder: (ctx) => const [
-                            PopupMenuItem(
-                              value: 'view',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
-                                  SizedBox(width: 8),
-                                  Text('View Details', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'whatsapp',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.chat, size: 18, color: Colors.green),
-                                  SizedBox(width: 8),
-                                  Text('WhatsApp Chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        p.partyName,
-                        style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    p.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL'),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                    ErpStatusBadge.neutral(p.paymentMode.toString().split('.').last.toUpperCase()),
-                  ],
-                ),
-                if (p.referenceDocumentNumber != null && p.referenceDocumentNumber!.isNotEmpty && p.referenceDocumentNumber != '-') ...[
-                  const SizedBox(height: 4),
-                  Text('Ref Doc: ${p.referenceDocumentNumber}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                ],
-                if (p.transactionReference != null && p.transactionReference!.isNotEmpty && p.transactionReference != '-') ...[
-                  const SizedBox(height: 2),
-                  Text('UTR/Ref: ${p.transactionReference}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                ],
-              ],
-            ),
-          );
-        },
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth > 0 ? constraints.maxWidth : 900),
-              child: DataTable(
-                key: const ValueKey('commission_payments_table'),
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                headingTextStyle: AppTextStyles.tableHeader,
-                dataTextStyle: AppTextStyles.tableCell,
-                dividerThickness: 1,
-                horizontalMargin: 20,
-                columnSpacing: 24,
-                headingRowHeight: 46,
-                dataRowMinHeight: 52,
-                dataRowMaxHeight: 60,
-                columns: [
-                  DataColumn(label: Text('PAYMENT NO', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(label: Text('DATE', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(label: Text('PARTY / BENEFICIARY', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(label: Text('REFERENCE DOC', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(label: Text('AMOUNT (₹)', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(label: Text('SETTLEMENT', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(label: Text('REMAINING (₹)', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(label: Text('PAYMENT MODE', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(label: Text('UTR / REF NO', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
-                  DataColumn(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.edit_note, size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text('ACTIONS', style: AppTextStyles.tableHeader.copyWith(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                ],
-                rows: payments.map((p) {
-                  final parentSection = switch (p.paymentType) {
-                    PaymentType.customerPayment => ErpNavSection.customerPayments,
-                    PaymentType.dealerPayment => ErpNavSection.dealerPayments,
-                    PaymentType.vendorPayment => ErpNavSection.vendorPaymentsSection,
-                    PaymentType.commissionPayment => ErpNavSection.commissionPayments,
-                  };
-
-                  return DataRow(
-                    cells: [
-                      DataCell(
-                        InkWell(
-                          onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', parentSection),
-                          child: Text(
-                            p.paymentNumber,
-                            style: AppTextStyles.bodyBold.copyWith(
-                              fontSize: 12,
-                              color: AppColors.primary,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ),
-                      ),
-                      DataCell(Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall)),
-                      DataCell(Text(p.partyName, style: AppTextStyles.bodyMedium)),
-                      DataCell(Text(p.referenceDocumentNumber ?? '-', style: AppTextStyles.bodySmall)),
-                      DataCell(
-                        Text(
-                          Formatters.formatCurrency(p.amount),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            color: (p.paymentType == PaymentType.customerPayment || p.paymentType == PaymentType.dealerPayment)
-                                ? AppColors.successText
-                                : AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                      DataCell(p.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL')),
-                      DataCell(
-                        Text(
-                          p.remainingAmount != null ? Formatters.formatCurrency(p.remainingAmount!) : '-',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: (p.remainingAmount ?? 0) > 0 ? AppColors.warningText : AppColors.successText,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      DataCell(ErpStatusBadge.neutral(p.paymentMode.toString().split('.').last.toUpperCase())),
-                      DataCell(Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall)),
-                      DataCell(
-                        PopupMenuButton<String>(
-                          tooltip: 'Actions',
-                          icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onSelected: (val) {
-                            if (val == 'view') {
-                              ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', parentSection);
-                            } else if (val == 'whatsapp') {
-                              final architect = db.architects.where((a) => a.id == p.partyId).firstOrNull;
-                              WhatsAppQuickChatDialog.showArchitectQuickChat(
-                                context,
-                                architectName: architect?.name ?? p.partyName,
-                                architectPhone: architect?.mobile ?? '',
-                                firmName: architect?.companyName,
-                                projectName: p.projectName,
-                                commissionNumber: p.referenceDocumentNumber,
-                              );
-                            }
-                          },
-                          itemBuilder: (ctx) => const [
-                            PopupMenuItem(
-                              value: 'view',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
-                                  SizedBox(width: 8),
-                                  Text('View Details', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'whatsapp',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.chat, size: 18, color: Colors.green),
-                                  SizedBox(width: 8),
-                                  Text('WhatsApp Chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }).toList(),
+        return [
+          InkWell(
+            onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', parentSection),
+            child: Text(
+              p.paymentNumber,
+              style: AppTextStyles.bodyBold.copyWith(
+                fontSize: 12,
+                color: AppColors.primary,
+                decoration: TextDecoration.underline,
               ),
             ),
-          );
-        },
-      ),
+          ),
+          Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
+          Text(p.partyName, style: AppTextStyles.bodyMedium),
+          Text(p.referenceDocumentNumber ?? '-', style: AppTextStyles.bodySmall),
+          Text(
+            Formatters.formatCurrency(p.amount),
+            style: AppTextStyles.bodyBold.copyWith(
+              color: (p.paymentType == PaymentType.customerPayment || p.paymentType == PaymentType.dealerPayment)
+                  ? AppColors.successText
+                  : AppColors.textPrimary,
+            ),
+          ),
+          p.isFullPayment ? ErpStatusBadge.success('FULL') : ErpStatusBadge.warning('PARTIAL'),
+          Text(
+            p.remainingAmount != null ? Formatters.formatCurrency(p.remainingAmount!) : '-',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: (p.remainingAmount ?? 0) > 0 ? AppColors.warningText : AppColors.successText,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          ErpStatusBadge.neutral(p.paymentMode.toString().split('.').last.toUpperCase()),
+          Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
+          PopupMenuButton<String>(
+            tooltip: 'Actions',
+            icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onSelected: (val) {
+              if (val == 'view') {
+                ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', parentSection);
+              } else if (val == 'whatsapp') {
+                final architect = db.architects.where((a) => a.id == p.partyId).firstOrNull;
+                WhatsAppQuickChatDialog.showArchitectQuickChat(
+                  context,
+                  architectName: architect?.name ?? p.partyName,
+                  architectPhone: architect?.mobile ?? '',
+                  firmName: architect?.companyName,
+                  projectName: p.projectName,
+                  commissionNumber: p.referenceDocumentNumber,
+                );
+              }
+            },
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(
+                value: 'view',
+                child: Row(
+                  children: [
+                    Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF475569)),
+                    SizedBox(width: 8),
+                    Text('View Details', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'whatsapp',
+                child: Row(
+                  children: [
+                    Icon(Icons.chat, size: 18, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('WhatsApp Chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ];
+      }).toList(),
     );
   }
 }
@@ -3388,6 +3638,69 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
   DateTime _selectedDate = DateTime.now();
   PaymentMode? _selectedMode;
 
+  double _getCustomerOutstanding(Customer customer, MockDatabaseService db) {
+    if (customer.isDeleted) return 0.0;
+    final cName = customer.name.trim().toLowerCase();
+    final duplicates = db.customers.where((c) {
+      if (c.isDeleted) return false;
+      final dName = c.name.trim().toLowerCase();
+      return (dName.isNotEmpty && dName == cName) || c.id == customer.id;
+    }).toList();
+
+    final matchingIds = duplicates.map((c) => c.id).toSet();
+    final directOutstanding = duplicates.fold(0.0, (maxVal, c) => max(maxVal, c.outstandingAmount));
+    final salesPending = db.sales
+        .where((s) => matchingIds.contains(s.partyId) && s.pendingAmount > 0)
+        .fold(0.0, (sum, s) => sum + s.pendingAmount);
+
+    return max(directOutstanding, salesPending);
+  }
+
+  double _getDealerOutstanding(Dealer dealer, MockDatabaseService db) {
+    if (dealer.isDeleted) return 0.0;
+    final dName = dealer.name.trim().toLowerCase();
+    final duplicates = db.dealers.where((d) {
+      if (d.isDeleted) return false;
+      final otherName = d.name.trim().toLowerCase();
+      return (otherName.isNotEmpty && otherName == dName) || d.id == dealer.id;
+    }).toList();
+
+    final matchingIds = duplicates.map((d) => d.id).toSet();
+    final directOutstanding = duplicates.fold(0.0, (maxVal, d) => max(maxVal, d.outstandingAmount));
+    final salesPending = db.sales
+        .where((s) => matchingIds.contains(s.partyId) && s.pendingAmount > 0)
+        .fold(0.0, (sum, s) => sum + s.pendingAmount);
+
+    return max(directOutstanding, salesPending);
+  }
+
+  double _getVendorOutstanding(Vendor vendor, MockDatabaseService db) {
+    if (vendor.isDeleted) return 0.0;
+    final vName = vendor.name.trim().toLowerCase();
+    final duplicates = db.vendors.where((v) {
+      if (v.isDeleted) return false;
+      final otherName = v.name.trim().toLowerCase();
+      return (otherName.isNotEmpty && otherName == vName) || v.id == vendor.id;
+    }).toList();
+
+    final matchingIds = duplicates.map((v) => v.id).toSet();
+    final directOutstanding = duplicates.fold(0.0, (maxVal, v) => max(maxVal, v.outstandingBalance));
+    final purchasesPending = db.purchases
+        .where((p) => matchingIds.contains(p.vendorId) && p.pendingAmount > 0)
+        .fold(0.0, (sum, p) => sum + p.pendingAmount);
+
+    return max(directOutstanding, purchasesPending);
+  }
+
+  double _getArchitectOutstanding(Architect architect, MockDatabaseService db) {
+    if (architect.isDeleted) return 0.0;
+    final directCommission = architect.pendingCommission;
+    final commPending = db.commissions
+        .where((cm) => cm.architectId == architect.id && cm.status != CommissionStatus.paid)
+        .fold(0.0, (sum, cm) => sum + cm.commissionAmount);
+    return max(directCommission, commPending);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -3399,14 +3712,18 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     final db = ref.read(databaseServiceProvider);
     if (widget.preselectedPartyId != null) {
       _selectedPartyId = widget.preselectedPartyId;
-    } else if (widget.type == PaymentType.customerPayment && db.customers.isNotEmpty) {
-      _selectedPartyId = db.customers.first.id;
-    } else if (widget.type == PaymentType.dealerPayment && db.dealers.isNotEmpty) {
-      _selectedPartyId = db.dealers.first.id;
-    } else if (widget.type == PaymentType.vendorPayment && db.vendors.isNotEmpty) {
-      _selectedPartyId = db.vendors.first.id;
-    } else if (widget.type == PaymentType.commissionPayment && db.architects.isNotEmpty) {
-      _selectedPartyId = db.architects.first.id;
+    } else if (widget.type == PaymentType.customerPayment) {
+      final eligible = db.customers.where((c) => !c.isDeleted && c.isActive && _getCustomerOutstanding(c, db) > 0).toList();
+      _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
+    } else if (widget.type == PaymentType.dealerPayment) {
+      final eligible = db.dealers.where((d) => !d.isDeleted && d.isActive && _getDealerOutstanding(d, db) > 0).toList();
+      _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
+    } else if (widget.type == PaymentType.vendorPayment) {
+      final eligible = db.vendors.where((v) => !v.isDeleted && v.isActive && _getVendorOutstanding(v, db) > 0).toList();
+      _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
+    } else if (widget.type == PaymentType.commissionPayment) {
+      final eligible = db.architects.where((a) => !a.isDeleted && a.isActive && _getArchitectOutstanding(a, db) > 0).toList();
+      _selectedPartyId = eligible.isNotEmpty ? eligible.first.id : null;
     }
   }
 
@@ -3422,6 +3739,77 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(databaseServiceProvider);
+
+    // Compute eligible parties with outstanding amounts > 0
+    final eligibleCustomers = <Customer>[];
+    final seenCustKeys = <String>{};
+    for (final c in db.customers) {
+      if (c.isDeleted || !c.isActive) continue;
+      final out = _getCustomerOutstanding(c, db);
+      if (out <= 0) continue;
+      final key = c.name.trim().toLowerCase().isNotEmpty ? c.name.trim().toLowerCase() : c.id;
+      if (seenCustKeys.add(key)) {
+        eligibleCustomers.add(c);
+      }
+    }
+    eligibleCustomers.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final eligibleDealers = <Dealer>[];
+    final seenDealerKeys = <String>{};
+    for (final d in db.dealers) {
+      if (d.isDeleted || !d.isActive) continue;
+      final out = _getDealerOutstanding(d, db);
+      if (out <= 0) continue;
+      final key = d.name.trim().toLowerCase().isNotEmpty ? d.name.trim().toLowerCase() : d.id;
+      if (seenDealerKeys.add(key)) {
+        eligibleDealers.add(d);
+      }
+    }
+    eligibleDealers.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final eligibleVendors = <Vendor>[];
+    final seenVendorKeys = <String>{};
+    for (final v in db.vendors) {
+      if (v.isDeleted || !v.isActive) continue;
+      final out = _getVendorOutstanding(v, db);
+      if (out <= 0) continue;
+      final key = v.name.trim().toLowerCase().isNotEmpty ? v.name.trim().toLowerCase() : v.id;
+      if (seenVendorKeys.add(key)) {
+        eligibleVendors.add(v);
+      }
+    }
+    eligibleVendors.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final eligibleArchitects = <Architect>[];
+    for (final a in db.architects) {
+      if (a.isDeleted || !a.isActive) continue;
+      final out = _getArchitectOutstanding(a, db);
+      if (out <= 0) continue;
+      eligibleArchitects.add(a);
+    }
+    eligibleArchitects.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    // Synchronize _selectedPartyId with available eligible list if not preselected
+    if (widget.preselectedPartyId == null) {
+      if (widget.type == PaymentType.customerPayment) {
+        if (_selectedPartyId == null || !eligibleCustomers.any((c) => c.id == _selectedPartyId)) {
+          _selectedPartyId = eligibleCustomers.isNotEmpty ? eligibleCustomers.first.id : null;
+        }
+      } else if (widget.type == PaymentType.dealerPayment) {
+        if (_selectedPartyId == null || !eligibleDealers.any((d) => d.id == _selectedPartyId)) {
+          _selectedPartyId = eligibleDealers.isNotEmpty ? eligibleDealers.first.id : null;
+        }
+      } else if (widget.type == PaymentType.vendorPayment) {
+        if (_selectedPartyId == null || !eligibleVendors.any((v) => v.id == _selectedPartyId)) {
+          _selectedPartyId = eligibleVendors.isNotEmpty ? eligibleVendors.first.id : null;
+        }
+      } else if (widget.type == PaymentType.commissionPayment) {
+        if (_selectedPartyId == null || !eligibleArchitects.any((a) => a.id == _selectedPartyId)) {
+          _selectedPartyId = eligibleArchitects.isNotEmpty ? eligibleArchitects.first.id : null;
+        }
+      }
+    }
+
     double outstanding = 0.0;
     String partyName = '';
     List<DropdownMenuItem<String>> linkedDocItems = [];
@@ -3432,9 +3820,11 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     String? selectedProjectName;
 
     if (widget.type == PaymentType.customerPayment && _selectedPartyId != null) {
-      final c = db.customers.firstWhere((cust) => cust.id == _selectedPartyId, orElse: () => db.customers.first);
-      outstanding = c.outstandingAmount;
-      partyName = c.name;
+      final c = db.customers.where((cust) => cust.id == _selectedPartyId).firstOrNull;
+      if (c != null) {
+        outstanding = _getCustomerOutstanding(c, db);
+        partyName = c.name;
+      }
       final sales = db.sales.where((s) => s.partyId == _selectedPartyId && s.pendingAmount > 0);
       linkedDocItems = sales.map((s) => DropdownMenuItem(value: s.id, child: Text('${s.invoiceNumber} (Pending: ${Formatters.formatCurrency(s.pendingAmount)})'))).toList();
 
@@ -3449,9 +3839,11 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
         }
       }
     } else if (widget.type == PaymentType.dealerPayment && _selectedPartyId != null) {
-      final d = db.dealers.firstWhere((dlr) => dlr.id == _selectedPartyId, orElse: () => db.dealers.first);
-      outstanding = d.outstandingAmount;
-      partyName = d.name;
+      final d = db.dealers.where((dlr) => dlr.id == _selectedPartyId).firstOrNull;
+      if (d != null) {
+        outstanding = _getDealerOutstanding(d, db);
+        partyName = d.name;
+      }
       final sales = db.sales.where((s) => s.partyId == _selectedPartyId && s.pendingAmount > 0);
       linkedDocItems = sales.map((s) => DropdownMenuItem(value: s.id, child: Text('${s.invoiceNumber} (Pending: ${Formatters.formatCurrency(s.pendingAmount)})'))).toList();
 
@@ -3466,9 +3858,11 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
         }
       }
     } else if (widget.type == PaymentType.vendorPayment && _selectedPartyId != null) {
-      final v = db.vendors.firstWhere((ven) => ven.id == _selectedPartyId, orElse: () => db.vendors.first);
-      outstanding = v.outstandingBalance;
-      partyName = v.name;
+      final v = db.vendors.where((ven) => ven.id == _selectedPartyId).firstOrNull;
+      if (v != null) {
+        outstanding = _getVendorOutstanding(v, db);
+        partyName = v.name;
+      }
       final purchases = db.purchases.where((p) => p.vendorId == _selectedPartyId && p.pendingAmount > 0);
       linkedDocItems = purchases.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.purchaseNumber} (Pending: ${Formatters.formatCurrency(p.pendingAmount)})'))).toList();
 
@@ -3483,9 +3877,11 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
         }
       }
     } else if (widget.type == PaymentType.commissionPayment && _selectedPartyId != null) {
-      final a = db.architects.firstWhere((arc) => arc.id == _selectedPartyId, orElse: () => db.architects.first);
-      outstanding = a.pendingCommission;
-      partyName = a.name;
+      final a = db.architects.where((arc) => arc.id == _selectedPartyId).firstOrNull;
+      if (a != null) {
+        outstanding = _getArchitectOutstanding(a, db);
+        partyName = a.name;
+      }
 
       final commissions = db.commissions.where((cm) => cm.architectId == _selectedPartyId && cm.status != CommissionStatus.paid);
       linkedDocItems = commissions.map((cm) => DropdownMenuItem(value: cm.id, child: Text('${cm.commissionNumber} (Amt: ${Formatters.formatCurrency(cm.commissionAmount)})'))).toList();
@@ -3617,16 +4013,44 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                         labelText: 'Select Customer *',
                         prefixIcon: Icon(Icons.person_outline, size: 20),
                       ),
-                      items: db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedPartyId = val;
-                          _selectedLinkedDocId = null;
-                          _amountCtrl.clear();
-                          _discountCtrl.clear();
-                        });
+                      hint: const Text('Select Customer with outstanding balance'),
+                      items: eligibleCustomers.isEmpty
+                          ? null
+                          : eligibleCustomers.map((c) {
+                              final out = _getCustomerOutstanding(c, db);
+                              return DropdownMenuItem(
+                                value: c.id,
+                                child: Text(
+                                  '${c.name} — Outstanding: ${Formatters.formatCurrency(out)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                      onChanged: eligibleCustomers.isEmpty
+                          ? null
+                          : (val) {
+                              setState(() {
+                                _selectedPartyId = val;
+                                _selectedLinkedDocId = null;
+                                _amountCtrl.clear();
+                                _discountCtrl.clear();
+                              });
+                            },
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return 'Select Customer';
+                        }
+                        return null;
                       },
                     ),
+                    if (eligibleCustomers.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6, left: 4),
+                        child: Text(
+                          'All customer accounts are settled (Zero outstanding dues).',
+                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                        ),
+                      ),
                     const SizedBox(height: 14),
                   ] else if (widget.type == PaymentType.dealerPayment) ...[
                     DropdownButtonFormField<String>(
@@ -3636,16 +4060,44 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                         labelText: 'Select Dealer *',
                         prefixIcon: Icon(Icons.storefront_outlined, size: 20),
                       ),
-                      items: db.dealers.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedPartyId = val;
-                          _selectedLinkedDocId = null;
-                          _amountCtrl.clear();
-                          _discountCtrl.clear();
-                        });
+                      hint: const Text('Select Dealer with outstanding balance'),
+                      items: eligibleDealers.isEmpty
+                          ? null
+                          : eligibleDealers.map((d) {
+                              final out = _getDealerOutstanding(d, db);
+                              return DropdownMenuItem(
+                                value: d.id,
+                                child: Text(
+                                  '${d.name} — Outstanding: ${Formatters.formatCurrency(out)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                      onChanged: eligibleDealers.isEmpty
+                          ? null
+                          : (val) {
+                              setState(() {
+                                _selectedPartyId = val;
+                                _selectedLinkedDocId = null;
+                                _amountCtrl.clear();
+                                _discountCtrl.clear();
+                              });
+                            },
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return 'Select Dealer';
+                        }
+                        return null;
                       },
                     ),
+                    if (eligibleDealers.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6, left: 4),
+                        child: Text(
+                          'All dealer accounts are settled (Zero outstanding dues).',
+                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                        ),
+                      ),
                     const SizedBox(height: 14),
                   ] else if (widget.type == PaymentType.vendorPayment) ...[
                     DropdownButtonFormField<String>(
@@ -3655,16 +4107,44 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                         labelText: 'Select Vendor *',
                         prefixIcon: Icon(Icons.business_outlined, size: 20),
                       ),
-                      items: db.vendors.map((v) => DropdownMenuItem(value: v.id, child: Text(v.name, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedPartyId = val;
-                          _selectedLinkedDocId = null;
-                          _amountCtrl.clear();
-                          _discountCtrl.clear();
-                        });
+                      hint: const Text('Select Vendor with outstanding balance'),
+                      items: eligibleVendors.isEmpty
+                          ? null
+                          : eligibleVendors.map((v) {
+                              final out = _getVendorOutstanding(v, db);
+                              return DropdownMenuItem(
+                                value: v.id,
+                                child: Text(
+                                  '${v.name} — Outstanding: ${Formatters.formatCurrency(out)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                      onChanged: eligibleVendors.isEmpty
+                          ? null
+                          : (val) {
+                              setState(() {
+                                _selectedPartyId = val;
+                                _selectedLinkedDocId = null;
+                                _amountCtrl.clear();
+                                _discountCtrl.clear();
+                              });
+                            },
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return 'Select Vendor';
+                        }
+                        return null;
                       },
                     ),
+                    if (eligibleVendors.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6, left: 4),
+                        child: Text(
+                          'All vendor accounts are settled (Zero outstanding dues).',
+                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                        ),
+                      ),
                     const SizedBox(height: 14),
                   ] else if (widget.type == PaymentType.commissionPayment) ...[
                     DropdownButtonFormField<String>(
@@ -3674,16 +4154,44 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                         labelText: 'Select Architect / Partner *',
                         prefixIcon: Icon(Icons.handshake_outlined, size: 20),
                       ),
-                      items: db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedPartyId = val;
-                          _selectedLinkedDocId = null;
-                          _amountCtrl.clear();
-                          _discountCtrl.clear();
-                        });
+                      hint: const Text('Select Architect with commission due'),
+                      items: eligibleArchitects.isEmpty
+                          ? null
+                          : eligibleArchitects.map((a) {
+                              final out = _getArchitectOutstanding(a, db);
+                              return DropdownMenuItem(
+                                value: a.id,
+                                child: Text(
+                                  '${a.name} — Commission Due: ${Formatters.formatCurrency(out)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                      onChanged: eligibleArchitects.isEmpty
+                          ? null
+                          : (val) {
+                              setState(() {
+                                _selectedPartyId = val;
+                                _selectedLinkedDocId = null;
+                                _amountCtrl.clear();
+                                _discountCtrl.clear();
+                              });
+                            },
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return 'Select Architect';
+                        }
+                        return null;
                       },
                     ),
+                    if (eligibleArchitects.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6, left: 4),
+                        child: Text(
+                          'All architect commissions are settled (Zero dues).',
+                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                        ),
+                      ),
                     const SizedBox(height: 14),
                   ],
                 ],
@@ -4068,7 +4576,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                     ErpButton(
                       text: 'Add Transaction',
                       icon: Icons.check,
-                      onPressed: () {
+                      onPressed: (_selectedPartyId == null) ? null : () {
                         if (!_formKey.currentState!.validate()) return;
                         if (_transactionType != 'Discount Only' && _selectedMode == null) {
                           ErpToast.showWarning(context, 'Please select a payment mode.');

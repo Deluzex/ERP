@@ -1,4 +1,4 @@
-import 'purchase_model.dart';
+﻿import 'purchase_model.dart';
 
 enum PartyType {
   customer,

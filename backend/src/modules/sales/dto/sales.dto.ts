@@ -58,12 +58,12 @@ export class SaleLineItemDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUUID()
+  @IsString()
   finishedProductId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUUID()
+  @IsString()
   rawMaterialId?: string;
 
   @ApiPropertyOptional()
@@ -168,6 +168,11 @@ export class CreateQuotationDto {
   @IsOptional()
   @IsUUID()
   projectId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  proformaId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -318,8 +323,19 @@ export class CreateSalesOrderDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsUUID()
+  proformaId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
   notes?: string;
+}
+
+export class UpdateProformaStatusDto {
+  @ApiProperty()
+  @IsString()
+  status!: string;
 }
 
 export class UpdateSalesOrderStatusDto {
@@ -503,7 +519,7 @@ export class RecordInvoicePaymentDto {
 
 export class CreateSalesReturnDto {
   @ApiProperty()
-  @IsUUID()
+  @IsString()
   originalInvoiceId!: string;
 
   @ApiProperty()

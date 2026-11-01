@@ -1,4 +1,4 @@
-import 'api_client.dart';
+﻿import 'api_client.dart';
 
 /// Production API Service for Reports & Business Intelligence (`/api/v1/reports/*`)
 class ReportsApiService {

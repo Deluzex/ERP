@@ -12,6 +12,7 @@ class Dealer {
   final String stateCode;
   final double outstandingAmount;
   final bool isDeleted;
+  final bool isActive;
   final DateTime? deletedAt;
   final DateTime createdAt;
 
@@ -29,6 +30,7 @@ class Dealer {
     this.stateCode = '24',
     this.outstandingAmount = 0.0,
     this.isDeleted = false,
+    this.isActive = true,
     this.deletedAt,
     required this.createdAt,
   });
@@ -47,6 +49,7 @@ class Dealer {
     String? stateCode,
     double? outstandingAmount,
     bool? isDeleted,
+    bool? isActive,
     DateTime? deletedAt,
     DateTime? createdAt,
   }) {
@@ -64,6 +67,7 @@ class Dealer {
       stateCode: stateCode ?? this.stateCode,
       outstandingAmount: outstandingAmount ?? this.outstandingAmount,
       isDeleted: isDeleted ?? this.isDeleted,
+      isActive: isActive ?? this.isActive,
       deletedAt: deletedAt ?? this.deletedAt,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -84,6 +88,9 @@ class Dealer {
       stateCode: json['stateCode']?.toString() ?? json['state_code']?.toString() ?? '24',
       outstandingAmount: double.tryParse(json['outstandingAmount']?.toString() ?? json['outstanding_amount']?.toString() ?? '0') ?? 0.0,
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
+      isActive: json['isActive'] != null
+          ? (json['isActive'] == true || json['isActive'].toString() == 'true')
+          : (json['is_active'] != null ? (json['is_active'] == true || json['is_active'].toString() == 'true') : true),
       deletedAt: json['deletedAt'] != null ? DateTime.tryParse(json['deletedAt'].toString()) : null,
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now() : DateTime.now(),
     );
@@ -91,6 +98,7 @@ class Dealer {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': companyName.isNotEmpty ? companyName : name,
       'contactPerson': contactPerson,
       'mobile': mobile,
@@ -101,6 +109,7 @@ class Dealer {
       if (state.trim().isNotEmpty) 'state': state.trim(),
       if (pincode.trim().isNotEmpty) 'pincode': pincode.trim(),
       if (stateCode.trim().isNotEmpty) 'stateCode': stateCode.trim(),
+      'isActive': isActive,
     };
   }
 }

@@ -19,8 +19,10 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import '../../../shared/services/mock_database_service.dart';
+import '../../../core/storage/form_draft_service.dart';
 
 class _QuotationItemDraft {
   PurchaseItemType itemType;
@@ -175,6 +177,8 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   final _formKey = GlobalKey<FormState>();
 
   PartyType _partyType = PartyType.customer;
+  int? _partyDropdownVersion = 0;
+  int get partyDropdownVersion => _partyDropdownVersion ?? 0;
   String? _selectedPartyId;
   String? _selectedProjectId;
   String _salesExecutive = 'Alex Sterling';
@@ -210,13 +214,26 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
     final db = ref.read(databaseServiceProvider);
     final sourceId = ref.read(salesCreateSourceDocIdProvider);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      db.loadRawMaterials();
-      db.loadFinishedProducts();
-      db.loadCustomers();
-      db.loadDealers();
-      db.loadArchitects();
-      db.loadProjects();
+    _contactPersonCtrl.addListener(_saveDraftToStorage);
+    _mobileCtrl.addListener(_saveDraftToStorage);
+    _emailCtrl.addListener(_saveDraftToStorage);
+    _gstNumberCtrl.addListener(_saveDraftToStorage);
+    _billingAddressCtrl.addListener(_saveDraftToStorage);
+    _shippingAddressCtrl.addListener(_saveDraftToStorage);
+    _notesCtrl.addListener(_saveDraftToStorage);
+    _termsCtrl.addListener(_saveDraftToStorage);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await db.loadRawMaterials();
+      await db.loadFinishedProducts();
+      await db.loadCustomers();
+      await db.loadDealers();
+      await db.loadArchitects();
+      await db.loadProjects();
+
+      if (sourceId == null && !_isRevision) {
+        await _restoreDraftFromStorage();
+      }
     });
 
     if (sourceId != null) {
@@ -267,46 +284,202 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
           ));
         }
       }
+    } else {
+      final syncDraft = FormDraftService.instance.getDraftSync('quotation');
+      if (syncDraft != null) {
+        _applyDraftData(syncDraft);
+      } else {
+        final firstCust = db.customers.where((c) => !c.isDeleted && c.isActive).firstOrNull;
+        if (firstCust != null) {
+          _selectedPartyId = firstCust.id;
+          _autoFillPartyDetails(firstCust.id, PartyType.customer, db);
+        }
+        _resolveTaxClassification();
+        final firstFp = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).firstOrNull;
+        if (firstFp != null) {
+          _items.add(_QuotationItemDraft(
+            itemType: PurchaseItemType.finishedProduct,
+            itemId: firstFp.id,
+            itemName: firstFp.name,
+            itemCode: firstFp.itemCode,
+            productDescription: _generateFpDescription(firstFp),
+            unit: firstFp.unit,
+            quantity: 10.0,
+            rate: firstFp.customerSellingPrice,
+            discount: 0.0,
+            gstPercent: firstFp.gstPercent,
+            availableStockSnapshot: firstFp.availableStock,
+          ));
+        } else {
+          final rm = db.rawMaterials.where((r) => !r.isDeleted && r.isActive).firstOrNull;
+          if (rm != null) {
+            _items.add(_QuotationItemDraft(
+              itemType: PurchaseItemType.rawMaterial,
+              itemId: rm.id,
+              itemName: rm.name,
+              itemCode: rm.itemCode,
+              productDescription: _generateRmDescription(rm),
+              unit: rm.unit,
+              quantity: 10.0,
+              rate: rm.defaultPurchasePrice,
+              discount: 0.0,
+              gstPercent: rm.gstPercent,
+              availableStockSnapshot: rm.currentStock,
+            ));
+          }
+        }
+      }
     }
+  }
 
-    if (_items.isEmpty) {
-      if (db.customers.isNotEmpty) {
-        _selectedPartyId = db.customers.first.id;
-        _autoFillPartyDetails(db.customers.first.id, PartyType.customer, db);
-      }
-      _resolveTaxClassification();
-      if (db.finishedProducts.isNotEmpty) {
-        final fp = db.finishedProducts.first;
-        _items.add(_QuotationItemDraft(
-          itemType: PurchaseItemType.finishedProduct,
-          itemId: fp.id,
-          itemName: fp.name,
-          itemCode: fp.itemCode,
-          productDescription: _generateFpDescription(fp),
-          unit: fp.unit,
-          quantity: 10.0,
-          rate: fp.customerSellingPrice,
-          discount: 0.0,
-          gstPercent: fp.gstPercent,
-          availableStockSnapshot: fp.availableStock,
-        ));
-      } else if (db.rawMaterials.isNotEmpty) {
-        final rm = db.rawMaterials.first;
-        _items.add(_QuotationItemDraft(
-          itemType: PurchaseItemType.rawMaterial,
-          itemId: rm.id,
-          itemName: rm.name,
-          itemCode: rm.itemCode,
-          productDescription: _generateRmDescription(rm),
-          unit: rm.unit,
-          quantity: 10.0,
-          rate: rm.defaultPurchasePrice,
-          discount: 0.0,
-          gstPercent: rm.gstPercent,
-          availableStockSnapshot: rm.currentStock,
-        ));
+  @override
+  void dispose() {
+    _contactPersonCtrl.removeListener(_saveDraftToStorage);
+    _mobileCtrl.removeListener(_saveDraftToStorage);
+    _emailCtrl.removeListener(_saveDraftToStorage);
+    _gstNumberCtrl.removeListener(_saveDraftToStorage);
+    _billingAddressCtrl.removeListener(_saveDraftToStorage);
+    _shippingAddressCtrl.removeListener(_saveDraftToStorage);
+    _notesCtrl.removeListener(_saveDraftToStorage);
+    _termsCtrl.removeListener(_saveDraftToStorage);
+
+    _contactPersonCtrl.dispose();
+    _mobileCtrl.dispose();
+    _emailCtrl.dispose();
+    _gstNumberCtrl.dispose();
+    _billingAddressCtrl.dispose();
+    _shippingAddressCtrl.dispose();
+    _notesCtrl.dispose();
+    _termsCtrl.dispose();
+    super.dispose();
+  }
+
+  void _saveDraftToStorage() {
+    if (_isRevision || !mounted) return;
+    if (_items.isEmpty &&
+        _selectedPartyId == null &&
+        _contactPersonCtrl.text.isEmpty &&
+        _notesCtrl.text.isEmpty) {
+      return;
+    }
+    final data = {
+      'partyType': _partyType.name,
+      'selectedPartyId': _selectedPartyId,
+      'selectedProjectId': _selectedProjectId,
+      'contactPerson': _contactPersonCtrl.text,
+      'mobile': _mobileCtrl.text,
+      'email': _emailCtrl.text,
+      'gstNumber': _gstNumberCtrl.text,
+      'billingAddress': _billingAddressCtrl.text,
+      'shippingAddress': _shippingAddressCtrl.text,
+      'deliveryPosState': _deliveryPosState,
+      'isInterStateTax': _isInterStateTax,
+      'isTaxManuallySelected': _isTaxManuallySelected,
+      'salesExecutive': _salesExecutive,
+      'notes': _notesCtrl.text,
+      'terms': _termsCtrl.text,
+      'items': _items.map((it) => {
+        'itemType': it.itemType.name,
+        'itemId': it.itemId,
+        'itemName': it.itemName,
+        'itemCode': it.itemCode,
+        'productDescription': it.productDescription,
+        'unit': it.unit,
+        'quantity': it.quantity,
+        'rate': it.rate,
+        'discount': it.discount,
+        'gstPercent': it.gstPercent,
+        'availableStockSnapshot': it.availableStockSnapshot,
+      }).toList(),
+    };
+    FormDraftService.instance.saveDraft('quotation', data);
+  }
+
+  void _applyDraftData(Map<String, dynamic> draft) {
+    if (draft['partyType'] != null) {
+      _partyType = PartyType.values.firstWhere(
+        (p) => p.name == draft['partyType'],
+        orElse: () => PartyType.customer,
+      );
+    }
+    if (draft['selectedPartyId'] != null) {
+      _selectedPartyId = draft['selectedPartyId'] as String?;
+    }
+    if (draft['selectedProjectId'] != null) {
+      _selectedProjectId = draft['selectedProjectId'] as String?;
+    }
+    if (draft['contactPerson'] != null) {
+      _contactPersonCtrl.text = draft['contactPerson'] as String;
+    }
+    if (draft['mobile'] != null) {
+      _mobileCtrl.text = draft['mobile'] as String;
+    }
+    if (draft['email'] != null) {
+      _emailCtrl.text = draft['email'] as String;
+    }
+    if (draft['gstNumber'] != null) {
+      _gstNumberCtrl.text = draft['gstNumber'] as String;
+    }
+    if (draft['billingAddress'] != null) {
+      _billingAddressCtrl.text = draft['billingAddress'] as String;
+    }
+    if (draft['shippingAddress'] != null) {
+      _shippingAddressCtrl.text = draft['shippingAddress'] as String;
+    }
+    if (draft['deliveryPosState'] != null) {
+      _deliveryPosState = draft['deliveryPosState'] as String?;
+    }
+    if (draft['isInterStateTax'] != null) {
+      _isInterStateTax = draft['isInterStateTax'] as bool;
+    }
+    if (draft['isTaxManuallySelected'] != null) {
+      _isTaxManuallySelected = draft['isTaxManuallySelected'] as bool;
+    }
+    if (draft['salesExecutive'] != null) {
+      _salesExecutive = draft['salesExecutive'] as String;
+    }
+    if (draft['notes'] != null) {
+      _notesCtrl.text = draft['notes'] as String;
+    }
+    if (draft['terms'] != null) {
+      _termsCtrl.text = draft['terms'] as String;
+    }
+    final rawItems = draft['items'];
+    if (rawItems is List && rawItems.isNotEmpty) {
+      _items.clear();
+      for (final it in rawItems) {
+        if (it is Map<String, dynamic>) {
+          final itemTypeStr = it['itemType'] as String? ?? 'finishedProduct';
+          final itemType = itemTypeStr == 'rawMaterial'
+              ? PurchaseItemType.rawMaterial
+              : PurchaseItemType.finishedProduct;
+          _items.add(_QuotationItemDraft(
+            itemType: itemType,
+            itemId: it['itemId'] as String? ?? '',
+            itemName: it['itemName'] as String? ?? '',
+            itemCode: it['itemCode'] as String? ?? '',
+            productDescription: it['productDescription'] as String? ?? '',
+            unit: it['unit'] as String? ?? '',
+            quantity: (it['quantity'] as num?)?.toDouble() ?? 1.0,
+            rate: (it['rate'] as num?)?.toDouble() ?? 0.0,
+            discount: (it['discount'] as num?)?.toDouble() ?? 0.0,
+            gstPercent: (it['gstPercent'] as num?)?.toDouble() ?? 18.0,
+            availableStockSnapshot: (it['availableStockSnapshot'] as num?)?.toDouble() ?? 0.0,
+          ));
+        }
       }
     }
+  }
+
+  Future<void> _restoreDraftFromStorage() async {
+    try {
+      final draft = await FormDraftService.instance.loadDraft('quotation');
+      if (draft != null && mounted && !_isRevision) {
+        setState(() {
+          _applyDraftData(draft);
+        });
+      }
+    } catch (_) {}
   }
 
   void _resolveTaxClassification() {
@@ -502,243 +675,278 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         break;
     }
 
+    bool isSaving = false;
+
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) {
-        return AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          title: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              Text(title, style: AppTextStyles.h2),
-              ErpButton(
-                text: 'Scan & Upload (OCR)',
-                icon: Icons.document_scanner_outlined,
-                isOutlined: true,
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (ocrCtx) => Dialog(
-                      backgroundColor: Colors.transparent,
-                      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
-                        width: double.infinity,
-                        height: MediaQuery.of(context).size.height * 0.88,
-                        child: DocumentOcrUploader(
-                          docType: partyType == PartyType.customer
-                              ? OcrDocType.customerDoc
-                              : (partyType == PartyType.dealer ? OcrDocType.customerDoc : OcrDocType.architectDoc),
-                          onCancel: () => Navigator.of(ocrCtx).pop(),
-                          onConfirm: (data) {
-                            nameCtrl.text = data['Customer Name'] ?? data['Company Name'] ?? data['Dealer Name'] ?? data['Architect Name'] ?? nameCtrl.text;
-                            contactPersonCtrl.text = data['Contact Person'] ?? contactPersonCtrl.text;
-                            mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
-                            emailCtrl.text = data['Email'] ?? emailCtrl.text;
-                            addressCtrl.text = data['Address'] ?? addressCtrl.text;
-                            gstCtrl.text = data['GSTIN'] ?? data['GST Number'] ?? gstCtrl.text;
-                            Navigator.of(ocrCtx).pop();
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              title: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  Text(title, style: AppTextStyles.h2),
+                  ErpButton(
+                    text: 'Scan & Upload (OCR)',
+                    icon: Icons.document_scanner_outlined,
+                    isOutlined: true,
+                    onPressed: isSaving
+                        ? null
+                        : () {
+                            showDialog(
+                              context: context,
+                              builder: (ocrCtx) => Dialog(
+                                backgroundColor: Colors.transparent,
+                                insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                                child: Container(
+                                  constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
+                                  width: double.infinity,
+                                  height: MediaQuery.of(context).size.height * 0.88,
+                                  child: DocumentOcrUploader(
+                                    docType: partyType == PartyType.customer
+                                        ? OcrDocType.customerDoc
+                                        : (partyType == PartyType.dealer ? OcrDocType.customerDoc : OcrDocType.architectDoc),
+                                    onCancel: () => Navigator.of(ocrCtx).pop(),
+                                    onConfirm: (data) {
+                                      nameCtrl.text = data['Customer Name'] ?? data['Company Name'] ?? data['Dealer Name'] ?? data['Architect Name'] ?? nameCtrl.text;
+                                      companyCtrl.text = data['Company Name'] ?? companyCtrl.text;
+                                      contactPersonCtrl.text = data['Contact Person'] ?? contactPersonCtrl.text;
+                                      mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
+                                      emailCtrl.text = data['Email'] ?? emailCtrl.text;
+                                      addressCtrl.text = data['Address'] ?? addressCtrl.text;
+                                      gstCtrl.text = data['GSTIN'] ?? data['GST Number'] ?? gstCtrl.text;
+                                      Navigator.of(ocrCtx).pop();
+                                    },
+                                  ),
+                                ),
+                              ),
+                            );
                           },
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                  ),
+                ],
               ),
-            ],
-          ),
-          content: Container(
-            constraints: const BoxConstraints(maxWidth: 540),
-            width: double.infinity,
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: nameCtrl,
-                      validator: (v) => Validators.requiredField(v, '$nameLabel required'),
-                      decoration: InputDecoration(labelText: nameLabel, hintText: nameHint),
-                    ),
-                    const SizedBox(height: 12),
-                    if (partyType == PartyType.dealer) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: companyCtrl,
-                              decoration: const InputDecoration(labelText: 'Registered Entity Name'),
-                            ),
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 540),
+                width: double.infinity,
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: nameCtrl,
+                          validator: (v) => Validators.requiredField(v, '$nameLabel required'),
+                          decoration: InputDecoration(labelText: nameLabel, hintText: nameHint),
+                        ),
+                        const SizedBox(height: 12),
+                        if (partyType == PartyType.dealer) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: companyCtrl,
+                                  validator: (v) => Validators.requiredField(v, 'Registered entity name required'),
+                                  decoration: const InputDecoration(labelText: 'Registered Entity Name *', hintText: 'E.g., Luxe Furnishings LLP'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: contactPersonCtrl,
+                                  validator: (v) => Validators.requiredField(v, 'Contact person required'),
+                                  decoration: const InputDecoration(labelText: 'Contact Person *', hintText: 'E.g., Ramesh Shah'),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: contactPersonCtrl,
-                              validator: (v) => Validators.requiredField(v, 'Contact person required'),
-                              decoration: const InputDecoration(labelText: 'Contact Person *'),
-                            ),
-                          ),
+                          const SizedBox(height: 12),
                         ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (partyType == PartyType.architect) ...[
-                      TextFormField(
-                        controller: companyCtrl,
-                        decoration: const InputDecoration(labelText: 'Studio / Firm Name', hintText: 'E.g., Sanjay Puri Architects'),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: mobileCtrl,
-                            validator: Validators.mobile,
-                            decoration: const InputDecoration(labelText: 'Mobile Number *'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: emailCtrl,
-                            validator: Validators.email,
-                            decoration: const InputDecoration(labelText: 'Email Address'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: gstCtrl,
-                            decoration: const InputDecoration(labelText: 'GST Number'),
-                          ),
-                        ),
                         if (partyType == PartyType.architect) ...[
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: commissionRateCtrl,
-                              keyboardType: TextInputType.number,
-                              validator: Validators.nonNegativeNumber,
-                              decoration: const InputDecoration(labelText: 'Default Commission Rate (%) *'),
-                            ),
+                          TextFormField(
+                            controller: companyCtrl,
+                            validator: (v) => Validators.requiredField(v, 'Studio / Firm name required'),
+                            decoration: const InputDecoration(labelText: 'Studio / Firm Name *', hintText: 'E.g., Sanjay Puri Architects'),
                           ),
+                          const SizedBox(height: 12),
                         ],
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: mobileCtrl,
+                                validator: Validators.mobile,
+                                keyboardType: TextInputType.phone,
+                                decoration: const InputDecoration(labelText: 'Mobile Number *', hintText: 'E.g., 9876543210'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: emailCtrl,
+                                validator: Validators.requiredEmailAddress,
+                                keyboardType: TextInputType.emailAddress,
+                                decoration: const InputDecoration(labelText: 'Email Address *', hintText: 'name@example.com'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: gstCtrl,
+                                validator: (v) => Validators.gst(v, false),
+                                decoration: const InputDecoration(
+                                  labelText: 'GST Number (Optional, 15 chars)',
+                                  hintText: '24AAAAA0000A1Z5',
+                                ),
+                              ),
+                            ),
+                            if (partyType == PartyType.architect) ...[
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: commissionRateCtrl,
+                                  keyboardType: TextInputType.number,
+                                  validator: (v) => Validators.percentage(v, 'Must be between 0% and 100%'),
+                                  decoration: const InputDecoration(labelText: 'Default Commission Rate (%) *'),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: addressCtrl,
+                          maxLines: 2,
+                          validator: (v) => Validators.requiredField(
+                            v,
+                            partyType == PartyType.customer
+                                ? 'Site / Billing Address required'
+                                : (partyType == PartyType.dealer ? 'Showroom / Business Address required' : 'Studio / Office Address required'),
+                          ),
+                          decoration: InputDecoration(
+                            labelText: partyType == PartyType.customer
+                                ? 'Site / Billing Address *'
+                                : (partyType == PartyType.dealer ? 'Showroom / Business Address *' : 'Studio / Office Address *'),
+                            hintText: 'Enter complete postal address with locality and city',
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: addressCtrl,
-                      maxLines: 2,
-                      decoration: InputDecoration(
-                        labelText: partyType == PartyType.customer
-                            ? 'Site / Billing Address'
-                            : (partyType == PartyType.dealer ? 'Showroom / Business Address' : 'Studio / Office Address'),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-          actions: [
-            ErpButton(
-              text: 'Cancel',
-              isOutlined: true,
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ErpButton(
-              text: 'Save & Select',
-              icon: Icons.check_circle_outline,
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-                Navigator.of(ctx).pop();
+              actions: [
+                ErpButton(
+                  text: 'Cancel',
+                  isOutlined: true,
+                  onPressed: isSaving ? null : () => Navigator.of(ctx).pop(),
+                ),
+                ErpButton(
+                  text: 'Save & Select',
+                  icon: Icons.check_circle_outline,
+                  isLoading: isSaving,
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
 
-                try {
-                  if (partyType == PartyType.customer) {
-                    final newCust = Customer(
-                      id: IdGenerator.generateId('CUST'),
-                      name: nameCtrl.text.trim(),
-                      mobile: mobileCtrl.text.trim(),
-                      email: emailCtrl.text.trim(),
-                      gstNumber: gstCtrl.text.trim(),
-                      address: addressCtrl.text.trim(),
-                      outstandingAmount: 0.0,
-                      createdAt: DateTime.now(),
-                    );
-                    final saved = await db.addCustomerAsync(newCust);
-                    if (!mounted) return;
-                    setState(() {
-                      _selectedPartyId = saved.id;
-                      _autoFillPartyDetails(saved.id, PartyType.customer, db);
-                    });
-                  } else if (partyType == PartyType.dealer) {
-                    final newDealer = Dealer(
-                      id: IdGenerator.generateId('DLR'),
-                      name: nameCtrl.text.trim(),
-                      companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
-                      contactPerson: contactPersonCtrl.text.trim(),
-                      mobile: mobileCtrl.text.trim(),
-                      email: emailCtrl.text.trim(),
-                      gstNumber: gstCtrl.text.trim(),
-                      address: addressCtrl.text.trim(),
-                      outstandingAmount: 0.0,
-                      createdAt: DateTime.now(),
-                    );
-                    final saved = await db.addDealerAsync(newDealer);
-                    if (!mounted) return;
-                    setState(() {
-                      _selectedPartyId = saved.id;
-                      _autoFillPartyDetails(saved.id, PartyType.dealer, db);
-                    });
-                  } else if (partyType == PartyType.architect) {
-                    final newArch = Architect(
-                      id: IdGenerator.generateId('ARCH'),
-                      name: nameCtrl.text.trim(),
-                      companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
-                      mobile: mobileCtrl.text.trim(),
-                      email: emailCtrl.text.trim(),
-                      gstNumber: gstCtrl.text.trim(),
-                      address: addressCtrl.text.trim(),
-                      defaultCommissionRate: double.tryParse(commissionRateCtrl.text.trim()) ?? 5.0,
-                      totalCommissionEarned: 0.0,
-                      pendingCommission: 0.0,
-                      approvedCommission: 0.0,
-                      paidCommission: 0.0,
-                      createdAt: DateTime.now(),
-                    );
-                    final saved = await db.addArchitectAsync(newArch);
-                    if (!mounted) return;
-                    setState(() {
-                      _selectedPartyId = saved.id;
-                      _autoFillPartyDetails(saved.id, PartyType.architect, db);
-                    });
-                  }
+                          setDlgState(() => isSaving = true);
 
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('${partyType == PartyType.customer ? 'Customer' : partyType == PartyType.dealer ? 'Dealer' : 'Architect'} created and added to master successfully!'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to save: $e'), backgroundColor: AppColors.danger),
-                  );
-                }
-              },
-            ),
-          ],
+                          try {
+                            if (partyType == PartyType.customer) {
+                              final newCust = Customer(
+                                id: IdGenerator.generateId('CUST'),
+                                name: nameCtrl.text.trim(),
+                                mobile: mobileCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                                gstNumber: gstCtrl.text.trim(),
+                                address: addressCtrl.text.trim(),
+                                outstandingAmount: 0.0,
+                                createdAt: DateTime.now(),
+                              );
+                              final saved = await db.addCustomerAsync(newCust);
+                              if (!mounted) return;
+                              setState(() {
+                                _selectedPartyId = saved.id;
+                              _autoFillPartyDetails(saved.id, partyType, db);
+                              });
+                            } else if (partyType == PartyType.dealer) {
+                              final newDealer = Dealer(
+                                id: IdGenerator.generateId('DLR'),
+                                name: nameCtrl.text.trim(),
+                                companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
+                                contactPerson: contactPersonCtrl.text.trim(),
+                                mobile: mobileCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                                gstNumber: gstCtrl.text.trim(),
+                                address: addressCtrl.text.trim(),
+                                outstandingAmount: 0.0,
+                                createdAt: DateTime.now(),
+                              );
+                              final saved = await db.addDealerAsync(newDealer);
+                              if (!mounted) return;
+                              setState(() {
+                                _selectedPartyId = saved.id;
+                              _autoFillPartyDetails(saved.id, partyType, db);
+                              });
+                            } else if (partyType == PartyType.architect) {
+                              final newArch = Architect(
+                                id: IdGenerator.generateId('ARCH'),
+                                name: nameCtrl.text.trim(),
+                                companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
+                                mobile: mobileCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                                gstNumber: gstCtrl.text.trim(),
+                                address: addressCtrl.text.trim(),
+                                defaultCommissionRate: double.tryParse(commissionRateCtrl.text.trim()) ?? 5.0,
+                                totalCommissionEarned: 0.0,
+                                pendingCommission: 0.0,
+                                approvedCommission: 0.0,
+                                paidCommission: 0.0,
+                                createdAt: DateTime.now(),
+                              );
+                              final saved = await db.addArchitectAsync(newArch);
+                              if (!mounted) return;
+                              setState(() {
+                                _selectedPartyId = saved.id;
+                              _autoFillPartyDetails(saved.id, partyType, db);
+                              });
+                            }
+
+                            if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                              Navigator.of(ctx).pop();
+                            }
+
+                            if (!mounted) return;
+                            ErpToast.showSuccess(
+                              context,
+                              '${partyType == PartyType.customer ? 'Customer' : partyType == PartyType.dealer ? 'Dealer' : 'Architect'} created and added to master successfully!',
+                            );
+                          } catch (e) {
+                            setDlgState(() => isSaving = false);
+                            final msg = e.toString().replaceAll('Exception: ', '').trim();
+                            if (ctx.mounted) {
+                              ErpToast.showError(ctx, 'Failed to save: $msg');
+                            }
+                          }
+                        },
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -861,12 +1069,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                       _selectedProjectId = newProj.id;
                     });
 
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Project created and added to Project Master successfully!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
+                    ErpToast.showSuccess(context, 'Project created and added to Project Master successfully!');
                   },
                 ),
               ],
@@ -880,9 +1083,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   void _addNewProductRow() {
     final db = ref.read(databaseServiceProvider);
     if (db.finishedProducts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No Finished Products available in master.'), backgroundColor: AppColors.warning),
-      );
+      ErpToast.showWarning(context, 'No Finished Products available in master.');
       return;
     }
     final fp = db.finishedProducts.first;
@@ -901,14 +1102,14 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         availableStockSnapshot: fp.availableStock,
       ));
     });
+    _saveDraftToStorage();
   }
 
+  // ignore: unused_element
   void _addNewRawMaterialRow() {
     final db = ref.read(databaseServiceProvider);
     if (db.rawMaterials.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No Raw Materials available in master.'), backgroundColor: AppColors.warning),
-      );
+      ErpToast.showWarning(context, 'No Raw Materials available in master.');
       return;
     }
     final rm = db.rawMaterials.first;
@@ -927,6 +1128,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         availableStockSnapshot: rm.currentStock,
       ));
     });
+    _saveDraftToStorage();
   }
 
   void _duplicateRow(int index) {
@@ -934,12 +1136,14 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       setState(() {
         _items.insert(index + 1, _items[index].copy());
       });
+      _saveDraftToStorage();
     }
   }
 
   void _removeRow(int index) {
     if (_items.length > 1) {
       setState(() => _items.removeAt(index));
+      _saveDraftToStorage();
     }
   }
 
@@ -986,6 +1190,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   double get _grandTotal => _totalTaxable + _totalGst;
 
   void _resetForm() {
+    FormDraftService.instance.clearDraft('quotation');
     setState(() {
       _partyType = PartyType.customer;
       _selectedPartyId = null;
@@ -1010,11 +1215,16 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
   }
 
   Future<void> _saveQuotation(bool isDraft) async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      if (_selectedPartyId == null) {
+        ErpToast.showError(context, 'Please select a customer or dealer');
+      } else {
+        ErpToast.showError(context, 'Please fill in all required fields marked with *');
+      }
+      return;
+    }
     if (_items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one line item row.'), backgroundColor: AppColors.danger),
-      );
+      ErpToast.showError(context, 'Please add at least one line item row.');
       return;
     }
     if (_isSubmitting) return;
@@ -1029,12 +1239,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
         final siteCode = p.siteStateCode?.trim();
         if ((siteState == null || siteState.isEmpty) && (siteCode == null || siteCode.isEmpty)) {
           setState(() => _isSubmitting = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cannot finalize quotation: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.'),
-              backgroundColor: AppColors.danger,
-            ),
-          );
+          ErpToast.showError(context, 'Cannot finalize quotation: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.');
           return;
         }
       }
@@ -1172,22 +1377,18 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isRevision
-              ? 'Quotation Revision $quoteNumber created! Old version marked as Superseded.'
-              : (isDraft ? 'Quotation Draft Saved ($quoteNumber)' : 'Quotation $quoteNumber Created and Sent to Client!')),
-          backgroundColor: AppColors.success,
-        ),
+      ErpToast.showSuccess(
+        context,
+        _isRevision
+            ? 'Quotation Revision $quoteNumber created! Old version marked as Superseded.'
+            : (isDraft ? 'Quotation Draft Saved ($quoteNumber)' : 'Quotation $quoteNumber Created and Sent to Client!'),
       );
 
       _resetForm();
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.quotations;
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save quotation: $e'), backgroundColor: AppColors.danger),
-      );
+      ErpToast.showError(context, 'Failed to save quotation: $e');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -1330,6 +1531,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                           (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId));
 
                       final partyPicker = DropdownButtonFormField<String?>(
+                        key: ValueKey('quotation_party_${_partyType}_${_selectedPartyId}_$partyDropdownVersion'),
                         value: _selectedPartyId,
                         isExpanded: true,
                         decoration: InputDecoration(
@@ -1337,7 +1539,58 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               ? 'Select Customer *'
                               : (_partyType == PartyType.dealer ? 'Select Dealer *' : 'Select Architect *'),
                         ),
+                        selectedItemBuilder: (context) {
+                          return [
+                            Text(
+                              _selectedPartyId != null
+                                  ? (_partyType == PartyType.customer
+                                      ? db.customers.where((c) => c.id == _selectedPartyId).firstOrNull?.name ?? ''
+                                      : _partyType == PartyType.dealer
+                                          ? db.dealers.where((d) => d.id == _selectedPartyId).firstOrNull?.name ?? ''
+                                          : db.architects.where((a) => a.id == _selectedPartyId).firstOrNull?.name ?? '')
+                                  : '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (_selectedPartyId != null && !isPartyInList)
+                              Text(
+                                _sourceQuotation?.partyName ?? 'Current Party ($_selectedPartyId)',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            if (_partyType == PartyType.customer)
+                              ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))
+                            else if (_partyType == PartyType.dealer)
+                              ...db.dealers.where((d) => !d.isDeleted && d.isActive).map((d) => Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis))
+                            else
+                              ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => Text(a.companyName.isNotEmpty ? '${a.name} (${a.companyName})' : a.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          ];
+                        },
                         items: [
+                          DropdownMenuItem<String?>(
+                            value: '__ADD_NEW__',
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.only(bottom: 4),
+                              decoration: const BoxDecoration(
+                                border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _partyType == PartyType.customer
+                                        ? '+ Add New Customer'
+                                        : _partyType == PartyType.dealer
+                                            ? '+ Add New Dealer'
+                                            : '+ Add New Architect',
+                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                           if (_selectedPartyId != null && !isPartyInList)
                             DropdownMenuItem<String?>(
                               value: _selectedPartyId,
@@ -1348,13 +1601,20 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               ),
                             ),
                           if (_partyType == PartyType.customer)
-                            ...db.customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                            ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
                           else if (_partyType == PartyType.dealer)
-                            ...db.dealers.map((d) => DropdownMenuItem<String?>(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                            ...db.dealers.where((d) => !d.isDeleted && d.isActive).map((d) => DropdownMenuItem<String?>(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
                           else
-                            ...db.architects.map((a) => DropdownMenuItem<String?>(value: a.id, child: Text(a.companyName.isNotEmpty ? '${a.name} (${a.companyName})' : a.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                            ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => DropdownMenuItem<String?>(value: a.id, child: Text(a.companyName.isNotEmpty ? '${a.name} (${a.companyName})' : a.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                         ],
                         onChanged: (val) {
+                          if (val == '__ADD_NEW__') {
+                            setState(() {
+                              _partyDropdownVersion = partyDropdownVersion + 1;
+                            });
+                            _openQuickAddPartyDialog(_partyType);
+                            return;
+                          }
                           if (val != null) {
                             setState(() {
                               _selectedPartyId = val;
@@ -1611,12 +1871,12 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                             isOutlined: true,
                             onPressed: _addNewProductRow,
                           ),
-                          ErpButton(
-                            text: 'Add Raw Material',
-                            icon: Icons.grain,
-                            isOutlined: true,
-                            onPressed: _addNewRawMaterialRow,
-                          ),
+                          // ErpButton(
+                          //   text: 'Add Raw Material',
+                          //   icon: Icons.grain,
+                          //   isOutlined: true,
+                          //   onPressed: _addNewRawMaterialRow,
+                          // ),
                         ],
                       );
 
@@ -1675,7 +1935,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
 
                             // Item Type Dropdown Selector
                             final typeSelector = Container(
-                              height: 38,
+                              height: 48,
                               padding: const EdgeInsets.symmetric(horizontal: 10),
                               decoration: BoxDecoration(
                                 color: typeBgColor,
@@ -1755,9 +2015,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                             final itemPicker = isRm
                                 ? DropdownButtonFormField<String>(
                                     key: ValueKey('rm_picker_${item.itemId}_${item.itemType.name}'),
-                                    value: db.rawMaterials.any((m) => m.id == item.itemId)
+                                    value: db.rawMaterials.where((m) => !m.isDeleted && m.isActive).any((m) => m.id == item.itemId)
                                         ? item.itemId
-                                        : (db.rawMaterials.isNotEmpty ? db.rawMaterials.first.id : null),
+                                        : (db.rawMaterials.where((m) => !m.isDeleted && m.isActive).isNotEmpty ? db.rawMaterials.where((m) => !m.isDeleted && m.isActive).first.id : null),
                                     isExpanded: true,
                                     decoration: InputDecoration(
                                       labelText: 'Raw Material Master *',
@@ -1765,7 +2025,7 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       filled: true,
                                       fillColor: Colors.white,
                                     ),
-                                    items: db.rawMaterials.map((rm) {
+                                    items: db.rawMaterials.where((m) => !m.isDeleted && m.isActive).map((rm) {
                                       return DropdownMenuItem(
                                         value: rm.id,
                                         child: Text(
@@ -1793,9 +2053,9 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                   )
                                 : DropdownButtonFormField<String>(
                                     key: ValueKey('fp_picker_${item.itemId}_${item.itemType.name}'),
-                                    value: db.finishedProducts.any((p) => p.id == item.itemId)
+                                    value: (item.itemId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.itemId))
                                         ? item.itemId
-                                        : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                                        : (db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : null),
                                     isExpanded: true,
                                     decoration: InputDecoration(
                                       labelText: 'Finished Product Master *',
@@ -1803,16 +2063,27 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       filled: true,
                                       fillColor: Colors.white,
                                     ),
-                                    items: db.finishedProducts.map((fp) {
-                                      return DropdownMenuItem(
-                                        value: fp.id,
-                                        child: Text(
-                                          '${fp.name} (${fp.itemCode}) — Stock: ${fp.availableStock} ${fp.unit}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                    items: [
+                                      if (item.itemId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.itemId && !p.isActive))
+                                        DropdownMenuItem(
+                                          value: item.itemId,
+                                          child: Text(
+                                            '${db.finishedProducts.firstWhere((p) => p.id == item.itemId).name} (${db.finishedProducts.firstWhere((p) => p.id == item.itemId).itemCode}) (Inactive)',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                      );
-                                    }).toList(),
+                                      ...db.finishedProducts.where((p) => !p.isDeleted && p.isActive).map((fp) {
+                                        return DropdownMenuItem(
+                                          value: fp.id,
+                                          child: Text(
+                                            '${fp.name} (${fp.itemCode}) — Stock: ${fp.availableStock} ${fp.unit}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        );
+                                      }),
+                                    ],
                                     onChanged: (val) {
                                       if (val != null) {
                                         final fp = db.finishedProducts.firstWhere((p) => p.id == val);
@@ -1879,60 +2150,105 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                             );
 
                             final numberBadge = Container(
-                              width: 28,
-                              height: 28,
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                               ),
-                              alignment: Alignment.center,
                               child: Text(
-                                '${idx + 1}',
+                                '#${idx + 1}',
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.primaryDark,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 13,
+                                  fontSize: 12,
                                 ),
                               ),
                             );
 
-                            // Top Row: Item Type + Product Master Dropdown + Action Icons
-                            final topRow = Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
+                            final actionIcons = Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                typeSelector,
-                                const SizedBox(width: 12),
-                                Expanded(child: itemPicker),
-                                const SizedBox(width: 12),
                                 IconButton(
                                   icon: const Icon(Icons.copy_outlined, size: 20, color: Color(0xFF64748B)),
                                   tooltip: 'Duplicate Item',
+                                  visualDensity: VisualDensity.compact,
                                   onPressed: () => _duplicateRow(idx),
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.danger),
                                   tooltip: 'Delete Item',
+                                  visualDensity: VisualDensity.compact,
                                   onPressed: () => _removeRow(idx),
                                 ),
                               ],
                             );
 
+                            // Top Row: Item # + Item Type + Product Master Dropdown + Action Icons
+                            final topRow = isItemNarrow
+                                ? Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          numberBadge,
+                                          const SizedBox(width: 10),
+                                          typeSelector,
+                                          const Spacer(),
+                                          actionIcons,
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      itemPicker,
+                                    ],
+                                  )
+                                : Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      numberBadge,
+                                      const SizedBox(width: 10),
+                                      typeSelector,
+                                      const SizedBox(width: 12),
+                                      Expanded(child: itemPicker),
+                                      const SizedBox(width: 8),
+                                      actionIcons,
+                                    ],
+                                  );
+
                             // Middle Row: Inputs (Qty, Rate, Discount, GST) + Line Total
-                            final lineTotalWidget = Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text('Line Total', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                                const SizedBox(height: 2),
-                                Text(
-                                  Formatters.formatCurrency(item.lineTotal),
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primaryDark,
+                            final lineTotalWidget = Container(
+                              height: 50,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0FDF4),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFBBF7D0), width: 1.2),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    'Line Total (Incl. GST)',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF166534),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    Formatters.formatCurrency(item.lineTotal),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF15803D),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                             );
 
                             final middleRow = isItemNarrow
@@ -1941,34 +2257,37 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                                       Row(
                                         children: [
                                           Expanded(child: qtyField),
-                                          const SizedBox(width: 10),
+                                          const SizedBox(width: 12),
                                           Expanded(child: rateField),
                                         ],
                                       ),
-                                      const SizedBox(height: 10),
+                                      const SizedBox(height: 12),
                                       Row(
                                         children: [
                                           Expanded(child: discountField),
-                                          const SizedBox(width: 10),
+                                          const SizedBox(width: 12),
                                           Expanded(child: gstField),
-                                          const SizedBox(width: 16),
-                                          lineTotalWidget,
                                         ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: lineTotalWidget,
                                       ),
                                     ],
                                   )
                                 : Row(
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      Expanded(flex: 3, child: qtyField),
+                                      Expanded(child: qtyField),
                                       const SizedBox(width: 12),
-                                      Expanded(flex: 3, child: rateField),
+                                      Expanded(child: rateField),
                                       const SizedBox(width: 12),
-                                      Expanded(flex: 3, child: discountField),
+                                      Expanded(child: discountField),
                                       const SizedBox(width: 12),
-                                      Expanded(flex: 2, child: gstField),
-                                      const SizedBox(width: 20),
-                                      lineTotalWidget,
+                                      Expanded(child: gstField),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: lineTotalWidget),
                                     ],
                                   );
 
@@ -1984,25 +2303,14 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                               onChanged: (val) => item.productDescription = val,
                             );
 
-                            return Row(
+                            return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8, right: 14),
-                                  child: numberBadge,
-                                ),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      topRow,
-                                      const SizedBox(height: 12),
-                                      middleRow,
-                                      const SizedBox(height: 12),
-                                      descriptionRow,
-                                    ],
-                                  ),
-                                ),
+                                topRow,
+                                const SizedBox(height: 14),
+                                middleRow,
+                                const SizedBox(height: 14),
+                                descriptionRow,
                               ],
                             );
                           },
@@ -2037,17 +2345,21 @@ class _CreateQuotationScreenState extends ConsumerState<CreateQuotationScreen> {
                           const SizedBox(height: 12),
                           TextFormField(
                             controller: _termsCtrl,
-                            maxLines: 4,
-                            minLines: 3,
-                            decoration: const InputDecoration(labelText: 'Terms & Conditions (Printed on PDF)'),
+                            maxLines: isNarrow ? 6 : 8,
+                            minLines: isNarrow ? 4 : 8,
+                            decoration: const InputDecoration(
+                              labelText: 'Terms & Conditions (Printed on PDF)',
+                              alignLabelWithHint: true,
+                            ),
                           ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _notesCtrl,
-                            maxLines: 2,
-                            minLines: 2,
-                            decoration: const InputDecoration(labelText: 'Internal Sales Notes'),
-                          ),
+                          // Internal Sales Notes commented out per user request
+                          // const SizedBox(height: 12),
+                          // TextFormField(
+                          //   controller: _notesCtrl,
+                          //   maxLines: 2,
+                          //   minLines: 2,
+                          //   decoration: const InputDecoration(labelText: 'Internal Sales Notes'),
+                          // ),
                         ],
                       );
 

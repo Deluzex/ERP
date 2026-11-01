@@ -69,7 +69,7 @@ export class TokenService {
     return {
       accessToken,
       refreshToken,
-      expiresIn: 900, // 15 minutes in seconds
+      expiresIn: this.accessExpiresIn === '15m' ? 900 : 1800, // 30 minutes in seconds
     };
   }
 

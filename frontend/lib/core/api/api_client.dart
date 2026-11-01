@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'api_config.dart';
@@ -8,6 +8,9 @@ import 'token_storage.dart';
 /// Centralized HTTP API Client for NestJS ERP Backend
 class ApiClient {
   static final ApiClient instance = ApiClient._internal();
+
+  /// Global callback invoked when authentication session expires (401 or expired token)
+  static void Function()? onSessionExpired;
 
   late final Dio dio;
   late final Dio _refreshDio;
@@ -30,6 +33,7 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+
           final token = TokenStorage.instance.accessToken;
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
@@ -74,11 +78,13 @@ class ApiClient {
 
                 final newAccessToken = dataObj['accessToken'] as String?;
                 final newRefreshToken = dataObj['refreshToken'] as String?;
+                final expiresIn = (dataObj['expiresIn'] as num?)?.toInt() ?? 1800;
 
                 if (newAccessToken != null) {
                   TokenStorage.instance.saveTokens(
                     accessToken: newAccessToken,
                     refreshToken: newRefreshToken ?? refreshToken,
+                    expiresIn: expiresIn,
                   );
 
                   // Retry original failed request with new token
@@ -90,7 +96,11 @@ class ApiClient {
                 }
               } catch (_) {
                 TokenStorage.instance.clear();
+                onSessionExpired?.call();
               }
+            } else if (!isLoginOrRefresh) {
+              TokenStorage.instance.clear();
+              onSessionExpired?.call();
             }
           }
 

@@ -19,6 +19,10 @@ const emptyToUndefined = ({ value }: { value: unknown }) =>
 
 export class CreateCustomerDto {
   @IsString()
+  @IsOptional()
+  id?: string;
+
+  @IsString()
   @IsNotEmpty()
   name!: string;
 
@@ -72,9 +76,17 @@ export class CreateCustomerDto {
   @IsBoolean()
   @IsOptional()
   isAlsoArchitect?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class UpdateCustomerDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsOptional()
   name?: string;
@@ -130,4 +142,8 @@ export class UpdateCustomerDto {
   @IsBoolean()
   @IsOptional()
   isAlsoArchitect?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }

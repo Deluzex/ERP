@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -19,6 +20,7 @@ import {
 } from '../dto/architect.dto';
 import { CreateCustomerDto, UpdateCustomerDto } from '../dto/customer.dto';
 import { CreateDealerDto, UpdateDealerDto } from '../dto/dealer.dto';
+import { UpdateMasterStatusDto } from '../dto/master-status.dto';
 import { PartiesService } from '../services/parties.service';
 
 @ApiTags('Masters - Parties (Customers, Dealers, Architects)')
@@ -35,10 +37,14 @@ export class PartiesController {
   findAllCustomers(
     @Query('search') search?: string,
     @Query('isAlsoArchitect') isAlsoArchitect?: string,
+    @Query('includeDeleted') includeDeleted?: string,
+    @Query('isActive') isActive?: string,
   ) {
     return this.partiesService.findAllCustomers(
       search,
       isAlsoArchitect === undefined ? undefined : isAlsoArchitect === 'true',
+      includeDeleted === 'true',
+      isActive === undefined ? undefined : isActive === 'true',
     );
   }
 
@@ -64,6 +70,16 @@ export class PartiesController {
     return this.partiesService.updateCustomer(id, dto, ctx.userId, ctx.correlationId);
   }
 
+  @Patch('customers/:id/status')
+  @RequirePermission('masters.edit')
+  toggleCustomerStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateMasterStatusDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.partiesService.toggleCustomerStatus(id, dto.isActive, ctx.userId, ctx.correlationId);
+  }
+
   @Delete('customers/:id')
   @RequirePermission('masters.delete')
   deleteCustomer(@Param('id') id: string, @Ctx() ctx: RequestContext) {
@@ -75,8 +91,16 @@ export class PartiesController {
   // -------------------------------------------------------------
   @Get('dealers')
   @RequirePermission('masters.view')
-  findAllDealers(@Query('search') search?: string) {
-    return this.partiesService.findAllDealers(search);
+  findAllDealers(
+    @Query('search') search?: string,
+    @Query('includeDeleted') includeDeleted?: string,
+    @Query('isActive') isActive?: string,
+  ) {
+    return this.partiesService.findAllDealers(
+      search,
+      includeDeleted === 'true',
+      isActive === undefined ? undefined : isActive === 'true',
+    );
   }
 
   @Get('dealers/:id')
@@ -101,6 +125,16 @@ export class PartiesController {
     return this.partiesService.updateDealer(id, dto, ctx.userId, ctx.correlationId);
   }
 
+  @Patch('dealers/:id/status')
+  @RequirePermission('masters.edit')
+  toggleDealerStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateMasterStatusDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.partiesService.toggleDealerStatus(id, dto.isActive, ctx.userId, ctx.correlationId);
+  }
+
   @Delete('dealers/:id')
   @RequirePermission('masters.delete')
   deleteDealer(@Param('id') id: string, @Ctx() ctx: RequestContext) {
@@ -112,8 +146,16 @@ export class PartiesController {
   // -------------------------------------------------------------
   @Get('architects')
   @RequirePermission('masters.view')
-  findAllArchitects(@Query('search') search?: string) {
-    return this.partiesService.findAllArchitects(search);
+  findAllArchitects(
+    @Query('search') search?: string,
+    @Query('includeDeleted') includeDeleted?: string,
+    @Query('isActive') isActive?: string,
+  ) {
+    return this.partiesService.findAllArchitects(
+      search,
+      includeDeleted === 'true',
+      isActive === undefined ? undefined : isActive === 'true',
+    );
   }
 
   @Get('architects/:id')
@@ -136,6 +178,16 @@ export class PartiesController {
     @Ctx() ctx: RequestContext,
   ) {
     return this.partiesService.updateArchitect(id, dto, ctx.userId, ctx.correlationId);
+  }
+
+  @Patch('architects/:id/status')
+  @RequirePermission('masters.edit')
+  toggleArchitectStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateMasterStatusDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.partiesService.toggleArchitectStatus(id, dto.isActive, ctx.userId, ctx.correlationId);
   }
 
   @Delete('architects/:id')

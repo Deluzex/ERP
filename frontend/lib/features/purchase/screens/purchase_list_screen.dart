@@ -7,6 +7,7 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/purchase_model.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -111,22 +112,15 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                         );
                         if (mounted) {
                           Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Purchase cancelled and stock rolled back successfully'),
-                              backgroundColor: AppColors.success,
-                            ),
+                          ErpToast.showSuccess(
+                            context,
+                            'Purchase cancelled and stock rolled back successfully',
                           );
                         }
                       } catch (err) {
                         setDialogState(() => isSubmitting = false);
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error: $err'),
-                              backgroundColor: AppColors.danger,
-                            ),
-                          );
+                          ErpToast.showError(context, 'Error: $err');
                         }
                       }
                     },
@@ -137,6 +131,58 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
     );
   }
 
+  Future<void> _openEditPurchaseDialog(Purchase initialPurchase) async {
+    Purchase p = initialPurchase;
+    if (p.items.isEmpty) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+      try {
+        p = await ref.read(databaseServiceProvider).getPurchaseDetailAsync(initialPurchase.id);
+      } catch (e) {
+        debugPrint('[PurchaseListScreen] Failed to load full purchase: ' + e.toString());
+      } finally {
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 1280,
+            maxHeight: MediaQuery.of(context).size.height * 0.92,
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            height: double.infinity,
+            child: CreatePurchaseScreen(
+              key: ValueKey('edit_purchase_' + p.id),
+              existingPurchase: p,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (mounted) {
+      await ref.read(databaseServiceProvider).loadPurchases();
+      setState(() {});
+    }
+  }
   void _showPurchaseDetailsDialog(Purchase initialPurchase) {
     Purchase currentPurchase = initialPurchase;
     bool isLoading = initialPurchase.items.isEmpty;
@@ -207,12 +253,7 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                     constraints: const BoxConstraints(),
                     onPressed: () {
                       Navigator.pop(ctx);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CreatePurchaseScreen(existingPurchase: p),
-                        ),
-                      );
+                      _openEditPurchaseDialog(currentPurchase);
                     },
                   ),
                 ],
@@ -247,6 +288,8 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                           _buildDetailField('Vendor Name', p.vendorName),
                           _buildDetailField('Vendor Invoice', p.vendorInvoiceNumber.isNotEmpty ? p.vendorInvoiceNumber : 'N/A'),
                           _buildDetailField('Purchase Date', Formatters.formatDate(p.purchaseDate)),
+                          if (p.isModified && p.updatedAt != null)
+                            _buildDetailField('Modified Date', Formatters.formatDateTime(p.updatedAt!)),
                           _buildDetailField('Purchase Type', p.purchaseTypeLabel),
                           _buildDetailField('Payment Mode', p.paymentMode.name.toUpperCase()),
                           if (p.projectName != null && p.projectName!.isNotEmpty)
@@ -378,12 +421,7 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                             icon: Icons.edit_outlined,
                             onPressed: () {
                               Navigator.pop(ctx);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CreatePurchaseScreen(existingPurchase: p),
-                                ),
-                              );
+                              _openEditPurchaseDialog(currentPurchase);
                             },
                           ),
                           const SizedBox(height: 8),
@@ -403,12 +441,7 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                         icon: Icons.edit_outlined,
                         onPressed: () {
                           Navigator.pop(ctx);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CreatePurchaseScreen(existingPurchase: p),
-                            ),
-                          );
+                          _openEditPurchaseDialog(currentPurchase);
                         },
                       ),
                       const SizedBox(width: 8),
@@ -439,7 +472,15 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
   Widget _tableHeaderCell(String text, {TextAlign align = TextAlign.left}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Text(text, textAlign: align, style: AppTextStyles.bodyBold.copyWith(fontSize: 11, color: AppColors.textSecondary)),
+      child: Text(
+        text,
+        textAlign: align,
+        style: AppTextStyles.tableHeader.copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF1E293B),
+        ),
+      ),
     );
   }
 
@@ -622,15 +663,18 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
               ErpButton(
                 text: 'Create Direct Purchase',
                 icon: Icons.add,
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                onPressed: () {
+                  ref.read(editingPurchaseProvider.notifier).state = null;
+                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase;
+                },
               ),
-              ErpButton(
-                text: 'Refresh',
-                icon: Icons.refresh,
-                isOutlined: true,
-                isLoading: db.isLoadingPurchases,
-                onPressed: () => db.loadPurchases(forceRefresh: true),
-              ),
+              // ErpButton(
+              //   text: 'Refresh',
+              //   icon: Icons.refresh,
+              //   isOutlined: true,
+              //   isLoading: db.isLoadingPurchases,
+              //   onPressed: () => db.loadPurchases(forceRefresh: true),
+              // ),
             ],
           ),
           const SizedBox(height: 20),
@@ -721,7 +765,7 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                 // Modern Filter Controls Bar (Responsive: vertical stack on mobile, horizontal wrap on desktop)
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 650;
+                    final isMobile = constraints.maxWidth < 450;
                     if (isMobile) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -835,7 +879,32 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                   rows: pagedPurchases.map((p) {
                     return [
                       Text(p.purchaseNumber, style: AppTextStyles.bodyBold.copyWith(fontSize: 12)),
-                      Text(Formatters.formatDate(p.purchaseDate), style: AppTextStyles.bodySmall),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(Formatters.formatDate(p.displayDate), style: AppTextStyles.bodySmall),
+                          if (p.isModified && p.updatedAt != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryLight.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Modified',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.primary,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                       Text(p.vendorName, style: AppTextStyles.bodyMedium),
                       Text(p.vendorInvoiceNumber, style: AppTextStyles.bodySmall),
                       Text('${p.items.length} items', style: AppTextStyles.bodySmall),
@@ -858,6 +927,9 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                             case 'view':
                               _showPurchaseDetailsDialog(p);
                               break;
+                            case 'edit':
+                              _openEditPurchaseDialog(p);
+                              break;
                             case 'cancel':
                               _confirmCancelPurchase(p);
                               break;
@@ -874,6 +946,17 @@ class _PurchaseListScreenState extends ConsumerState<PurchaseListScreen> {
                               ],
                             ),
                           ),
+                          if (p.status != PurchaseStatus.cancelled)
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Edit Purchase'),
+                                ],
+                              ),
+                            ),
                           if (p.status != PurchaseStatus.cancelled)
                             const PopupMenuItem(
                               value: 'cancel',

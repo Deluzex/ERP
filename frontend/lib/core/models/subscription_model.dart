@@ -1,4 +1,4 @@
-class SubscriptionStatus {
+﻿class SubscriptionStatus {
   final String clientName;
   final String planName;
   final bool isActive;

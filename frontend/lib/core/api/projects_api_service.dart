@@ -1,4 +1,4 @@
-import '../models/project_model.dart';
+﻿import '../models/project_model.dart';
 import 'api_client.dart';
 
 /// Service for managing Architectural Projects against NestJS `/api/v1/projects`
