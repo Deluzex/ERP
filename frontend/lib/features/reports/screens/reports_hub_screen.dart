@@ -1,3 +1,4 @@
+import '../../../core/widgets/erp_toast.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1025,12 +1026,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('PDF Export Error: $e'),
-            backgroundColor: AppColors.danger,
-          ),
-        );
+ErpToast.showError(context, 'PDF Export Error: $e');
       }
     }
   }
@@ -1056,12 +1052,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> with Single
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Print layout error: $e'),
-            backgroundColor: AppColors.danger,
-          ),
-        );
+ErpToast.showError(context, 'Print layout error: $e');
       }
     }
   }

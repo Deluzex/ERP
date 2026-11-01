@@ -1,4 +1,4 @@
-enum CommissionStatus {
+﻿enum CommissionStatus {
   generated,
   approved,
   paid,

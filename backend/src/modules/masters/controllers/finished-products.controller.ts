@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -17,6 +18,7 @@ import {
   CreateFinishedProductDto,
   UpdateFinishedProductDto,
 } from '../dto/finished-product.dto';
+import { UpdateMasterStatusDto } from '../dto/master-status.dto';
 import { FinishedProductsService } from '../services/finished-products.service';
 
 @ApiTags('Masters - Finished Products')
@@ -46,11 +48,13 @@ export class FinishedProductsController {
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
     @Query('includeDeleted') includeDeleted?: string,
+    @Query('isActive') isActive?: string,
   ) {
     return this.finishedProductsService.findAll(
       search,
       categoryId,
       includeDeleted === 'true',
+      isActive === undefined ? undefined : isActive === 'true',
     );
   }
 
@@ -80,6 +84,21 @@ export class FinishedProductsController {
     return this.finishedProductsService.update(
       id,
       dto,
+      ctx.userId,
+      ctx.correlationId,
+    );
+  }
+
+  @Patch(':id/status')
+  @RequirePermission('masters.edit')
+  toggleStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateMasterStatusDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.finishedProductsService.toggleStatus(
+      id,
+      dto.isActive,
       ctx.userId,
       ctx.correlationId,
     );

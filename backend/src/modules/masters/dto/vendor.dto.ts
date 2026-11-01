@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsEmail,
   IsNotEmpty,
   IsNumber,
@@ -13,6 +14,10 @@ const emptyToUndefined = ({ value }: { value: unknown }) =>
   typeof value === 'string' && value.trim() === '' ? undefined : value;
 
 export class CreateVendorDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsNotEmpty()
   name!: string;
@@ -70,9 +75,22 @@ export class CreateVendorDto {
   @Min(0)
   @IsOptional()
   creditLimit?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  defaultTransportationCharges?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class UpdateVendorDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsOptional()
   name?: string;
@@ -130,6 +148,15 @@ export class UpdateVendorDto {
   @Min(0)
   @IsOptional()
   creditLimit?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  defaultTransportationCharges?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class DeleteVendorDto {

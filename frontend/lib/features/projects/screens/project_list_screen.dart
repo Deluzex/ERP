@@ -12,6 +12,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_pagination_bar.dart';
@@ -58,8 +59,8 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
     final siteStateCtrl = TextEditingController(text: existing?.siteState ?? '');
     final sitePincodeCtrl = TextEditingController(text: existing?.sitePincode ?? '');
     final siteAddressCtrl = TextEditingController(text: existing?.siteAddress ?? '');
-    String? selectedCustomerId = existing?.customerId ?? (db.customers.isNotEmpty ? db.customers.first.id : null);
-    String? selectedArchitectId = existing?.architectId ?? (db.architects.isNotEmpty ? db.architects.first.id : null);
+    String? selectedCustomerId = existing?.customerId ?? (db.customers.where((c) => !c.isDeleted && c.isActive).isNotEmpty ? db.customers.where((c) => !c.isDeleted && c.isActive).first.id : null);
+    String? selectedArchitectId = existing?.architectId ?? (db.architects.where((a) => !a.isDeleted && a.isActive).isNotEmpty ? db.architects.where((a) => !a.isDeleted && a.isActive).first.id : null);
     ProjectStatus selectedStatus = existing?.status ?? ProjectStatus.active;
     DateTime startDate = existing?.startDate ?? DateTime.now();
     DateTime expDate = existing?.expectedCompletionDate ?? DateTime.now().add(const Duration(days: 90));
@@ -142,7 +143,9 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                     decoration: const InputDecoration(labelText: 'Customer Account'),
                                     items: [
                                       const DropdownMenuItem(value: null, child: Text('(No Customer Linked)')),
-                                      ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                                      if (selectedCustomerId != null && db.customers.any((c) => c.id == selectedCustomerId && !c.isActive))
+                                        DropdownMenuItem(value: selectedCustomerId, child: Text('${db.customers.firstWhere((c) => c.id == selectedCustomerId).name} (Inactive)')),
+                                      ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                                     ],
                                     onChanged: (val) {
                                       setDlgState(() {
@@ -163,7 +166,9 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                     decoration: const InputDecoration(labelText: 'Architect Partner'),
                                     items: [
                                       const DropdownMenuItem(value: null, child: Text('(No Architect Linked)')),
-                                      ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
+                                      if (selectedArchitectId != null && db.architects.any((a) => a.id == selectedArchitectId && !a.isActive))
+                                        DropdownMenuItem(value: selectedArchitectId, child: Text('${db.architects.firstWhere((a) => a.id == selectedArchitectId).name} (Inactive)')),
+                                      ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
                                     ],
                                     onChanged: (val) {
                                       setDlgState(() {
@@ -263,7 +268,9 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                         decoration: const InputDecoration(labelText: 'Customer Account'),
                                         items: [
                                           const DropdownMenuItem(value: null, child: Text('(No Customer Linked)')),
-                                          ...db.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                                          if (selectedCustomerId != null && db.customers.any((c) => c.id == selectedCustomerId && !c.isActive))
+                                            DropdownMenuItem(value: selectedCustomerId, child: Text('${db.customers.firstWhere((c) => c.id == selectedCustomerId).name} (Inactive)')),
+                                          ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                                         ],
                                         onChanged: (val) {
                                           setDlgState(() {
@@ -286,7 +293,9 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                         decoration: const InputDecoration(labelText: 'Architect Partner'),
                                         items: [
                                           const DropdownMenuItem(value: null, child: Text('(No Architect Linked)')),
-                                          ...db.architects.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
+                                          if (selectedArchitectId != null && db.architects.any((a) => a.id == selectedArchitectId && !a.isActive))
+                                            DropdownMenuItem(value: selectedArchitectId, child: Text('${db.architects.firstWhere((a) => a.id == selectedArchitectId).name} (Inactive)')),
+                                          ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
                                         ],
                                         onChanged: (val) {
                                           setDlgState(() {
@@ -487,7 +496,10 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          if (!formKey.currentState!.validate()) return;
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
                           setDlgState(() {
                             isSubmitting = true;
                             serverError = null;
@@ -552,12 +564,7 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                             }
 
                             if (ctx.mounted) Navigator.of(ctx).pop();
-                            messenger.showSnackBar(
-                              SnackBar(
-                                content: Text(isEdit ? 'Project updated successfully!' : 'Project created successfully!'),
-                                backgroundColor: AppColors.success,
-                              ),
-                            );
+ErpToast.showSuccess(context, isEdit ? 'Project updated successfully!' : 'Project created successfully!');
                           } catch (e) {
                             setDlgState(() {
                               serverError = e.toString().replaceFirst('Exception: ', '');
@@ -588,19 +595,9 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
             final db = ref.read(databaseServiceProvider);
             try {
               await db.deleteProjectAsync(project.id, reason: reason);
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text('Project "${project.name}" archived successfully!'),
-                  backgroundColor: AppColors.success,
-                ),
-              );
+ErpToast.showSuccess(context, 'Project "${project.name}" archived successfully!');
             } catch (e) {
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text('Error deleting project: ${e.toString().replaceFirst("Exception: ", "")}'),
-                  backgroundColor: AppColors.danger,
-                ),
-              );
+ErpToast.showError(context, 'Error deleting project: ${e.toString().replaceFirst("Exception: ", "")}');
             }
           },
         );
@@ -788,12 +785,7 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                             await db.updateProjectAsync(updated);
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Project status updated to ${newStatus.name.toUpperCase()} successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+ErpToast.showSuccess(context, 'Project status updated to ${newStatus.name.toUpperCase()} successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {

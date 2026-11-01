@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -25,6 +26,10 @@ export class BulkImportRawMaterialsDto {
 }
 
 export class CreateRawMaterialDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsNotEmpty()
   name!: string;
@@ -79,9 +84,17 @@ export class CreateRawMaterialDto {
   @IsString({ each: true })
   @IsOptional()
   preferredVendorIds?: string[];
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class UpdateRawMaterialDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsOptional()
   name?: string;
@@ -154,4 +167,8 @@ export class UpdateRawMaterialDto {
   @IsString({ each: true })
   @IsOptional()
   preferredVendorNames?: string[];
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }

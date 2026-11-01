@@ -25,6 +25,7 @@ export interface VendorRecord {
   creditLimit: string;
   outstandingBalance: string;
   isDeleted: boolean;
+  isActive: boolean;
   deleteReason: string | null;
   deletedAt: Date | null;
   createdAt: Date;
@@ -38,13 +39,18 @@ export class VendorsService {
     private readonly auditService: AuditService,
   ) {}
 
-  async findAll(search?: string, includeDeleted = false): Promise<VendorRecord[]> {
+  async findAll(search?: string, includeDeleted = false, isActive?: boolean): Promise<VendorRecord[]> {
     const conditions: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
 
     if (!includeDeleted) {
       conditions.push('is_deleted = false');
+    }
+
+    if (isActive !== undefined) {
+      conditions.push(`is_active = $${idx++}`);
+      values.push(isActive);
     }
 
     if (search && search.trim().length > 0) {
@@ -291,6 +297,61 @@ export class VendorsService {
     return { success: true };
   }
 
+  async toggleStatus(
+    id: string,
+    isActive: boolean,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<{ success: boolean; message: string; data: any; timestamp: string }> {
+    const existing = await this.findById(id);
+    if (existing.isActive === isActive) {
+      return {
+        success: true,
+        message: `Vendor status updated to ${isActive ? 'active' : 'inactive'}`,
+        data: {
+          id: existing.id,
+          name: existing.name,
+          isActive: existing.isActive,
+          updatedAt: existing.updatedAt,
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    await this.db.query('UPDATE vendors SET is_active = $1, updated_at = NOW() WHERE id = $2', [isActive, id]);
+
+    await this.auditService.log({
+      userId,
+      userName: 'User',
+      action: 'MASTER_STATUS_CHANGE',
+      entityType: 'VENDOR',
+      entityId: id,
+      beforeSnapshot: { isActive: existing.isActive },
+      afterSnapshot: {
+        entityType: 'VENDOR',
+        entityId: id,
+        entityName: existing.name,
+        previousStatus: existing.isActive,
+        newStatus: isActive,
+      },
+      reason: `Status changed to ${isActive ? 'active' : 'inactive'}`,
+      correlationId,
+    });
+
+    const updated = await this.findById(id);
+    return {
+      success: true,
+      message: `Vendor status updated to ${isActive ? 'active' : 'inactive'}`,
+      data: {
+        id: updated.id,
+        name: updated.name,
+        isActive: updated.isActive,
+        updatedAt: updated.updatedAt,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   private mapRow(r: any): VendorRecord {
     return {
       id: r.id,
@@ -307,6 +368,7 @@ export class VendorsService {
       creditLimit: Money.format(r.credit_limit),
       outstandingBalance: Money.format(r.outstanding_balance),
       isDeleted: r.is_deleted,
+      isActive: r.is_active ?? true,
       deleteReason: r.delete_reason,
       deletedAt: r.deleted_at,
       createdAt: r.created_at,

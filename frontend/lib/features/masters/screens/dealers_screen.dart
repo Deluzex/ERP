@@ -9,6 +9,8 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
+import '../../../core/widgets/erp_status_badge.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_confirm_dialog.dart';
 import '../../../core/widgets/erp_data_table.dart';
@@ -262,7 +264,10 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          if (!formKey.currentState!.validate()) return;
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
                           setDlgState(() {
                             isSubmitting = true;
                             serverError = null;
@@ -301,12 +306,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
 
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Dealer "${nameCtrl.text.trim()}" ${isEdit ? "updated" : "saved"} successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+                              ErpToast.showSuccess(context, 'Dealer "${nameCtrl.text.trim()}" ${isEdit ? "updated" : "saved"} successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {
@@ -324,38 +324,129 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
     );
   }
 
-  void _confirmDeleteDealer(Dealer dealer) {
-    showDialog(
+  void _confirmToggleStatus(Dealer dealer) {
+    final willActivate = !dealer.isActive;
+    showErpStatusConfirmDialog(
       context: context,
-      builder: (ctx) {
-        return ErpConfirmDeleteDialog(
-          title: 'Delete Dealer Record',
-          message: 'Are you sure you want to deactivate and archive this dealer? A mandatory audit reason is required.',
-          itemName: '${dealer.name} (${dealer.id})',
-          requireReason: true,
-          onConfirm: (reason) async {
-            final db = ref.read(databaseServiceProvider);
-            try {
-              await db.deleteDealerAsync(dealerId: dealer.id, reason: reason);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Dealer "${dealer.name}" archived with audit reason: $reason'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
-              }
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Delete failed: ${e.toString().replaceFirst("Exception: ", "")}'),
-                    backgroundColor: AppColors.danger,
-                  ),
-                );
-              }
-            }
-          },
+      title: willActivate ? 'Activate Dealer' : 'Deactivate Dealer',
+      message: willActivate
+          ? 'Activate "${dealer.name}"? It will immediately become available in all transaction dropdowns and lookups.'
+          : 'Are you sure you want to deactivate "${dealer.name}"? This entity will no longer appear in transaction dropdowns for new Sales, Purchases, or Production orders. Historical records will remain intact.',
+      itemName: dealer.name,
+      willActivate: willActivate,
+      confirmLabel: willActivate ? 'Activate' : 'Deactivate',
+      onConfirm: () async {
+        final db = ref.read(databaseServiceProvider);
+        try {
+          await db.toggleDealerStatusAsync(dealer.id, willActivate);
+          if (mounted) {
+            ErpToast.showSuccess(
+              context,
+              'Dealer "${dealer.name}" ${willActivate ? "activated" : "deactivated"} successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ErpToast.showError(
+              context,
+              'Status update failed: ${e.toString().replaceFirst("Exception: ", "")}',
+            );
+          }
+        }
+      },
+    );
+  }
+
+  Widget _buildControlsRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 450;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search dealer by name, showroom, GST...',
+                initialValue: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _balanceFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                  DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Receivables / Balance')),
+                  DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _balanceFilter = val;
+                      _currentPage = 0;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ErpSearchInput(
+                hintText: 'Search dealer by name, showroom, GST...',
+                initialValue: _searchQuery,
+                onChanged: (val) => setState(() {
+                  _searchQuery = val;
+                  _currentPage = 0;
+                }),
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _balanceFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
+                DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Receivables / Balance')),
+                DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _balanceFilter = val;
+                    _currentPage = 0;
+                  });
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _startDate,
+              endDate: _endDate,
+              onDateRangeSelected: (start, end) => setState(() {
+                _startDate = start;
+                _endDate = end;
+                _currentPage = 0;
+              }),
+            ),
+          ],
         );
       },
     );
@@ -451,11 +542,11 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.account_balance_wallet_outlined,
-                      iconColor: AppColors.danger,
+                      iconColor: withBalanceCount > 0 ? AppColors.danger : AppColors.success,
                       title: 'With Balance',
-                      value: '${withBalanceCount}',
-                      subtext: 'Pending Collection',
-                      subtextColor: AppColors.danger,
+                      value: '$withBalanceCount',
+                      subtext: withBalanceCount > 0 ? '$withBalanceCount of $totalDealersCount with balance' : 'Zero balance pending',
+                      subtextColor: withBalanceCount > 0 ? AppColors.danger : AppColors.success,
                     ),
                   ),
                   SizedBox(
@@ -484,59 +575,36 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
           ),
           const SizedBox(height: 18),
 
-          // Modern Filter Controls Bar
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 280,
-                child: ErpSearchInput(
-                  hintText: 'Search dealer by name, showroom, GST...',
-                  initialValue: _searchQuery,
-                  onChanged: (val) => setState(() {
-                    _searchQuery = val;
-                    _currentPage = 0;
-                  }),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
                 ),
-              ),
-              ErpFilterDropdown<String>(
-                value: _balanceFilter,
-                items: const [
-                  DropdownMenuItem(value: 'ALL', child: Text('All Balances')),
-                  DropdownMenuItem(value: 'WITH_BALANCE', child: Text('Has Receivables / Balance')),
-                  DropdownMenuItem(value: 'ZERO_BALANCE', child: Text('Zero Balance / Settled')),
-                ],
-                onChanged: (val) {
-                  if (val != null) setState(() {
-                    _balanceFilter = val;
-                    _currentPage = 0;
-                  });
-                },
-              ),
-              ErpDateFilterBox(
-                startDate: _startDate,
-                endDate: _endDate,
-                onDateRangeSelected: (start, end) => setState(() {
-                  _startDate = start;
-                  _endDate = end;
-                  _currentPage = 0;
-                }),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          ErpDataTable(
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildControlsRow(),
+                const SizedBox(height: 16),
+                ErpDataTable(
             columns: const [
               ErpColumn(title: 'Showroom / Dealer Name'),
               ErpColumn(title: 'Company Entity'),
               ErpColumn(title: 'Contact Person'),
+              ErpColumn(title: 'Address', width: 220),
               ErpColumn(title: 'State'),
               ErpColumn(title: 'Mobile / Email'),
               ErpColumn(title: 'GST Number'),
               ErpColumn(title: 'Outstanding Balance', isNumeric: true),
+              ErpColumn(title: 'Status'),
               ErpColumn(title: 'Actions'),
             ],
             rows: pagedDealers.map((d) {
@@ -545,33 +613,24 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                   onTap: () {
                     ref.read(activeRecordDetailsStackProvider.notifier).push(d.id, 'dealer', ErpNavSection.dealers);
                   },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        d.name,
-                        style: AppTextStyles.bodyBold.copyWith(
-                          fontSize: 13,
-                          color: const Color(0xFF1E293B),
-                        ),
-                      ),
-                      if (d.address.isNotEmpty || d.state.isNotEmpty || d.pincode.isNotEmpty)
-                        Text(
-                          [
-                            if (d.address.isNotEmpty) d.address,
-                            if (d.state.isNotEmpty) d.state,
-                            if (d.pincode.isNotEmpty) d.pincode,
-                          ].join(', '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                        ),
-                    ],
+                  child: Text(
+                    d.name,
+                    style: AppTextStyles.bodyBold.copyWith(
+                      fontSize: 13,
+                      color: const Color(0xFF1E293B),
+                    ),
                   ),
                 ),
                 Text(d.companyName, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
                 Text(d.contactPerson, style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 160, maxWidth: 240),
+                  child: Text(
+                    d.address.isNotEmpty ? d.address : '-',
+                    softWrap: true,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.35),
+                  ),
+                ),
                 Text(d.state.isNotEmpty ? d.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -590,6 +649,7 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                     color: d.outstandingAmount > 0 ? AppColors.danger : const Color(0xFF1E293B),
                   ),
                 ),
+                d.isActive ? ErpStatusBadge.active() : ErpStatusBadge.inactive(),
                 PopupMenuButton<String>(
                   tooltip: 'Actions',
                   icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
@@ -610,12 +670,12 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                       case 'edit':
                         _openAddEditDealerDialog(d);
                         break;
-                      case 'delete':
-                        _confirmDeleteDealer(d);
+                      case 'toggle_status':
+                        _confirmToggleStatus(d);
                         break;
                     }
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'view',
                       child: Row(
@@ -647,12 +707,21 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                       ),
                     ),
                     PopupMenuItem(
-                      value: 'delete',
+                      value: 'toggle_status',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                          SizedBox(width: 8),
-                          Text('Delete Dealer', style: TextStyle(color: AppColors.danger)),
+                          Icon(
+                            d.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                            size: 18,
+                            color: d.isActive ? AppColors.warning : AppColors.success,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            d.isActive ? 'Deactivate Dealer' : 'Activate Dealer',
+                            style: TextStyle(
+                              color: d.isActive ? AppColors.warning : AppColors.success,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -663,14 +732,17 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
           ),
           const SizedBox(height: 16),
           ErpPaginationBar(
-            currentPage: safeCurrentPage,
-            pageSize: safePageSize,
-            totalRecords: totalRecords,
-            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-            onPageSizeChanged: (newSize) => setState(() {
-              _pageSize = newSize;
-              _currentPage = 0;
-            }),
+                  currentPage: safeCurrentPage,
+                  pageSize: safePageSize,
+                  totalRecords: totalRecords,
+                  onPageChanged: (newPage) => setState(() => _currentPage = newPage),
+                  onPageSizeChanged: (newSize) => setState(() {
+                    _pageSize = newSize;
+                    _currentPage = 0;
+                  }),
+                ),
+              ],
+            ),
           ),
         ],
       ),

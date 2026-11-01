@@ -1,3 +1,4 @@
+import '../../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/constants/app_constants.dart';
@@ -267,9 +268,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                 final btn = ErpButton(
                   text: 'Save Preferences',
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Preferences saved successfully!'), backgroundColor: AppColors.success),
-                    );
+ErpToast.showSuccess(context, 'Preferences saved successfully!');
                   },
                 );
 

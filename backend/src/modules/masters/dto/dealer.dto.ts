@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsEmail,
   IsNotEmpty,
   IsOptional,
@@ -12,6 +13,10 @@ const emptyToUndefined = ({ value }: { value: unknown }) =>
 
 export class CreateDealerDto {
   @IsString()
+  @IsOptional()
+  id?: string;
+
+  @IsString()
   @IsNotEmpty()
   name!: string;
 
@@ -19,9 +24,10 @@ export class CreateDealerDto {
   @IsNotEmpty()
   contactPerson!: string;
 
+  @Transform(emptyToUndefined)
   @IsString()
-  @IsNotEmpty()
-  companyName!: string;
+  @IsOptional()
+  companyName?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -62,9 +68,17 @@ export class CreateDealerDto {
     message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
   })
   pincode?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class UpdateDealerDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsOptional()
   name?: string;
@@ -116,4 +130,8 @@ export class UpdateDealerDto {
     message: 'Pincode must be a valid 6-digit Indian Postal PIN code (e.g. 400001)',
   })
   pincode?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }

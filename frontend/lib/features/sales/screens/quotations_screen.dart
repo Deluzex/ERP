@@ -30,7 +30,6 @@ class QuotationsScreen extends ConsumerStatefulWidget {
 class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = '';
-  String _selectedStatusFilter = 'ALL';
   DateTime? _startDate;
   DateTime? _endDate;
   int _currentPage = 0;
@@ -167,31 +166,67 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
           const SizedBox(height: 16),
 
           // 3. Global Filters
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              ErpSearchInput(
-                hintText: 'Search quotation, client, project...',
-                value: _searchQuery,
-                onChanged: (val) => setState(() {
-                  _searchQuery = val;
-                  _currentPage = 0;
-                }),
-              ),
-              ErpDateFilterBox(
-                startDate: _startDate,
-                endDate: _endDate,
-                onDateRangeSelected: (start, end) {
-                  setState(() {
-                    _startDate = start;
-                    _endDate = end;
-                    _currentPage = 0;
-                  });
-                },
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 450;
+              if (isMobile) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ErpSearchInput(
+                      hintText: 'Search quotation, client, project...',
+                      initialValue: _searchQuery,
+                      onChanged: (val) => setState(() {
+                        _searchQuery = val;
+                        _currentPage = 0;
+                      }),
+                    ),
+                    const SizedBox(height: 10),
+                    ErpDateFilterBox(
+                      startDate: _startDate,
+                      endDate: _endDate,
+                      onDateRangeSelected: (start, end) {
+                        setState(() {
+                          _startDate = start;
+                          _endDate = end;
+                          _currentPage = 0;
+                        });
+                      },
+                    ),
+                  ],
+                );
+              }
+
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 300,
+                    child: ErpSearchInput(
+                      hintText: 'Search quotation, client, project...',
+                      initialValue: _searchQuery,
+                      onChanged: (val) => setState(() {
+                        _searchQuery = val;
+                        _currentPage = 0;
+                      }),
+                    ),
+                  ),
+                  ErpDateFilterBox(
+                    startDate: _startDate,
+                    endDate: _endDate,
+                    onDateRangeSelected: (start, end) {
+                      setState(() {
+                        _startDate = start;
+                        _endDate = end;
+                        _currentPage = 0;
+                      });
+                    },
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
 
@@ -321,7 +356,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
         return [
           InkWell(
             onTap: () {
-              ref.read(activeRecordDetailsStackProvider.notifier).push(quote.id, 'quotation', ErpNavSection.quotations);
+              SalesPdfGeneratorDialog.show(context, quote, db);
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -334,7 +369,7 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
                   const SizedBox(width: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(color: AppColors.purple.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
+                    decoration: BoxDecoration(color: AppColors.purple.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
                     child: Text('R${quote.revisionNumber}', style: const TextStyle(color: AppColors.purple, fontSize: 9.5, fontWeight: FontWeight.bold)),
                   ),
                 ],
@@ -377,27 +412,70 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 18),
-          tooltip: 'Preview PDF',
-          onPressed: () => SalesPdfGeneratorDialog.show(context, quote, db),
-        ),
+        // IconButton(
+        //   icon: const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 18),
+        //   tooltip: 'Preview PDF',
+        //   onPressed: () => SalesPdfGeneratorDialog.show(context, quote, db),
+        // ),
         PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
+          tooltip: 'Actions',
+          icon: const Icon(Icons.edit_note, color: AppColors.primary, size: 22),
           onSelected: (action) => _handleAction(context, ref, action, quote, db),
           itemBuilder: (ctx) => [
-            const PopupMenuItem(value: 'view', child: Row(children: [Icon(Icons.visibility_outlined, size: 16), SizedBox(width: 8), Text('View Details')])),
+            const PopupMenuItem(
+              value: 'view',
+              child: Row(
+                children: [
+                  Icon(Icons.visibility_outlined, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('View Details')),
+                ],
+              ),
+            ),
             if (quote.quotationStatus == QuotationStatus.draft)
-              const PopupMenuItem(value: 'send', child: Row(children: [Icon(Icons.send_outlined, size: 16, color: AppColors.info), SizedBox(width: 8), Text('Mark as Sent')])),
+              const PopupMenuItem(
+                value: 'send',
+                child: Row(
+                  children: [
+                    Icon(Icons.send_outlined, size: 16, color: AppColors.info),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('Mark as Sent')),
+                  ],
+                ),
+              ),
             if (quote.quotationStatus == QuotationStatus.sent) ...[
-              const PopupMenuItem(value: 'accept', child: Row(children: [Icon(Icons.check_circle_outline, size: 16, color: AppColors.success), SizedBox(width: 8), Text('Accept Quote')])),
-              const PopupMenuItem(value: 'reject', child: Row(children: [Icon(Icons.cancel_outlined, size: 16, color: AppColors.danger), SizedBox(width: 8), Text('Reject Quote')])),
+              const PopupMenuItem(
+                value: 'accept',
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 16, color: AppColors.success),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('Accept Quote')),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'reject',
+                child: Row(
+                  children: [
+                    Icon(Icons.cancel_outlined, size: 16, color: AppColors.danger),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('Reject Quote')),
+                  ],
+                ),
+              ),
             ],
-            if (quote.quotationStatus != QuotationStatus.superseded) ...[
-              const PopupMenuItem(value: 'revision', child: Row(children: [Icon(Icons.difference_outlined, size: 16, color: AppColors.purple), SizedBox(width: 8), Text('Create Revision')])),
-              const PopupMenuItem(value: 'proforma', child: Row(children: [Icon(Icons.receipt_long_outlined, size: 16, color: AppColors.primary), SizedBox(width: 8), Text('Convert to Proforma')])),
-            ],
-            const PopupMenuItem(value: 'duplicate', child: Row(children: [Icon(Icons.copy_outlined, size: 16), SizedBox(width: 8), Text('Duplicate Quote')])),
+            if (quote.quotationStatus == QuotationStatus.accepted || quote.quotationStatus == QuotationStatus.approved)
+              const PopupMenuItem(
+                value: 'proforma',
+                child: Row(
+                  children: [
+                    Icon(Icons.receipt_long_outlined, size: 16, color: AppColors.primary),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('Convert to Proforma')),
+                  ],
+                ),
+              ),
           ],
         ),
       ],
@@ -408,42 +486,33 @@ class _QuotationsScreenState extends ConsumerState<QuotationsScreen> with Single
     try {
       switch (action) {
         case 'view':
-          ref.read(activeRecordDetailsStackProvider.notifier).push(quote.id, 'quotation', ErpNavSection.quotations);
+          SalesPdfGeneratorDialog.show(context, quote, db);
           break;
         case 'send':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.sent.name);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Quotation ${quote.invoiceNumber} marked as SENT to client.'), backgroundColor: AppColors.info),
-          );
+ErpToast.showInfo(context, 'Quotation ${quote.invoiceNumber} marked as SENT to client.');
           break;
         case 'accept':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.accepted.name);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Quotation ${quote.invoiceNumber} ACCEPTED! You can now generate Proforma Invoice.'), backgroundColor: AppColors.success),
-          );
+ErpToast.showSuccess(context, 'Quotation ${quote.invoiceNumber} ACCEPTED! You can now generate Proforma Invoice.');
           break;
         case 'reject':
           await db.updateQuotationStatusAsync(quote.id, QuotationStatus.rejected.name);
           if (!context.mounted) return;
           ErpToast.showSuccess(context, 'Quotation ${quote.invoiceNumber} marked as REJECTED.');
           break;
-        case 'revision':
-          ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
-          ref.read(salesCreateSourceDocIdProvider.notifier).state = quote.id;
-          ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
-          break;
         case 'proforma':
+          if (quote.quotationStatus != QuotationStatus.accepted && quote.quotationStatus != QuotationStatus.approved) {
+            if (!context.mounted) return;
+ErpToast.showWarning(context, 'Only accepted quotations can be converted to a Proforma Invoice. Please accept the quote first.');
+            return;
+          }
           final proforma = await db.convertQuotationToProformaAsync(quote.id);
           if (!context.mounted) return;
           ErpToast.showSuccess(context, 'Created Proforma Invoice ${proforma.invoiceNumber}!');
           ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.proformaInvoices;
-          break;
-        case 'duplicate':
-          ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.quotation;
-          ref.read(salesCreateSourceDocIdProvider.notifier).state = quote.id;
-          ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation;
           break;
       }
     } catch (e) {

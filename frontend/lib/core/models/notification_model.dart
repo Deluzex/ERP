@@ -1,4 +1,4 @@
-class NotificationItem {
+﻿class NotificationItem {
   final String id;
   final String title;
   final String message;

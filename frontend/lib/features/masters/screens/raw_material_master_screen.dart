@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/routes/app_routes.dart';
@@ -9,6 +10,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/erp_data_table.dart';
 import '../../../core/widgets/erp_status_badge.dart';
@@ -17,6 +19,8 @@ import '../../../core/widgets/erp_filter_controls.dart';
 import '../../../core/widgets/figma_metric_card.dart';
 import '../../../core/widgets/bulk_upload_dialog.dart';
 import '../../../core/widgets/bulk_upload_history_dialog.dart';
+import '../../../core/widgets/erp_confirm_dialog.dart';
+import '../../../core/storage/tab_session_storage.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 class RawMaterialMasterScreen extends ConsumerStatefulWidget {
@@ -38,12 +42,37 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreFilters();
       ref.read(databaseServiceProvider).loadRawMaterials();
       ref.read(databaseServiceProvider).loadCategories();
       ref.read(databaseServiceProvider).loadUnits();
       ref.read(databaseServiceProvider).loadVendors();
     });
+  }
+
+  void _persistFilters() {
+    TabSessionStorage.setItem('erp_filter_raw_materials', jsonEncode({
+      'search': _searchQuery,
+      'category': _selectedCategoryFilter,
+      'stock': _stockFilter,
+      'page': _currentPage,
+    }));
+  }
+
+  Future<void> _restoreFilters() async {
+    try {
+      final raw = await TabSessionStorage.getItem('erp_filter_raw_materials');
+      if (raw != null && raw.isNotEmpty && mounted) {
+        final data = jsonDecode(raw);
+        setState(() {
+          _searchQuery = data['search'] as String? ?? '';
+          _selectedCategoryFilter = data['category'] as String? ?? 'ALL';
+          _stockFilter = data['stock'] as String? ?? 'ALL';
+          _currentPage = data['page'] as int? ?? 0;
+        });
+      }
+    } catch (_) {}
   }
 
   void _openAddEditDialog([RawMaterial? existing]) {
@@ -363,7 +392,10 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                   onPressed: isSubmitting
                       ? null
                       : () async {
-                          if (!formKey.currentState!.validate()) return;
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
                           setDlgState(() {
                             isSubmitting = true;
                             serverError = null;
@@ -430,12 +462,7 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
 
                             if (ctx.mounted) Navigator.of(ctx).pop();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(isEdit ? 'Raw material updated successfully!' : 'Raw material created successfully!'),
-                                  backgroundColor: AppColors.success,
-                                ),
-                              );
+                              ErpToast.showSuccess(context, isEdit ? 'Raw material updated successfully!' : 'Raw material created successfully!');
                             }
                           } catch (e) {
                             setDlgState(() {
@@ -453,46 +480,34 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
     );
   }
 
-  void _confirmDelete(RawMaterial rm) {
-    showDialog(
+  void _confirmToggleStatus(RawMaterial rm) {
+    final willActivate = !rm.isActive;
+    showErpStatusConfirmDialog(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text('Delete Raw Material', style: AppTextStyles.h2),
-          content: Text(
-            'Are you sure you want to delete "${rm.name}" (${rm.itemCode})? This cannot be undone.',
-            style: AppTextStyles.bodyMedium,
-          ),
-          actions: [
-            ErpButton(
-              text: 'Cancel',
-              isOutlined: true,
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ErpButton(
-              text: 'Delete',
-              isDanger: true,
-              onPressed: () async {
-                Navigator.of(ctx).pop();
-                try {
-                  await ref.read(databaseServiceProvider).deleteRawMaterialAsync(rm.id);
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Raw material "${rm.name}" deleted successfully!'),
-                      backgroundColor: AppColors.danger,
-                    ),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to delete "${rm.name}": $e'), backgroundColor: AppColors.danger),
-                  );
-                }
-              },
-            ),
-          ],
-        );
+      title: willActivate ? 'Activate Raw Material' : 'Deactivate Raw Material',
+      message: willActivate
+          ? 'Activate "${rm.name}"? It will immediately become available in all transaction dropdowns and lookups.'
+          : 'Are you sure you want to deactivate "${rm.name}"? This entity will no longer appear in transaction dropdowns for new Sales, Purchases, or Production orders. Historical records will remain intact.',
+      itemName: '${rm.name} (${rm.itemCode})',
+      willActivate: willActivate,
+      confirmLabel: willActivate ? 'Activate' : 'Deactivate',
+      onConfirm: () async {
+        try {
+          await ref.read(databaseServiceProvider).toggleRawMaterialStatusAsync(rm.id, willActivate);
+          if (mounted) {
+            ErpToast.showSuccess(
+              context,
+              'Raw material "${rm.name}" ${willActivate ? "activated" : "deactivated"} successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ErpToast.showError(
+              context,
+              'Status update failed: ${e.toString().replaceFirst("Exception: ", "")}',
+            );
+          }
+        }
       },
     );
   }
@@ -512,6 +527,143 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
     } else {
       return ErpStatusBadge.categoryNeutral(catName);
     }
+  }
+
+  Widget _buildControlsRow(List<DropdownMenuItem<String>> categoryFilterItems) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 450;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ErpSearchInput(
+                hintText: 'Search raw materials by SKU, name, vendor...',
+                initialValue: _searchQuery,
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _selectedCategoryFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: categoryFilterItems,
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedCategoryFilter = val;
+                      _currentPage = 0;
+                    });
+                    _persistFilters();
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpFilterDropdown<String>(
+                value: _stockFilter,
+                width: double.infinity,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                  DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                  DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                  DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _stockFilter = val;
+                      _currentPage = 0;
+                    });
+                    _persistFilters();
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              ErpDateFilterBox(
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeSelected: (start, end) => setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                }),
+              ),
+            ],
+          );
+        }
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ErpSearchInput(
+                hintText: 'Search raw materials by SKU, name, vendor...',
+                initialValue: _searchQuery,
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                },
+              ),
+            ),
+            ErpFilterDropdown<String>(
+              value: _selectedCategoryFilter,
+              items: categoryFilterItems,
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _selectedCategoryFilter = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                }
+              },
+            ),
+            ErpFilterDropdown<String>(
+              value: _stockFilter,
+              items: const [
+                DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
+                DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
+                DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
+                DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _stockFilter = val;
+                    _currentPage = 0;
+                  });
+                  _persistFilters();
+                }
+              },
+            ),
+            ErpDateFilterBox(
+              startDate: _startDate,
+              endDate: _endDate,
+              onDateRangeSelected: (start, end) {
+                setState(() {
+                  _startDate = start;
+                  _endDate = end;
+                  _currentPage = 0;
+                });
+                _persistFilters();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -568,30 +720,25 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
             icon: Icons.grain_rounded,
             title: 'Raw Materials Master',
             badgeText: 'COMPONENTS & INGREDIENTS',
-            action: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ErpButton(
-                  text: 'Upload History',
-                  icon: Icons.history,
-                  isOutlined: true,
-                  onPressed: () => BulkUploadHistoryDialog.show(context, masterFilter: 'Raw Materials'),
-                ),
-                const SizedBox(width: 10),
-                ErpButton(
-                  text: 'Bulk Upload',
-                  icon: Icons.upload_file,
-                  isOutlined: true,
-                  onPressed: () => BulkUploadDialog.show(context, BulkUploadMasterType.rawMaterial),
-                ),
-                const SizedBox(width: 10),
-                ErpButton(
-                  text: 'Add Material',
-                  icon: Icons.add,
-                  onPressed: () => _openAddEditDialog(),
-                ),
-              ],
-            ),
+            actions: [
+              ErpButton(
+                text: 'Upload History',
+                icon: Icons.history,
+                isOutlined: true,
+                onPressed: () => BulkUploadHistoryDialog.show(context, masterFilter: 'Raw Materials'),
+              ),
+              ErpButton(
+                text: 'Bulk Upload',
+                icon: Icons.upload_file,
+                isOutlined: true,
+                onPressed: () => BulkUploadDialog.show(context, BulkUploadMasterType.rawMaterial),
+              ),
+              ErpButton(
+                text: 'Add Material',
+                icon: Icons.add,
+                onPressed: () => _openAddEditDialog(),
+              ),
+            ],
           ),
           const SizedBox(height: 18),
 
@@ -629,22 +776,22 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.warning_amber_rounded,
-                      iconColor: AppColors.danger,
+                      iconColor: lowStockCount > 0 ? AppColors.danger : AppColors.success,
                       title: 'Low Stock Items',
                       value: '$lowStockCount',
-                      subtext: 'Reorder Soon',
-                      subtextColor: AppColors.danger,
+                      subtext: lowStockCount > 0 ? '$lowStockCount of $totalRawMaterialsCount need reorder' : 'Healthy stock levels',
+                      subtextColor: lowStockCount > 0 ? AppColors.danger : AppColors.success,
                     ),
                   ),
                   SizedBox(
                     width: cardWidth,
                     child: FigmaMetricCard(
                       icon: Icons.cancel_outlined,
-                      iconColor: AppColors.danger,
+                      iconColor: outOfStockCount > 0 ? AppColors.danger : AppColors.success,
                       title: 'Out of Stock',
                       value: '$outOfStockCount',
-                      subtext: 'Zero Stock',
-                      subtextColor: AppColors.danger,
+                      subtext: outOfStockCount > 0 ? '$outOfStockCount of $totalRawMaterialsCount zero stock' : 'No stockouts',
+                      subtextColor: outOfStockCount > 0 ? AppColors.danger : AppColors.success,
                     ),
                   ),
                   SizedBox(
@@ -663,63 +810,26 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
           ),
           const SizedBox(height: 18),
 
-          // Modern Filter Controls Bar
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 280,
-                child: ErpSearchInput(
-                  hintText: 'Search raw materials by SKU, name, vendor...',
-                  initialValue: _searchQuery,
-                  onChanged: (val) => setState(() {
-                    _searchQuery = val;
-                    _currentPage = 0;
-                  }),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1.0),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
                 ),
-              ),
-              ErpFilterDropdown<String>(
-                value: _selectedCategoryFilter,
-                items: categoryFilterItems,
-                onChanged: (val) {
-                  if (val != null) setState(() {
-                    _selectedCategoryFilter = val;
-                    _currentPage = 0;
-                  });
-                },
-              ),
-              ErpFilterDropdown<String>(
-                value: _stockFilter,
-                items: const [
-                  DropdownMenuItem(value: 'ALL', child: Text('All Stock Levels')),
-                  DropdownMenuItem(value: 'LOW', child: Text('Low Stock Alert')),
-                  DropdownMenuItem(value: 'IN_STOCK', child: Text('In Stock')),
-                  DropdownMenuItem(value: 'OUT_OF_STOCK', child: Text('Out of Stock (Zero)')),
-                ],
-                onChanged: (val) {
-                  if (val != null) setState(() {
-                    _stockFilter = val;
-                    _currentPage = 0;
-                  });
-                },
-              ),
-              ErpDateFilterBox(
-                startDate: _startDate,
-                endDate: _endDate,
-                onDateRangeSelected: (start, end) => setState(() {
-                  _startDate = start;
-                  _endDate = end;
-                  _currentPage = 0;
-                }),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Data Table with All Deluzex ERP Raw Material Fields & Figma Typography
-          ErpDataTable(
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildControlsRow(categoryFilterItems),
+                const SizedBox(height: 16),
+                ErpDataTable(
             columns: const [
               ErpColumn(title: 'MATERIAL NAME'),
               ErpColumn(title: 'SKU / CODE'),
@@ -784,9 +894,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                   Formatters.formatCurrency(rm.defaultPurchasePrice),
                   style: AppTextStyles.bodyBold.copyWith(fontSize: 13, color: const Color(0xFF1E293B)),
                 ),
-                rm.isLowStock
-                    ? ErpStatusBadge.warning('Low Stock')
-                    : (rm.currentStock <= 0 ? ErpStatusBadge.danger('Out of Stock') : ErpStatusBadge.success('In Stock')),
+                !rm.isActive
+                    ? ErpStatusBadge.inactive()
+                    : (rm.isLowStock
+                        ? ErpStatusBadge.warning('Low Stock')
+                        : (rm.currentStock <= 0 ? ErpStatusBadge.danger('Out of Stock') : ErpStatusBadge.active())),
                 // Previous Single Action Button
                 PopupMenuButton<String>(
                   tooltip: 'Actions',
@@ -801,12 +913,12 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                       case 'edit':
                         _openAddEditDialog(rm);
                         break;
-                      case 'delete':
-                        _confirmDelete(rm);
+                      case 'toggle_status':
+                        _confirmToggleStatus(rm);
                         break;
                     }
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'view',
                       child: Row(
@@ -828,12 +940,21 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                       ),
                     ),
                     PopupMenuItem(
-                      value: 'delete',
+                      value: 'toggle_status',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                          SizedBox(width: 8),
-                          Text('Delete Material', style: TextStyle(color: AppColors.danger)),
+                          Icon(
+                            rm.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                            color: rm.isActive ? AppColors.warning : AppColors.success,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            rm.isActive ? 'Deactivate Material' : 'Activate Material',
+                            style: TextStyle(
+                              color: rm.isActive ? AppColors.warning : AppColors.success,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -844,14 +965,23 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
           ),
           const SizedBox(height: 16),
           ErpPaginationBar(
-            currentPage: safeCurrentPage,
-            pageSize: safePageSize,
-            totalRecords: totalRecords,
-            onPageChanged: (newPage) => setState(() => _currentPage = newPage),
-            onPageSizeChanged: (newSize) => setState(() {
-              _pageSize = newSize;
-              _currentPage = 0;
-            }),
+                  currentPage: safeCurrentPage,
+                  pageSize: safePageSize,
+                  totalRecords: totalRecords,
+                  onPageChanged: (newPage) {
+                    setState(() => _currentPage = newPage);
+                    _persistFilters();
+                  },
+                  onPageSizeChanged: (newSize) {
+                    setState(() {
+                      _pageSize = newSize;
+                      _currentPage = 0;
+                    });
+                    _persistFilters();
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),

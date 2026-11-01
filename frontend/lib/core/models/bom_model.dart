@@ -1,4 +1,4 @@
-class BomItem {
+﻿class BomItem {
   final String id;
   final String rawMaterialId;
   final String rawMaterialName;

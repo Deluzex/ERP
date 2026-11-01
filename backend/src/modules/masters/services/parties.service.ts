@@ -27,6 +27,7 @@ export interface CustomerRecord {
   linkedArchitectId: string | null;
   isAlsoArchitect: boolean;
   isDeleted: boolean;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,6 +46,7 @@ export interface DealerRecord {
   pincode?: string | null;
   outstandingAmount: string;
   isDeleted: boolean;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,6 +70,7 @@ export interface ArchitectRecord {
   linkedCustomerId: string | null;
   isAlsoCustomer: boolean;
   isDeleted: boolean;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -83,10 +86,24 @@ export class PartiesService {
   // -------------------------------------------------------------
   // CUSTOMERS
   // -------------------------------------------------------------
-  async findAllCustomers(search?: string, isAlsoArchitect?: boolean): Promise<CustomerRecord[]> {
-    const conditions: string[] = ['is_deleted = false'];
+  async findAllCustomers(
+    search?: string,
+    isAlsoArchitect?: boolean,
+    includeDeleted = false,
+    isActive?: boolean,
+  ): Promise<CustomerRecord[]> {
+    const conditions: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
+
+    if (!includeDeleted) {
+      conditions.push('is_deleted = false');
+    }
+
+    if (isActive !== undefined) {
+      conditions.push(`is_active = $${idx++}`);
+      values.push(isActive);
+    }
 
     if (isAlsoArchitect !== undefined) {
       conditions.push(`is_also_architect = $${idx++}`);
@@ -99,8 +116,9 @@ export class PartiesService {
       idx++;
     }
 
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const res = await this.db.query(
-      `SELECT * FROM customers WHERE ${conditions.join(' AND ')} ORDER BY name ASC`,
+      `SELECT * FROM customers ${whereClause} ORDER BY name ASC`,
       values,
     );
 
@@ -119,6 +137,7 @@ export class PartiesService {
       linkedArchitectId: r.linked_architect_id,
       isAlsoArchitect: r.is_also_architect,
       isDeleted: r.is_deleted,
+      isActive: r.is_active ?? true,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -144,6 +163,7 @@ export class PartiesService {
       linkedArchitectId: r.linked_architect_id,
       isAlsoArchitect: r.is_also_architect,
       isDeleted: r.is_deleted,
+      isActive: r.is_active ?? true,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
@@ -315,13 +335,81 @@ export class PartiesService {
     return { success: true };
   }
 
+  async toggleCustomerStatus(
+    id: string,
+    isActive: boolean,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<{ success: boolean; message: string; data: any; timestamp: string }> {
+    const existing = await this.findCustomerById(id);
+    if (existing.isActive === isActive) {
+      return {
+        success: true,
+        message: `Customer status updated to ${isActive ? 'active' : 'inactive'}`,
+        data: {
+          id: existing.id,
+          name: existing.name,
+          isActive: existing.isActive,
+          updatedAt: existing.updatedAt,
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    await this.db.query('UPDATE customers SET is_active = $1, updated_at = NOW() WHERE id = $2', [isActive, id]);
+
+    await this.auditService.log({
+      userId,
+      userName: 'User',
+      action: 'MASTER_STATUS_CHANGE',
+      entityType: 'CUSTOMER',
+      entityId: id,
+      beforeSnapshot: { isActive: existing.isActive },
+      afterSnapshot: {
+        entityType: 'CUSTOMER',
+        entityId: id,
+        entityName: existing.name,
+        previousStatus: existing.isActive,
+        newStatus: isActive,
+      },
+      reason: `Status changed to ${isActive ? 'active' : 'inactive'}`,
+      correlationId,
+    });
+
+    const updated = await this.findCustomerById(id);
+    return {
+      success: true,
+      message: `Customer status updated to ${isActive ? 'active' : 'inactive'}`,
+      data: {
+        id: updated.id,
+        name: updated.name,
+        isActive: updated.isActive,
+        updatedAt: updated.updatedAt,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   // -------------------------------------------------------------
   // DEALERS
   // -------------------------------------------------------------
-  async findAllDealers(search?: string): Promise<DealerRecord[]> {
-    const conditions: string[] = ['is_deleted = false'];
+  async findAllDealers(
+    search?: string,
+    includeDeleted = false,
+    isActive?: boolean,
+  ): Promise<DealerRecord[]> {
+    const conditions: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
+
+    if (!includeDeleted) {
+      conditions.push('is_deleted = false');
+    }
+
+    if (isActive !== undefined) {
+      conditions.push(`is_active = $${idx++}`);
+      values.push(isActive);
+    }
 
     if (search && search.trim().length > 0) {
       conditions.push(`(name ILIKE $${idx} OR company_name ILIKE $${idx} OR mobile ILIKE $${idx})`);
@@ -329,8 +417,9 @@ export class PartiesService {
       idx++;
     }
 
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const res = await this.db.query(
-      `SELECT * FROM dealers WHERE ${conditions.join(' AND ')} ORDER BY name ASC`,
+      `SELECT * FROM dealers ${whereClause} ORDER BY name ASC`,
       values,
     );
 
@@ -348,6 +437,7 @@ export class PartiesService {
       pincode: r.pincode,
       outstandingAmount: Money.format(r.outstanding_amount),
       isDeleted: r.is_deleted,
+      isActive: r.is_active ?? true,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -372,6 +462,7 @@ export class PartiesService {
       pincode: r.pincode,
       outstandingAmount: Money.format(r.outstanding_amount),
       isDeleted: r.is_deleted,
+      isActive: r.is_active ?? true,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
@@ -386,7 +477,7 @@ export class PartiesService {
       [
         dto.name.trim(),
         dto.contactPerson.trim(),
-        dto.companyName.trim(),
+        dto.companyName ? dto.companyName.trim() : dto.name.trim(),
         dto.mobile.trim(),
         dto.email.trim().toLowerCase(),
         dto.gstNumber ? dto.gstNumber.trim().toUpperCase() : '',
@@ -456,13 +547,81 @@ export class PartiesService {
     return { success: true };
   }
 
+  async toggleDealerStatus(
+    id: string,
+    isActive: boolean,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<{ success: boolean; message: string; data: any; timestamp: string }> {
+    const existing = await this.findDealerById(id);
+    if (existing.isActive === isActive) {
+      return {
+        success: true,
+        message: `Dealer status updated to ${isActive ? 'active' : 'inactive'}`,
+        data: {
+          id: existing.id,
+          name: existing.name,
+          isActive: existing.isActive,
+          updatedAt: existing.updatedAt,
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    await this.db.query('UPDATE dealers SET is_active = $1, updated_at = NOW() WHERE id = $2', [isActive, id]);
+
+    await this.auditService.log({
+      userId,
+      userName: 'User',
+      action: 'MASTER_STATUS_CHANGE',
+      entityType: 'DEALER',
+      entityId: id,
+      beforeSnapshot: { isActive: existing.isActive },
+      afterSnapshot: {
+        entityType: 'DEALER',
+        entityId: id,
+        entityName: existing.name,
+        previousStatus: existing.isActive,
+        newStatus: isActive,
+      },
+      reason: `Status changed to ${isActive ? 'active' : 'inactive'}`,
+      correlationId,
+    });
+
+    const updated = await this.findDealerById(id);
+    return {
+      success: true,
+      message: `Dealer status updated to ${isActive ? 'active' : 'inactive'}`,
+      data: {
+        id: updated.id,
+        name: updated.name,
+        isActive: updated.isActive,
+        updatedAt: updated.updatedAt,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   // -------------------------------------------------------------
   // ARCHITECTS
   // -------------------------------------------------------------
-  async findAllArchitects(search?: string): Promise<ArchitectRecord[]> {
-    const conditions: string[] = ['is_deleted = false'];
+  async findAllArchitects(
+    search?: string,
+    includeDeleted = false,
+    isActive?: boolean,
+  ): Promise<ArchitectRecord[]> {
+    const conditions: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
+
+    if (!includeDeleted) {
+      conditions.push('is_deleted = false');
+    }
+
+    if (isActive !== undefined) {
+      conditions.push(`is_active = $${idx++}`);
+      values.push(isActive);
+    }
 
     if (search && search.trim().length > 0) {
       conditions.push(`(name ILIKE $${idx} OR company_name ILIKE $${idx} OR mobile ILIKE $${idx})`);
@@ -470,6 +629,7 @@ export class PartiesService {
       idx++;
     }
 
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.map((c) => `a.${c}`).join(' AND ')}` : '';
     const res = await this.db.query(
       `SELECT a.*,
          COALESCE(c_agg.total_earned, 0) as comm_earned,
@@ -486,7 +646,7 @@ export class PartiesService {
          FROM architect_commissions
          GROUP BY architect_id
        ) c_agg ON c_agg.architect_id = a.id
-       WHERE ${conditions.map((c) => `a.${c}`).join(' AND ')} ORDER BY a.name ASC`,
+       ${whereClause} ORDER BY a.name ASC`,
       values,
     );
 
@@ -509,6 +669,7 @@ export class PartiesService {
       linkedCustomerId: r.linked_customer_id,
       isAlsoCustomer: r.is_also_customer,
       isDeleted: r.is_deleted,
+      isActive: r.is_active ?? true,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -556,6 +717,7 @@ export class PartiesService {
       linkedCustomerId: r.linked_customer_id,
       isAlsoCustomer: r.is_also_customer,
       isDeleted: r.is_deleted,
+      isActive: r.is_active ?? true,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
@@ -570,9 +732,9 @@ export class PartiesService {
       RETURNING id`,
       [
         dto.name.trim(),
-        dto.companyName.trim(),
+        dto.companyName ? dto.companyName.trim() : dto.name.trim(),
         dto.mobile.trim(),
-        dto.email.trim().toLowerCase(),
+        dto.email ? dto.email.trim().toLowerCase() : '',
         dto.gstNumber?.trim().toUpperCase() || null,
         dto.address.trim(),
         dto.state?.trim() || 'Gujarat',
@@ -643,6 +805,61 @@ export class PartiesService {
     await this.db.query('UPDATE architects SET is_deleted = true, updated_at = NOW() WHERE id = $1', [id]);
     await this.auditService.log({ userId, userName: 'User', action: 'ARCHITECT_DELETE', entityType: 'ARCHITECT', entityId: id, correlationId });
     return { success: true };
+  }
+
+  async toggleArchitectStatus(
+    id: string,
+    isActive: boolean,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<{ success: boolean; message: string; data: any; timestamp: string }> {
+    const existing = await this.findArchitectById(id);
+    if (existing.isActive === isActive) {
+      return {
+        success: true,
+        message: `Architect status updated to ${isActive ? 'active' : 'inactive'}`,
+        data: {
+          id: existing.id,
+          name: existing.name,
+          isActive: existing.isActive,
+          updatedAt: existing.updatedAt,
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    await this.db.query('UPDATE architects SET is_active = $1, updated_at = NOW() WHERE id = $2', [isActive, id]);
+
+    await this.auditService.log({
+      userId,
+      userName: 'User',
+      action: 'MASTER_STATUS_CHANGE',
+      entityType: 'ARCHITECT',
+      entityId: id,
+      beforeSnapshot: { isActive: existing.isActive },
+      afterSnapshot: {
+        entityType: 'ARCHITECT',
+        entityId: id,
+        entityName: existing.name,
+        previousStatus: existing.isActive,
+        newStatus: isActive,
+      },
+      reason: `Status changed to ${isActive ? 'active' : 'inactive'}`,
+      correlationId,
+    });
+
+    const updated = await this.findArchitectById(id);
+    return {
+      success: true,
+      message: `Architect status updated to ${isActive ? 'active' : 'inactive'}`,
+      data: {
+        id: updated.id,
+        name: updated.name,
+        isActive: updated.isActive,
+        updatedAt: updated.updatedAt,
+      },
+      timestamp: new Date().toISOString(),
+    };
   }
 
   // -------------------------------------------------------------

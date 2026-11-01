@@ -1,3 +1,4 @@
+import 'erp_toast.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -230,12 +231,7 @@ class _BulkUploadDialogState extends ConsumerState<BulkUploadDialog> {
 
     if (mounted) {
       final count = csvRows.length - 1;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Downloaded CSV with $count items: $fileName'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+ErpToast.showSuccess(context, 'Downloaded CSV with $count items: $fileName');
     }
   }
 
@@ -583,12 +579,7 @@ class _BulkUploadDialogState extends ConsumerState<BulkUploadDialog> {
     final rowsToImport = _stagedRows.where((r) => r.isReadyToImport).toList();
 
     if (rowsToImport.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No valid rows available to import. Please review and resolve row errors.'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+ErpToast.showError(context, 'No valid rows available to import. Please review and resolve row errors.');
       return;
     }
 

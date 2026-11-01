@@ -1,4 +1,4 @@
-enum ExpenseCategory {
+﻿enum ExpenseCategory {
   transportation,
   courier,
   fuel,

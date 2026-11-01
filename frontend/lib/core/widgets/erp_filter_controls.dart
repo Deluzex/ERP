@@ -249,11 +249,17 @@ class ErpDatePickerButton extends StatelessWidget {
     return InkWell(
       onTap: () async {
         final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final effectiveLastDate = lastDate ?? today;
+        final effectiveInitialDate = selectedDate != null
+            ? (selectedDate!.isAfter(effectiveLastDate) ? effectiveLastDate : selectedDate!)
+            : effectiveLastDate;
+
         final picked = await showDatePicker(
           context: context,
-          initialDate: selectedDate ?? now,
+          initialDate: effectiveInitialDate,
           firstDate: firstDate ?? DateTime(2020),
-          lastDate: lastDate ?? DateTime(2035),
+          lastDate: effectiveLastDate,
           builder: (dialogCtx, child) {
             return Theme(
               data: Theme.of(dialogCtx).copyWith(
@@ -425,13 +431,16 @@ class ErpDateFilterBox extends StatelessWidget {
   }
 
   void _openDateFilterDialog(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final effectiveLast = lastDate ?? today;
     showDialog(
       context: context,
       builder: (dialogCtx) => _ErpDateFilterDialog(
         initialStart: startDate,
         initialEnd: endDate,
         firstDate: firstDate ?? DateTime(2020),
-        lastDate: lastDate ?? DateTime(2035),
+        lastDate: effectiveLast,
         onApply: (start, end) {
           onDateRangeSelected(start, end);
         },
@@ -469,8 +478,14 @@ class _ErpDateFilterDialogState extends State<_ErpDateFilterDialog> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    final start = widget.initialStart;
-    final end = widget.initialEnd;
+    final today = DateTime(now.year, now.month, now.day);
+    final maxDate = widget.lastDate.isBefore(today) ? widget.lastDate : today;
+    final start = widget.initialStart != null && widget.initialStart!.isAfter(maxDate)
+        ? maxDate
+        : widget.initialStart;
+    final end = widget.initialEnd != null && widget.initialEnd!.isAfter(maxDate)
+        ? maxDate
+        : widget.initialEnd;
 
     final isSame = start != null && end != null &&
         start.year == end.year && start.month == end.month && start.day == end.day;
@@ -487,9 +502,9 @@ class _ErpDateFilterDialogState extends State<_ErpDateFilterDialog> {
       _rangeEnd = end ?? start;
     } else {
       _isRangeMode = false;
-      _singleDate = now;
-      _rangeStart = now;
-      _rangeEnd = now;
+      _singleDate = maxDate;
+      _rangeStart = maxDate;
+      _rangeEnd = maxDate;
     }
   }
 
@@ -621,7 +636,11 @@ class _ErpDateFilterDialogState extends State<_ErpDateFilterDialog> {
                       elevation: 0,
                     ),
                     onPressed: () {
-                      widget.onApply(_singleDate, _singleDate);
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+                      final maxDate = widget.lastDate.isBefore(today) ? widget.lastDate : today;
+                      final selected = _singleDate.isAfter(maxDate) ? maxDate : _singleDate;
+                      widget.onApply(selected, selected);
                       Navigator.pop(context);
                     },
                     child: Text(
@@ -692,11 +711,16 @@ class _ErpDateFilterDialogState extends State<_ErpDateFilterDialog> {
                           title: 'From Date',
                           date: _rangeStart,
                           onTap: () async {
+                            final maxStart = _rangeEnd != null && _rangeEnd!.isBefore(widget.lastDate)
+                                ? _rangeEnd!
+                                : widget.lastDate;
+                            final currentInitial = _rangeStart ?? maxStart;
+                            final initial = currentInitial.isAfter(maxStart) ? maxStart : currentInitial;
                             final picked = await showDatePicker(
                               context: context,
-                              initialDate: _rangeStart ?? DateTime.now(),
+                              initialDate: initial,
                               firstDate: widget.firstDate,
-                              lastDate: widget.lastDate,
+                              lastDate: maxStart,
                             );
                             if (picked != null) {
                               setState(() {
@@ -718,10 +742,15 @@ class _ErpDateFilterDialogState extends State<_ErpDateFilterDialog> {
                           title: 'To Date',
                           date: _rangeEnd,
                           onTap: () async {
+                            final minEnd = _rangeStart ?? widget.firstDate;
+                            final currentInitial = _rangeEnd ?? _rangeStart ?? widget.lastDate;
+                            final initial = currentInitial.isAfter(widget.lastDate)
+                                ? widget.lastDate
+                                : (currentInitial.isBefore(minEnd) ? minEnd : currentInitial);
                             final picked = await showDatePicker(
                               context: context,
-                              initialDate: _rangeEnd ?? _rangeStart ?? DateTime.now(),
-                              firstDate: _rangeStart ?? widget.firstDate,
+                              initialDate: initial,
+                              firstDate: minEnd,
                               lastDate: widget.lastDate,
                             );
                             if (picked != null) {
@@ -744,8 +773,14 @@ class _ErpDateFilterDialogState extends State<_ErpDateFilterDialog> {
                       elevation: 0,
                     ),
                     onPressed: () {
-                      final start = _rangeStart ?? _rangeEnd ?? DateTime.now();
-                      final end = _rangeEnd ?? _rangeStart ?? DateTime.now();
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+                      final maxDate = widget.lastDate.isBefore(today) ? widget.lastDate : today;
+                      var start = _rangeStart ?? _rangeEnd ?? maxDate;
+                      var end = _rangeEnd ?? _rangeStart ?? maxDate;
+                      if (start.isAfter(maxDate)) start = maxDate;
+                      if (end.isAfter(maxDate)) end = maxDate;
+                      if (end.isBefore(start)) end = start;
                       widget.onApply(start, end);
                       Navigator.pop(context);
                     },

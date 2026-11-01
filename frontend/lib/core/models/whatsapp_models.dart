@@ -1,4 +1,4 @@
-enum WhatsAppAlertType {
+﻿enum WhatsAppAlertType {
   lowStockRawMaterial,
   lowStockFinishedProduct,
   allLowStock,

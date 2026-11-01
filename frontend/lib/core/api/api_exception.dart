@@ -1,4 +1,4 @@
-/// Strongly-typed exception for ERP API errors
+﻿/// Strongly-typed exception for ERP API errors
 class ApiException implements Exception {
   final int? statusCode;
   final String errorCode;

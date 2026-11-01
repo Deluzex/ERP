@@ -1,4 +1,4 @@
-import '../models/stock_adjustment_model.dart';
+﻿import '../models/stock_adjustment_model.dart';
 import '../models/stock_movement_model.dart';
 import '../models/whatsapp_models.dart';
 import 'api_client.dart';
@@ -86,7 +86,7 @@ class InventoryApiService {
     DateTime? endDate,
     String? search,
     int page = 1,
-    int limit = 50,
+    int limit = 500,
   }) async {
     try {
       final queryParams = <String, dynamic>{
@@ -155,7 +155,7 @@ class InventoryApiService {
   /// 6.4 Get Historical Stock Adjustments
   Future<List<StockAdjustment>> getStockAdjustments({
     int page = 1,
-    int limit = 50,
+    int limit = 500,
   }) async {
     try {
       final response = await _client.dio.get(

@@ -602,6 +602,31 @@ export class ProductionService {
                WHERE id = $2`,
               [actualQty, order.finished_product_id],
             );
+
+            // Update reserved quantity on the linked sale item
+            await client.query(
+              `UPDATE sale_items
+               SET reserved_quantity = LEAST(quantity, reserved_quantity + $1)
+               WHERE sale_id = $2 AND finished_product_id = $3`,
+              [actualQty, order.sales_order_id, order.finished_product_id],
+            );
+
+            // Check if all line items for this sales order are now fully reserved/produced
+            const checkShortage = await client.query<{ remaining: string }>(
+              `SELECT COUNT(*) as remaining
+               FROM sale_items
+               WHERE sale_id = $1 AND (quantity - delivered_quantity) > reserved_quantity`,
+              [order.sales_order_id],
+            );
+
+            if (parseInt(checkShortage.rows[0]?.remaining || '0', 10) === 0) {
+              await client.query(
+                `UPDATE sales
+                 SET sales_order_status = 'readyForDispatch', updated_at = now()
+                 WHERE id = $1`,
+                [order.sales_order_id],
+              );
+            }
           }
         }
 

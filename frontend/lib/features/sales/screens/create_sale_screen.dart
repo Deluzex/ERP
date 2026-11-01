@@ -18,7 +18,9 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/widgets/document_ocr_uploader.dart';
 import '../../../core/widgets/erp_button.dart';
+import '../../../core/widgets/erp_toast.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import '../../../core/storage/form_draft_service.dart';
 
 class _SaleLineItemDraft {
   String finishedProductId;
@@ -69,21 +71,131 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
   final List<_SaleLineItemDraft> _items = [];
 
   bool _isInterStateTax = false;
+  int? _partyDropdownVersion = 0;
+  int get partyDropdownVersion => _partyDropdownVersion ?? 0;
+  int? _projectDropdownVersion = 0;
+  int get projectDropdownVersion => _projectDropdownVersion ?? 0;
 
   @override
   void initState() {
     super.initState();
     final db = ref.read(databaseServiceProvider);
-    if (db.customers.isNotEmpty) {
-      _selectedPartyId = db.customers.first.id;
+    final activeCust = db.customers.where((c) => !c.isDeleted && c.isActive).firstOrNull;
+    if (activeCust != null) {
+      _selectedPartyId = activeCust.id;
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+
+    _paidAmountCtrl.addListener(_saveDraftToStorage);
+    _notesCtrl.addListener(_saveDraftToStorage);
+
+    final syncDraft = FormDraftService.instance.getDraftSync('sale_invoice');
+    if (syncDraft != null) {
+      _applyDraftData(syncDraft);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreDraftFromStorage();
       if (mounted) {
         setState(() {
           _resolveTaxClassification();
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _paidAmountCtrl.removeListener(_saveDraftToStorage);
+    _notesCtrl.removeListener(_saveDraftToStorage);
+    _paidAmountCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  void _saveDraftToStorage() {
+    if (!mounted) return;
+    if (_items.isEmpty && _selectedPartyId == null && _notesCtrl.text.isEmpty && _paidAmountCtrl.text == '0') {
+      return;
+    }
+    final data = {
+      'partyType': _partyType.name,
+      'selectedPartyId': _selectedPartyId,
+      'selectedProjectId': _selectedProjectId,
+      'paymentMode': _paymentMode.name,
+      'paidAmount': _paidAmountCtrl.text,
+      'notes': _notesCtrl.text,
+      'isInterStateTax': _isInterStateTax,
+      'items': _items.map((it) => {
+        'finishedProductId': it.finishedProductId,
+        'finishedProductName': it.finishedProductName,
+        'finishedProductCode': it.finishedProductCode,
+        'unit': it.unit,
+        'quantity': it.quantity,
+        'rate': it.rate,
+        'discount': it.discount,
+        'gstPercent': it.gstPercent,
+      }).toList(),
+    };
+    FormDraftService.instance.saveDraft('sale_invoice', data);
+  }
+
+  void _applyDraftData(Map<String, dynamic> draft) {
+    if (draft['partyType'] != null) {
+      _partyType = PartyType.values.firstWhere(
+        (p) => p.name == draft['partyType'],
+        orElse: () => PartyType.customer,
+      );
+    }
+    if (draft['selectedPartyId'] != null) {
+      _selectedPartyId = draft['selectedPartyId'] as String?;
+    }
+    if (draft['selectedProjectId'] != null) {
+      _selectedProjectId = draft['selectedProjectId'] as String?;
+    }
+    if (draft['paymentMode'] != null) {
+      _paymentMode = PaymentMode.values.firstWhere(
+        (m) => m.name == draft['paymentMode'],
+        orElse: () => PaymentMode.bankTransfer,
+      );
+    }
+    if (draft['paidAmount'] != null) {
+      _paidAmountCtrl.text = draft['paidAmount'] as String;
+    }
+    if (draft['notes'] != null) {
+      _notesCtrl.text = draft['notes'] as String;
+    }
+    if (draft['isInterStateTax'] != null) {
+      _isInterStateTax = draft['isInterStateTax'] as bool;
+    }
+    final rawItems = draft['items'];
+    if (rawItems is List && rawItems.isNotEmpty) {
+      _items.clear();
+      for (final it in rawItems) {
+        if (it is Map<String, dynamic>) {
+          _items.add(_SaleLineItemDraft(
+            finishedProductId: it['finishedProductId'] as String? ?? '',
+            finishedProductName: it['finishedProductName'] as String? ?? '',
+            finishedProductCode: it['finishedProductCode'] as String? ?? '',
+            unit: it['unit'] as String? ?? '',
+            quantity: (it['quantity'] as num?)?.toDouble() ?? 1.0,
+            rate: (it['rate'] as num?)?.toDouble() ?? 0.0,
+            discount: (it['discount'] as num?)?.toDouble() ?? 0.0,
+            gstPercent: (it['gstPercent'] as num?)?.toDouble() ?? 18.0,
+          ));
+        }
+      }
+    }
+  }
+
+  Future<void> _restoreDraftFromStorage() async {
+    try {
+      final draft = await FormDraftService.instance.loadDraft('sale_invoice');
+      if (draft != null && mounted) {
+        setState(() {
+          _applyDraftData(draft);
+        });
+      }
+    } catch (_) {}
   }
 
   void _resolveTaxClassification() {
@@ -153,19 +265,15 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
 
   Future<void> _showAddProductDialog() async {
     final db = ref.read(databaseServiceProvider);
-    if (db.finishedProducts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No finished products found in catalog.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+    final activeProducts = db.finishedProducts.where((p) => !p.isDeleted && p.isActive).toList();
+    if (activeProducts.isEmpty) {
+      ErpToast.showWarning(context, 'No active finished products found in catalog.');
       return;
     }
 
     final dialogFormKey = GlobalKey<FormState>();
-    String? selectedProductId = db.finishedProducts.first.id;
-    final firstFp = db.finishedProducts.first;
+    String? selectedProductId = activeProducts.first.id;
+    final firstFp = activeProducts.first;
     final initialRate = _partyType == PartyType.customer ? firstFp.customerSellingPrice : firstFp.dealerSellingPrice;
 
     final qtyCtrl = TextEditingController(text: '1');
@@ -177,9 +285,9 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) {
-          final selectedFp = db.finishedProducts.firstWhere(
+          final selectedFp = activeProducts.firstWhere(
             (p) => p.id == selectedProductId,
-            orElse: () => db.finishedProducts.first,
+            orElse: () => activeProducts.first,
           );
           final qty = double.tryParse(qtyCtrl.text.trim()) ?? 0.0;
           final rate = double.tryParse(rateCtrl.text.trim()) ?? 0.0;
@@ -237,7 +345,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                           labelText: 'Select Product *',
                           prefixIcon: Icon(Icons.category_outlined, size: 20),
                         ),
-                        items: db.finishedProducts.map((fp) {
+                        items: activeProducts.map((fp) {
                           return DropdownMenuItem(
                             value: fp.id,
                             child: Text(
@@ -249,7 +357,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                         }).toList(),
                         onChanged: (val) {
                           if (val != null) {
-                            final chosen = db.finishedProducts.firstWhere((p) => p.id == val);
+                            final chosen = activeProducts.firstWhere((p) => p.id == val);
                             setDlgState(() {
                               selectedProductId = chosen.id;
                               final newRate = _partyType == PartyType.customer
@@ -423,6 +531,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                       gstPercent: gstPercent,
                     ));
                   });
+                  _saveDraftToStorage();
                   Navigator.of(ctx).pop();
                 },
               ),
@@ -435,6 +544,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
 
   void _removeLineItem(int index) {
     setState(() => _items.removeAt(index));
+    _saveDraftToStorage();
   }
 
   double get _subtotalAmount => _items.fold(0.0, (sum, i) => sum + (i.quantity * i.rate));
@@ -485,240 +595,278 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
         break;
     }
 
+    bool isSaving = false;
+
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) {
-        return AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          title: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              Text(title, style: AppTextStyles.h2),
-              ErpButton(
-                text: 'Scan & Upload (OCR)',
-                icon: Icons.document_scanner_outlined,
-                isOutlined: true,
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (ocrCtx) => Dialog(
-                      backgroundColor: Colors.transparent,
-                      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
-                        width: double.infinity,
-                        height: MediaQuery.of(context).size.height * 0.88,
-                        child: DocumentOcrUploader(
-                          docType: partyType == PartyType.customer
-                              ? OcrDocType.customerDoc
-                              : (partyType == PartyType.dealer ? OcrDocType.customerDoc : OcrDocType.architectDoc),
-                          onCancel: () => Navigator.of(ocrCtx).pop(),
-                          onConfirm: (data) {
-                            nameCtrl.text = data['Customer Name'] ?? data['Company Name'] ?? data['Dealer Name'] ?? data['Architect Name'] ?? nameCtrl.text;
-                            contactPersonCtrl.text = data['Contact Person'] ?? contactPersonCtrl.text;
-                            mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
-                            emailCtrl.text = data['Email'] ?? emailCtrl.text;
-                            addressCtrl.text = data['Address'] ?? addressCtrl.text;
-                            gstCtrl.text = data['GSTIN'] ?? data['GST Number'] ?? gstCtrl.text;
-                            Navigator.of(ocrCtx).pop();
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              title: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  Text(title, style: AppTextStyles.h2),
+                  ErpButton(
+                    text: 'Scan & Upload (OCR)',
+                    icon: Icons.document_scanner_outlined,
+                    isOutlined: true,
+                    onPressed: isSaving
+                        ? null
+                        : () {
+                            showDialog(
+                              context: context,
+                              builder: (ocrCtx) => Dialog(
+                                backgroundColor: Colors.transparent,
+                                insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                                child: Container(
+                                  constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
+                                  width: double.infinity,
+                                  height: MediaQuery.of(context).size.height * 0.88,
+                                  child: DocumentOcrUploader(
+                                    docType: partyType == PartyType.customer
+                                        ? OcrDocType.customerDoc
+                                        : (partyType == PartyType.dealer ? OcrDocType.customerDoc : OcrDocType.architectDoc),
+                                    onCancel: () => Navigator.of(ocrCtx).pop(),
+                                    onConfirm: (data) {
+                                      nameCtrl.text = data['Customer Name'] ?? data['Company Name'] ?? data['Dealer Name'] ?? data['Architect Name'] ?? nameCtrl.text;
+                                      companyCtrl.text = data['Company Name'] ?? companyCtrl.text;
+                                      contactPersonCtrl.text = data['Contact Person'] ?? contactPersonCtrl.text;
+                                      mobileCtrl.text = data['Mobile'] ?? mobileCtrl.text;
+                                      emailCtrl.text = data['Email'] ?? emailCtrl.text;
+                                      addressCtrl.text = data['Address'] ?? addressCtrl.text;
+                                      gstCtrl.text = data['GSTIN'] ?? data['GST Number'] ?? gstCtrl.text;
+                                      Navigator.of(ocrCtx).pop();
+                                    },
+                                  ),
+                                ),
+                              ),
+                            );
                           },
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                  ),
+                ],
               ),
-            ],
-          ),
-          content: Container(
-            constraints: const BoxConstraints(maxWidth: 540),
-            width: double.infinity,
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: nameCtrl,
-                      validator: (v) => Validators.requiredField(v, '$nameLabel required'),
-                      decoration: InputDecoration(labelText: nameLabel, hintText: nameHint),
-                    ),
-                    const SizedBox(height: 12),
-                    if (partyType == PartyType.dealer) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: companyCtrl,
-                              decoration: const InputDecoration(labelText: 'Registered Entity Name'),
-                            ),
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 540),
+                width: double.infinity,
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: nameCtrl,
+                          validator: (v) => Validators.requiredField(v, '$nameLabel required'),
+                          decoration: InputDecoration(labelText: nameLabel, hintText: nameHint),
+                        ),
+                        const SizedBox(height: 12),
+                        if (partyType == PartyType.dealer) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: companyCtrl,
+                                  validator: (v) => Validators.requiredField(v, 'Registered entity name required'),
+                                  decoration: const InputDecoration(labelText: 'Registered Entity Name *', hintText: 'E.g., Luxe Furnishings LLP'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: contactPersonCtrl,
+                                  validator: (v) => Validators.requiredField(v, 'Contact person required'),
+                                  decoration: const InputDecoration(labelText: 'Contact Person *', hintText: 'E.g., Ramesh Shah'),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: contactPersonCtrl,
-                              validator: (v) => Validators.requiredField(v, 'Contact person required'),
-                              decoration: const InputDecoration(labelText: 'Contact Person *'),
-                            ),
-                          ),
+                          const SizedBox(height: 12),
                         ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (partyType == PartyType.architect) ...[
-                      TextFormField(
-                        controller: companyCtrl,
-                        decoration: const InputDecoration(labelText: 'Studio / Firm Name', hintText: 'E.g., Sanjay Puri Architects'),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: mobileCtrl,
-                            validator: Validators.mobile,
-                            decoration: const InputDecoration(labelText: 'Mobile Number *'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: emailCtrl,
-                            validator: Validators.email,
-                            decoration: const InputDecoration(labelText: 'Email Address'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: gstCtrl,
-                            decoration: const InputDecoration(labelText: 'GST Number'),
-                          ),
-                        ),
                         if (partyType == PartyType.architect) ...[
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: commissionRateCtrl,
-                              keyboardType: TextInputType.number,
-                              validator: Validators.nonNegativeNumber,
-                              decoration: const InputDecoration(labelText: 'Default Commission Rate (%) *'),
-                            ),
+                          TextFormField(
+                            controller: companyCtrl,
+                            validator: (v) => Validators.requiredField(v, 'Studio / Firm name required'),
+                            decoration: const InputDecoration(labelText: 'Studio / Firm Name *', hintText: 'E.g., Sanjay Puri Architects'),
                           ),
+                          const SizedBox(height: 12),
                         ],
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: mobileCtrl,
+                                validator: Validators.mobile,
+                                keyboardType: TextInputType.phone,
+                                decoration: const InputDecoration(labelText: 'Mobile Number *', hintText: 'E.g., 9876543210'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: emailCtrl,
+                                validator: Validators.requiredEmailAddress,
+                                keyboardType: TextInputType.emailAddress,
+                                decoration: const InputDecoration(labelText: 'Email Address *', hintText: 'name@example.com'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: gstCtrl,
+                                validator: (v) => Validators.gst(v, false),
+                                decoration: const InputDecoration(
+                                  labelText: 'GST Number (Optional, 15 chars)',
+                                  hintText: '24AAAAA0000A1Z5',
+                                ),
+                              ),
+                            ),
+                            if (partyType == PartyType.architect) ...[
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: commissionRateCtrl,
+                                  keyboardType: TextInputType.number,
+                                  validator: (v) => Validators.percentage(v, 'Must be between 0% and 100%'),
+                                  decoration: const InputDecoration(labelText: 'Default Commission Rate (%) *'),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: addressCtrl,
+                          maxLines: 2,
+                          validator: (v) => Validators.requiredField(
+                            v,
+                            partyType == PartyType.customer
+                                ? 'Site / Billing Address required'
+                                : (partyType == PartyType.dealer ? 'Showroom / Business Address required' : 'Studio / Office Address required'),
+                          ),
+                          decoration: InputDecoration(
+                            labelText: partyType == PartyType.customer
+                                ? 'Site / Billing Address *'
+                                : (partyType == PartyType.dealer ? 'Showroom / Business Address *' : 'Studio / Office Address *'),
+                            hintText: 'Enter complete postal address with locality and city',
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: addressCtrl,
-                      maxLines: 2,
-                      decoration: InputDecoration(
-                        labelText: partyType == PartyType.customer
-                            ? 'Site / Billing Address'
-                            : (partyType == PartyType.dealer ? 'Showroom / Business Address' : 'Studio / Office Address'),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-          actions: [
-            ErpButton(
-              text: 'Cancel',
-              isOutlined: true,
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ErpButton(
-              text: 'Save & Select',
-              icon: Icons.check_circle_outline,
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-                Navigator.of(ctx).pop();
+              actions: [
+                ErpButton(
+                  text: 'Cancel',
+                  isOutlined: true,
+                  onPressed: isSaving ? null : () => Navigator.of(ctx).pop(),
+                ),
+                ErpButton(
+                  text: 'Save & Select',
+                  icon: Icons.check_circle_outline,
+                  isLoading: isSaving,
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) {
+                            ErpToast.showError(ctx, 'Please fill in all required fields marked with *');
+                            return;
+                          }
 
-                try {
-                  if (partyType == PartyType.customer) {
-                    final newCust = Customer(
-                      id: IdGenerator.generateId('CUST'),
-                      name: nameCtrl.text.trim(),
-                      mobile: mobileCtrl.text.trim(),
-                      email: emailCtrl.text.trim(),
-                      gstNumber: gstCtrl.text.trim(),
-                      address: addressCtrl.text.trim(),
-                      outstandingAmount: 0.0,
-                      createdAt: DateTime.now(),
-                    );
-                    final saved = await db.addCustomerAsync(newCust);
-                    if (!mounted) return;
-                    setState(() {
-                      _selectedPartyId = saved.id;
-                    });
-                  } else if (partyType == PartyType.dealer) {
-                    final newDealer = Dealer(
-                      id: IdGenerator.generateId('DLR'),
-                      name: nameCtrl.text.trim(),
-                      companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
-                      contactPerson: contactPersonCtrl.text.trim(),
-                      mobile: mobileCtrl.text.trim(),
-                      email: emailCtrl.text.trim(),
-                      gstNumber: gstCtrl.text.trim(),
-                      address: addressCtrl.text.trim(),
-                      outstandingAmount: 0.0,
-                      createdAt: DateTime.now(),
-                    );
-                    final saved = await db.addDealerAsync(newDealer);
-                    if (!mounted) return;
-                    setState(() {
-                      _selectedPartyId = saved.id;
-                    });
-                  } else if (partyType == PartyType.architect) {
-                    final newArch = Architect(
-                      id: IdGenerator.generateId('ARCH'),
-                      name: nameCtrl.text.trim(),
-                      companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
-                      mobile: mobileCtrl.text.trim(),
-                      email: emailCtrl.text.trim(),
-                      gstNumber: gstCtrl.text.trim(),
-                      address: addressCtrl.text.trim(),
-                      defaultCommissionRate: double.tryParse(commissionRateCtrl.text.trim()) ?? 5.0,
-                      totalCommissionEarned: 0.0,
-                      pendingCommission: 0.0,
-                      approvedCommission: 0.0,
-                      paidCommission: 0.0,
-                      createdAt: DateTime.now(),
-                    );
-                    final saved = await db.addArchitectAsync(newArch);
-                    if (!mounted) return;
-                    setState(() {
-                      _selectedPartyId = saved.id;
-                    });
-                  }
+                          setDlgState(() => isSaving = true);
 
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('${partyType == PartyType.customer ? 'Customer' : partyType == PartyType.dealer ? 'Dealer' : 'Architect'} created and added to master successfully!'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to save: $e'), backgroundColor: AppColors.danger),
-                  );
-                }
-              },
-            ),
-          ],
+                          try {
+                            if (partyType == PartyType.customer) {
+                              final newCust = Customer(
+                                id: IdGenerator.generateId('CUST'),
+                                name: nameCtrl.text.trim(),
+                                mobile: mobileCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                                gstNumber: gstCtrl.text.trim(),
+                                address: addressCtrl.text.trim(),
+                                outstandingAmount: 0.0,
+                                createdAt: DateTime.now(),
+                              );
+                              final saved = await db.addCustomerAsync(newCust);
+                              if (!mounted) return;
+                              setState(() {
+                                _selectedPartyId = saved.id;
+                              _resolveTaxClassification();
+                              });
+                            } else if (partyType == PartyType.dealer) {
+                              final newDealer = Dealer(
+                                id: IdGenerator.generateId('DLR'),
+                                name: nameCtrl.text.trim(),
+                                companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
+                                contactPerson: contactPersonCtrl.text.trim(),
+                                mobile: mobileCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                                gstNumber: gstCtrl.text.trim(),
+                                address: addressCtrl.text.trim(),
+                                outstandingAmount: 0.0,
+                                createdAt: DateTime.now(),
+                              );
+                              final saved = await db.addDealerAsync(newDealer);
+                              if (!mounted) return;
+                              setState(() {
+                                _selectedPartyId = saved.id;
+                              _resolveTaxClassification();
+                              });
+                            } else if (partyType == PartyType.architect) {
+                              final newArch = Architect(
+                                id: IdGenerator.generateId('ARCH'),
+                                name: nameCtrl.text.trim(),
+                                companyName: companyCtrl.text.trim().isNotEmpty ? companyCtrl.text.trim() : nameCtrl.text.trim(),
+                                mobile: mobileCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                                gstNumber: gstCtrl.text.trim(),
+                                address: addressCtrl.text.trim(),
+                                defaultCommissionRate: double.tryParse(commissionRateCtrl.text.trim()) ?? 5.0,
+                                totalCommissionEarned: 0.0,
+                                pendingCommission: 0.0,
+                                approvedCommission: 0.0,
+                                paidCommission: 0.0,
+                                createdAt: DateTime.now(),
+                              );
+                              final saved = await db.addArchitectAsync(newArch);
+                              if (!mounted) return;
+                              setState(() {
+                                _selectedPartyId = saved.id;
+                              _resolveTaxClassification();
+                              });
+                            }
+
+                            if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                              Navigator.of(ctx).pop();
+                            }
+
+                            if (!mounted) return;
+                            ErpToast.showSuccess(
+                              context,
+                              '${partyType == PartyType.customer ? 'Customer' : partyType == PartyType.dealer ? 'Dealer' : 'Architect'} created and added to master successfully!',
+                            );
+                          } catch (e) {
+                            setDlgState(() => isSaving = false);
+                            final msg = e.toString().replaceAll('Exception: ', '').trim();
+                            if (ctx.mounted) {
+                              ErpToast.showError(ctx, 'Failed to save: $msg');
+                            }
+                          }
+                        },
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -780,7 +928,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                           decoration: const InputDecoration(labelText: 'Linked Client / Customer (Optional)'),
                           items: [
                             const DropdownMenuItem<String?>(value: null, child: Text('None (Direct Architect Specification)')),
-                            ...db.customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                            ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                           ],
                           onChanged: (val) => setDlgState(() => selectedCustId = val),
                         ),
@@ -878,12 +1026,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                       _resolveTaxClassification();
                     });
 
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Project created and added to Project Master successfully!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
+ErpToast.showSuccess(context, 'Project created and added to Project Master successfully!');
                   },
                 ),
               ],
@@ -897,12 +1040,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
   Future<void> _createInvoice(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
     if (_items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one finished product to invoice.'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+ErpToast.showError(context, 'Please add at least one finished product to invoice.');
       return;
     }
     final db = ref.read(databaseServiceProvider);
@@ -913,12 +1051,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
         final siteState = p.siteState?.trim();
         final siteCode = p.siteStateCode?.trim();
         if ((siteState == null || siteState.isEmpty) && (siteCode == null || siteCode.isEmpty)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cannot finalize sale: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.'),
-              backgroundColor: AppColors.danger,
-            ),
-          );
+ErpToast.showError(context, 'Cannot finalize sale: Project Place of Supply site state is unresolved. Please update the project site location in Project Master before proceeding.');
           return;
         }
       }
@@ -931,12 +1064,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
       for (final item in _items) {
         final fp = db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId, orElse: () => db.finishedProducts.first);
         if (fp.currentStock < item.quantity) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Insufficient stock for ${fp.name}! Available: ${fp.currentStock} ${fp.unit}, Invoiced: ${item.quantity} ${fp.unit}'),
-              backgroundColor: AppColors.danger,
-            ),
-          );
+ErpToast.showError(context, 'Insufficient stock for ${fp.name}! Available: ${fp.currentStock} ${fp.unit}, Invoiced: ${item.quantity} ${fp.unit}');
           return;
         }
       }
@@ -1043,19 +1171,13 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(isDraft ? 'Draft Sale Saved' : 'Invoice Created! Finished Product stock deducted & commission generated.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+ErpToast.showSuccess(context, isDraft ? 'Draft Sale Saved' : 'Invoice Created! Finished Product stock deducted & commission generated.');
 
+      FormDraftService.instance.clearDraft('sale_invoice');
       ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create sale: $e'), backgroundColor: AppColors.danger),
-      );
+ErpToast.showError(context, 'Failed to create sale: $e');
     }
   }
 
@@ -1104,7 +1226,10 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                             child: ErpButton(
                               text: 'Cancel',
                               isOutlined: true,
-                              onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
+                              onPressed: () {
+                                FormDraftService.instance.clearDraft('sale_invoice');
+                                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+                              },
                             ),
                           ),
                         ],
@@ -1117,7 +1242,10 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                         ErpButton(
                           text: 'Cancel',
                           isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList,
+                          onPressed: () {
+                            FormDraftService.instance.clearDraft('sale_invoice');
+                            ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+                          },
                         ),
                         ErpButton(
                           text: 'Save Draft',
@@ -1179,11 +1307,11 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                               _partyType = val;
                               _selectedProjectId = null;
                               if (val == PartyType.customer) {
-                                _selectedPartyId = db.customers.isNotEmpty ? db.customers.first.id : null;
+                                _selectedPartyId = db.customers.where((c) => !c.isDeleted && c.isActive).firstOrNull?.id;
                               } else if (val == PartyType.dealer) {
-                                _selectedPartyId = db.dealers.isNotEmpty ? db.dealers.first.id : null;
+                                _selectedPartyId = db.dealers.where((d) => !d.isDeleted && d.isActive).firstOrNull?.id;
                               } else {
-                                _selectedPartyId = db.architects.isNotEmpty ? db.architects.first.id : null;
+                                _selectedPartyId = db.architects.where((a) => !a.isDeleted && a.isActive).firstOrNull?.id;
                               }
                               _resolveTaxClassification();
                             });
@@ -1192,6 +1320,7 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                       );
 
                       final dropdownField = DropdownButtonFormField<String?>(
+                        key: ValueKey('sale_party_${_partyType}_${_selectedPartyId}_$partyDropdownVersion'),
                         value: ((_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId)) ||
                                 (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId)) ||
                                 (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId)))
@@ -1205,42 +1334,99 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                   ? 'Select Dealer *'
                                   : 'Select Architect *',
                         ),
+                        selectedItemBuilder: (context) {
+                          final currentCustomer = _partyType == PartyType.customer ? db.customers.where((c) => c.id == _selectedPartyId).firstOrNull : null;
+                          final currentDealer = _partyType == PartyType.dealer ? db.dealers.where((d) => d.id == _selectedPartyId).firstOrNull : null;
+                          final currentArchitect = _partyType == PartyType.architect ? db.architects.where((a) => a.id == _selectedPartyId).firstOrNull : null;
+                          final isCurrentInactive = (currentCustomer != null && !currentCustomer.isActive) ||
+                              (currentDealer != null && !currentDealer.isActive) ||
+                              (currentArchitect != null && !currentArchitect.isActive);
+
+                          return [
+                            Text(
+                              _selectedPartyId != null
+                                  ? (_partyType == PartyType.customer
+                                      ? (currentCustomer?.name ?? '')
+                                      : _partyType == PartyType.dealer
+                                          ? (currentDealer?.name ?? '')
+                                          : (currentArchitect?.name ?? ''))
+                                  : '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (isCurrentInactive)
+                              Text(
+                                _partyType == PartyType.customer
+                                    ? '${currentCustomer!.name} (Inactive)'
+                                    : _partyType == PartyType.dealer
+                                        ? '${currentDealer!.name} (Inactive)'
+                                        : '${currentArchitect!.name} (Inactive)',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            if (_partyType == PartyType.customer)
+                              ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis))
+                            else if (_partyType == PartyType.dealer)
+                              ...db.dealers.where((d) => !d.isDeleted && d.isActive).map((d) => Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis))
+                            else
+                              ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          ];
+                        },
                         items: [
                           DropdownMenuItem<String?>(
                             value: '__ADD_NEW__',
-                            child: Row(
-                              children: [
-                                const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _partyType == PartyType.customer
-                                      ? '+ Add New Customer'
-                                      : _partyType == PartyType.dealer
-                                          ? '+ Add New Dealer'
-                                          : '+ Add New Architect',
-                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-                                ),
-                              ],
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.only(bottom: 4),
+                              decoration: const BoxDecoration(
+                                border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _partyType == PartyType.customer
+                                        ? '+ Add New Customer'
+                                        : _partyType == PartyType.dealer
+                                            ? '+ Add New Dealer'
+                                            : '+ Add New Architect',
+                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          const DropdownMenuItem<String?>(
-                            enabled: false,
-                            value: '__DIVIDER__',
-                            child: Divider(height: 1),
-                          ),
+                          if (_partyType == PartyType.customer && db.customers.any((c) => c.id == _selectedPartyId && !c.isActive))
+                            DropdownMenuItem<String?>(
+                              value: _selectedPartyId,
+                              child: Text('${db.customers.firstWhere((c) => c.id == _selectedPartyId).name} (Inactive)', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            )
+                          else if (_partyType == PartyType.dealer && db.dealers.any((d) => d.id == _selectedPartyId && !d.isActive))
+                            DropdownMenuItem<String?>(
+                              value: _selectedPartyId,
+                              child: Text('${db.dealers.firstWhere((d) => d.id == _selectedPartyId).name} (Inactive)', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            )
+                          else if (_partyType == PartyType.architect && db.architects.any((a) => a.id == _selectedPartyId && !a.isActive))
+                            DropdownMenuItem<String?>(
+                              value: _selectedPartyId,
+                              child: Text('${db.architects.firstWhere((a) => a.id == _selectedPartyId).name} (Inactive)', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ),
                           if (_partyType == PartyType.customer)
-                            ...db.customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                            ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
                           else if (_partyType == PartyType.dealer)
-                            ...db.dealers.map((d) => DropdownMenuItem<String?>(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
+                            ...db.dealers.where((d) => !d.isDeleted && d.isActive).map((d) => DropdownMenuItem<String?>(value: d.id, child: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis)))
                           else
-                            ...db.architects.map((a) => DropdownMenuItem<String?>(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
+                            ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => DropdownMenuItem<String?>(value: a.id, child: Text('${a.name} (${a.companyName})', maxLines: 1, overflow: TextOverflow.ellipsis))),
                         ],
                         onChanged: (val) {
                           if (val == '__ADD_NEW__') {
+                            setState(() {
+                              _partyDropdownVersion = partyDropdownVersion + 1;
+                            });
                             _openQuickAddPartyDialog(_partyType);
                             return;
                           }
-                          if (val == '__DIVIDER__') return;
                           setState(() {
                             _selectedPartyId = val;
                             _resolveTaxClassification();
@@ -1248,63 +1434,58 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                         },
                       );
 
-                      if (isNarrow) {
-                        return Column(
-                          children: [
-                            partyTypeDropdown,
-                            const SizedBox(height: 14),
-                            dropdownField,
-                          ],
-                        );
-                      }
-
-                      return Row(
-                        children: [
-                          Expanded(flex: 2, child: partyTypeDropdown),
-                          const SizedBox(width: 16),
-                          Expanded(flex: 3, child: dropdownField),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  LayoutBuilder(
-                    builder: (context, partySubBox) {
-                      final isMobileParty = partySubBox.maxWidth < 650;
                       final projectField = DropdownButtonFormField<String?>(
+                        key: ValueKey('sale_proj_${_selectedProjectId}_$projectDropdownVersion'),
                         value: (_selectedProjectId != null && db.projects.any((p) => p.id == _selectedProjectId))
                             ? _selectedProjectId
                             : null,
                         isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Linked Project (Optional)'),
+                        selectedItemBuilder: (context) {
+                          return [
+                            Text(
+                              _selectedProjectId != null
+                                  ? db.projects.where((p) => p.id == _selectedProjectId).firstOrNull?.name ?? ''
+                                  : 'None (Direct Site)',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const Text('None (Direct Site)', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ...db.projects.map((p) => Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          ];
+                        },
                         items: [
                           DropdownMenuItem<String?>(
                             value: '__ADD_PROJECT__',
-                            child: Row(
-                              children: [
-                                const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '+ Add New Project',
-                                  style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
-                                ),
-                              ],
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.only(bottom: 4),
+                              decoration: const BoxDecoration(
+                                border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.add_circle, size: 18, color: AppColors.primary),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '+ Add New Project',
+                                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          const DropdownMenuItem<String?>(
-                            enabled: false,
-                            value: '__DIVIDER_PROJECT__',
-                            child: Divider(height: 1),
                           ),
                           const DropdownMenuItem<String?>(value: null, child: Text('None (Direct Site)')),
                           ...db.projects.map((p) => DropdownMenuItem<String?>(value: p.id, child: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                         ],
                         onChanged: (val) {
                           if (val == '__ADD_PROJECT__') {
+                            setState(() {
+                              _projectDropdownVersion = projectDropdownVersion + 1;
+                            });
                             _openQuickAddProjectDialog();
                             return;
                           }
-                          if (val == '__DIVIDER_PROJECT__') return;
                           setState(() {
                             _selectedProjectId = val;
                             _resolveTaxClassification();
@@ -1327,26 +1508,45 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                         },
                       );
 
-                      if (_partyType == PartyType.architect) {
-                        if (isMobileParty) {
-                          return Column(
-                            children: [
-                              projectField,
-                              const SizedBox(height: 12),
-                              paymentModeField,
-                            ],
-                          );
-                        }
-                        return Row(
+                      if (isNarrow) {
+                        return Column(
                           children: [
-                            Expanded(child: projectField),
-                            const SizedBox(width: 16),
-                            Expanded(child: paymentModeField),
+                            partyTypeDropdown,
+                            const SizedBox(height: 12),
+                            dropdownField,
+                            if (_partyType == PartyType.architect) ...[
+                              const SizedBox(height: 12),
+                              projectField,
+                            ],
+                            const SizedBox(height: 12),
+                            paymentModeField,
                           ],
                         );
                       }
 
-                      return paymentModeField;
+                      if (_partyType == PartyType.architect) {
+                        return Row(
+                          children: [
+                            Expanded(flex: 2, child: partyTypeDropdown),
+                            const SizedBox(width: 16),
+                            Expanded(flex: 3, child: dropdownField),
+                            const SizedBox(width: 16),
+                            Expanded(flex: 3, child: projectField),
+                            const SizedBox(width: 16),
+                            Expanded(flex: 2, child: paymentModeField),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Expanded(flex: 2, child: partyTypeDropdown),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 3, child: dropdownField),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 2, child: paymentModeField),
+                        ],
+                      );
                     },
                   ),
                 ],
@@ -1473,21 +1673,32 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                   ),
                                   const SizedBox(height: 10),
                                   DropdownButtonFormField<String>(
-                                    value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
+                                    value: (item.finishedProductId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.finishedProductId))
                                         ? item.finishedProductId
-                                        : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                                        : (db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : null),
                                     isExpanded: true,
                                     decoration: const InputDecoration(labelText: 'Product'),
-                                    items: db.finishedProducts.map((fp) {
-                                      return DropdownMenuItem(
-                                        value: fp.id,
-                                        child: Text(
-                                          '${fp.itemCode} - ${fp.name}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                    items: [
+                                      if (item.finishedProductId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.finishedProductId && !p.isActive))
+                                        DropdownMenuItem(
+                                          value: item.finishedProductId,
+                                          child: Text(
+                                            '${db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId).itemCode} - ${db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId).name} (Inactive)',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                      );
-                                    }).toList(),
+                                      ...db.finishedProducts.where((p) => !p.isDeleted && p.isActive).map((fp) {
+                                        return DropdownMenuItem(
+                                          value: fp.id,
+                                          child: Text(
+                                            '${fp.itemCode} - ${fp.name}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        );
+                                      }),
+                                    ],
                                     onChanged: (val) {
                                       if (val != null) {
                                         final fp = db.finishedProducts.firstWhere((p) => p.id == val);
@@ -1615,21 +1826,32 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                                     SizedBox(
                                       width: 280,
                                       child: DropdownButtonFormField<String>(
-                                        value: db.finishedProducts.any((p) => p.id == item.finishedProductId)
+                                        value: (item.finishedProductId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.finishedProductId))
                                             ? item.finishedProductId
-                                            : (db.finishedProducts.isNotEmpty ? db.finishedProducts.first.id : null),
+                                            : (db.finishedProducts.where((p) => !p.isDeleted && p.isActive).isNotEmpty ? db.finishedProducts.where((p) => !p.isDeleted && p.isActive).first.id : null),
                                         isExpanded: true,
                                         decoration: const InputDecoration(labelText: 'Product'),
-                                        items: db.finishedProducts.map((fp) {
-                                          return DropdownMenuItem(
-                                            value: fp.id,
-                                            child: Text(
-                                              '${fp.itemCode} - ${fp.name}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                        items: [
+                                          if (item.finishedProductId.isNotEmpty && db.finishedProducts.any((p) => p.id == item.finishedProductId && !p.isActive))
+                                            DropdownMenuItem(
+                                              value: item.finishedProductId,
+                                              child: Text(
+                                                '${db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId).itemCode} - ${db.finishedProducts.firstWhere((p) => p.id == item.finishedProductId).name} (Inactive)',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
-                                          );
-                                        }).toList(),
+                                          ...db.finishedProducts.where((p) => !p.isDeleted && p.isActive).map((fp) {
+                                            return DropdownMenuItem(
+                                              value: fp.id,
+                                              child: Text(
+                                                '${fp.itemCode} - ${fp.name}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            );
+                                          }),
+                                        ],
                                         onChanged: (val) {
                                           if (val != null) {
                                             final fp = db.finishedProducts.firstWhere((p) => p.id == val);

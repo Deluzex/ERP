@@ -72,6 +72,26 @@ class ErpStatusBadge extends StatelessWidget {
     );
   }
 
+  /// Active Master Status Badge (#16A34A text, #F0FDF4 bg) per Doc v2.1.0 Sec 5.1
+  factory ErpStatusBadge.active([String label = 'Active']) {
+    return ErpStatusBadge(
+      label: label,
+      backgroundColor: const Color(0xFFF0FDF4),
+      borderColor: const Color(0xFFBBF7D0),
+      textColor: const Color(0xFF16A34A),
+    );
+  }
+
+  /// Inactive Master Status Badge (#6B7280 text, #F3F4F6 bg) per Doc v2.1.0 Sec 5.1
+  factory ErpStatusBadge.inactive([String label = 'Inactive']) {
+    return ErpStatusBadge(
+      label: label,
+      backgroundColor: const Color(0xFFF3F4F6),
+      borderColor: const Color(0xFFE5E7EB),
+      textColor: const Color(0xFF6B7280),
+    );
+  }
+
   /// Category Purple / Submitted (Soft Lavender)
   factory ErpStatusBadge.categoryPurple(String label) {
     return ErpStatusBadge(

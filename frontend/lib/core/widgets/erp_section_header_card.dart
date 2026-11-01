@@ -19,7 +19,7 @@ class ErpSectionHeaderCard extends StatelessWidget {
     this.subtitle,
     this.action,
     this.actions,
-    this.narrowBreakpoint = 750,
+    this.narrowBreakpoint = 480,
   });
 
   @override

@@ -36,7 +36,6 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
     final lowStockFP = db.lowStockFinishedProducts;
     final activeRawMaterials = db.rawMaterials.where((r) => !r.isDeleted).toList();
     final activeFinishedProducts = db.finishedProducts.where((p) => !p.isDeleted).toList();
-    final recentMovements = db.stockMovements.take(6).toList();
 
     return SingleChildScrollView(
       padding: AppSpacing.pagePadding,
@@ -137,6 +136,8 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
               subtitle: '${activeRawMaterials.length} Unique items',
               icon: Icons.view_in_ar_rounded,
               color: Colors.blue,
+              titleValueSpacing: 6,
+              valueSubtitleSpacing: 4,
             ),
             _buildMetricCard(
               title: 'Finished Goods Valuation',
@@ -144,6 +145,8 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
               subtitle: '${activeFinishedProducts.length} Product SKUs',
               icon: Icons.inventory_outlined,
               color: Colors.teal,
+              titleValueSpacing: 6,
+              valueSubtitleSpacing: 4,
             ),
             _buildMetricCard(
               title: 'Total Stock Valuation',
@@ -151,6 +154,8 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
               subtitle: 'Combined Warehouse Assets',
               icon: Icons.account_balance_wallet_outlined,
               color: Colors.indigo,
+              titleValueSpacing: 6,
+              valueSubtitleSpacing: 4,
             ),
             _buildMetricCard(
               title: 'Low Stock Alerts',
@@ -158,6 +163,8 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
               subtitle: '${lowStockRM.length} RM • ${lowStockFP.length} FP below min level',
               icon: Icons.warning_amber_rounded,
               color: db.totalLowStockCount > 0 ? AppColors.danger : AppColors.success,
+              titleValueSpacing: 6,
+              valueSubtitleSpacing: 4,
             ),
           ]),
           const SizedBox(height: 28),
@@ -470,7 +477,10 @@ class PurchaseRoleDashboard extends ConsumerWidget {
               ErpButton(
                 text: 'Create Direct Purchase',
                 icon: Icons.add_shopping_cart,
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+                onPressed: () {
+                  ref.read(editingPurchaseProvider.notifier).state = null;
+                  ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase;
+                },
               ),
               ErpButton(
                 text: 'Purchase Invoices',
@@ -478,18 +488,18 @@ class PurchaseRoleDashboard extends ConsumerWidget {
                 isOutlined: true,
                 onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.purchaseList,
               ),
-              ErpButton(
-                text: 'Vendors Directory',
-                icon: Icons.storefront_outlined,
-                isOutlined: true,
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendors,
-              ),
-              ErpButton(
-                text: 'Vendor Settlements',
-                icon: Icons.payments_outlined,
-                isOutlined: true,
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
-              ),
+              // ErpButton(
+              //   text: 'Vendors Directory',
+              //   icon: Icons.storefront_outlined,
+              //   isOutlined: true,
+              //   onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendors,
+              // ),
+              // ErpButton(
+              //   text: 'Vendor Settlements',
+              //   icon: Icons.payments_outlined,
+              //   isOutlined: true,
+              //   onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.vendorPaymentsSection,
+              // ),
             ],
           ),
           const SizedBox(height: 24),
@@ -626,12 +636,12 @@ class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboar
                 isOutlined: true,
                 onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.productionOrders,
               ),
-              ErpButton(
-                text: 'Raw Material Buffer',
-                icon: Icons.inventory_2_outlined,
-                isOutlined: true,
-                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-              ),
+              // ErpButton(
+              //   text: 'Raw Material Buffer',
+              //   icon: Icons.inventory_2_outlined,
+              //   isOutlined: true,
+              //   onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
+              // ),
             ],
           ),
           const SizedBox(height: 24),
@@ -719,19 +729,11 @@ class _ProductionRoleDashboardState extends ConsumerState<ProductionRoleDashboar
 // =====================================================================
 // 4. ACCOUNTS / PAYMENT ROLE DASHBOARD
 // =====================================================================
-class AccountsPaymentRoleDashboard extends ConsumerStatefulWidget {
+class AccountsPaymentRoleDashboard extends ConsumerWidget {
   const AccountsPaymentRoleDashboard({super.key});
 
   @override
-  ConsumerState<AccountsPaymentRoleDashboard> createState() => _AccountsPaymentRoleDashboardState();
-}
-
-class _AccountsPaymentRoleDashboardState extends ConsumerState<AccountsPaymentRoleDashboard> {
-  DateTime? _paymentStartDate;
-  DateTime? _paymentEndDate;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
 
     return SingleChildScrollView(
@@ -804,85 +806,46 @@ class _AccountsPaymentRoleDashboardState extends ConsumerState<AccountsPaymentRo
           ]),
           const SizedBox(height: 28),
 
-          // Recent Payment Transactions Table (Transaction History: Date filter only)
-          Builder(
-            builder: (context) {
-              final filteredPayments = db.payments.where((p) {
-                if (_paymentStartDate != null &&
-                    p.paymentDate.isBefore(DateTime(_paymentStartDate!.year, _paymentStartDate!.month, _paymentStartDate!.day))) {
-                  return false;
-                }
-                if (_paymentEndDate != null &&
-                    p.paymentDate.isAfter(DateTime(_paymentEndDate!.year, _paymentEndDate!.month, _paymentEndDate!.day, 23, 59, 59))) {
-                  return false;
-                }
-                return true;
-              }).toList();
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text('Recent Payment & Disbursement Transactions', style: AppTextStyles.h2),
-                      ErpDateFilterBox(
-                        startDate: _paymentStartDate,
-                        endDate: _paymentEndDate,
-                        onDateRangeSelected: (start, end) {
-                          setState(() {
-                            _paymentStartDate = start;
-                            _paymentEndDate = end;
-                          });
-                        },
-                      ),
-                    ],
+          // Recent Payment Transactions Table
+          Text('Recent Payment & Disbursement Transactions', style: AppTextStyles.h2),
+          const SizedBox(height: 12),
+          if (db.payments.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(32),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Text('No payment transactions recorded yet.', style: AppTextStyles.bodyMedium),
+            )
+          else
+            ErpDataTable(
+              columns: const [
+                ErpColumn(title: 'Voucher No'),
+                ErpColumn(title: 'Date'),
+                ErpColumn(title: 'Payment Type'),
+                ErpColumn(title: 'Party Name'),
+                ErpColumn(title: 'Reference / UTR'),
+                ErpColumn(title: 'Amount (₹)', isNumeric: true),
+                ErpColumn(title: 'Mode'),
+              ],
+              rows: db.payments.take(10).map((p) {
+                return [
+                  InkWell(
+                    onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', ErpNavSection.customerPayments),
+                    child: Text(p.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
                   ),
-                  const SizedBox(height: 12),
-                  if (filteredPayments.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(32),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Text('No payment transactions recorded for the selected date range.', style: AppTextStyles.bodyMedium),
-                    )
-                  else
-                    ErpDataTable(
-                      columns: const [
-                        ErpColumn(title: 'Voucher No'),
-                        ErpColumn(title: 'Date'),
-                        ErpColumn(title: 'Payment Type'),
-                        ErpColumn(title: 'Party Name'),
-                        ErpColumn(title: 'Reference / UTR'),
-                        ErpColumn(title: 'Amount (₹)', isNumeric: true),
-                        ErpColumn(title: 'Mode'),
-                      ],
-                      rows: filteredPayments.take(10).map((p) {
-                        return [
-                          InkWell(
-                            onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(p.id, 'payment', ErpNavSection.customerPayments),
-                            child: Text(p.paymentNumber, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                          ),
-                          Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
-                          Text(p.typeLabel, style: AppTextStyles.bodyBold),
-                          Text(p.partyName, style: AppTextStyles.bodyMedium),
-                          Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
-                          Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: Colors.green.shade800)),
-                          ErpStatusBadge.neutral(p.paymentMode.name.toUpperCase()),
-                        ];
-                      }).toList(),
-                    ),
-                ],
-              );
-            },
-          ),
+                  Text(Formatters.formatDate(p.paymentDate), style: AppTextStyles.bodySmall),
+                  Text(p.typeLabel, style: AppTextStyles.bodyBold),
+                  Text(p.partyName, style: AppTextStyles.bodyMedium),
+                  Text(p.transactionReference ?? '-', style: AppTextStyles.bodySmall),
+                  Text(Formatters.formatCurrency(p.amount), style: AppTextStyles.bodyBold.copyWith(color: Colors.green.shade800)),
+                  ErpStatusBadge.neutral(p.paymentMode.name.toUpperCase()),
+                ];
+              }).toList(),
+            ),
         ],
       ),
     );
@@ -1203,37 +1166,6 @@ class _MastersRoleDashboardState extends ConsumerState<MastersRoleDashboard> {
               );
             },
           ),
-          /*
-          // NOTE: Temporarily commented out pending final decision on removal
-          const SizedBox(height: 28),
-
-          // Architect & Partner Overview Table
-          Text('Key Registered Architects & Commercial Specifiers', style: AppTextStyles.h2),
-          const SizedBox(height: 12),
-          ErpDataTable(
-            columns: const [
-              ErpColumn(title: 'Architect Name'),
-              ErpColumn(title: 'Contact Phone'),
-              ErpColumn(title: 'Email Address'),
-              ErpColumn(title: 'Commission Rate', isNumeric: true),
-              ErpColumn(title: 'Approved Commission', isNumeric: true),
-              ErpColumn(title: 'Commission Earned', isNumeric: true),
-            ],
-            rows: (activeArchitects.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt))).take(6).map((arc) {
-              return [
-                InkWell(
-                  onTap: () => ref.read(activeRecordDetailsStackProvider.notifier).push(arc.id, 'architect', ErpNavSection.architects),
-                  child: Text(arc.name, style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary, decoration: TextDecoration.underline)),
-                ),
-                Text(arc.mobile, style: AppTextStyles.bodySmall),
-                Text(arc.email, style: AppTextStyles.bodySmall),
-                Text('${arc.defaultCommissionRate.toStringAsFixed(1)}%', style: AppTextStyles.bodyBold),
-                Text(Formatters.formatCurrency(arc.approvedCommission), style: AppTextStyles.bodyMedium),
-                Text(Formatters.formatCurrency(arc.totalCommissionEarned), style: AppTextStyles.bodyBold.copyWith(color: Colors.purple)),
-              ];
-            }).toList(),
-          ),
-          */
         ],
       ),
     );
@@ -1668,7 +1600,10 @@ class DataEntryRoleDashboard extends ConsumerWidget {
               subtitle: 'PO for Vendor supply',
               icon: Icons.add_shopping_cart,
               color: Colors.purple,
-              onTap: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase,
+              onTap: () {
+                ref.read(editingPurchaseProvider.notifier).state = null;
+                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createPurchase;
+              },
             ),
             _buildActionShortcutTile(
               title: 'Add New Customer',
@@ -1824,40 +1759,60 @@ Widget _buildMetricCard({
   required String subtitle,
   required IconData icon,
   required Color color,
+  double titleValueSpacing = 6,
+  double valueSubtitleSpacing = 4,
 }) {
   return Container(
-    padding: const EdgeInsets.all(18),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     decoration: BoxDecoration(
       color: AppColors.surface,
       borderRadius: AppRadius.lgBorderRadius,
       border: Border.all(color: AppColors.border),
     ),
-    child: Column(
+    child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
                 title,
-                style: AppTextStyles.tableHeader.copyWith(fontSize: 12),
+                style: AppTextStyles.tableHeader.copyWith(fontSize: 12, height: 1.2),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-              child: Icon(icon, size: 18, color: color),
-            ),
-          ],
+              SizedBox(height: titleValueSpacing),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: AppTextStyles.metricValue.copyWith(
+                    fontSize: 26,
+                    color: color,
+                    height: 1.15,
+                  ),
+                  maxLines: 1,
+                ),
+              ),
+              SizedBox(height: valueSubtitleSpacing),
+              Text(
+                subtitle,
+                style: AppTextStyles.caption.copyWith(color: AppColors.textMuted, height: 1.2),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 10),
-        Text(value, style: AppTextStyles.metricValue.copyWith(fontSize: 20, color: color)),
-        const SizedBox(height: 4),
-        Text(subtitle, style: AppTextStyles.caption.copyWith(color: AppColors.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+          child: Icon(icon, size: 18, color: color),
+        ),
       ],
     ),
   );

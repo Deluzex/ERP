@@ -17,6 +17,7 @@ class Architect {
   final String? linkedCustomerId;
   final bool isAlsoCustomer;
   final bool isDeleted;
+  final bool isActive;
   final DateTime? deletedAt;
   final DateTime createdAt;
 
@@ -39,6 +40,7 @@ class Architect {
     this.linkedCustomerId,
     this.isAlsoCustomer = false,
     this.isDeleted = false,
+    this.isActive = true,
     this.deletedAt,
     required this.createdAt,
   });
@@ -62,6 +64,7 @@ class Architect {
     String? linkedCustomerId,
     bool? isAlsoCustomer,
     bool? isDeleted,
+    bool? isActive,
     DateTime? deletedAt,
     DateTime? createdAt,
   }) {
@@ -84,6 +87,7 @@ class Architect {
       linkedCustomerId: linkedCustomerId ?? this.linkedCustomerId,
       isAlsoCustomer: isAlsoCustomer ?? this.isAlsoCustomer,
       isDeleted: isDeleted ?? this.isDeleted,
+      isActive: isActive ?? this.isActive,
       deletedAt: deletedAt ?? this.deletedAt,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -109,6 +113,9 @@ class Architect {
       linkedCustomerId: json['linkedCustomerId']?.toString() ?? json['linked_customer_id']?.toString(),
       isAlsoCustomer: json['isAlsoCustomer'] == true || json['is_also_customer'] == true,
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
+      isActive: json['isActive'] != null
+          ? (json['isActive'] == true || json['isActive'].toString() == 'true')
+          : (json['is_active'] != null ? (json['is_active'] == true || json['is_active'].toString() == 'true') : true),
       deletedAt: json['deletedAt'] != null ? DateTime.tryParse(json['deletedAt'].toString()) : null,
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now() : DateTime.now(),
     );
@@ -116,6 +123,7 @@ class Architect {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'companyName': companyName,
       'mobile': mobile,
@@ -129,6 +137,7 @@ class Architect {
       if (linkedCustomerId != null && linkedCustomerId!.isNotEmpty)
         'linkedCustomerId': linkedCustomerId,
       'isAlsoCustomer': isAlsoCustomer,
+      'isActive': isActive,
     };
   }
 }

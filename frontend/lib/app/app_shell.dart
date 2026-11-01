@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/models/purchase_model.dart';
+import '../core/models/sale_model.dart';
 import '../core/models/payment_model.dart';
 import '../core/models/rbac_models.dart';
+import '../core/storage/tab_session_storage.dart';
 import '../core/widgets/erp_button.dart';
 import '../core/widgets/erp_header.dart';
 import '../core/widgets/erp_sidebar.dart';
@@ -45,6 +48,8 @@ import '../shared/providers/app_state_providers.dart';
 import '../shared/providers/subscription_provider.dart';
 import '../shared/widgets/access_required_dialog.dart';
 // import '../shared/widgets/global_whatsapp_floating_button.dart';
+import '../core/utils/navigation_history.dart';
+import 'app.dart';
 import 'routes/app_routes.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_radius.dart';
@@ -57,7 +62,7 @@ class AppShell extends ConsumerStatefulWidget {
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final Map<ErpNavSection, Widget> _cachedScreens = {};
   String? _lastUserId;
@@ -66,9 +71,47 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(subscriptionProvider.notifier).fetchStatus();
+      NavigationHistory.initialize(ref, navigatorKey: appNavigatorKey);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final current = ref.read(currentNavSectionProvider);
+        await prefs.setString('erp_last_nav_section', current.name);
+      } catch (_) {}
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    NavigationHistory.dispose();
+    super.dispose();
+  }
+
+  @override
+  Future<bool> didPopRoute() async {
+    // 1. If an active modal dialog or subroute is open in Navigator, pop it
+    final nav = appNavigatorKey.currentState;
+    if (nav != null && nav.canPop()) {
+      nav.pop();
+      return true;
+    }
+
+    // 2. If a drilldown detail view is active in the stack, pop back to the list
+    final detailsStack = ref.read(activeRecordDetailsStackProvider);
+    if (detailsStack.isNotEmpty) {
+      ref.read(activeRecordDetailsStackProvider.notifier).pop();
+      return true;
+    }
+
+    // 3. If navigation history can go back, return to the previous section
+    if (NavigationHistory.canGoBack) {
+      return NavigationHistory.goBack();
+    }
+
+    return false;
   }
 
   ErpNavSection _canonicalSection(ErpNavSection section) {
@@ -106,6 +149,45 @@ class _AppShellState extends ConsumerState<AppShell> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('erp_last_nav_section', next.name);
       } catch (_) {}
+      NavigationHistory.onSectionChanged(next);
+    });
+
+    // Sync detail view state with browser history
+    ref.listen(activeRecordDetailsStackProvider, (previous, next) {
+      NavigationHistory.onDetailStateChanged(next.isNotEmpty, ref.read(currentNavSectionProvider));
+    });
+
+    // Contextual edit and creation providers persistence
+    ref.listen<Purchase?>(editingPurchaseProvider, (previous, next) {
+      if (next != null) {
+        TabSessionStorage.setItem('erp_editing_purchase_id', next.id);
+      } else {
+        TabSessionStorage.removeItem('erp_editing_purchase_id');
+      }
+    });
+
+    ref.listen<SalesDocumentType?>(salesCreateDocTypeProvider, (previous, next) {
+      if (next != null) {
+        TabSessionStorage.setItem('erp_sales_create_doc_type', next.name);
+      } else {
+        TabSessionStorage.removeItem('erp_sales_create_doc_type');
+      }
+    });
+
+    ref.listen<String?>(salesCreateSourceDocIdProvider, (previous, next) {
+      if (next != null) {
+        TabSessionStorage.setItem('erp_sales_create_source_doc_id', next);
+      } else {
+        TabSessionStorage.removeItem('erp_sales_create_source_doc_id');
+      }
+    });
+
+    ref.listen<String?>(selectedProductionProductIdProvider, (previous, next) {
+      if (next != null) {
+        TabSessionStorage.setItem('erp_selected_prod_product_id', next);
+      } else {
+        TabSessionStorage.removeItem('erp_selected_prod_product_id');
+      }
     });
 
     Widget contentWidget;
@@ -118,7 +200,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       contentWidget = _buildAccessDeniedBarrier(context, currentUser, currentSection, db);
     } else {
       final canonicalKey = _canonicalSection(currentSection);
-      // Lazy load screen into cache if not present
+
+      // Lazy load screen into cache if not present (retain existing creation state on tab switch)
       if (!_cachedScreens.containsKey(canonicalKey)) {
         _cachedScreens[canonicalKey] = _buildSectionWidget(canonicalKey, currentUser);
       }
@@ -144,7 +227,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       backgroundColor: AppColors.background,
       drawer: isDesktop ? null : const Drawer(child: ErpSidebar()),
       body: Stack(
-        children: [
+          children: [
           Row(
             children: [
               // Persistent Dark Sidebar for Desktop
@@ -168,7 +251,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                             ),
                           Expanded(
                             child: RepaintBoundary(
-                              child: contentWidget,
+                              child: SelectionArea(
+                                child: contentWidget,
+                              ),
                             ),
                           ),
                         ],
@@ -234,7 +319,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       case ErpNavSection.purchaseHistory:
         return const PurchaseListScreen();
       case ErpNavSection.createPurchase:
-        return const CreatePurchaseScreen();
+        final editingPurchase = ref.watch(editingPurchaseProvider);
+        return CreatePurchaseScreen(
+          key: ValueKey(editingPurchase?.id ?? 'create_purchase_new'),
+          existingPurchase: editingPurchase,
+        );
       case ErpNavSection.vendorPayments:
       case ErpNavSection.vendorPaymentsSection:
         return const PaymentCenterScreen(initialTab: PaymentType.vendorPayment);

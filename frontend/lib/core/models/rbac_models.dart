@@ -1,4 +1,4 @@
-import '../../app/routes/app_routes.dart';
+﻿import '../../app/routes/app_routes.dart';
 
 /// Supported functional modules in the ERP system
 enum ErpModule {

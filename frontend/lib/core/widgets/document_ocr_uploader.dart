@@ -1,3 +1,4 @@
+import 'erp_toast.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
@@ -287,9 +288,7 @@ class _DocumentOcrUploaderState extends State<DocumentOcrUploader> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to open storage: $e'), backgroundColor: AppColors.danger),
-        );
+ErpToast.showError(context, 'Failed to open storage: $e');
       }
     }
   }

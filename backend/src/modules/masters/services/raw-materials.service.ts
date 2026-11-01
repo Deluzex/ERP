@@ -45,6 +45,7 @@ export interface RawMaterialRecord {
   preferredVendorIds: string[];
   isLowStock: boolean;
   isDeleted: boolean;
+  isActive: boolean;
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -63,6 +64,7 @@ export class RawMaterialsService {
     categoryId?: string,
     lowStockOnly = false,
     includeDeleted = false,
+    isActive?: boolean,
   ): Promise<RawMaterialRecord[]> {
     const conditions: string[] = [];
     const values: unknown[] = [];
@@ -70,6 +72,11 @@ export class RawMaterialsService {
 
     if (!includeDeleted) {
       conditions.push('rm.is_deleted = false');
+    }
+
+    if (isActive !== undefined) {
+      conditions.push(`rm.is_active = $${idx++}`);
+      values.push(isActive);
     }
 
     if (categoryId) {
@@ -564,6 +571,61 @@ export class RawMaterialsService {
     return { success: true };
   }
 
+  async toggleStatus(
+    id: string,
+    isActive: boolean,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<{ success: boolean; message: string; data: any; timestamp: string }> {
+    const existing = await this.findById(id);
+    if (existing.isActive === isActive) {
+      return {
+        success: true,
+        message: `Raw material status updated to ${isActive ? 'active' : 'inactive'}`,
+        data: {
+          id: existing.id,
+          name: existing.name,
+          isActive: existing.isActive,
+          updatedAt: existing.updatedAt,
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    await this.db.query('UPDATE raw_materials SET is_active = $1, updated_at = NOW() WHERE id = $2', [isActive, id]);
+
+    await this.auditService.log({
+      userId,
+      userName: 'User',
+      action: 'MASTER_STATUS_CHANGE',
+      entityType: 'RAW_MATERIAL',
+      entityId: id,
+      beforeSnapshot: { isActive: existing.isActive },
+      afterSnapshot: {
+        entityType: 'RAW_MATERIAL',
+        entityId: id,
+        entityName: existing.name,
+        previousStatus: existing.isActive,
+        newStatus: isActive,
+      },
+      reason: `Status changed to ${isActive ? 'active' : 'inactive'}`,
+      correlationId,
+    });
+
+    const updated = await this.findById(id);
+    return {
+      success: true,
+      message: `Raw material status updated to ${isActive ? 'active' : 'inactive'}`,
+      data: {
+        id: updated.id,
+        name: updated.name,
+        isActive: updated.isActive,
+        updatedAt: updated.updatedAt,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   private mapRow(r: any): RawMaterialRecord {
     const rawCurrentStock = r.current_stock !== null && r.current_stock !== undefined ? parseFloat(r.current_stock) : null;
     const rawOpeningStock = parseFloat(r.opening_stock) || 0;
@@ -589,6 +651,7 @@ export class RawMaterialsService {
       preferredVendorIds: r.preferred_vendor_ids || [],
       isLowStock: currentStock <= minStock,
       isDeleted: r.is_deleted,
+      isActive: r.is_active ?? true,
       deletedAt: r.deleted_at,
       createdAt: r.created_at,
       updatedAt: r.updated_at,

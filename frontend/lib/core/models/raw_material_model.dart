@@ -17,6 +17,7 @@ class RawMaterial {
   final List<String> preferredVendorIds;
   final List<String> preferredVendorNames;
   final bool isDeleted;
+  final bool isActive;
   final DateTime? deletedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -40,6 +41,7 @@ class RawMaterial {
     required this.preferredVendorIds,
     this.preferredVendorNames = const [],
     this.isDeleted = false,
+    this.isActive = true,
     this.deletedAt,
     required this.createdAt,
     required this.updatedAt,
@@ -68,6 +70,7 @@ class RawMaterial {
     List<String>? preferredVendorIds,
     List<String>? preferredVendorNames,
     bool? isDeleted,
+    bool? isActive,
     DateTime? deletedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -91,6 +94,7 @@ class RawMaterial {
       preferredVendorIds: preferredVendorIds ?? this.preferredVendorIds,
       preferredVendorNames: preferredVendorNames ?? this.preferredVendorNames,
       isDeleted: isDeleted ?? this.isDeleted,
+      isActive: isActive ?? this.isActive,
       deletedAt: deletedAt ?? this.deletedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -117,6 +121,9 @@ class RawMaterial {
       preferredVendorIds: (json['preferredVendorIds'] as List?)?.map((e) => e.toString()).toList() ?? [],
       preferredVendorNames: (json['preferredVendorNames'] as List?)?.map((e) => e.toString()).toList() ?? [],
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
+      isActive: json['isActive'] != null
+          ? (json['isActive'] == true || json['isActive'].toString() == 'true')
+          : (json['is_active'] != null ? (json['is_active'] == true || json['is_active'].toString() == 'true') : true),
       deletedAt: json['deletedAt'] != null ? DateTime.tryParse(json['deletedAt'].toString()) : null,
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now() : DateTime.now(),
       updatedAt: json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt'].toString()) ?? DateTime.now() : DateTime.now(),
@@ -125,6 +132,7 @@ class RawMaterial {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'itemCode': itemCode,
       'categoryId': categoryId,
@@ -137,6 +145,7 @@ class RawMaterial {
       'transportationCharge': transportationCharge,
       'gstPercent': gstPercent,
       'preferredVendorIds': preferredVendorIds,
+      'isActive': isActive,
     };
   }
 
@@ -153,6 +162,7 @@ class RawMaterial {
       'transportationCharge': transportationCharge,
       'gstPercent': gstPercent,
       'preferredVendorIds': preferredVendorIds,
+      'isActive': isActive,
     };
   }
 }

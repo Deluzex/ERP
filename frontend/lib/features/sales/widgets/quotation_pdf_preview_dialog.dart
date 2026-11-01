@@ -1,3 +1,4 @@
+import '../../../core/widgets/erp_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -493,12 +494,7 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
                 Clipboard.setData(ClipboardData(
                   text: 'https://erp.deluzex.com/quotations/${quotation.id}/preview?no=${quotation.invoiceNumber}',
                 ));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Quotation link for ${quotation.invoiceNumber} copied to clipboard!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+ErpToast.showSuccess(context, 'Quotation link for ${quotation.invoiceNumber} copied to clipboard!');
               },
             ),
 
@@ -508,12 +504,7 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
               icon: Icons.download_outlined,
               isOutlined: true,
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Quotation ${quotation.invoiceNumber}.pdf downloaded successfully!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+ErpToast.showSuccess(context, 'Quotation ${quotation.invoiceNumber}.pdf downloaded successfully!');
               },
             ),
 
@@ -523,12 +514,7 @@ class QuotationPdfPreviewDialog extends StatelessWidget {
               icon: Icons.print_outlined,
               isOutlined: true,
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Sent Quotation ${quotation.invoiceNumber} to system printer.'),
-                    backgroundColor: AppColors.info,
-                  ),
-                );
+ErpToast.showInfo(context, 'Sent Quotation ${quotation.invoiceNumber} to system printer.');
               },
             ),
 
