@@ -383,7 +383,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                         decoration: const InputDecoration(labelText: 'Related Project'),
                                         items: [
                                           const DropdownMenuItem(value: null, child: Text('None (General Expense)')),
-                                          ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
+                                          ...db.projects.where((p) => !p.isDeleted && (p.isActive || p.id == selectedProjId)).map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
                                         ],
                                         onChanged: (val) => setDlgState(() => selectedProjId = val),
                                       ),
@@ -410,7 +410,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                         decoration: const InputDecoration(labelText: 'Related Project'),
                                         items: [
                                           const DropdownMenuItem(value: null, child: Text('None (General Expense)')),
-                                          ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
+                                          ...db.projects.where((p) => !p.isDeleted && (p.isActive || p.id == selectedProjId)).map((p) => DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))),
                                         ],
                                         onChanged: (val) => setDlgState(() => selectedProjId = val),
                                       ),

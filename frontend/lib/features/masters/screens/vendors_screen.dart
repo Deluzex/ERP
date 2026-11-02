@@ -419,6 +419,7 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
         try {
           await db.toggleVendorStatusAsync(vendor.id, willActivate);
           if (mounted) {
+            setState(() {});
             ErpToast.showSuccess(
               context,
               'Vendor "${vendor.name}" ${willActivate ? "activated" : "deactivated"} successfully',
@@ -764,7 +765,11 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                         );
                         break;
                       case 'edit':
-                        if (!v.isDeleted) _openAddEditVendorDialog(v);
+                        if (!v.isDeleted && v.isActive) {
+                          _openAddEditVendorDialog(v);
+                        } else if (!v.isActive) {
+                          ErpToast.showWarning(context, 'Cannot edit an inactive record. Activate it first.');
+                        }
                         break;
                       case 'toggle_status':
                         if (!v.isDeleted) _confirmToggleStatus(v);
@@ -794,13 +799,18 @@ class _VendorsScreenState extends ConsumerState<VendorsScreen> {
                     ),
                     PopupMenuItem(
                       value: 'edit',
-                      enabled: !v.isDeleted,
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit_outlined, size: 18, color: v.isDeleted ? Colors.grey : AppColors.textPrimary),
-                          const SizedBox(width: 8),
-                          Text('Edit Vendor', style: TextStyle(color: v.isDeleted ? Colors.grey : null)),
-                        ],
+                      enabled: !v.isDeleted && v.isActive,
+                      child: Tooltip(
+                        message: (!v.isActive)
+                            ? 'Cannot edit an inactive record. Activate it first.'
+                            : 'Edit Vendor',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, size: 18, color: (!v.isActive || v.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : AppColors.textPrimary),
+                            const SizedBox(width: 8),
+                            Text('Edit Vendor', style: TextStyle(color: (!v.isActive || v.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : null)),
+                          ],
+                        ),
                       ),
                     ),
                     PopupMenuItem(

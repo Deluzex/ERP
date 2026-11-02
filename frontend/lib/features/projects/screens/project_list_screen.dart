@@ -46,7 +46,6 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
   }
 
   void _openAddEditProjectDialog([Project? existing]) {
-    final messenger = ScaffoldMessenger.of(context);
     final db = ref.read(databaseServiceProvider);
     final isEdit = existing != null;
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
@@ -134,6 +133,77 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                         LayoutBuilder(
                           builder: (context, constraints) {
                             final isNarrow = constraints.maxWidth < 500;
+
+                            List<DropdownMenuItem<String?>> buildCustomerItems() {
+                              final list = <DropdownMenuItem<String?>>[
+                                const DropdownMenuItem(value: null, child: Text('(No Customer Linked)')),
+                              ];
+                              final addedValues = <String?>{null};
+
+                              if (selectedCustomerId != null) {
+                                final existingCust = db.customers.where((c) => c.id == selectedCustomerId).firstOrNull;
+                                if (existingCust == null) {
+                                  final custName = existing?.customerName;
+                                  final label = (custName != null && custName.isNotEmpty) ? custName : '$selectedCustomerId (Unlinked)';
+                                  list.add(DropdownMenuItem(
+                                    value: selectedCustomerId,
+                                    child: Text(label),
+                                  ));
+                                  addedValues.add(selectedCustomerId);
+                                } else if (!existingCust.isActive) {
+                                  list.add(DropdownMenuItem(
+                                    value: selectedCustomerId,
+                                    child: Text('${existingCust.name} (Inactive)'),
+                                  ));
+                                  addedValues.add(selectedCustomerId);
+                                }
+                              }
+
+                              for (final c in db.customers.where((c) => !c.isDeleted && c.isActive)) {
+                                if (!addedValues.contains(c.id)) {
+                                  list.add(DropdownMenuItem(value: c.id, child: Text(c.name)));
+                                  addedValues.add(c.id);
+                                }
+                              }
+
+                              return list;
+                            }
+
+                            List<DropdownMenuItem<String?>> buildArchitectItems() {
+                              final list = <DropdownMenuItem<String?>>[
+                                const DropdownMenuItem(value: null, child: Text('(No Architect Linked)')),
+                              ];
+                              final addedValues = <String?>{null};
+
+                              if (selectedArchitectId != null) {
+                                final existingArch = db.architects.where((a) => a.id == selectedArchitectId).firstOrNull;
+                                if (existingArch == null) {
+                                  final archName = existing?.architectName;
+                                  final label = (archName != null && archName.isNotEmpty) ? archName : '$selectedArchitectId (Unlinked)';
+                                  list.add(DropdownMenuItem(
+                                    value: selectedArchitectId,
+                                    child: Text(label),
+                                  ));
+                                  addedValues.add(selectedArchitectId);
+                                } else if (!existingArch.isActive) {
+                                  list.add(DropdownMenuItem(
+                                    value: selectedArchitectId,
+                                    child: Text('${existingArch.name} (Inactive)'),
+                                  ));
+                                  addedValues.add(selectedArchitectId);
+                                }
+                              }
+
+                              for (final a in db.architects.where((a) => !a.isDeleted && a.isActive)) {
+                                if (!addedValues.contains(a.id)) {
+                                  list.add(DropdownMenuItem(value: a.id, child: Text(a.name)));
+                                  addedValues.add(a.id);
+                                }
+                              }
+
+                              return list;
+                            }
+
                             if (isNarrow) {
                               return Column(
                                 children: [
@@ -141,12 +211,7 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                     initialValue: selectedCustomerId,
                                     isExpanded: true,
                                     decoration: const InputDecoration(labelText: 'Customer Account'),
-                                    items: [
-                                      const DropdownMenuItem(value: null, child: Text('(No Customer Linked)')),
-                                      if (selectedCustomerId != null && db.customers.any((c) => c.id == selectedCustomerId && !c.isActive))
-                                        DropdownMenuItem(value: selectedCustomerId, child: Text('${db.customers.firstWhere((c) => c.id == selectedCustomerId).name} (Inactive)')),
-                                      ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
-                                    ],
+                                    items: buildCustomerItems(),
                                     onChanged: (val) {
                                       setDlgState(() {
                                         selectedCustomerId = val;
@@ -164,12 +229,7 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                     initialValue: selectedArchitectId,
                                     isExpanded: true,
                                     decoration: const InputDecoration(labelText: 'Architect Partner'),
-                                    items: [
-                                      const DropdownMenuItem(value: null, child: Text('(No Architect Linked)')),
-                                      if (selectedArchitectId != null && db.architects.any((a) => a.id == selectedArchitectId && !a.isActive))
-                                        DropdownMenuItem(value: selectedArchitectId, child: Text('${db.architects.firstWhere((a) => a.id == selectedArchitectId).name} (Inactive)')),
-                                      ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
-                                    ],
+                                    items: buildArchitectItems(),
                                     onChanged: (val) {
                                       setDlgState(() {
                                         selectedArchitectId = val;
@@ -266,12 +326,7 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                         initialValue: selectedCustomerId,
                                         isExpanded: true,
                                         decoration: const InputDecoration(labelText: 'Customer Account'),
-                                        items: [
-                                          const DropdownMenuItem(value: null, child: Text('(No Customer Linked)')),
-                                          if (selectedCustomerId != null && db.customers.any((c) => c.id == selectedCustomerId && !c.isActive))
-                                            DropdownMenuItem(value: selectedCustomerId, child: Text('${db.customers.firstWhere((c) => c.id == selectedCustomerId).name} (Inactive)')),
-                                          ...db.customers.where((c) => !c.isDeleted && c.isActive).map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
-                                        ],
+                                        items: buildCustomerItems(),
                                         onChanged: (val) {
                                           setDlgState(() {
                                             selectedCustomerId = val;
@@ -291,12 +346,7 @@ class _ProjectListScreenState extends ConsumerState<ProjectListScreen> {
                                         initialValue: selectedArchitectId,
                                         isExpanded: true,
                                         decoration: const InputDecoration(labelText: 'Architect Partner'),
-                                        items: [
-                                          const DropdownMenuItem(value: null, child: Text('(No Architect Linked)')),
-                                          if (selectedArchitectId != null && db.architects.any((a) => a.id == selectedArchitectId && !a.isActive))
-                                            DropdownMenuItem(value: selectedArchitectId, child: Text('${db.architects.firstWhere((a) => a.id == selectedArchitectId).name} (Inactive)')),
-                                          ...db.architects.where((a) => !a.isDeleted && a.isActive).map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))),
-                                        ],
+                                        items: buildArchitectItems(),
                                         onChanged: (val) {
                                           setDlgState(() {
                                             selectedArchitectId = val;
@@ -581,26 +631,36 @@ ErpToast.showSuccess(context, isEdit ? 'Project updated successfully!' : 'Projec
     );
   }
 
-  void _confirmDeleteProject(Project project) {
-    final messenger = ScaffoldMessenger.of(context);
-    showDialog(
+  void _confirmToggleStatus(Project project) {
+    final willActivate = !project.isActive;
+    showErpStatusConfirmDialog(
       context: context,
-      builder: (ctx) {
-        return ErpConfirmDeleteDialog(
-          title: 'Delete Architectural Project',
-          message: 'Are you sure you want to deactivate and archive this project? An audit reason is required.',
-          itemName: '${project.name} (${project.projectCode.isNotEmpty ? project.projectCode : project.id})',
-          requireReason: true,
-          onConfirm: (reason) async {
-            final db = ref.read(databaseServiceProvider);
-            try {
-              await db.deleteProjectAsync(project.id, reason: reason);
-ErpToast.showSuccess(context, 'Project "${project.name}" archived successfully!');
-            } catch (e) {
-ErpToast.showError(context, 'Error deleting project: ${e.toString().replaceFirst("Exception: ", "")}');
-            }
-          },
-        );
+      title: willActivate ? 'Activate Project' : 'Deactivate Project',
+      message: willActivate
+          ? 'Activate "${project.name}"? It will immediately become available in all transaction dropdowns and lookups.'
+          : 'Are you sure you want to deactivate "${project.name}"? This project will no longer appear in transaction dropdowns for new Sales, Purchases, or Expenses. Historical records will remain intact.',
+      itemName: project.name,
+      willActivate: willActivate,
+      confirmLabel: willActivate ? 'Activate' : 'Deactivate',
+      onConfirm: () async {
+        final db = ref.read(databaseServiceProvider);
+        try {
+          await db.toggleProjectStatusAsync(project.id, willActivate);
+          if (mounted) {
+            setState(() {});
+            ErpToast.showSuccess(
+              context,
+              'Project "${project.name}" ${willActivate ? "activated" : "deactivated"} successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ErpToast.showError(
+              context,
+              'Status update failed: ${e.toString().replaceFirst("Exception: ", "")}',
+            );
+          }
+        }
       },
     );
   }
@@ -832,7 +892,9 @@ ErpToast.showSuccess(context, 'Project status updated to ${newStatus.name.toUppe
             p.status.toString().toLowerCase().contains(query);
         if (!matches) return false;
       }
-      if (_statusFilter != 'ALL' && p.status.name.toLowerCase() != _statusFilter.toLowerCase()) {
+      if (_statusFilter == 'ACTIVE_ONLY' && !p.isActive) return false;
+      if (_statusFilter == 'INACTIVE_ONLY' && p.isActive) return false;
+      if (_statusFilter != 'ALL' && _statusFilter != 'ACTIVE_ONLY' && _statusFilter != 'INACTIVE_ONLY' && p.status.name.toLowerCase() != _statusFilter.toLowerCase()) {
         return false;
       }
       if (_startDate != null && p.startDate.isBefore(DateTime(_startDate!.year, _startDate!.month, _startDate!.day))) return false;
@@ -887,6 +949,8 @@ ErpToast.showSuccess(context, 'Project status updated to ${newStatus.name.toUppe
                 value: _statusFilter,
                 items: const [
                   DropdownMenuItem(value: 'ALL', child: Text('All Project Statuses')),
+                  DropdownMenuItem(value: 'ACTIVE_ONLY', child: Text('Active Only')),
+                  DropdownMenuItem(value: 'INACTIVE_ONLY', child: Text('Inactive Only')),
                   DropdownMenuItem(value: 'planned', child: Text('Planned')),
                   DropdownMenuItem(value: 'active', child: Text('Active / In Progress')),
                   DropdownMenuItem(value: 'completed', child: Text('Completed')),
@@ -928,22 +992,26 @@ ErpToast.showSuccess(context, 'Project status updated to ${newStatus.name.toUppe
             ],
             rows: pagedProjects.map((p) {
               ErpStatusBadge badge;
-              switch (p.status) {
-                case ProjectStatus.active:
-                  badge = ErpStatusBadge.success('ACTIVE');
-                  break;
-                case ProjectStatus.completed:
-                  badge = ErpStatusBadge.info('COMPLETED');
-                  break;
-                case ProjectStatus.planned:
-                  badge = ErpStatusBadge.warning('PLANNED');
-                  break;
-                case ProjectStatus.closed:
-                  badge = ErpStatusBadge.neutral('CLOSED');
-                  break;
-                case ProjectStatus.cancelled:
-                  badge = ErpStatusBadge.danger('CANCELLED');
-                  break;
+              if (!p.isActive) {
+                badge = ErpStatusBadge.inactive('INACTIVE');
+              } else {
+                switch (p.status) {
+                  case ProjectStatus.active:
+                    badge = ErpStatusBadge.success('ACTIVE');
+                    break;
+                  case ProjectStatus.completed:
+                    badge = ErpStatusBadge.info('COMPLETED');
+                    break;
+                  case ProjectStatus.planned:
+                    badge = ErpStatusBadge.warning('PLANNED');
+                    break;
+                  case ProjectStatus.closed:
+                    badge = ErpStatusBadge.neutral('CLOSED');
+                    break;
+                  case ProjectStatus.cancelled:
+                    badge = ErpStatusBadge.danger('CANCELLED');
+                    break;
+                }
               }
 
               final prjInvoices = db.sales.where((s) =>
@@ -1005,15 +1073,19 @@ ErpToast.showSuccess(context, 'Project status updated to ${newStatus.name.toUppe
                           _openUpdateProjectStatusDialog(p);
                           break;
                         case 'edit':
-                          _openAddEditProjectDialog(p);
+                          if (!p.isDeleted && p.isActive) {
+                            _openAddEditProjectDialog(p);
+                          } else if (!p.isActive) {
+                            ErpToast.showWarning(context, 'Cannot edit an inactive record. Activate it first.');
+                          }
                           break;
-                        case 'delete':
-                          _confirmDeleteProject(p);
+                        case 'toggle_status':
+                          if (!p.isDeleted) _confirmToggleStatus(p);
                           break;
                       }
                     },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
                         value: 'view',
                         child: Row(
                           children: [
@@ -1035,21 +1107,46 @@ ErpToast.showSuccess(context, 'Project status updated to ${newStatus.name.toUppe
                       ),
                       PopupMenuItem(
                         value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
-                            SizedBox(width: 8),
-                            Text('Edit Project'),
-                          ],
+                        enabled: !p.isDeleted && p.isActive,
+                        child: Tooltip(
+                          message: (!p.isActive)
+                              ? 'Cannot edit an inactive record. Activate it first.'
+                              : 'Edit Project',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.edit_outlined,
+                                color: (!p.isActive || p.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : AppColors.primary,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Edit Project',
+                                style: TextStyle(
+                                  color: (!p.isActive || p.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : null,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       PopupMenuItem(
-                        value: 'delete',
+                        value: 'toggle_status',
+                        enabled: !p.isDeleted,
                         child: Row(
                           children: [
-                            Icon(Icons.delete_outline, color: AppColors.danger, size: 18),
-                            SizedBox(width: 8),
-                            Text('Delete Project'),
+                            Icon(
+                              p.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                              size: 18,
+                              color: p.isDeleted ? Colors.grey : (p.isActive ? AppColors.warning : AppColors.success),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              p.isActive ? 'Deactivate Project' : 'Activate Project',
+                              style: TextStyle(
+                                color: p.isDeleted ? Colors.grey : (p.isActive ? AppColors.warning : AppColors.success),
+                              ),
+                            ),
                           ],
                         ),
                       ),

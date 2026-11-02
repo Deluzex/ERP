@@ -516,7 +516,7 @@ ErpToast.showError(context, 'Failed to create sales order: $e');
                         decoration: const InputDecoration(labelText: 'Linked Project (Optional)'),
                         items: [
                           const DropdownMenuItem(value: null, child: Text('None (Direct Site)')),
-                          ...db.projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
+                          ...db.projects.where((p) => !p.isDeleted && (p.isActive || p.id == _selectedProjectId)).map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
                         ],
                         onChanged: (val) => setState(() {
                           _selectedProjectId = val;

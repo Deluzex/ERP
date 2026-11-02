@@ -1044,7 +1044,11 @@ ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                                     );
                                     break;
                                   case 'edit':
-                                    _openAddEditArchitectDialog(a);
+                                    if (!a.isDeleted && a.isActive) {
+                                      _openAddEditArchitectDialog(a);
+                                    } else if (!a.isActive) {
+                                      ErpToast.showWarning(context, 'Cannot edit an inactive record. Activate it first.');
+                                    }
                                     break;
                                   case 'toggle_status':
                                     _confirmToggleStatus(a);
@@ -1074,12 +1078,18 @@ ErpToast.showSuccess(context, 'Commission Paid & Ledger Updated!');
                                 ),
                                 PopupMenuItem(
                                   value: 'edit',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.edit_outlined, size: 18),
-                                      SizedBox(width: 8),
-                                      Text('Edit Architect'),
-                                    ],
+                                  enabled: !a.isDeleted && a.isActive,
+                                  child: Tooltip(
+                                    message: (!a.isActive)
+                                        ? 'Cannot edit an inactive record. Activate it first.'
+                                        : 'Edit Architect',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit_outlined, size: 18, color: (!a.isActive || a.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : AppColors.textPrimary),
+                                        const SizedBox(width: 8),
+                                        Text('Edit Architect', style: TextStyle(color: (!a.isActive || a.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : null)),
+                                      ],
+                                    ),
                                   ),
                                 ),
                                 PopupMenuItem(

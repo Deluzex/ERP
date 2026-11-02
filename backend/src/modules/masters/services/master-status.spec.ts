@@ -2,6 +2,7 @@ import { PartiesService } from './parties.service';
 import { VendorsService } from './vendors.service';
 import { FinishedProductsService } from './finished-products.service';
 import { RawMaterialsService } from './raw-materials.service';
+import { ProjectsService } from '../../projects/services/projects.service';
 import { NotFoundError } from '../../../core/errors/not-found.error';
 
 describe('Master Status Lifecycle & Governance Service Tests', () => {
@@ -26,6 +27,19 @@ describe('Master Status Lifecycle & Governance Service Tests', () => {
 
     beforeEach(() => {
       service = new PartiesService(mockDb, mockUow, mockAudit);
+    });
+    it('rejects update on inactive customer with 400 validation error', async () => {
+      const inactiveCustomer = {
+        id: 'c-inactive-1',
+        name: 'Inactive Customer Corp',
+        is_active: false,
+        is_deleted: false,
+      };
+      mockDb.query.mockResolvedValueOnce({ rows: [inactiveCustomer] });
+
+      await expect(
+        service.updateCustomer('c-inactive-1', { name: 'Attempted Name Change' })
+      ).rejects.toThrow('Inactive records cannot be edited. Please activate the record first.');
     });
 
     it('toggles customer status from active to inactive and logs MASTER_STATUS_CHANGE audit entry', async () => {
@@ -142,6 +156,20 @@ describe('Master Status Lifecycle & Governance Service Tests', () => {
   });
 
   describe('PartiesService - Dealer & Architect Status Lifecycle', () => {
+    it('rejects update on inactive dealer and architect with 400 validation error', async () => {
+      const inactiveDealer = { id: 'd-inactive-1', name: 'Inactive Dealer', is_active: false, is_deleted: false };
+      const inactiveArch = { id: 'a-inactive-1', name: 'Inactive Architect', is_active: false, is_deleted: false };
+
+      mockDb.query.mockResolvedValueOnce({ rows: [inactiveDealer] });
+      await expect(
+        service.updateDealer('d-inactive-1', { name: 'New Dealer Name' })
+      ).rejects.toThrow('Inactive records cannot be edited. Please activate the record first.');
+
+      mockDb.query.mockResolvedValueOnce({ rows: [inactiveArch] });
+      await expect(
+        service.updateArchitect('a-inactive-1', { name: 'New Architect Name' })
+      ).rejects.toThrow('Inactive records cannot be edited. Please activate the record first.');
+    });
     let service: PartiesService;
 
     beforeEach(() => {
@@ -244,6 +272,14 @@ describe('Master Status Lifecycle & Governance Service Tests', () => {
   });
 
   describe('VendorsService - Status Lifecycle', () => {
+    it('rejects update on inactive vendor with 400 validation error', async () => {
+      const inactiveVendor = { id: 'v-inactive-1', name: 'Inactive Vendor', is_active: false, is_deleted: false };
+      mockDb.query.mockResolvedValueOnce({ rows: [inactiveVendor] });
+
+      await expect(
+        service.update('v-inactive-1', { name: 'Attempted Vendor Rename' })
+      ).rejects.toThrow('Inactive records cannot be edited. Please activate the record first.');
+    });
     let service: VendorsService;
 
     beforeEach(() => {
@@ -286,9 +322,131 @@ describe('Master Status Lifecycle & Governance Service Tests', () => {
         }),
       );
     });
+
+    it('reactivates inactive vendor back to active and preserves balance and historical flags', async () => {
+      const inactiveVendor = {
+        id: 'v1a2b3c4-0001-4000-8000-111122223333',
+        name: 'Brass World Corp',
+        contact_person: 'Vendor Contact',
+        mobile: '9876543210',
+        email: 'brass@example.com',
+        gst_number: '24AAAAA0000A1Z5',
+        pan_number: 'AAAAA0000A',
+        address: 'Jamnagar',
+        payment_terms: 'Net 30 Days',
+        credit_limit: '500000.00',
+        outstanding_balance: '12000.00',
+        is_deleted: false,
+        is_active: false,
+        delete_reason: null,
+        deleted_at: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [inactiveVendor] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ ...inactiveVendor, is_active: true }] });
+
+      const res = await (service as any).toggleStatus(inactiveVendor.id, true, 'user-1', 'cid-1');
+      expect(res.success).toBe(true);
+      expect(res.data.isActive).toBe(true);
+      expect(res.message).toContain('active');
+
+      // Ensure UPDATE query specifically sets is_active = true
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringMatching(/UPDATE vendors SET is_active = \$1/),
+        [true, inactiveVendor.id],
+      );
+
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'MASTER_STATUS_CHANGE',
+          entityType: 'VENDOR',
+          entityId: inactiveVendor.id,
+          afterSnapshot: expect.objectContaining({
+            newStatus: true,
+            previousStatus: false,
+          }),
+        }),
+      );
+    });
+
+    it('returns idempotently without redundant update if vendor status already matches target', async () => {
+      const activeVendor = {
+        id: 'v1a2b3c4-0001-4000-8000-111122223333',
+        name: 'Brass World Corp',
+        contact_person: 'Vendor Contact',
+        mobile: '9876543210',
+        email: 'brass@example.com',
+        gst_number: '24AAAAA0000A1Z5',
+        pan_number: 'AAAAA0000A',
+        address: 'Jamnagar',
+        payment_terms: 'Net 30 Days',
+        credit_limit: '500000.00',
+        outstanding_balance: '12000.00',
+        is_deleted: false,
+        is_active: true,
+        delete_reason: null,
+        deleted_at: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockDb.query.mockResolvedValueOnce({ rows: [activeVendor] });
+
+      const res = await (service as any).toggleStatus(activeVendor.id, true, 'user-1', 'cid-1');
+      expect(res.success).toBe(true);
+      expect(res.data.isActive).toBe(true);
+      expect(mockDb.query).toHaveBeenCalledTimes(1); // Only findById query, no UPDATE
+      expect(mockAudit.log).not.toHaveBeenCalled();
+    });
+
+    it('updates is_active correctly via general update() method', async () => {
+      const existingVendor = {
+        id: 'v1a2b3c4-0001-4000-8000-111122223333',
+        name: 'Brass World Corp',
+        contact_person: 'Vendor Contact',
+        mobile: '9876543210',
+        email: 'brass@example.com',
+        gst_number: '24AAAAA0000A1Z5',
+        pan_number: 'AAAAA0000A',
+        address: 'Jamnagar',
+        payment_terms: 'Net 30 Days',
+        credit_limit: '500000.00',
+        outstanding_balance: '12000.00',
+        is_deleted: false,
+        is_active: true,
+        delete_reason: null,
+        deleted_at: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [existingVendor] }) // initial findById
+        .mockResolvedValueOnce({ rows: [] }) // UPDATE vendors
+        .mockResolvedValueOnce({ rows: [{ ...existingVendor, is_active: false }] }); // findById after update
+
+      const res = await service.update(existingVendor.id, { isActive: false }, 'user-1', 'cid-1');
+      expect(res.isActive).toBe(false);
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringMatching(/is_active = \$1/),
+        expect.arrayContaining([false, existingVendor.id]),
+      );
+    });
   });
 
   describe('FinishedProductsService - Status Lifecycle', () => {
+    it('rejects update on inactive finished product with 400 validation error', async () => {
+      const inactiveProduct = { id: 'fp-inactive-1', name: 'Inactive Product', is_active: false, is_deleted: false };
+      mockDb.query.mockResolvedValueOnce({ rows: [inactiveProduct] });
+
+      await expect(
+        service.update('fp-inactive-1', { name: 'Attempted Product Rename' })
+      ).rejects.toThrow('Inactive records cannot be edited. Please activate the record first.');
+    });
     let service: FinishedProductsService;
 
     beforeEach(() => {
@@ -338,6 +496,14 @@ describe('Master Status Lifecycle & Governance Service Tests', () => {
   });
 
   describe('RawMaterialsService - Status Lifecycle', () => {
+    it('rejects update on inactive raw material with 400 validation error', async () => {
+      const inactiveMaterial = { id: 'rm-inactive-1', name: 'Inactive Material', is_active: false, is_deleted: false };
+      mockDb.query.mockResolvedValueOnce({ rows: [inactiveMaterial] });
+
+      await expect(
+        service.update('rm-inactive-1', { name: 'Attempted Material Rename' })
+      ).rejects.toThrow('Inactive records cannot be edited. Please activate the record first.');
+    });
     let service: RawMaterialsService;
 
     beforeEach(() => {
@@ -385,5 +551,177 @@ describe('Master Status Lifecycle & Governance Service Tests', () => {
       );
     });
   });
-});
+  describe('ProjectsService - Status Lifecycle', () => {
+    it('rejects update on inactive project with 400 validation error', async () => {
+      const inactiveProject = { id: 'prj-inactive-1', name: 'Inactive Project', is_active: false, is_deleted: false };
+      mockDb.query.mockResolvedValueOnce({ rows: [inactiveProject] });
 
+      await expect(
+        service.update('prj-inactive-1', { name: 'Attempted Project Rename' })
+      ).rejects.toThrow('Inactive records cannot be edited. Please activate the record first.');
+    });
+    let service: ProjectsService;
+
+    beforeEach(() => {
+      mockAudit.record = jest.fn().mockResolvedValue(undefined);
+      service = new ProjectsService(mockDb, mockAudit);
+    });
+
+    it('toggles project status from active to inactive and logs MASTER_STATUS_CHANGE audit entry', async () => {
+      const mockProject = {
+        id: 'p1a2b3c4-0001-4000-8000-111122223333',
+        project_code: 'PRJ-2026-0001',
+        name: 'The Grand Hyatt Tower Project',
+        customer_id: 'c1a2b3c4-0001-4000-8000-111122223333',
+        customer_name: 'Hyatt Hotels',
+        dealer_id: null,
+        dealer_name: null,
+        architect_id: null,
+        architect_name: null,
+        start_date: new Date(),
+        expected_completion_date: null,
+        actual_completion_date: null,
+        status: 'active',
+        budget_amount: '5000000.00',
+        total_sales_amount: '0.00',
+        total_commission_amount: '0.00',
+        site_state: 'Gujarat',
+        site_state_code: '24',
+        site_address: 'Ahmedabad',
+        site_pincode: '380015',
+        pos_verified: true,
+        notes: null,
+        is_deleted: false,
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [mockProject] }) // findById
+        .mockResolvedValueOnce({ rows: [] }) // UPDATE projects SET is_active = false
+        .mockResolvedValueOnce({ rows: [{ ...mockProject, is_active: false }] }); // findById after update
+
+      const res = await service.toggleStatus(mockProject.id, false, 'user-1', 'cid-1');
+      expect(res.success).toBe(true);
+      expect(res.data.isActive).toBe(false);
+      expect(res.message).toContain('inactive');
+
+      expect(mockDb.query).toHaveBeenNthCalledWith(
+        2,
+        expect.stringMatching(/UPDATE projects SET is_active = \$1/),
+        [false, mockProject.id],
+      );
+
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'MASTER_STATUS_CHANGE',
+          entityType: 'PROJECT',
+          entityId: mockProject.id,
+          afterSnapshot: expect.objectContaining({
+            newStatus: false,
+            previousStatus: true,
+          }),
+        }),
+      );
+    });
+
+    it('reactivates inactive project back to active and preserves budget and status', async () => {
+      const inactiveProject = {
+        id: 'p1a2b3c4-0001-4000-8000-111122223333',
+        project_code: 'PRJ-2026-0001',
+        name: 'The Grand Hyatt Tower Project',
+        customer_id: null,
+        customer_name: null,
+        dealer_id: null,
+        dealer_name: null,
+        architect_id: null,
+        architect_name: null,
+        start_date: new Date(),
+        expected_completion_date: null,
+        actual_completion_date: null,
+        status: 'active',
+        budget_amount: '5000000.00',
+        total_sales_amount: '0.00',
+        total_commission_amount: '0.00',
+        site_state: null,
+        site_state_code: null,
+        site_address: null,
+        site_pincode: null,
+        pos_verified: false,
+        notes: null,
+        is_deleted: false,
+        is_active: false,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [inactiveProject] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ ...inactiveProject, is_active: true }] });
+
+      const res = await service.toggleStatus(inactiveProject.id, true, 'user-1', 'cid-1');
+      expect(res.success).toBe(true);
+      expect(res.data.isActive).toBe(true);
+      expect(res.message).toContain('active');
+
+      expect(mockDb.query).toHaveBeenNthCalledWith(
+        2,
+        expect.stringMatching(/UPDATE projects SET is_active = \$1/),
+        [true, inactiveProject.id],
+      );
+    });
+
+    it('returns idempotently without redundant update if project status already matches target', async () => {
+      const activeProject = {
+        id: 'p1a2b3c4-0001-4000-8000-111122223333',
+        project_code: 'PRJ-2026-0001',
+        name: 'The Grand Hyatt Tower Project',
+        customer_id: null,
+        customer_name: null,
+        dealer_id: null,
+        dealer_name: null,
+        architect_id: null,
+        architect_name: null,
+        start_date: new Date(),
+        expected_completion_date: null,
+        actual_completion_date: null,
+        status: 'active',
+        budget_amount: '5000000.00',
+        total_sales_amount: '0.00',
+        total_commission_amount: '0.00',
+        site_state: null,
+        site_state_code: null,
+        site_address: null,
+        site_pincode: null,
+        pos_verified: false,
+        notes: null,
+        is_deleted: false,
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockDb.query.mockResolvedValueOnce({ rows: [activeProject] });
+
+      const res = await service.toggleStatus(activeProject.id, true, 'user-1', 'cid-1');
+      expect(res.success).toBe(true);
+      expect(res.data.isActive).toBe(true);
+      expect(mockDb.query).toHaveBeenCalledTimes(1); // Only findById
+      expect(mockAudit.record).not.toHaveBeenCalled();
+    });
+
+    it('filters active projects when isActive = true is passed in findAll query', async () => {
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [{ total_count: '1', active_count: '1', completed_count: '0', total_budget: '5000000' }] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      await service.findAll({ isActive: true });
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringMatching(/p\.is_active = \$1/),
+        expect.arrayContaining([true]),
+      );
+    });
+  });
+});

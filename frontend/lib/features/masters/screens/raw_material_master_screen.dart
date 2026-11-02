@@ -911,7 +911,11 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                         ref.read(activeRecordDetailsStackProvider.notifier).push(rm.id, 'rawMaterial', ErpNavSection.rawMaterials);
                         break;
                       case 'edit':
-                        _openAddEditDialog(rm);
+                        if (!rm.isDeleted && rm.isActive) {
+                          _openAddEditDialog(rm);
+                        } else if (!rm.isActive) {
+                          ErpToast.showWarning(context, 'Cannot edit an inactive record. Activate it first.');
+                        }
                         break;
                       case 'toggle_status':
                         _confirmToggleStatus(rm);
@@ -931,12 +935,18 @@ class _RawMaterialMasterScreenState extends ConsumerState<RawMaterialMasterScree
                     ),
                     PopupMenuItem(
                       value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
-                          SizedBox(width: 8),
-                          Text('Edit Material'),
-                        ],
+                      enabled: !rm.isDeleted && rm.isActive,
+                      child: Tooltip(
+                        message: (!rm.isActive)
+                            ? 'Cannot edit an inactive record. Activate it first.'
+                            : 'Edit Material',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, color: (!rm.isActive || rm.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : AppColors.primary, size: 18),
+                            const SizedBox(width: 8),
+                            Text('Edit Material', style: TextStyle(color: (!rm.isActive || rm.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : null)),
+                          ],
+                        ),
                       ),
                     ),
                     PopupMenuItem(

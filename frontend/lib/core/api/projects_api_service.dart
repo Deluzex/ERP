@@ -95,6 +95,28 @@ class ProjectsApiService {
     }
   }
 
+  Future<Project> toggleProjectStatus(String id, bool isActive) async {
+    try {
+      final response = await _client.dio.patch(
+        '/projects/$id/status',
+        data: {'isActive': isActive},
+      );
+      final data = _client.unwrap<Map<String, dynamic>>(response);
+      return Project.fromJson(data);
+    } catch (e) {
+      try {
+        final response = await _client.dio.put(
+          '/projects/$id',
+          data: {'isActive': isActive},
+        );
+        final data = _client.unwrap<Map<String, dynamic>>(response);
+        return Project.fromJson(data);
+      } catch (_) {
+        throw _client.handleDioError(e);
+      }
+    }
+  }
+
   Future<void> deleteProject(String id, String reason) async {
     try {
       await _client.dio.delete(

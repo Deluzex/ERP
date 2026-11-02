@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditService } from '../../../core/audit/audit.service';
 import { DatabasePool } from '../../../core/database/connection';
 import {
@@ -48,6 +48,12 @@ export class ProjectsService {
     if (query.dealerId) {
       conditions.push(`p.dealer_id = $${paramIndex}`);
       params.push(query.dealerId);
+      paramIndex++;
+    }
+
+    if (query.isActive !== undefined) {
+      conditions.push(`p.is_active = $${paramIndex}`);
+      params.push(query.isActive);
       paramIndex++;
     }
 
@@ -107,6 +113,7 @@ export class ProjectsService {
         p.site_pincode,
         p.pos_verified,
         p.notes,
+        p.is_active,
         p.created_at,
         p.updated_at
        FROM projects p
@@ -169,6 +176,7 @@ export class ProjectsService {
         p.site_pincode,
         p.pos_verified,
         p.notes,
+        p.is_active,
         p.created_at,
         p.updated_at
        FROM projects p
@@ -229,6 +237,7 @@ export class ProjectsService {
     const siteAddress = dto.siteAddress?.trim() || null;
     const sitePincode = dto.sitePincode?.trim() || null;
     const posVerified = dto.posVerified !== undefined ? dto.posVerified : Boolean(siteState);
+    const isActive = dto.isActive !== undefined ? dto.isActive : true;
 
     const res = await this.db.query<any>(
       `INSERT INTO projects (
@@ -236,13 +245,13 @@ export class ProjectsService {
         dealer_id, dealer_name, architect_id, architect_name,
         start_date, expected_completion_date, status,
         budget_amount, site_state, site_state_code, site_address, site_pincode, pos_verified,
-        notes, created_by, created_at, updated_at
+        notes, is_active, created_by, created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4,
         $5, $6, $7, $8,
         $9, $10, $11,
         $12, $13, $14, $15, $16, $17,
-        $18, $19, now(), now()
+        $18, $19, $20, now(), now()
       )
       RETURNING *`,
       [
@@ -264,6 +273,7 @@ export class ProjectsService {
         sitePincode,
         posVerified,
         dto.notes?.trim() || null,
+        isActive,
         userId || null,
       ],
     );
@@ -284,6 +294,9 @@ export class ProjectsService {
 
   async update(id: string, dto: UpdateProjectDto, userId?: string, correlationId?: string) {
     const existing = await this.findById(id);
+    if (!existing.isActive && dto.isActive !== true) {
+      throw new BadRequestException('Inactive records cannot be edited. Please activate the record first.');
+    }
 
     // Resolve updated party names if party IDs changed
     let customerName = existing.customerName;
@@ -337,6 +350,8 @@ export class ProjectsService {
     const sitePincode = dto.sitePincode ? dto.sitePincode.trim() : null;
     const hasPosVerified = dto.posVerified !== undefined;
     const posVerified = dto.posVerified ?? false;
+    const hasIsActive = dto.isActive !== undefined;
+    const isActive = dto.isActive ?? true;
 
     const res = await this.db.query<any>(
       `UPDATE projects SET
@@ -358,8 +373,9 @@ export class ProjectsService {
         site_pincode = CASE WHEN $24::boolean THEN $25 ELSE site_pincode END,
         pos_verified = CASE WHEN $26::boolean THEN $27 ELSE pos_verified END,
         notes = CASE WHEN $28::boolean THEN $29 ELSE notes END,
+        is_active = CASE WHEN $30::boolean THEN $31 ELSE is_active END,
         updated_at = now()
-      WHERE id = $30 AND is_deleted = false
+      WHERE id = $32 AND is_deleted = false
       RETURNING *`,
       [
         dto.name?.trim() || null,
@@ -391,6 +407,8 @@ export class ProjectsService {
         posVerified,
         dto.notes !== undefined,
         dto.notes ? dto.notes.trim() : null,
+        hasIsActive,
+        isActive,
         id,
       ],
     );
@@ -408,6 +426,50 @@ export class ProjectsService {
     });
 
     return updated;
+  }
+
+  async toggleStatus(
+    id: string,
+    isActive: boolean,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<{ success: boolean; message: string; data: any; timestamp: string }> {
+    const existing = await this.findById(id);
+    if (existing.isActive === isActive) {
+      return {
+        success: true,
+        message: `Project status updated to ${isActive ? 'active' : 'inactive'}`,
+        data: existing,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    await this.db.query('UPDATE projects SET is_active = $1, updated_at = NOW() WHERE id = $2', [isActive, id]);
+
+    await this.auditService.record({
+      userId,
+      action: 'MASTER_STATUS_CHANGE',
+      entityType: 'PROJECT',
+      entityId: id,
+      beforeSnapshot: { isActive: existing.isActive },
+      afterSnapshot: {
+        entityType: 'PROJECT',
+        entityId: id,
+        entityName: existing.name,
+        previousStatus: existing.isActive,
+        newStatus: isActive,
+      },
+      reason: `Status changed to ${isActive ? 'active' : 'inactive'}`,
+      correlationId,
+    });
+
+    const updated = await this.findById(id);
+    return {
+      success: true,
+      message: `Project status updated to ${isActive ? 'active' : 'inactive'}`,
+      data: updated,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   async delete(id: string, reason: string, userId?: string, correlationId?: string) {
@@ -514,6 +576,7 @@ export class ProjectsService {
       sitePincode: row.site_pincode || null,
       posVerified: row.pos_verified ?? false,
       notes: row.notes,
+      isActive: row.is_active === false || row.is_active === 'false' || row.is_active === 0 ? false : true,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

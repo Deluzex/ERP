@@ -161,7 +161,7 @@ class ErpCacheManager {
       }
 
       _hasLoadedFromCache = true;
-      db.notifyListeners();
+      db.notifyDatabaseChanged();
       if (kDebugMode) {
         debugPrint('[ErpCacheManager] Successfully restored all masters and transactions from local cache.');
       }
@@ -210,6 +210,16 @@ class ErpCacheManager {
   // ---------------------------------------------------------------------------
   // Targeted Cache Saves (Single Collection for fast updates)
   // ---------------------------------------------------------------------------
+  static Future<void> saveProjects(List<Project> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _saveJsonList(prefs, 'projects', list, _projectToCache);
+  }
+
+  static Future<void> saveVendors(List<Vendor> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _saveJsonList(prefs, 'vendors', list, _vendorToCache);
+  }
+
   static Future<void> saveCustomers(List<Customer> list) async {
     final prefs = await SharedPreferences.getInstance();
     await _saveJsonList(prefs, 'customers', list, _customerToCache);
@@ -524,6 +534,7 @@ class ErpCacheManager {
         'notes': p.notes,
         'isDeleted': p.isDeleted,
         'deleteReason': p.deleteReason,
+        'isActive': p.isActive,
         'createdAt': p.createdAt.toIso8601String(),
         'updatedAt': p.updatedAt?.toIso8601String(),
       };

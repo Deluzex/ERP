@@ -1409,10 +1409,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                               ),
                               items: [
                                 const DropdownMenuItem(value: null, child: Text('General Inventory (No Project)')),
-                                ...db.projects.map((p) => DropdownMenuItem(
-                                      value: p.id,
-                                      child: Text(p.name),
-                                    )),
+                                ...db.projects.where((p) => !p.isDeleted && (p.isActive || p.id == _selectedProjectId)).map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
                               ],
                               onChanged: (val) => setState(() => _selectedProjectId = val),
                             ),
@@ -1524,12 +1521,7 @@ class _CreatePurchaseScreenState extends ConsumerState<CreatePurchaseScreen> {
                                   ),
                                   items: [
                                     const DropdownMenuItem(value: null, child: Text('General Inventory (No Project)')),
-                                    ...db.projects
-                                        .where((p) => !p.isDeleted)
-                                        .map((p) => DropdownMenuItem(
-                                              value: p.id,
-                                              child: Text(p.name),
-                                            )),
+                                    ...db.projects.where((p) => !p.isDeleted && (p.isActive || p.id == _selectedProjectId)).map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
                                   ],
                                   onChanged: (val) => setState(() => _selectedProjectId = val),
                                 ),

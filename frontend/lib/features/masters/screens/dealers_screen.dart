@@ -668,7 +668,11 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                         );
                         break;
                       case 'edit':
-                        _openAddEditDealerDialog(d);
+                        if (!d.isDeleted && d.isActive) {
+                          _openAddEditDealerDialog(d);
+                        } else if (!d.isActive) {
+                          ErpToast.showWarning(context, 'Cannot edit an inactive record. Activate it first.');
+                        }
                         break;
                       case 'toggle_status':
                         _confirmToggleStatus(d);
@@ -698,12 +702,18 @@ class _DealersScreenState extends ConsumerState<DealersScreen> {
                     ),
                     PopupMenuItem(
                       value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit_outlined, size: 18),
-                          SizedBox(width: 8),
-                          Text('Edit Dealer'),
-                        ],
+                      enabled: !d.isDeleted && d.isActive,
+                      child: Tooltip(
+                        message: (!d.isActive)
+                            ? 'Cannot edit an inactive record. Activate it first.'
+                            : 'Edit Dealer',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, size: 18, color: (!d.isActive || d.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : AppColors.textPrimary),
+                            const SizedBox(width: 8),
+                            Text('Edit Dealer', style: TextStyle(color: (!d.isActive || d.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : null)),
+                          ],
+                        ),
                       ),
                     ),
                     PopupMenuItem(

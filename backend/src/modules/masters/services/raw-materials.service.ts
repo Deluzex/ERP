@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { AuditService } from '../../../core/audit/audit.service';
 import { Money } from '../../../core/common/money';
 import { DatabasePool } from '../../../core/database/connection';
@@ -469,6 +469,9 @@ export class RawMaterialsService {
     correlationId?: string,
   ): Promise<RawMaterialRecord> {
     const existing = await this.findById(id);
+    if (!existing.isActive && dto.isActive !== true) {
+      throw new BadRequestException('Inactive records cannot be edited. Please activate the record first.');
+    }
 
     const updates: string[] = [];
     const values: unknown[] = [];

@@ -1451,7 +1451,7 @@ ErpToast.showError(context, 'Failed to create sale: $e');
                               overflow: TextOverflow.ellipsis,
                             ),
                             const Text('None (Direct Site)', maxLines: 1, overflow: TextOverflow.ellipsis),
-                            ...db.projects.map((p) => Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            ...db.projects.where((p) => !p.isDeleted && (p.isActive || p.id == _selectedProjectId)).map((p) => Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
                           ];
                         },
                         items: [
@@ -1476,7 +1476,7 @@ ErpToast.showError(context, 'Failed to create sale: $e');
                             ),
                           ),
                           const DropdownMenuItem<String?>(value: null, child: Text('None (Direct Site)')),
-                          ...db.projects.map((p) => DropdownMenuItem<String?>(value: p.id, child: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                          ...db.projects.where((p) => !p.isDeleted && (p.isActive || p.id == _selectedProjectId)).map((p) => DropdownMenuItem<String?>(value: p.id, child: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis))),
                         ],
                         onChanged: (val) {
                           if (val == '__ADD_PROJECT__') {

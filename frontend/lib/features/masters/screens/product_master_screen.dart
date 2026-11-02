@@ -932,7 +932,11 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                   onSelected: (action) {
                     switch (action) {
                       case 'edit':
-                        _openAddEditDialog(fp);
+                        if (!fp.isDeleted && fp.isActive) {
+                          _openAddEditDialog(fp);
+                        } else if (!fp.isActive) {
+                          ErpToast.showWarning(context, 'Cannot edit an inactive record. Activate it first.');
+                        }
                         break;
                       case 'toggle_status':
                         _confirmToggleStatus(fp);
@@ -942,12 +946,18 @@ class _ProductMasterScreenState extends ConsumerState<ProductMasterScreen> {
                   itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit_outlined, color: AppColors.primary, size: 18),
-                          SizedBox(width: 8),
-                          Text('Edit Product'),
-                        ],
+                      enabled: !fp.isDeleted && fp.isActive,
+                      child: Tooltip(
+                        message: (!fp.isActive)
+                            ? 'Cannot edit an inactive record. Activate it first.'
+                            : 'Edit Product',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, color: (!fp.isActive || fp.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : AppColors.primary, size: 18),
+                            const SizedBox(width: 8),
+                            Text('Edit Product', style: TextStyle(color: (!fp.isActive || fp.isDeleted) ? AppColors.textSecondary.withValues(alpha: 0.5) : null)),
+                          ],
+                        ),
                       ),
                     ),
                     PopupMenuItem(

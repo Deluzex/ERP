@@ -1574,12 +1574,16 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
                           _openChangeStatusDialog(bom);
                           break;
                         case 'edit':
-                          _startEdit(bom);
+                          if (bom.isActive) {
+                            _startEdit(bom);
+                          } else {
+                            ErpToast.showWarning(context, 'Cannot edit an inactive record. Activate it first.');
+                          }
                           break;
                       }
                     },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
                         value: 'view',
                         child: Row(
                           children: [
@@ -1611,12 +1615,18 @@ ErpToast.showWarning(context, 'No raw materials found in inventory catalog.');
                       ),
                       PopupMenuItem(
                         value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_outlined, size: 18),
-                            SizedBox(width: 8),
-                            Text('Edit Recipe'),
-                          ],
+                        enabled: bom.isActive,
+                        child: Tooltip(
+                          message: (!bom.isActive)
+                              ? 'Cannot edit an inactive record. Activate it first.'
+                              : 'Edit Recipe',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined, size: 18, color: !bom.isActive ? AppColors.textSecondary.withValues(alpha: 0.5) : AppColors.textPrimary),
+                              const SizedBox(width: 8),
+                              Text('Edit Recipe', style: TextStyle(color: !bom.isActive ? AppColors.textSecondary.withValues(alpha: 0.5) : null)),
+                            ],
+                          ),
                         ),
                       ),
                     ],

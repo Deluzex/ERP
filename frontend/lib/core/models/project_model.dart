@@ -31,6 +31,7 @@ class Project {
   final String? notes;
   final bool isDeleted;
   final String? deleteReason;
+  final bool isActive;
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -59,6 +60,7 @@ class Project {
     this.notes,
     this.isDeleted = false,
     this.deleteReason,
+    this.isActive = true,
     required this.createdAt,
     this.updatedAt,
   });
@@ -139,6 +141,7 @@ class Project {
       notes: json['notes']?.toString(),
       isDeleted: json['isDeleted'] == true || json['is_deleted'] == true,
       deleteReason: json['deleteReason']?.toString() ?? json['delete_reason']?.toString(),
+      isActive: json['isActive'] == null && json['is_active'] == null ? true : (json['isActive'] == true || json['is_active'] == true),
       createdAt: parseDate(json['createdAt'] ?? json['created_at']),
       updatedAt: parseNullableDate(json['updatedAt'] ?? json['updated_at']),
     );
@@ -156,6 +159,7 @@ class Project {
       if (actualCompletionDate != null)
         'actualCompletionDate': actualCompletionDate!.toIso8601String().split('T')[0],
       'status': status.name,
+      'isActive': isActive,
       'budgetAmount': budgetAmount,
       if (siteState != null) 'siteState': siteState,
       if (siteStateCode != null) 'siteStateCode': siteStateCode,
@@ -191,6 +195,7 @@ class Project {
     String? notes,
     bool? isDeleted,
     String? deleteReason,
+    bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -219,6 +224,7 @@ class Project {
       notes: notes ?? this.notes,
       isDeleted: isDeleted ?? this.isDeleted,
       deleteReason: deleteReason ?? this.deleteReason,
+      isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

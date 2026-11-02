@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { AuditService } from '../../../core/audit/audit.service';
 import { Money } from '../../../core/common/money';
 import { DatabasePool } from '../../../core/database/connection';
@@ -153,8 +153,8 @@ export class VendorsService {
     }>(
       `INSERT INTO vendors (
         name, contact_person, mobile, email, gst_number, pan_number,
-        address, state, pincode, payment_terms, credit_limit, outstanding_balance
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '0.00')
+        address, state, pincode, payment_terms, credit_limit, outstanding_balance, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '0.00', $12)
       RETURNING *`,
       [
         dto.name.trim(),
@@ -168,6 +168,7 @@ export class VendorsService {
         dto.pincode?.trim() || null,
         dto.paymentTerms || 'Net 30 Days',
         creditLimit,
+        dto.isActive ?? true,
       ],
     );
 
@@ -193,6 +194,9 @@ export class VendorsService {
     correlationId?: string,
   ): Promise<VendorRecord> {
     const existing = await this.findById(id);
+    if (!existing.isActive && dto.isActive !== true) {
+      throw new BadRequestException('Inactive records cannot be edited. Please activate the record first.');
+    }
 
     const updates: string[] = [];
     const values: unknown[] = [];
@@ -241,6 +245,10 @@ export class VendorsService {
     if (dto.creditLimit !== undefined) {
       updates.push(`credit_limit = $${idx++}`);
       values.push(Money.format(dto.creditLimit));
+    }
+    if (dto.isActive !== undefined) {
+      updates.push(`is_active = $${idx++}`);
+      values.push(dto.isActive);
     }
 
     if (updates.length > 0) {
@@ -368,7 +376,7 @@ export class VendorsService {
       creditLimit: Money.format(r.credit_limit),
       outstandingBalance: Money.format(r.outstanding_balance),
       isDeleted: r.is_deleted,
-      isActive: r.is_active ?? true,
+      isActive: r.is_active === false || r.is_active === 'false' || r.is_active === 0 ? false : true,
       deleteReason: r.delete_reason,
       deletedAt: r.deleted_at,
       createdAt: r.created_at,

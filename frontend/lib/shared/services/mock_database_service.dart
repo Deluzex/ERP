@@ -46,6 +46,7 @@ import '../../core/utils/password_security.dart';
 import '../../core/storage/erp_cache_manager.dart';
 
 class MockDatabaseService extends ChangeNotifier {
+  void notifyDatabaseChanged() => notifyListeners();
   // Roles & RBAC System
   List<Role> roles = [];
   List<AppUser> users = [];
@@ -6001,6 +6002,7 @@ class MockDatabaseService extends ChangeNotifier {
     try {
       final remoteVendors = await _vendorsApi.getVendors(includeDeleted: true);
       vendors = remoteVendors;
+      await ErpCacheManager.saveVendors(vendors);
       notifyListeners();
     } catch (e) {
       if (kDebugMode) {
@@ -6080,6 +6082,7 @@ class MockDatabaseService extends ChangeNotifier {
       if (kDebugMode) debugPrint('[MockDatabaseService] toggleVendorStatus remote failed: $e');
     }
     toggleVendorStatus(id, isActive);
+    await ErpCacheManager.saveVendors(vendors);
   }
 
   // -------------------------------------------------------------
@@ -6337,6 +6340,27 @@ class MockDatabaseService extends ChangeNotifier {
     }
   }
 
+  void toggleProjectStatus(String id, bool isActive) {
+    final index = projects.indexWhere((p) => p.id == id);
+    if (index != -1) {
+      projects[index] = projects[index].copyWith(
+        isActive: isActive,
+        updatedAt: DateTime.now(),
+      );
+      notifyListeners();
+    }
+  }
+
+  Future<void> toggleProjectStatusAsync(String id, bool isActive) async {
+    try {
+      await _projectsApi.toggleProjectStatus(id, isActive);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MockDatabaseService] toggleProjectStatus remote failed: $e');
+    }
+    toggleProjectStatus(id, isActive);
+    await ErpCacheManager.saveProjects(projects);
+  }
+
   void deleteProject(String id) {
     projects.removeWhere((p) => p.id == id);
     notifyListeners();
@@ -6350,6 +6374,7 @@ class MockDatabaseService extends ChangeNotifier {
       final remote = await _projectsApi.getProjects(search: search, status: status);
       projects = remote;
       _hasLoadedProjects = true;
+      await ErpCacheManager.saveProjects(projects);
       notifyListeners();
     } catch (e) {
       if (kDebugMode) debugPrint('[MockDatabaseService] loadProjects fallback: $e');

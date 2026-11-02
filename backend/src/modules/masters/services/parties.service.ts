@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { AuditService } from '../../../core/audit/audit.service';
 import { Money } from '../../../core/common/money';
 import { DatabasePool } from '../../../core/database/connection';
@@ -233,6 +233,9 @@ export class PartiesService {
     correlationId?: string,
   ): Promise<CustomerRecord> {
     const existing = await this.findCustomerById(id);
+    if (!existing.isActive && dto.isActive !== true) {
+      throw new BadRequestException('Inactive records cannot be edited. Please activate the record first.');
+    }
     const updates: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
@@ -505,6 +508,9 @@ export class PartiesService {
 
   async updateDealer(id: string, dto: UpdateDealerDto, userId?: string, correlationId?: string): Promise<DealerRecord> {
     const existing = await this.findDealerById(id);
+    if (!existing.isActive && dto.isActive !== true) {
+      throw new BadRequestException('Inactive records cannot be edited. Please activate the record first.');
+    }
     const updates: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
@@ -763,6 +769,9 @@ export class PartiesService {
 
   async updateArchitect(id: string, dto: UpdateArchitectDto, userId?: string, correlationId?: string): Promise<ArchitectRecord> {
     const existing = await this.findArchitectById(id);
+    if (!existing.isActive && dto.isActive !== true) {
+      throw new BadRequestException('Inactive records cannot be edited. Please activate the record first.');
+    }
     const updates: string[] = [];
     const values: unknown[] = [];
     let idx = 1;

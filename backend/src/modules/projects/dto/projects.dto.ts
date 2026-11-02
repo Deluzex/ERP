@@ -76,6 +76,10 @@ export class CreateProjectDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class UpdateProjectDto {
@@ -139,6 +143,10 @@ export class UpdateProjectDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class DeleteProjectDto {
@@ -179,4 +187,13 @@ export class ProjectQueryDto {
   @IsOptional()
   @Min(1)
   limit?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+}
+
+export class ToggleProjectStatusDto {
+  @IsBoolean()
+  isActive!: boolean;
 }

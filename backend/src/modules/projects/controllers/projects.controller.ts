@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Patch,
   Get,
   Param,
   Post,
@@ -17,6 +18,7 @@ import {
   DeleteProjectDto,
   ProjectQueryDto,
   UpdateProjectDto,
+  ToggleProjectStatusDto,
 } from '../dto/projects.dto';
 import { ProjectsService } from '../services/projects.service';
 
@@ -65,6 +67,17 @@ export class ProjectsController {
     @Ctx() ctx: RequestContext,
   ) {
     return this.projectsService.update(id, dto, ctx.userId, ctx.correlationId);
+  }
+
+  @Patch(':id/status')
+  @RequirePermission('projects.edit')
+  @ApiOperation({ summary: 'Toggle project active / inactive status' })
+  toggleStatus(
+    @Param('id') id: string,
+    @Body() dto: ToggleProjectStatusDto,
+    @Ctx() ctx: RequestContext,
+  ) {
+    return this.projectsService.toggleStatus(id, dto.isActive, ctx.userId, ctx.correlationId);
   }
 
   @Delete(':id')
