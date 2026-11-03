@@ -10,6 +10,7 @@ import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/api/chat_api_service.dart';
 import '../../../core/utils/document_sharing_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 enum MessageAudience { everyone, department, individual }
 
@@ -186,6 +187,17 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
     );
   }
 
+  Widget _buildWhatsAppIcon({double size = 16, Color color = const Color(0xFF15803D)}) {
+    return SvgPicture.string(
+      '<svg viewBox="0 0 24 24" width="$size" height="$size" fill="currentColor" xmlns="http://www.w3.org/2000/svg">'
+      '<path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0012.04 2zm.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 012.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 01-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24zm-4.7 3.63c-.15 0-.4.06-.61.29-.21.23-.8.78-.8 1.9 0 1.12.82 2.2 1.03 2.37.11.16 1.6 2.45 3.88 3.44 2.28.98 2.28.65 2.69.61.41-.04 1.33-.54 1.52-1.07.19-.53.19-.98.13-1.07-.06-.09-.23-.15-.49-.27-.26-.13-1.53-.76-1.77-.85-.24-.09-.41-.13-.59.13-.17.26-.68.85-.83 1.02-.15.17-.3.19-.56.06-.26-.13-1.1-.41-2.1-1.3-.78-.7-1.31-1.56-1.46-1.82-.15-.26-.02-.4.11-.53.12-.12.26-.3.39-.46.13-.15.17-.26.26-.43.09-.17.04-.32-.02-.45-.06-.13-.59-1.42-.81-1.95-.21-.51-.43-.44-.59-.45-.15-.01-.33-.01-.5-.01z"/>'
+      '</svg>',
+      width: size,
+      height: size,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    );
+  }
+
   Widget _buildPageHeader() {
     return const ErpSectionHeaderCard(
       key: ValueKey('broadcast-page-title'),
@@ -322,33 +334,13 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFBFDBFE)),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.shield_outlined, size: 14, color: Color(0xFF1D4ED8)),
-                SizedBox(width: 6),
-                Text(
-                  'Anti-Ban Protection: Human-like random pacing (3.5s - 6.5s) applied to avoid Meta spam detection',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF1E40AF), fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: AppSpacing.md),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               OutlinedButton.icon(
                 onPressed: () => _openDirectWhatsApp(systemUsers),
-                icon: const Icon(Icons.open_in_new_rounded, size: 15, color: Color(0xFF15803D)),
+                icon: _buildWhatsAppIcon(size: 15, color: const Color(0xFF15803D)),
                 label: const Text(
                   'Direct WhatsApp (wa.me)',
                   style: TextStyle(
@@ -385,7 +377,7 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
                           ),
                           SizedBox(width: 10),
                           Text(
-                            'Dispatching (anti-ban pacing)...',
+                            'Sending Message...',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -736,37 +728,42 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
               ),
             ),
             const SizedBox(width: AppSpacing.xs),
-            Flexible(
-              child: Text(
-                user.phone,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.end,
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textMuted,
-                  fontSize: 9.5,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Tooltip(
-              message: 'Send direct WhatsApp to ${user.name}',
-              child: InkWell(
-                onTap: () => _sendDirectToSingleUser(user),
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF25D366).withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.chat_rounded,
-                    color: Color(0xFF15803D),
-                    size: 14,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 86,
+                  child: Text(
+                    user.phone,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: 'Direct WhatsApp to ${user.name}',
+                  child: InkWell(
+                    onTap: () => _sendDirectToSingleUser(user),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366).withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      alignment: Alignment.center,
+                      child: _buildWhatsAppIcon(size: 15, color: const Color(0xFF15803D)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -927,7 +924,7 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
                 color: const Color(0xFF25D366).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 20),
+              child: _buildWhatsAppIcon(size: 18, color: const Color(0xFF25D366)),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -994,7 +991,7 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
                                 message: message,
                               );
                             },
-                            icon: const Icon(Icons.send_rounded, size: 13),
+                            icon: _buildWhatsAppIcon(size: 13, color: Colors.white),
                             label: const Text('Send', style: TextStyle(fontSize: 12)),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF25D366),
