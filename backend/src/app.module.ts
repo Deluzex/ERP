@@ -25,6 +25,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { BomsModule } from './modules/boms/boms.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { SubscriptionGuard } from './core/auth/subscription.guard';
+import { ChatModule } from './modules/chat/chat.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { SubscriptionGuard } from './core/auth/subscription.guard';
     ReportsModule,
     NotificationsModule,
     SubscriptionModule,
+    ChatModule,
   ],
   providers: [
     AppLogger,
