@@ -584,12 +584,9 @@ class _SalesWorkflowCardItemState extends State<_SalesWorkflowCardItem> {
     final step = widget.step;
     final color = step.color;
 
-    return Tooltip(
-      message: 'Navigate to ${step.title}',
-      waitDuration: const Duration(milliseconds: 400),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
           onTap: widget.onTap,
           onHover: (hovering) {
             if (mounted && _isHovered != hovering) {
@@ -612,9 +609,8 @@ class _SalesWorkflowCardItemState extends State<_SalesWorkflowCardItem> {
               boxShadow: [
                 if (_isHovered)
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.16),
-                    blurRadius: 10,
-                    spreadRadius: 1,
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    blurRadius: 8,
                     offset: const Offset(0, 2),
                   )
                 else
@@ -625,85 +621,68 @@ class _SalesWorkflowCardItemState extends State<_SalesWorkflowCardItem> {
                   ),
               ],
             ),
-            child: Stack(
-              children: [
-                Positioned(
-                  top: 0,
-                  left: 14,
-                  right: 14,
-                  child: Container(
-                    height: 2.5,
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(2)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+              child: SizedBox(
+                width: double.infinity,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(step.icon, color: color, size: 16),
                     ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(step.icon, color: color, size: 16),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          step.title,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.bodyBold.copyWith(
-                            fontSize: 12.5,
-                            color: AppColors.textPrimary,
-                            height: 1.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          step.count,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: color,
-                            height: 1.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          step.activeCount,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textMuted,
-                            height: 1.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                    const SizedBox(height: 10),
+                    Text(
+                      step.title,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodyBold.copyWith(
+                        fontSize: 12.5,
+                        color: AppColors.textPrimary,
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
+                    const SizedBox(height: 5),
+                    Text(
+                      step.count,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      step.activeCount,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textMuted,
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

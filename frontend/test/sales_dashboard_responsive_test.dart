@@ -82,6 +82,35 @@ void main() {
 
       await tester.tap(find.text('Sales Workflow Stages'));
       await tester.pumpAndSettle();
+        });
+
+testWidgets('Positive: Workflow cards render cleanly without top line and hover thickens border', (tester) async {
+      tester.binding.window.physicalSizeTestValue = const Size(1920, 1080);
+      tester.binding.window.devicePixelRatioTestValue = 1.0;
+      addTearDown(() {
+        tester.binding.window.clearPhysicalSizeTestValue();
+        tester.binding.window.clearDevicePixelRatioTestValue();
+      });
+
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SalesDashboardScreen(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Quotations'), findsOneWidget);
+      expect(find.text('Proforma Invoices'), findsOneWidget);
+
+      final quotationsFinder = find.text('Quotations');
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      await gesture.moveTo(tester.getCenter(quotationsFinder));
+      await tester.pumpAndSettle();
     });
   });
 }

@@ -358,8 +358,7 @@ class _SalesOrdersScreenState extends ConsumerState<SalesOrdersScreen> with Sing
               text: 'New Sales Order',
               icon: Icons.add,
               onPressed: () {
-                ref.read(salesCreateDocTypeProvider.notifier).state = SalesDocumentType.salesOrder;
-                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesOrder;
+                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale;
               },
             ),
           ),
