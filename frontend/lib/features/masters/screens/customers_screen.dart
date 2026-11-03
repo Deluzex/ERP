@@ -674,9 +674,13 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
           // 5 Summary Metric Cards
           LayoutBuilder(
             builder: (context, constraints) {
-              final cardWidth = constraints.maxWidth > 850
-                  ? (constraints.maxWidth - (4 * 12)) / 5
-                  : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
+              final cardWidth = constraints.maxWidth >= 1050
+                  ? ((constraints.maxWidth - (4 * 12) - 0.5) / 5).floorToDouble()
+                  : (constraints.maxWidth >= 650
+                      ? ((constraints.maxWidth - (2 * 12) - 0.5) / 3).floorToDouble()
+                      : (constraints.maxWidth >= 450
+                          ? ((constraints.maxWidth - 12 - 0.5) / 2).floorToDouble()
+                          : double.infinity));
               return Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -759,16 +763,16 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                 const SizedBox(height: 16),
                 ErpDataTable(
             columns: const [
-              ErpColumn(title: 'Customer Name'),
-              ErpColumn(title: 'Type / Dual Role'),
-              ErpColumn(title: 'State'),
-              ErpColumn(title: 'Mobile Phone'),
-              ErpColumn(title: 'Email Address'),
-              ErpColumn(title: 'GST Number'),
+              ErpColumn(title: 'Customer Name', width: 170),
+              ErpColumn(title: 'Type / Dual Role', width: 150),
+              ErpColumn(title: 'State', width: 95),
+              ErpColumn(title: 'Mobile Phone', width: 125),
+              ErpColumn(title: 'Email Address', width: 170),
+              ErpColumn(title: 'GST Number', width: 140),
               ErpColumn(title: 'Site / Billing Address', width: 220),
-              ErpColumn(title: 'Outstanding Balance', isNumeric: true),
-              ErpColumn(title: 'Status'),
-              ErpColumn(title: 'Actions'),
+              ErpColumn(title: 'Outstanding Balance', width: 160, isNumeric: true),
+              ErpColumn(title: 'Status', width: 95),
+              ErpColumn(title: 'Actions', width: 75),
             ],
             rows: pagedCustomers.map((c) {
               final linkedArch = c.linkedArchitectId != null
@@ -781,11 +785,16 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                   onTap: () {
                     ref.read(activeRecordDetailsStackProvider.notifier).push(c.id, 'customer', ErpNavSection.customers);
                   },
-                  child: Text(
-                    c.name,
-                    style: AppTextStyles.bodyBold.copyWith(
-                      fontSize: 13,
-                      color: const Color(0xFF1E293B),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: Text(
+                      c.name,
+                      style: AppTextStyles.bodyBold.copyWith(
+                        fontSize: 13,
+                        color: const Color(0xFF1E293B),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
@@ -807,7 +816,8 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                             children: [
                               const Icon(Icons.link, size: 12, color: Color(0xFF7E22CE)),
                               const SizedBox(width: 4),
-                              Flexible(
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 160),
                                 child: Text(
                                   'Arch: ${linkedArch.name}',
                                   style: const TextStyle(
@@ -838,7 +848,15 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                         : const Text('Direct Client', style: TextStyle(fontSize: 12, color: Color(0xFF64748B)))),
                 Text(c.state.isNotEmpty ? c.state : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 Text(c.mobile, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
-                Text(c.email, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: Text(
+                    c.email,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 Text(c.gstNumber.isNotEmpty ? c.gstNumber : '-', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
                 ConstrainedBox(
                   constraints: const BoxConstraints(minWidth: 160, maxWidth: 240),

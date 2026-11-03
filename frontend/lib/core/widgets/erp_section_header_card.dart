@@ -26,13 +26,29 @@ class ErpSectionHeaderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < narrowBreakpoint;
         final isMobile = constraints.maxWidth < 520;
         final isSmallMobile = constraints.maxWidth < 380;
 
+        // Adaptive breakpoint for intermediate screens between mobile and full desktop.
+        // 4 buttons take ~750px and require at least ~1220px card width to sit comfortably side-by-side with title.
+        // 3 buttons take ~480px and require at least ~1000px card width.
+        // 2 buttons take ~320px and require at least ~800px card width.
+        final actionCount = actions?.length ?? (action != null ? 4 : 0);
+        final defaultBreakpoint = actionCount >= 4
+            ? 1220.0
+            : (actionCount == 3
+                ? 1000.0
+                : (actionCount == 2
+                    ? 800.0
+                    : (actionCount == 1 ? 580.0 : 480.0)));
+        final effectiveBreakpoint = narrowBreakpoint != 480 ? narrowBreakpoint : defaultBreakpoint;
+        final isDesktop = constraints.maxWidth >= effectiveBreakpoint;
+        final isIntermediate = !isDesktop && !isMobile;
+
         Widget? effectiveAction = action;
         if (actions != null && actions!.isNotEmpty) {
-          if (isNarrow) {
+          if (isMobile) {
+            // Mobile: keep existing full-width vertical stack
             effectiveAction = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
@@ -46,7 +62,17 @@ class ErpSectionHeaderCard extends StatelessWidget {
                 ],
               ],
             );
+          } else if (isIntermediate) {
+            // Between mobile & desktop: wrap buttons horizontally under the title
+            effectiveAction = Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.start,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: actions!,
+            );
           } else {
+            // Desktop: keep existing end-aligned side-by-side wrap
             effectiveAction = Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -141,8 +167,20 @@ class ErpSectionHeaderCard extends StatelessWidget {
               ),
             ],
           ),
-          child: isNarrow
-              ? Column(
+          child: isDesktop
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    iconBox,
+                    const SizedBox(width: 16),
+                    Expanded(child: titleBlock),
+                    if (effectiveAction != null) ...[
+                      const SizedBox(width: 16),
+                      effectiveAction,
+                    ],
+                  ],
+                )
+              : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -157,23 +195,11 @@ class ErpSectionHeaderCard extends StatelessWidget {
                       ],
                     ),
                     if (effectiveAction != null) ...[
-                      SizedBox(height: isMobile ? 12 : 16),
+                      SizedBox(height: isMobile ? 12 : 14),
                       SizedBox(
-                        width: double.infinity,
+                        width: isMobile ? double.infinity : null,
                         child: effectiveAction,
                       ),
-                    ],
-                  ],
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    iconBox,
-                    const SizedBox(width: 16),
-                    Expanded(child: titleBlock),
-                    if (effectiveAction != null) ...[
-                      const SizedBox(width: 16),
-                      effectiveAction,
                     ],
                   ],
                 ),

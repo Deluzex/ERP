@@ -43,71 +43,25 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
             icon: Icons.point_of_sale_rounded,
             title: 'Sales Operations Dashboard',
             badgeText: 'SALES PIPELINE',
-            action: LayoutBuilder(
-              builder: (context, actionBox) {
-                final isMobile = actionBox.maxWidth < 600;
-                if (isMobile) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'New Quotation',
-                          icon: Icons.request_quote_outlined,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'Create Sales Order',
-                          icon: Icons.shopping_cart_outlined,
-                          isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesOrder,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'Direct Sale',
-                          icon: Icons.point_of_sale_outlined,
-                          isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-
-                return Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.end,
-                  children: [
-                    ErpButton(
-                      text: 'New Quotation',
-                      icon: Icons.request_quote_outlined,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation,
-                    ),
-                    ErpButton(
-                      text: 'Create Sales Order',
-                      icon: Icons.shopping_cart_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesOrder,
-                    ),
-                    ErpButton(
-                      text: 'Direct Sale',
-                      icon: Icons.point_of_sale_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
-                    ),
-                  ],
-                );
-              },
-            ),
+            actions: [
+              ErpButton(
+                text: 'New Quotation',
+                icon: Icons.request_quote_outlined,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createQuotation,
+              ),
+              ErpButton(
+                text: 'Create Sales Order',
+                icon: Icons.shopping_cart_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSalesOrder,
+              ),
+              ErpButton(
+                text: 'Direct Sale',
+                icon: Icons.point_of_sale_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.createSale,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
@@ -379,7 +333,7 @@ class _SalesDashboardScreenState extends ConsumerState<SalesDashboardScreen> {
                   ),
                 );
               } else if (constraints.maxWidth >= 640) {
-                final itemWidth = (constraints.maxWidth - 16) / 3;
+                final itemWidth = ((constraints.maxWidth - 16.5) / 3).floorToDouble();
                 return Wrap(
                   spacing: 8,
                   runSpacing: 10,

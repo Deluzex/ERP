@@ -46,85 +46,31 @@ class _InventoryRoleDashboardState extends ConsumerState<InventoryRoleDashboard>
             icon: Icons.inventory_2_rounded,
             title: 'Inventory & Warehouse Dashboard',
             badgeText: 'INVENTORY MANAGER',
-            action: LayoutBuilder(
-              builder: (context, actionBox) {
-                final isMobileHeader = actionBox.maxWidth < 520;
-                if (isMobileHeader) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'New Stock Adjustment',
-                          icon: Icons.tune_rounded,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'Raw Material Stock',
-                          icon: Icons.category_outlined,
-                          isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'Finished Product Stock',
-                          icon: Icons.inventory_2_outlined,
-                          isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProductStock,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ErpButton(
-                          text: 'Stock Movement Ledger',
-                          icon: Icons.swap_horiz_rounded,
-                          isOutlined: true,
-                          onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-                return Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ErpButton(
-                      text: 'New Stock Adjustment',
-                      icon: Icons.tune_rounded,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
-                    ),
-                    ErpButton(
-                      text: 'Raw Material Stock',
-                      icon: Icons.category_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
-                    ),
-                    ErpButton(
-                      text: 'Finished Product Stock',
-                      icon: Icons.inventory_2_outlined,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProductStock,
-                    ),
-                    ErpButton(
-                      text: 'Stock Movement Ledger',
-                      icon: Icons.swap_horiz_rounded,
-                      isOutlined: true,
-                      onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
-                    ),
-                  ],
-                );
-              },
-            ),
+            actions: [
+              ErpButton(
+                text: 'New Stock Adjustment',
+                icon: Icons.tune_rounded,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockAdjustments,
+              ),
+              ErpButton(
+                text: 'Raw Material Stock',
+                icon: Icons.category_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.rawMaterialStock,
+              ),
+              ErpButton(
+                text: 'Finished Product Stock',
+                icon: Icons.inventory_2_outlined,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.finishedProductStock,
+              ),
+              ErpButton(
+                text: 'Stock Movement Ledger',
+                icon: Icons.swap_horiz_rounded,
+                isOutlined: true,
+                onPressed: () => ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.stockMovement,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
@@ -1836,7 +1782,7 @@ Widget _buildResponsiveMetricGrid(BuildContext context, List<Widget> cards) {
           }).toList(),
         );
       } else if (width >= 600) {
-        final halfWidth = (width - 16) / 2;
+        final halfWidth = ((width - 16.5) / 2).floorToDouble();
         return Wrap(
           spacing: 16,
           runSpacing: 16,

@@ -226,9 +226,12 @@ class _ErpDataTableState extends State<ErpDataTable> {
             );
           }
 
+          final hasBoundedWidth = constraints.maxWidth.isFinite && constraints.maxWidth > 0;
+          final tableMinWidth = hasBoundedWidth ? constraints.maxWidth : MediaQuery.of(context).size.width;
+
           final table = ConstrainedBox(
             constraints: BoxConstraints(
-              minWidth: constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width,
+              minWidth: tableMinWidth,
             ),
             child: DataTable(
               headingRowColor: WidgetStateProperty.all(const Color(0xFFF8F9FA)),
@@ -247,12 +250,15 @@ class _ErpDataTableState extends State<ErpDataTable> {
                 Widget label = Text(
                   col.title.toUpperCase(),
                   style: AppTextStyles.tableHeader,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
                 );
-                if (col.width != null || col.alignment != null) {
+                final effectiveWidth = col.width ?? (col.title.length > 10 ? (col.title.length * 8.5 + 24).ceilToDouble() : null);
+                if (effectiveWidth != null || col.alignment != null) {
                   label = SizedBox(
-                    width: col.width,
+                    width: effectiveWidth,
                     child: Align(
-                      alignment: col.alignment ?? Alignment.centerLeft,
+                      alignment: col.alignment ?? (col.isNumeric ? Alignment.centerRight : Alignment.centerLeft),
                       child: label,
                     ),
                   );

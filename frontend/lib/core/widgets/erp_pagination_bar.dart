@@ -35,7 +35,7 @@ class ErpPaginationBar extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 650;
+        final isCompact = constraints.maxWidth < 800;
 
         final infoText = Text(
           'Showing ${totalRecords == 0 ? 0 : startIndex + 1} to $endIndex of $totalRecords records',
@@ -234,17 +234,23 @@ class ErpPaginationBar extends StatelessWidget {
           ),
         );
 
-        final controlsRow = Row(
-          mainAxisSize: MainAxisSize.min,
-          children: pageButtons,
+        final controlsRow = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: pageButtons,
+          ),
         );
 
         if (isCompact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   infoText,
                   pageSizeSelector,
@@ -256,13 +262,18 @@ class ErpPaginationBar extends StatelessWidget {
           );
         }
 
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 12,
           children: [
-            Row(
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 16,
+              runSpacing: 8,
               children: [
                 infoText,
-                const SizedBox(width: 16),
                 pageSizeSelector,
               ],
             ),

@@ -19,14 +19,15 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _identifierCtrl = TextEditingController(text: 'admin@deluzex.com');
-  final _passwordCtrl = TextEditingController(text: 'Admin@123');
-  String? _selectedRoleId = 'admin';
+  final _identifierCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  String? _selectedRoleId;
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
   String? _errorMessage;
   bool _isLoading = false;
 
+  /*
   // Demo Preset Role Credentials matching Live PostgreSQL Seeds
   final List<Map<String, String>> _demoRoles = [
     {
@@ -84,6 +85,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       'pass': 'Admin@123',
     },
   ];
+  */
 
   IconData _getRoleIcon(String roleId) {
     switch (roleId) {
@@ -110,6 +112,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  /*
   void _fillDemoCredentials(Map<String, String> demo) {
     setState(() {
       _identifierCtrl.text = demo['email']!;
@@ -118,6 +121,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _errorMessage = null;
     });
   }
+  */
 
   Future<void> _handleLogin() async {
     if (_isLoading) return;
@@ -588,6 +592,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             const SizedBox(height: 24),
 
+            /*
             // Divider & Demo Role Presets
             Row(
               children: [
@@ -670,6 +675,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               }).toList(),
             ),
 
+            */
             const SizedBox(height: 24),
             Center(
               child: Text(
