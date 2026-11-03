@@ -53,6 +53,37 @@ export class ChatService {
   }
 
   /**
+   * Generates a randomized, humanized delay (jitter) between messages
+   * to protect against Meta/WhatsApp automated spam detection & rate-limit bans.
+   * Default: random between minDelayMs (3,500ms) and maxDelayMs (6,500ms).
+   */
+  private async humanizedAntiBanDelay(currentIndex: number, totalCount: number): Promise<void> {
+    // No delay needed after the final message
+    if (currentIndex >= totalCount - 1) {
+      return;
+    }
+
+    const minDelay = Number(this.config.get<number>('WHATSAPP_MIN_DELAY_MS', 3500));
+    const maxDelay = Number(this.config.get<number>('WHATSAPP_MAX_DELAY_MS', 6500));
+    const randomizedJitter = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+
+    // Optional batch cooldown: every 10 messages, add an extra human pause of 8-12 seconds
+    let totalDelay = randomizedJitter;
+    if ((currentIndex + 1) % 10 === 0) {
+      const batchCooldown = Math.floor(Math.random() * 4000) + 8000;
+      this.logger.log(
+        `Anti-spam batch cooldown after message ${currentIndex + 1}: pausing for ${batchCooldown}ms`,
+      );
+      totalDelay += batchCooldown;
+    }
+
+    this.logger.log(
+      `Anti-ban pacing: waiting ${(totalDelay / 1000).toFixed(2)}s before recipient ${currentIndex + 2}/${totalCount}`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, totalDelay));
+  }
+
+  /**
    * Cleans phone number to international format without + or spaces (e.g., 919876543210)
    */
   private cleanPhoneNumber(phone: string): string {
@@ -67,7 +98,8 @@ export class ChatService {
     const result: BroadcastResult = { sent: 0, failed: 0, inAppCreated: 0 };
     const formattedMessage = `*${dto.subject}*\n\n${dto.message}`;
 
-    for (const recipient of dto.recipients) {
+    for (let i = 0; i < dto.recipients.length; i++) {
+      const recipient = dto.recipients[i];
       // ── WhatsApp channel ──────────────────────────────────────────────────
       if (dto.sendWhatsApp !== false) {
         const cleanPhone = this.cleanPhoneNumber(recipient.phone);
@@ -104,8 +136,8 @@ export class ChatService {
           );
         }
 
-        // Anti-spam stagger (2 seconds between each message)
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        // Anti-ban humanized pacing (random jitter 3.5s - 6.5s + batch cooldown)
+        await this.humanizedAntiBanDelay(i, dto.recipients.length);
       }
 
       // ── In-App Notification channel ───────────────────────────────────────

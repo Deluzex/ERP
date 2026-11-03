@@ -8,6 +8,7 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../core/api/chat_api_service.dart';
+import '../../../core/utils/document_sharing_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 enum MessageAudience { everyone, department, individual }
@@ -321,20 +322,85 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _isSending
-                ? const SizedBox(
-                    height: 36,
-                    width: 36,
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  )
-                : ErpButton(
-              text: 'Send Message',
-              icon: Icons.send_rounded,
-              onPressed: () => _sendMessage(systemUsers),
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFBFDBFE)),
             ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.shield_outlined, size: 14, color: Color(0xFF1D4ED8)),
+                SizedBox(width: 6),
+                Text(
+                  'Anti-Ban Protection: Human-like random pacing (3.5s - 6.5s) applied to avoid Meta spam detection',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF1E40AF), fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _openDirectWhatsApp(systemUsers),
+                icon: const Icon(Icons.open_in_new_rounded, size: 15, color: Color(0xFF15803D)),
+                label: const Text(
+                  'Direct WhatsApp (wa.me)',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF15803D),
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF86EFAC), width: 1.2),
+                  backgroundColor: const Color(0xFFF0FDF4),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppRadius.smBorderRadius,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _isSending
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: AppRadius.smBorderRadius,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2.2),
+                          ),
+                          SizedBox(width: 10),
+                          Text(
+                            'Dispatching (anti-ban pacing)...',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ErpButton(
+                      text: 'Send Message (Auto Gateway)',
+                      icon: Icons.send_rounded,
+                      onPressed: () => _sendMessage(systemUsers),
+                    ),
+            ],
           ),
         ],
       ),
@@ -682,6 +748,26 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
                 ),
               ),
             ),
+            const SizedBox(width: 8),
+            Tooltip(
+              message: 'Send direct WhatsApp to ${user.name}',
+              child: InkWell(
+                onTap: () => _sendDirectToSingleUser(user),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF25D366).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.chat_rounded,
+                    color: Color(0xFF15803D),
+                    size: 14,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -788,6 +874,153 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  void _sendDirectToSingleUser(BroadcastUser user) {
+    final subject = _subjectController.text.trim();
+    final body = _messageController.text.trim();
+    final message = subject.isNotEmpty ? '*$subject*\n\n$body' : body;
+    DocumentSharingService.shareToWhatsApp(
+      phoneNumber: user.phone,
+      message: message,
+    );
+    ErpToast.showInfo(context, 'Opening direct WhatsApp for ${user.name}...');
+  }
+
+  void _openDirectWhatsApp(List<BroadcastUser> systemUsers) {
+    final selectedUsers = _getSelectedUsers(systemUsers);
+    if (selectedUsers.isEmpty) {
+      ErpToast.showInfo(context, 'Select at least one user to open WhatsApp.');
+      return;
+    }
+
+    final subject = _subjectController.text.trim();
+    final body = _messageController.text.trim();
+    final message = subject.isNotEmpty ? '*$subject*\n\n$body' : body;
+
+    if (selectedUsers.length == 1) {
+      final targetUser = selectedUsers.first;
+      DocumentSharingService.shareToWhatsApp(
+        phoneNumber: targetUser.phone,
+        message: message,
+      );
+      ErpToast.showInfo(context, 'Opening WhatsApp for ${targetUser.name}...');
+    } else {
+      final firstUser = selectedUsers.first;
+      DocumentSharingService.shareToWhatsApp(
+        phoneNumber: firstUser.phone,
+        message: message,
+      );
+      _showMultiUserWhatsAppDialog(selectedUsers, message);
+    }
+  }
+
+  void _showMultiUserWhatsAppDialog(List<BroadcastUser> users, String message) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Direct WhatsApp Dispatch (${users.length})',
+                style: AppTextStyles.h3.copyWith(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 440,
+          height: 380,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'WhatsApp opened for the first user. Click "Send" next to each user below to dispatch to them in your WhatsApp Web/App:',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: users.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final user = users[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundColor: user.avatarColor,
+                            child: Text(
+                              user.initials,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user.name,
+                                  style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                Text(
+                                  '${user.department} · ${user.phone}',
+                                  style: AppTextStyles.caption.copyWith(fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              DocumentSharingService.shareToWhatsApp(
+                                phoneNumber: user.phone,
+                                message: message,
+                              );
+                            },
+                            icon: const Icon(Icons.send_rounded, size: 13),
+                            label: const Text('Send', style: TextStyle(fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF25D366),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              minimumSize: const Size(0, 32),
+                              elevation: 0,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showWhatsAppNumbers(List<BroadcastUser> systemUsers) {
