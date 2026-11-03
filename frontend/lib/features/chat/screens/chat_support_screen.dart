@@ -7,7 +7,7 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_toast.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
-import '../../../core/utils/document_sharing_service.dart';
+import '../../../core/api/chat_api_service.dart';
 import '../../../shared/providers/app_state_providers.dart';
 
 enum MessageAudience { everyone, department, individual }
@@ -38,6 +38,8 @@ class ChatSupportScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
+  final ChatApiService _chatApi = ChatApiService();
+  bool _isSending = false;
   final _subjectController = TextEditingController(
     text: 'Stock Update Reminder',
   );
@@ -322,8 +324,14 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
           const SizedBox(height: AppSpacing.lg),
           Align(
             alignment: Alignment.centerRight,
-            child: ErpButton(
-              text: 'Send WhatsApp Message',
+            child: _isSending
+                ? const SizedBox(
+                    height: 36,
+                    width: 36,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                : ErpButton(
+              text: 'Send Message',
               icon: Icons.send_rounded,
               onPressed: () => _sendMessage(systemUsers),
             ),
@@ -730,7 +738,7 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
     });
   }
 
-  void _sendMessage(List<BroadcastUser> systemUsers) {
+  Future<void> _sendMessage(List<BroadcastUser> systemUsers) async {
     final selectedUsers = _getSelectedUsers(systemUsers);
     if (selectedUsers.isEmpty) {
       _showSnackBar('Select at least one user to send this message.');
@@ -749,125 +757,37 @@ class _ChatSupportScreenState extends ConsumerState<ChatSupportScreen> {
       return;
     }
 
-    final subject = _subjectController.text.trim();
-    final body = _messageController.text.trim();
-    final message = '*$subject*\n\n$body';
+    setState(() => _isSending = true);
+    try {
+      final result = await _chatApi.broadcastMessage(
+        recipients: selectedUsers
+            .map((u) => BroadcastRecipient(userId: u.id, name: u.name, phone: u.phone))
+            .toList(),
+        subject: _subjectController.text.trim(),
+        message: _messageController.text.trim(),
+        sendWhatsApp: _whatsAppEnabled,
+        sendInApp: _inAppEnabled,
+      );
 
-    if (_whatsAppEnabled) {
-      if (selectedUsers.length == 1) {
-        final targetUser = selectedUsers.first;
-        DocumentSharingService.shareToWhatsApp(
-          phoneNumber: targetUser.phone,
-          message: message,
-        );
-        _showSnackBar('Opening WhatsApp for ${targetUser.name}...');
-      } else {
-        // Automatically launch WhatsApp for the first user
-        final firstUser = selectedUsers.first;
-        DocumentSharingService.shareToWhatsApp(
-          phoneNumber: firstUser.phone,
-          message: message,
-        );
-
-        // Display multi-recipient helper dialog for one-click dispatch to other users
-        _showMultiUserWhatsAppDialog(selectedUsers, message);
+      final parts = <String>[];
+      if (_whatsAppEnabled) {
+        parts.add('${result.sent} WA message${result.sent == 1 ? '' : 's'} sent'
+            '${result.failed > 0 ? " (${result.failed} failed)" : ""}');
       }
-    } else {
-      _showSnackBar('In-app message prepared for ${selectedUsers.length} users.');
-    }
-  }
+      if (_inAppEnabled) {
+        parts.add('${result.inAppCreated} in-app notification${result.inAppCreated == 1 ? '' : 's'} created');
+      }
 
-  void _showMultiUserWhatsAppDialog(List<BroadcastUser> users, String message) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF25D366).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 20),
-            ),
-            const SizedBox(width: 10),
-            Text('Send WhatsApp (${users.length} Users)', style: AppTextStyles.h3.copyWith(fontSize: 16)),
-          ],
-        ),
-        content: SizedBox(
-          width: 460,
-          height: 380,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'WhatsApp opened for ${users.first.name}. Click "Send" to open chat for each team member:',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: users.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1, color: AppColors.borderLight),
-                  itemBuilder: (context, i) {
-                    final user = users[i];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 14,
-                            backgroundColor: user.avatarColor,
-                            child: Text(
-                              user.initials,
-                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(user.name, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
-                                Text('${user.department} · ${user.phone}', style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              DocumentSharingService.shareToWhatsApp(
-                                phoneNumber: user.phone,
-                                message: message,
-                              );
-                            },
-                            icon: const Icon(Icons.send_rounded, size: 13),
-                            label: const Text('Send', style: TextStyle(fontSize: 12)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF25D366),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              minimumSize: const Size(0, 32),
-                              elevation: 0,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Done'),
-          ),
-        ],
-      ),
-    );
+      if (mounted) {
+        ErpToast.showSuccess(context, '✅ ${parts.join(', ')}.');
+      }
+    } catch (e) {
+      if (mounted) {
+        ErpToast.showError(context, 'Broadcast failed: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
   }
 
   void _showWhatsAppNumbers(List<BroadcastUser> systemUsers) {

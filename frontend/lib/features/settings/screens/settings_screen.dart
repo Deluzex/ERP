@@ -11,6 +11,7 @@ import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import 'user_management_screen.dart';
+import 'whatsapp_settings_tab.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -25,7 +26,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -84,6 +85,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                           ],
                         ),
                       ),
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.chat_rounded, size: 16, color: Color(0xFF25D366)),
+                            SizedBox(width: 8),
+                            Text('WhatsApp Gateway'),
+                          ],
+                        ),
+                      ),
                     ],
                   )
                 : null,
@@ -96,6 +107,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                   children: [
                     _buildGeneralSettings(context, db, user, role),
                     const UserManagementScreen(),
+                    const WhatsAppSettingsTab(),
                   ],
                 )
               : _buildGeneralSettings(context, db, user, role),
