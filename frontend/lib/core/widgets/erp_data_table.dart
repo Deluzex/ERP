@@ -244,22 +244,29 @@ class _ErpDataTableState extends State<ErpDataTable> {
               dataRowMaxHeight: widget.dataRowMaxHeight ?? double.infinity,
               headingRowHeight: 46,
               columns: widget.columns.map((col) {
+                final alignment = col.alignment ?? (col.isNumeric ? Alignment.centerRight : Alignment.centerLeft);
                 Widget label = Text(
                   col.title.toUpperCase(),
                   style: AppTextStyles.tableHeader,
                 );
-                if (col.width != null || col.alignment != null) {
+                if (col.width != null) {
                   label = SizedBox(
                     width: col.width,
                     child: Align(
-                      alignment: col.alignment ?? Alignment.centerLeft,
+                      alignment: alignment,
                       child: label,
                     ),
                   );
                 }
                 return DataColumn(
                   numeric: false,
-                  label: label,
+                  label: Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: alignment,
+                      child: label,
+                    ),
+                  ),
                 );
               }).toList(),
               rows: widget.rows.map((cells) {
