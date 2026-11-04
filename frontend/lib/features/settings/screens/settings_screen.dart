@@ -9,6 +9,7 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/rbac_models.dart';
 import '../../../core/widgets/erp_button.dart';
 import '../../../core/widgets/erp_section_header_card.dart';
+import '../../../core/utils/navigation_history.dart';
 import '../../../shared/providers/app_state_providers.dart';
 import 'user_management_screen.dart';
 import 'whatsapp_settings_tab.dart';
@@ -22,15 +23,31 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isSyncingController = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    final initialTab = ref.read(settingsActiveTabProvider);
+    final clampedTab = (initialTab >= 0 && initialTab < 3) ? initialTab : 0;
+    _tabController = TabController(length: 3, vsync: this, initialIndex: clampedTab);
+    _tabController.addListener(_onTabControllerChanged);
+  }
+
+  void _onTabControllerChanged() {
+    if (_tabController.indexIsChanging) return;
+    if (_isSyncingController) return;
+
+    final newIndex = _tabController.index;
+    if (ref.read(settingsActiveTabProvider) != newIndex) {
+      ref.read(settingsActiveTabProvider.notifier).state = newIndex;
+      NavigationHistory.onSettingsTabChanged(newIndex);
+    }
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabControllerChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -41,6 +58,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
     final user = ref.watch(currentUserProvider) ?? db.currentUser;
     final role = db.getUserRole(user);
     final isAdminOrManager = user.hasPermission(ErpModule.settings, ErpAction.edit, db.roles);
+    final activeTab = ref.watch(settingsActiveTabProvider);
+    final clampedActiveTab = (activeTab >= 0 && activeTab < 3) ? activeTab : 0;
+
+    if (_tabController.index != clampedActiveTab && !_tabController.indexIsChanging) {
+      _isSyncingController = true;
+      _tabController.animateTo(clampedActiveTab);
+      _isSyncingController = false;
+    }
 
     return Column(
       children: [
@@ -64,6 +89,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                     labelColor: AppColors.primary,
                     unselectedLabelColor: AppColors.textMuted,
                     indicatorColor: AppColors.primary,
+                    onTap: (index) {
+                      if (ref.read(settingsActiveTabProvider) != index) {
+                        ref.read(settingsActiveTabProvider.notifier).state = index;
+                        NavigationHistory.onSettingsTabChanged(index);
+                      }
+                    },
                     tabs: const [
                       Tab(
                         child: Row(
@@ -102,22 +133,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
         ),
         Expanded(
           child: isAdminOrManager
-              ? TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildGeneralSettings(context, db, user, role),
-                    const UserManagementScreen(),
-                    const WhatsAppSettingsTab(),
-                  ],
-                )
+              ? _buildActiveTabContent(clampedActiveTab, context, db, user, role)
               : _buildGeneralSettings(context, db, user, role),
         ),
       ],
     );
   }
 
+  Widget _buildActiveTabContent(int activeTab, BuildContext context, dynamic db, AppUser user, Role role) {
+    switch (activeTab) {
+      case 1:
+        return const UserManagementScreen(key: ValueKey('settings_tab_users'));
+      case 2:
+        return const WhatsAppSettingsTab(key: ValueKey('settings_tab_whatsapp'));
+      case 0:
+      default:
+        return _buildGeneralSettings(context, db, user, role);
+    }
+  }
+
   Widget _buildGeneralSettings(BuildContext context, dynamic db, AppUser user, Role role) {
     return SingleChildScrollView(
+      key: const ValueKey('settings_tab_general'),
       padding: AppSpacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,7 +317,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                 final btn = ErpButton(
                   text: 'Save Preferences',
                   onPressed: () {
-ErpToast.showSuccess(context, 'Preferences saved successfully!');
+                    ErpToast.showSuccess(context, 'Preferences saved successfully!');
                   },
                 );
 

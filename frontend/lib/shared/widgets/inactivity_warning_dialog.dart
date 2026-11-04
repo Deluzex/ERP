@@ -59,7 +59,7 @@ class InactivityWarningDialog extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'Your session is about to expire due to inactivity.\n\nTo safeguard your account and data, Deluzex ERP will automatically sign you out shortly unless you choose to continue working.',
+                'Your session will expire in 2 minutes due to inactivity.\n\nTo safeguard your account and data, Deluzex ERP will automatically sign you out unless you choose to continue working.',
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: const Color(0xFF475569),
                   height: 1.5,

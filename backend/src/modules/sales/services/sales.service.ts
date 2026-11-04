@@ -1081,6 +1081,26 @@ export class SalesService {
     const dlv = await this.findById(dto.deliveryId);
     if (!dlv) throw new NotFoundException(`Delivery ${dto.deliveryId} not found`);
 
+    if (dlv.status === 'invoiced' || dlv.deliveryStatus === 'invoiced') {
+      throw new ConflictException(`Invoice has already been generated for this Dispatch Challan (${dlv.invoiceNumber})`);
+    }
+
+    const existingInvoice = await this.db.query<{ id: string; invoice_number: string }>(
+      `SELECT id, invoice_number FROM sales
+       WHERE document_type = 'invoice'
+         AND (delivery_reference_id = $1 OR notes LIKE $2)
+       LIMIT 1`,
+      [dto.deliveryId, `%Delivery ${dlv.invoiceNumber}%`],
+    );
+
+    if (existingInvoice.rows.length > 0) {
+      await this.db.query(
+        `UPDATE sales SET status = 'invoiced', delivery_status = 'invoiced', updated_at = now() WHERE id = $1`,
+        [dto.deliveryId],
+      );
+      throw new ConflictException(`Invoice has already been generated for this Dispatch Challan (${existingInvoice.rows[0].invoice_number})`);
+    }
+
     const invNumber = await this.getNextSequenceNumber('INV');
     const discount = dto.discountAmount ?? 0;
     const initialPaid = dto.initialPaidAmount ?? 0;
@@ -1089,6 +1109,9 @@ export class SalesService {
     const taxable = Math.max(0, subtotal - discount);
     const gst = dlv.gstAmount;
     const total = taxable + gst;
+    if (total <= 0) {
+      throw new BadRequestException('Invoice total must be strictly greater than 0');
+    }
     const pending = Math.max(0, total - initialPaid);
     const status = pending <= 0.01 ? 'paid' : initialPaid > 0 ? 'partialPaid' : 'active';
 
@@ -1110,7 +1133,8 @@ export class SalesService {
         invoice_number, document_type, party_type, party_id, party_name,
         customer_contact_person, customer_mobile, customer_email, customer_gst_number,
         billing_address, shipping_address, architect_id, architect_name,
-        sales_order_reference_id, sales_order_number, subtotal_amount, discount_amount,
+        sales_order_reference_id, sales_order_number, delivery_reference_id, delivery_number,
+        subtotal_amount, discount_amount,
         taxable_amount, cgst_amount, sgst_amount, igst_amount, gst_amount, total_amount,
         paid_amount, pending_amount, is_inter_state_tax, payment_mode, status,
         architect_commission_amount, notes, created_by
@@ -1119,15 +1143,17 @@ export class SalesService {
         $5, $6, $7, $8,
         $9, $10, $11, $12,
         $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22,
-        $23, $24, $25, $26, $27,
-        $28, $29, $30
+        $17, $18,
+        $19, $20, $21, $22, $23, $24,
+        $25, $26, $27, $28, $29,
+        $30, $31, $32
       ) RETURNING id`,
       [
         invNumber, dlv.partyType, dlv.partyId, dlv.partyName,
         dlv.customerContactPerson, dlv.customerMobile, dlv.customerEmail, dlv.customerGstNumber,
         dlv.billingAddress, dlv.shippingAddress, dlv.architectId, dlv.architectName,
-        dlv.salesOrderReferenceId, dlv.salesOrderNumber, subtotal, discount,
+        dlv.salesOrderReferenceId, dlv.salesOrderNumber, dto.deliveryId, dlv.invoiceNumber,
+        subtotal, discount,
         taxable, dlv.isInterStateTax ? 0 : gst / 2, dlv.isInterStateTax ? 0 : gst / 2, dlv.isInterStateTax ? gst : 0,
         gst, total, initialPaid, pending, dlv.isInterStateTax, dto.paymentMode ?? 'bankTransfer', status,
         commissionAmount, dto.notes ?? null, userId ?? null,
@@ -1205,6 +1231,12 @@ export class SalesService {
       );
     }
 
+    // Update Dispatch Challan to 'invoiced'
+    await this.db.query(
+      `UPDATE sales SET status = 'invoiced', delivery_status = 'invoiced', updated_at = now() WHERE id = $1`,
+      [dto.deliveryId],
+    );
+
     return this.findById(invId);
   }
 
@@ -1269,7 +1301,10 @@ export class SalesService {
 
       const rate = item.rate ?? parseFloat(fp.customer_selling_price);
       const discount = item.discountAmount ?? 0;
-      const gstPercent = item.gstPercent ?? parseFloat(fp.gst_percent);
+      const gstPercent = item.gstPercent !== undefined ? item.gstPercent : parseFloat(fp.gst_percent);
+      if (gstPercent < 0) {
+        throw new BadRequestException('GST rate cannot be negative');
+      }
       const taxable = Math.max(0, item.quantity * rate - discount);
       const gst = taxable * (gstPercent / 100);
       const lineTotal = taxable + gst;
@@ -1297,6 +1332,9 @@ export class SalesService {
 
     const taxableAmount = Math.max(0, subtotal - totalDiscount);
     const grandTotal = taxableAmount + totalGst;
+    if (grandTotal <= 0) {
+      throw new BadRequestException('Invoice total must be strictly greater than 0');
+    }
     const paidAmount = dto.paidAmount ?? grandTotal;
     const pendingAmount = Math.max(0, grandTotal - paidAmount);
     const status = pendingAmount <= 0.01 ? 'paid' : paidAmount > 0 ? 'partialPaid' : 'active';
@@ -1721,7 +1759,10 @@ export class SalesService {
     const total = parseInt(countRes.rows[0].count, 10);
 
     const listRes = await this.db.query(
-      `SELECT s.* FROM sales s ${whereClause} ORDER BY s.sale_date DESC, s.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+      `SELECT s.*,
+        (SELECT i.id FROM sales i WHERE i.document_type = 'invoice' AND (i.delivery_reference_id = s.id OR i.notes LIKE '%' || s.invoice_number || '%') LIMIT 1) as linked_invoice_id,
+        (SELECT i.invoice_number FROM sales i WHERE i.document_type = 'invoice' AND (i.delivery_reference_id = s.id OR i.notes LIKE '%' || s.invoice_number || '%') LIMIT 1) as linked_invoice_number
+       FROM sales s ${whereClause} ORDER BY s.sale_date DESC, s.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
       [...params, limit, offset],
     );
 
@@ -1735,7 +1776,13 @@ export class SalesService {
   }
 
   async findById(id: string) {
-    const saleRes = await this.db.query(`SELECT * FROM sales WHERE id = $1`, [id]);
+    const saleRes = await this.db.query(
+      `SELECT s.*,
+        (SELECT i.id FROM sales i WHERE i.document_type = 'invoice' AND (i.delivery_reference_id = s.id OR i.notes LIKE '%' || s.invoice_number || '%') LIMIT 1) as linked_invoice_id,
+        (SELECT i.invoice_number FROM sales i WHERE i.document_type = 'invoice' AND (i.delivery_reference_id = s.id OR i.notes LIKE '%' || s.invoice_number || '%') LIMIT 1) as linked_invoice_number
+       FROM sales s WHERE s.id = $1`,
+      [id],
+    );
     if (saleRes.rows.length === 0) throw new NotFoundException(`Sales document ${id} not found`);
 
     const itemsRes = await this.db.query(
@@ -1852,6 +1899,9 @@ export class SalesService {
       salesOrderStatus: row.sales_order_status,
       deliveryStatus: row.delivery_status,
       deliveryNumber: row.delivery_number,
+      deliveryReferenceId: row.delivery_reference_id ?? null,
+      linkedInvoiceId: row.linked_invoice_id ?? null,
+      linkedInvoiceNumber: row.linked_invoice_number ?? null,
       vehicleNumber: row.vehicle_number,
       driverContact: row.driver_contact,
       courierName: row.courier_name,

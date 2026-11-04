@@ -40,6 +40,7 @@ import '../../core/api/expense_categories_api_service.dart';
 import '../../core/api/reports_api_service.dart';
 import '../../core/models/notification_model.dart';
 import '../../core/api/notifications_api_service.dart';
+import '../../core/api/api_exception.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/password_security.dart';
@@ -1866,7 +1867,6 @@ class MockDatabaseService extends ChangeNotifier {
         shippingAddress: 'Tower C Penthouses, Borivali East, Mumbai',
         salesOrderReferenceId: 'SO-001',
         salesOrderNumber: 'DLZ/SO/2026/0074',
-        deliveryStatus: DeliveryStatus.delivered,
         deliveryNumber: 'DLZ/DLV/2026/0041',
         vehicleNumber: 'MH-04-KU-8842',
         driverContact: 'Sunil Jadhav (+91 97654 32100)',
@@ -1893,9 +1893,57 @@ class MockDatabaseService extends ChangeNotifier {
         paidAmount: 0.0,
         pendingAmount: 108560.0,
         paymentMode: PaymentMode.bankTransfer,
-        status: SaleStatus.completed,
+        status: SaleStatus.invoiced,
+        deliveryStatus: DeliveryStatus.invoiced,
+        linkedInvoiceId: 'SALE-001',
+        linkedInvoiceNumber: 'INV-2026-0214',
         notes: 'Delivered batch of 20 units with inspection challan signed by Site Manager.',
         createdAt: now.subtract(const Duration(hours: 2)),
+      ),
+
+      // 4b. Dispatched Delivery Challan (Pending Invoice)
+      Sale(
+        id: 'DLV-002',
+        invoiceNumber: 'DLZ/DLV/2026/0042',
+        documentType: SalesDocumentType.delivery,
+        partyType: PartyType.customer,
+        partyId: 'CUST-002',
+        partyName: 'Godrej Woodsman Estate',
+        customerContactPerson: 'Amitabh Joshi',
+        customerMobile: '+91 99200 44332',
+        shippingAddress: 'Bellary Road, Hebbal, Bengaluru',
+        salesOrderReferenceId: 'SO-002',
+        salesOrderNumber: 'DLZ/SO/2026/0075',
+        deliveryStatus: DeliveryStatus.dispatched,
+        deliveryNumber: 'DLZ/DLV/2026/0042',
+        vehicleNumber: 'KA-01-MJ-5521',
+        driverContact: 'Ramesh Gowda (+91 98450 11223)',
+        trackingNumber: 'TRK-2026-9922',
+        saleDate: now.subtract(const Duration(minutes: 45)),
+        items: [
+          SaleLineItem(
+            finishedProductId: 'FP-002',
+            finishedProductName: 'Lumist Chandelier Pendant',
+            finishedProductCode: 'DLX-CP-002',
+            quantity: 5.0,
+            deliveredQuantity: 5.0,
+            unit: 'PCS',
+            rate: 12500.0,
+            discountAmount: 2500.0,
+            gstPercent: 18.0,
+            lineTotal: 70800.0,
+          ),
+        ],
+        subtotalAmount: 62500.0,
+        discountAmount: 2500.0,
+        gstAmount: 10800.0,
+        totalAmount: 70800.0,
+        paidAmount: 0.0,
+        pendingAmount: 70800.0,
+        paymentMode: PaymentMode.bankTransfer,
+        status: SaleStatus.completed,
+        notes: 'Dispatched 5 units of crystal chandelier via Express Logistics.',
+        createdAt: now.subtract(const Duration(minutes: 45)),
       ),
 
       // 5. Final Sales Invoice: Invoiced for delivered 20 units
@@ -1912,6 +1960,8 @@ class MockDatabaseService extends ChangeNotifier {
         architectName: 'Ar. Sanjay Puri',
         salesOrderReferenceId: 'SO-001',
         salesOrderNumber: 'DLZ/SO/2026/0074',
+        deliveryReferenceId: 'DLV-001',
+        deliveryNumber: 'DLZ/DLV/2026/0041',
         saleDate: now.subtract(const Duration(hours: 1)),
         items: [
           SaleLineItem(
@@ -3296,6 +3346,19 @@ class MockDatabaseService extends ChangeNotifier {
     if (dlvIndex == -1) throw Exception('Delivery document not found');
     final dlv = sales[dlvIndex];
 
+    if (dlv.isInvoiced) {
+      throw Exception('Invoice already generated for this Dispatch Challan (${dlv.invoiceNumber})');
+    }
+    final alreadyHasInv = sales.any((s) => s.documentType == SalesDocumentType.invoice &&
+        (s.deliveryReferenceId == deliveryId || (s.notes != null && s.notes!.contains(dlv.invoiceNumber))));
+    if (alreadyHasInv) {
+      sales[dlvIndex] = dlv.copyWith(
+        status: SaleStatus.invoiced,
+        deliveryStatus: DeliveryStatus.invoiced,
+      );
+      throw Exception('Invoice already generated for this Dispatch Challan (${dlv.invoiceNumber})');
+    }
+
     final invNumber = IdGenerator.generateDocNumber('INV', ++_salesCounter);
 
     final invoiceItems = dlv.items.map((i) => i.copyWith(invoicedQuantity: i.quantity)).toList();
@@ -3303,6 +3366,9 @@ class MockDatabaseService extends ChangeNotifier {
     final taxable = (subtotal - discountAmount).clamp(0.0, double.infinity);
     final gst = invoiceItems.fold(0.0, (sum, i) => sum + ((taxable * (i.gstPercent / 100.0)) / (invoiceItems.length)));
     final total = taxable + gst;
+    if (total <= 0) {
+      throw Exception('Invoice total must be strictly greater than 0');
+    }
     final pending = (total - initialPaidAmount).clamp(0.0, double.infinity);
 
     // Architect commission
@@ -3341,6 +3407,8 @@ class MockDatabaseService extends ChangeNotifier {
       architectName: dlv.architectName,
       salesOrderReferenceId: dlv.salesOrderReferenceId,
       salesOrderNumber: dlv.salesOrderNumber,
+      deliveryReferenceId: dlv.id,
+      deliveryNumber: dlv.invoiceNumber,
       saleDate: DateTime.now(),
       items: invoiceItems,
       subtotalAmount: subtotal,
@@ -3430,6 +3498,12 @@ class MockDatabaseService extends ChangeNotifier {
     }
 
     sales.insert(0, invoice);
+    sales[dlvIndex] = dlv.copyWith(
+      status: SaleStatus.invoiced,
+      deliveryStatus: DeliveryStatus.invoiced,
+      linkedInvoiceId: invoice.id,
+      linkedInvoiceNumber: invoice.invoiceNumber,
+    );
     _applySaleToProject(invoice);
     notifyListeners();
     return invoice;
@@ -3497,6 +3571,13 @@ class MockDatabaseService extends ChangeNotifier {
 
   // --- 6. DIRECT SALE (IMMEDIATE COUNTER SALE) ---
   Sale createDirectSale(Sale sale) {
+    if (sale.totalAmount <= 0) {
+      throw Exception('Invoice total must be strictly greater than 0');
+    }
+    if (sale.items.any((i) => i.gstPercent < 0)) {
+      throw Exception('GST rate cannot be negative');
+    }
+
     // 1. Deduct finished product physical stock and record stock movements
     for (final item in sale.items) {
       final fpIndex = finishedProducts.indexWhere((fp) => fp.id == item.finishedProductId || fp.itemCode == item.finishedProductCode);
@@ -7492,6 +7573,15 @@ class MockDatabaseService extends ChangeNotifier {
         notes: notes,
       );
       sales.insert(0, created);
+      final dlvIndex = sales.indexWhere((s) => s.id == deliveryId);
+      if (dlvIndex != -1) {
+        sales[dlvIndex] = sales[dlvIndex].copyWith(
+          status: SaleStatus.invoiced,
+          deliveryStatus: DeliveryStatus.invoiced,
+          linkedInvoiceId: created.id,
+          linkedInvoiceNumber: created.invoiceNumber,
+        );
+      }
       _applySaleToProject(created);
       _generateCommissionForSale(created);
       await Future.wait([
@@ -7501,6 +7591,9 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
+      if (e is ApiException && e.statusCode != null && e.statusCode! >= 400 && e.statusCode! < 500) {
+        rethrow;
+      }
       if (kDebugMode) debugPrint('[MockDatabaseService] createSalesInvoiceFromDeliveryAsync remote failed, fallback to local: $e');
       final localInv = createSalesInvoiceFromDelivery(
         deliveryId: deliveryId,
@@ -7537,6 +7630,9 @@ class MockDatabaseService extends ChangeNotifier {
       notifyListeners();
       return created;
     } catch (e) {
+      if (e is ApiException && e.statusCode != null && e.statusCode! >= 400 && e.statusCode! < 500) {
+        rethrow;
+      }
       if (kDebugMode) debugPrint('[MockDatabaseService] createDirectSaleAsync remote failed, fallback to local: $e');
       final localSale = createDirectSale(sale);
       return localSale;

@@ -14,6 +14,10 @@ class NavigationHistory {
   static bool _isNavigatingBack = false;
 
   static bool get canGoBack => _history.length > 1;
+  static bool get isHandlingPopState => false;
+
+  static ErpNavSection? getInitialSection() => null;
+  static int getInitialSettingsTab() => 0;
 
   static void initialize(WidgetRef ref, {GlobalKey<NavigatorState>? navigatorKey}) {
     _ref = ref;
@@ -27,6 +31,10 @@ class NavigationHistory {
     if (_isNavigatingBack) return;
     if (_history.isNotEmpty && _history.last == section) return;
     _history.add(section);
+  }
+
+  static void onSettingsTabChanged(int tabIndex) {
+    // Non-web stub handles settings tab via provider
   }
 
   static void onDetailStateChanged(bool isDetailOpen, ErpNavSection currentSection) {
@@ -51,6 +59,32 @@ class NavigationHistory {
     _ref = null;
     _navigatorKey = null;
     _isNavigatingBack = false;
+  }
+
+  static String pathToSettingsTab(int tabIndex) {
+    switch (tabIndex) {
+      case 1:
+        return 'settings/users';
+      case 2:
+        return 'settings/whatsapp';
+      case 0:
+      default:
+        return 'settings';
+    }
+  }
+
+  static int settingsTabFromPath(String path) {
+    final clean = path.replaceAll('#', '').trim();
+    if (clean.isEmpty || clean == '/') return 0;
+    final segments = clean.split('/').where((s) => s.isNotEmpty).toList();
+    if (segments.isEmpty) return 0;
+    if (segments.first.toLowerCase() == 'settings' && segments.length >= 2) {
+      final sub = segments[1].toLowerCase();
+      if (sub == 'users' || sub == 'rbac' || sub == 'user-management') return 1;
+      if (sub == 'whatsapp' || sub == 'wa' || sub == 'gateway') return 2;
+      return 0;
+    }
+    return 0;
   }
 
   static String pathToSection(ErpNavSection section) {
@@ -180,4 +214,3 @@ class NavigationHistory {
     return null;
   }
 }
-

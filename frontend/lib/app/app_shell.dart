@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -64,9 +65,6 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final Map<ErpNavSection, Widget> _cachedScreens = {};
-  String? _lastUserId;
-  String? _lastRoleId;
 
   @override
   void initState() {
@@ -106,7 +104,12 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       return true;
     }
 
-    // 3. If navigation history can go back, return to the previous section
+    // 3. On Web, the browser itself manages history transitions via popstate
+    if (kIsWeb) {
+      return true;
+    }
+
+    // 4. On non-web platforms, return to the previous section in history
     if (NavigationHistory.canGoBack) {
       return NavigationHistory.goBack();
     }
@@ -136,13 +139,6 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
     final currentUser = ref.watch(currentUserProvider) ?? db.currentUser;
     final isAuthorized = currentUser.canAccessSection(currentSection, db.roles);
 
-    // Invalidate cached screens if user or their role changed (e.g. switch user / logout / re-login)
-    if (_lastUserId != currentUser.id || _lastRoleId != currentUser.primaryRoleId) {
-      _cachedScreens.clear();
-      _lastUserId = currentUser.id;
-      _lastRoleId = currentUser.primaryRoleId;
-    }
-
     // Persist active section on navigation change so reload stays on active screen
     ref.listen<ErpNavSection>(currentNavSectionProvider, (previous, next) async {
       try {
@@ -150,6 +146,14 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
         await prefs.setString('erp_last_nav_section', next.name);
       } catch (_) {}
       NavigationHistory.onSectionChanged(next);
+    });
+
+    // Persist settings active tab changes
+    ref.listen<int>(settingsActiveTabProvider, (previous, next) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('erp_last_settings_tab', next);
+      } catch (_) {}
     });
 
     // Sync detail view state with browser history
@@ -201,24 +205,10 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
     } else {
       final canonicalKey = _canonicalSection(currentSection);
 
-      // Lazy load screen into cache if not present (retain existing creation state on tab switch)
-      if (!_cachedScreens.containsKey(canonicalKey)) {
-        _cachedScreens[canonicalKey] = _buildSectionWidget(canonicalKey, currentUser);
-      }
-
-      contentWidget = Stack(
-        fit: StackFit.expand,
-        children: [
-          for (final entry in _cachedScreens.entries)
-            Offstage(
-              key: ValueKey(entry.key),
-              offstage: entry.key != canonicalKey,
-              child: TickerMode(
-                enabled: entry.key == canonicalKey,
-                child: entry.value,
-              ),
-            ),
-        ],
+      // Render strictly the active section without offstage caching to prevent multi-page rendering or bleed-through
+      contentWidget = KeyedSubtree(
+        key: ValueKey(canonicalKey),
+        child: _buildSectionWidget(canonicalKey, currentUser),
       );
     }
 
@@ -227,7 +217,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       backgroundColor: AppColors.background,
       drawer: isDesktop ? null : const Drawer(child: ErpSidebar()),
       body: Stack(
-          children: [
+        children: [
           Row(
             children: [
               // Persistent Dark Sidebar for Desktop
@@ -502,4 +492,3 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
     );
   }
 }
-

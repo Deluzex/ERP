@@ -1,4 +1,4 @@
-﻿import 'purchase_model.dart';
+import 'purchase_model.dart';
 
 enum PartyType {
   customer,
@@ -23,6 +23,7 @@ enum SaleStatus {
   overdue,
   completed,
   cancelled,
+  invoiced,
 }
 
 enum QuotationStatus {
@@ -68,6 +69,7 @@ enum DeliveryStatus {
   dispatched,
   delivered,
   cancelled,
+  invoiced,
 }
 
 enum SalesReturnStatus {
@@ -392,6 +394,9 @@ class Sale {
   
   final DeliveryStatus? deliveryStatus;
   final String? deliveryNumber;
+  final String? deliveryReferenceId;
+  final String? linkedInvoiceId;
+  final String? linkedInvoiceNumber;
   final String? vehicleNumber;
   final String? driverContact;
   final String? courierName;
@@ -488,6 +493,9 @@ class Sale {
     this.salesOrderStatus,
     this.deliveryStatus,
     this.deliveryNumber,
+    this.deliveryReferenceId,
+    this.linkedInvoiceId,
+    this.linkedInvoiceNumber,
     this.vehicleNumber,
     this.driverContact,
     this.courierName,
@@ -557,9 +565,17 @@ class Sale {
             return 'Completed';
           case SaleStatus.cancelled:
             return 'Cancelled';
+          case SaleStatus.invoiced:
+            return 'Invoiced';
         }
     }
   }
+
+  bool get isInvoiced =>
+      status == SaleStatus.invoiced ||
+      deliveryStatus == DeliveryStatus.invoiced ||
+      (linkedInvoiceId != null && linkedInvoiceId!.isNotEmpty) ||
+      (linkedInvoiceNumber != null && linkedInvoiceNumber!.isNotEmpty);
 
   String get quotationStatusLabel {
     switch (quotationStatus ?? QuotationStatus.draft) {
@@ -641,6 +657,8 @@ class Sale {
         return 'Delivered';
       case DeliveryStatus.cancelled:
         return 'Cancelled';
+      case DeliveryStatus.invoiced:
+        return 'Invoiced';
     }
   }
 
@@ -762,6 +780,9 @@ class Sale {
     SalesOrderStatus? salesOrderStatus,
     DeliveryStatus? deliveryStatus,
     String? deliveryNumber,
+    String? deliveryReferenceId,
+    String? linkedInvoiceId,
+    String? linkedInvoiceNumber,
     String? vehicleNumber,
     String? driverContact,
     String? courierName,
@@ -852,6 +873,9 @@ class Sale {
       salesOrderStatus: salesOrderStatus ?? this.salesOrderStatus,
       deliveryStatus: deliveryStatus ?? this.deliveryStatus,
       deliveryNumber: deliveryNumber ?? this.deliveryNumber,
+      deliveryReferenceId: deliveryReferenceId ?? this.deliveryReferenceId,
+      linkedInvoiceId: linkedInvoiceId ?? this.linkedInvoiceId,
+      linkedInvoiceNumber: linkedInvoiceNumber ?? this.linkedInvoiceNumber,
       vehicleNumber: vehicleNumber ?? this.vehicleNumber,
       driverContact: driverContact ?? this.driverContact,
       courierName: courierName ?? this.courierName,
@@ -952,6 +976,9 @@ class Sale {
       salesOrderStatus: _enumFromName<SalesOrderStatus>(json['salesOrderStatus'], SalesOrderStatus.values),
       deliveryStatus: _enumFromName<DeliveryStatus>(json['deliveryStatus'], DeliveryStatus.values),
       deliveryNumber: json['deliveryNumber']?.toString(),
+      deliveryReferenceId: json['deliveryReferenceId']?.toString() ?? json['delivery_reference_id']?.toString(),
+      linkedInvoiceId: json['linkedInvoiceId']?.toString() ?? json['linked_invoice_id']?.toString(),
+      linkedInvoiceNumber: json['linkedInvoiceNumber']?.toString() ?? json['linked_invoice_number']?.toString(),
       vehicleNumber: json['vehicleNumber']?.toString(),
       driverContact: json['driverContact']?.toString(),
       courierName: json['courierName']?.toString(),

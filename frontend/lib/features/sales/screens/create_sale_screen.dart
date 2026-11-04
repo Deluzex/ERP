@@ -459,7 +459,13 @@ class _CreateSaleScreenState extends ConsumerState<CreateSaleScreen> {
                             child: TextFormField(
                               controller: gstCtrl,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              validator: Validators.positiveNumber,
+                              validator: (v) {
+                                final nonNeg = Validators.nonNegativeNumber(v, 'GST must be 0 or greater');
+                                if (nonNeg != null) return nonNeg;
+                                final num = double.tryParse(v!.trim());
+                                if (num != null && num > 100) return 'GST cannot exceed 100%';
+                                return null;
+                              },
                               decoration: const InputDecoration(
                                 labelText: 'GST (%) *',
                                 prefixIcon: Icon(Icons.percent, size: 20),
@@ -1040,7 +1046,15 @@ ErpToast.showSuccess(context, 'Project created and added to Project Master succe
   Future<void> _createInvoice(bool isDraft) async {
     if (!_formKey.currentState!.validate()) return;
     if (_items.isEmpty) {
-ErpToast.showError(context, 'Please add at least one finished product to invoice.');
+      ErpToast.showError(context, 'Please add at least one finished product to invoice.');
+      return;
+    }
+    if (_totalAmount <= 0) {
+      ErpToast.showError(context, 'Invoice total must be strictly greater than 0.');
+      return;
+    }
+    if (_items.any((i) => i.gstPercent < 0)) {
+      ErpToast.showError(context, 'GST rate cannot be negative.');
       return;
     }
     final db = ref.read(databaseServiceProvider);

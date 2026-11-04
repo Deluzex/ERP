@@ -15,7 +15,9 @@ import '../../core/models/sale_model.dart';
 import '../../core/models/stock_movement_model.dart';
 import '../../core/storage/form_draft_service.dart';
 import '../../core/storage/tab_session_storage.dart';
+import '../../core/storage/cross_tab_session_sync.dart';
 import '../../core/api/auth_api_service.dart';
+import '../../core/utils/navigation_history.dart';
 import '../services/mock_database_service.dart';
 
 // Database Singleton Provider
@@ -30,6 +32,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     ApiClient.onSessionExpired = () {
       handleSessionExpired();
     };
+    _initCrossTabSync();
   }
 
   final AuthApiService _authApi = AuthApiService();
@@ -41,13 +44,33 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
   static const int _kSessionWarningMinutes = 28;
 
   Timer? _sessionExpiryTimer;
+  StreamSubscription? _crossTabSub;
+  BuildContext? _warningDialogContext;
+
   DateTime _lastUserActivityTime = DateTime.now();
   DateTime? _lastPersistedActivityTime;
+  DateTime? _sessionStartTime;
   bool _isLoggingOutDueToExpiry = false;
   bool _isWarningDialogShowing = false;
 
   DateTime get lastUserActivityTime => _lastUserActivityTime;
   bool get isWarningDialogShowing => _isWarningDialogShowing;
+
+  void _initCrossTabSync() {
+    _crossTabSub = CrossTabSessionSync.initListeners(
+      onCrossTabActivity: (activityTime) {
+        if (activityTime.isAfter(_lastUserActivityTime)) {
+          _lastUserActivityTime = activityTime;
+          _dismissWarningDialog();
+        }
+      },
+      onCrossTabLogout: () {
+        if (state != null) {
+          logout();
+        }
+      },
+    );
+  }
 
   void _startSessionTimer() {
     _sessionExpiryTimer?.cancel();
@@ -64,15 +87,17 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     }
 
     try {
-      // 1. Multi-tab activity sync
-      final prefs = await SharedPreferences.getInstance();
-      final sessionTimestamp = prefs.getInt(_kSessionTimestampKey);
-      if (sessionTimestamp != null) {
-        final crossTabActive = DateTime.fromMillisecondsSinceEpoch(sessionTimestamp);
-        if (crossTabActive.isAfter(_lastUserActivityTime)) {
-          _lastUserActivityTime = crossTabActive;
-          _dismissWarningDialog();
-        }
+      // 1. Check if another tab/window broadcasted a logout
+      if (await CrossTabSessionSync.isLoggedOutRemotely(_sessionStartTime)) {
+        await logout();
+        return;
+      }
+
+      // 2. Multi-tab activity sync: retrieve freshest shared timestamp
+      final crossTabActive = await CrossTabSessionSync.getLastActivity();
+      if (crossTabActive != null && crossTabActive.isAfter(_lastUserActivityTime)) {
+        _lastUserActivityTime = crossTabActive;
+        _dismissWarningDialog();
       }
 
       final now = DateTime.now();
@@ -80,20 +105,22 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final timeoutSeconds = _kSessionTimeoutMinutes * 60;
       final warningSeconds = _kSessionWarningMinutes * 60;
 
-      // 2. Check 30 minutes of continuous inactivity
+      // 3. Check 30 minutes of continuous inactivity
       if (inactiveSeconds >= timeoutSeconds) {
         _dismissWarningDialog();
         await handleSessionExpired();
         return;
       }
 
-      // 3. Show warning dialog shortly before 30-minute inactivity limit (at 28 minutes)
+      // 4. Show warning dialog shortly before 30-minute inactivity limit (at 28 minutes)
       if (inactiveSeconds >= warningSeconds) {
         _showInactivityWarningDialog();
       } else {
         _dismissWarningDialog();
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[SessionExpiry ERROR] $e\n$st');
+    }
   }
 
   void _showInactivityWarningDialog() {
@@ -105,28 +132,45 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogCtx) => InactivityWarningDialog(
-        onContinue: () {
-          recordUserActivity();
-          _dismissWarningDialog();
-        },
-        onLogout: () {
-          _dismissWarningDialog();
-          logout();
-        },
-      ),
+      builder: (dialogCtx) {
+        _warningDialogContext = dialogCtx;
+        return InactivityWarningDialog(
+          onContinue: () {
+            recordUserActivity();
+            _dismissWarningDialog();
+          },
+          onLogout: () {
+            _dismissWarningDialog();
+            logout();
+          },
+        );
+      },
     ).then((_) {
       _isWarningDialogShowing = false;
+      _warningDialogContext = null;
     });
   }
 
   void _dismissWarningDialog() {
     if (!_isWarningDialogShowing) return;
     _isWarningDialogShowing = false;
-    final nav = appNavigatorKey.currentState;
-    if (nav != null && nav.canPop()) {
-      nav.pop();
+    if (_warningDialogContext != null && _warningDialogContext!.mounted) {
+      try {
+        Navigator.of(_warningDialogContext!).pop();
+      } catch (e, st) {
+      debugPrint('[SessionExpiry ERROR] $e\n$st');
     }
+    } else {
+      final nav = appNavigatorKey.currentState;
+      if (nav != null && nav.canPop()) {
+        try {
+          nav.pop();
+        } catch (e, st) {
+      debugPrint('[SessionExpiry ERROR] $e\n$st');
+    }
+      }
+    }
+    _warningDialogContext = null;
   }
 
   Future<void> handleSessionExpired() async {
@@ -139,7 +183,7 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       await logout();
       ErpToast.showWarning(
         null,
-        'Your login session has expired after 30 minutes of inactivity. Please sign in again.',
+        'Your session has expired due to 30 minutes of inactivity. Please log in again.',
       );
     } finally {
       _isLoggingOutDueToExpiry = false;
@@ -153,12 +197,10 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     if (_isWarningDialogShowing) {
       _dismissWarningDialog();
     }
-    // Throttle writing to SharedPreferences to at most once every 10 seconds
-    if (_lastPersistedActivityTime == null || now.difference(_lastPersistedActivityTime!).inSeconds >= 10) {
+    // Throttle writing to persistent cross-tab storage to at most once every 5 seconds
+    if (_lastPersistedActivityTime == null || now.difference(_lastPersistedActivityTime!).inSeconds >= 5) {
       _lastPersistedActivityTime = now;
-      SharedPreferences.getInstance().then((prefs) {
-        prefs.setInt(_kSessionTimestampKey, now.millisecondsSinceEpoch);
-      }).catchError((_) {});
+      CrossTabSessionSync.updateLastActivity(now);
     }
   }
 
@@ -170,7 +212,9 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       if (section != null) {
         await prefs.setString(_kLastNavSectionKey, section.name);
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[SessionExpiry ERROR] $e\n$st');
+    }
   }
 
   Future<bool> restoreSession() async {
@@ -181,15 +225,14 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final lastSectionName = prefs.getString(_kLastNavSectionKey);
 
       // Enforce 30-minute session expiry threshold based on last user activity
-      final sessionTimestamp = prefs.getInt(_kSessionTimestampKey);
-      if (sessionTimestamp != null) {
-        final lastActive = DateTime.fromMillisecondsSinceEpoch(sessionTimestamp);
-        if (DateTime.now().difference(lastActive).inMinutes >= _kSessionTimeoutMinutes) {
+      final crossTabActive = await CrossTabSessionSync.getLastActivity();
+      if (crossTabActive != null) {
+        if (DateTime.now().difference(crossTabActive).inMinutes >= _kSessionTimeoutMinutes) {
           // Session expired after 30 minutes of tab close or inactivity
           await logout();
           ErpToast.showWarning(
             null,
-            'Your login session has expired after 30 minutes of inactivity. Please sign in again.',
+            'Your session has expired due to 30 minutes of inactivity. Please log in again.',
           );
           return false;
         }
@@ -220,17 +263,36 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
           }
         }
 
-        // Update active timestamp on successful session restore
-        await prefs.setInt(_kSessionTimestampKey, DateTime.now().millisecondsSinceEpoch);
+        // Reset inactivity timer from current moment on successful restore
+        _sessionStartTime = DateTime.now();
+        _lastUserActivityTime = _sessionStartTime!;
+        _lastPersistedActivityTime = _lastUserActivityTime;
+        _dismissWarningDialog();
+        await CrossTabSessionSync.notifyLogin();
+        await CrossTabSessionSync.updateLastActivity(_lastUserActivityTime);
 
         await db.loadRoles();
         // Non-blocking background preload so UI renders instantly on reload
         unawaited(db.loadAllMasters());
 
-        if (lastSectionName != null) {
+        final initialSectionFromUrl = NavigationHistory.getInitialSection();
+        final initialTabFromUrl = NavigationHistory.getInitialSettingsTab();
+
+        if (initialSectionFromUrl != null && user.canAccessSection(initialSectionFromUrl, db.roles)) {
+          ref.read(currentNavSectionProvider.notifier).state = initialSectionFromUrl;
+          if (initialSectionFromUrl == ErpNavSection.settings) {
+            ref.read(settingsActiveTabProvider.notifier).state = initialTabFromUrl;
+          }
+        } else if (lastSectionName != null) {
           final savedSection = ErpNavSection.values.where((s) => s.name == lastSectionName).firstOrNull;
           if (savedSection != null && user.canAccessSection(savedSection, db.roles)) {
             ref.read(currentNavSectionProvider.notifier).state = savedSection;
+            if (savedSection == ErpNavSection.settings) {
+              final savedTab = prefs.getInt('erp_last_settings_tab');
+              if (savedTab != null && savedTab >= 0 && savedTab < 3) {
+                ref.read(settingsActiveTabProvider.notifier).state = savedTab;
+              }
+            }
           } else {
             ref.read(currentNavSectionProvider.notifier).state = user.getAccessibleLandingSection(db.roles);
           }
@@ -259,7 +321,9 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
             ref.read(selectedProductionProductIdProvider.notifier).state = prodProductId;
           }
           await ref.read(activeRecordDetailsStackProvider.notifier).loadFromStorage();
-        } catch (_) {}
+        } catch (e, st) {
+      debugPrint('[SessionExpiry ERROR] $e\n$st');
+    }
         _startSessionTimer();
         return true;
       }
@@ -284,7 +348,13 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final landingSection = user.getAccessibleLandingSection(db.roles);
       ref.read(currentNavSectionProvider.notifier).state = landingSection;
       ref.read(activeRecordDetailsStackProvider.notifier).clear();
+      _sessionStartTime = DateTime.now();
+      _lastUserActivityTime = _sessionStartTime!;
+      _lastPersistedActivityTime = _lastUserActivityTime;
+      _dismissWarningDialog();
+      await CrossTabSessionSync.notifyLogin();
       await _persistSession(user, landingSection);
+      await CrossTabSessionSync.updateLastActivity(_lastUserActivityTime);
       _startSessionTimer();
       return true;
     } catch (e) {
@@ -303,7 +373,13 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
           final landingSection = user.getAccessibleLandingSection(db.roles);
           ref.read(currentNavSectionProvider.notifier).state = landingSection;
           ref.read(activeRecordDetailsStackProvider.notifier).clear();
+          _sessionStartTime = DateTime.now();
+          _lastUserActivityTime = _sessionStartTime!;
+          _lastPersistedActivityTime = _lastUserActivityTime;
+          _dismissWarningDialog();
+          await CrossTabSessionSync.notifyLogin();
           await _persistSession(user, landingSection);
+          await CrossTabSessionSync.updateLastActivity(_lastUserActivityTime);
           _startSessionTimer();
           return true;
         }
@@ -321,7 +397,13 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       final landingSection = user.getAccessibleLandingSection(db.roles);
       ref.read(currentNavSectionProvider.notifier).state = landingSection;
       ref.read(activeRecordDetailsStackProvider.notifier).clear();
+      _sessionStartTime = DateTime.now();
+      _lastUserActivityTime = _sessionStartTime!;
+      _lastPersistedActivityTime = _lastUserActivityTime;
+      _dismissWarningDialog();
+      CrossTabSessionSync.notifyLogin();
       _persistSession(user, landingSection);
+      CrossTabSessionSync.updateLastActivity(_lastUserActivityTime);
       _startSessionTimer();
       return true;
     }
@@ -342,7 +424,13 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     final landingSection = user.getAccessibleLandingSection(db.roles);
     ref.read(currentNavSectionProvider.notifier).state = landingSection;
     ref.read(activeRecordDetailsStackProvider.notifier).clear();
+    _sessionStartTime = DateTime.now();
+    _lastUserActivityTime = _sessionStartTime!;
+    _lastPersistedActivityTime = _lastUserActivityTime;
+    _dismissWarningDialog();
+    await CrossTabSessionSync.notifyLogin();
     await _persistSession(user, landingSection);
+    await CrossTabSessionSync.updateLastActivity(_lastUserActivityTime);
     _startSessionTimer();
   }
 
@@ -356,7 +444,10 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
     _sessionExpiryTimer?.cancel();
     _sessionExpiryTimer = null;
     _dismissWarningDialog();
-    _authApi.logout();
+    await CrossTabSessionSync.notifyLogout();
+    try {
+      await _authApi.logout();
+    } catch (_) {}
     if (mounted) {
       state = null;
     }
@@ -375,16 +466,29 @@ class AuthStateNotifier extends StateNotifier<AppUser?> {
       await TabSessionStorage.removeItem('erp_sales_create_doc_type');
       await TabSessionStorage.removeItem('erp_sales_create_source_doc_id');
       await TabSessionStorage.removeItem('erp_selected_prod_product_id');
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[SessionExpiry ERROR] $e\n$st');
+    }
   }
 
   @override
   void dispose() {
     _sessionExpiryTimer?.cancel();
     _sessionExpiryTimer = null;
+    _crossTabSub?.cancel();
+    _crossTabSub = null;
     _dismissWarningDialog();
     super.dispose();
   }
+
+  @visibleForTesting
+  Future<void> setMockLastUserActivityTime(DateTime time) async {
+    _lastUserActivityTime = time;
+    await CrossTabSessionSync.updateLastActivity(time);
+  }
+
+  @visibleForTesting
+  Future<void> checkSessionExpiryForTest() => _checkSessionExpiry();
 }
 
 final authStateProvider = StateNotifierProvider<AuthStateNotifier, AppUser?>((ref) {
@@ -417,6 +521,9 @@ final isSessionBootstrapCompleteProvider = StateProvider<bool>((ref) => false);
 final currentNavSectionProvider = StateProvider<ErpNavSection>((ref) {
   return ErpNavSection.dashboard;
 });
+
+// Settings Active Tab Provider (0: System & Company Preferences, 1: User Management & RBAC, 2: WhatsApp Gateway)
+final settingsActiveTabProvider = StateProvider<int>((ref) => 0);
 
 // Sales creation navigation helper state
 final salesCreateDocTypeProvider = StateProvider<SalesDocumentType?>((ref) => null);
@@ -481,7 +588,9 @@ class RecordDetailsStackNotifier extends StateNotifier<List<ActiveRecordDetails>
           state = list;
         }
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[SessionExpiry ERROR] $e\n$st');
+    }
   }
 
   Future<void> persist() async {
@@ -492,7 +601,9 @@ class RecordDetailsStackNotifier extends StateNotifier<List<ActiveRecordDetails>
         final encoded = jsonEncode(state.map((e) => e.toJson()).toList());
         await TabSessionStorage.setItem(_kStorageKey, encoded);
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[SessionExpiry ERROR] $e\n$st');
+    }
   }
 
   Future<void> push(String recordId, String recordType, ErpNavSection parentSection) async {

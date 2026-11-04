@@ -1,4 +1,5 @@
-﻿import 'dart:math';
+import 'dart:async';
+import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'api_config.dart';
@@ -14,6 +15,9 @@ class ApiClient {
 
   late final Dio dio;
   late final Dio _refreshDio;
+
+  // Mutex to serialize concurrent token refresh operations and avoid rotation collisions
+  Future<bool>? _refreshFuture;
 
   ApiClient._internal() {
     final baseOptions = BaseOptions(
@@ -33,7 +37,6 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-
           final token = TokenStorage.instance.accessToken;
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
@@ -63,38 +66,29 @@ class ApiClient {
 
           // Automatic 401 Token Refresh Rotation
           if (error.response?.statusCode == 401) {
-            final refreshToken = TokenStorage.instance.refreshToken;
             final isLoginOrRefresh = error.requestOptions.path.contains('/auth/login') ||
                 error.requestOptions.path.contains('/auth/refresh');
 
-            if (refreshToken != null && !isLoginOrRefresh) {
-              try {
-                final refreshRes = await _refreshDio.post('/auth/refresh', data: {
-                  'refreshToken': refreshToken,
-                });
+            if (!isLoginOrRefresh && TokenStorage.instance.refreshToken != null) {
+              _refreshFuture ??= _executeTokenRefresh().whenComplete(() {
+                _refreshFuture = null;
+              });
 
-                final resData = refreshRes.data;
-                final dataObj = (resData is Map && resData.containsKey('data')) ? resData['data'] : resData;
+              final refreshed = await _refreshFuture!;
+              if (refreshed && TokenStorage.instance.accessToken != null) {
+                // Retry original failed request with new rotated token
+                final originalOptions = error.requestOptions;
+                originalOptions.headers['Authorization'] = 'Bearer ${TokenStorage.instance.accessToken}';
 
-                final newAccessToken = dataObj['accessToken'] as String?;
-                final newRefreshToken = dataObj['refreshToken'] as String?;
-                final expiresIn = (dataObj['expiresIn'] as num?)?.toInt() ?? 1800;
-
-                if (newAccessToken != null) {
-                  TokenStorage.instance.saveTokens(
-                    accessToken: newAccessToken,
-                    refreshToken: newRefreshToken ?? refreshToken,
-                    expiresIn: expiresIn,
-                  );
-
-                  // Retry original failed request with new token
-                  final originalOptions = error.requestOptions;
-                  originalOptions.headers['Authorization'] = 'Bearer $newAccessToken';
-
+                try {
                   final cloneRes = await dio.fetch(originalOptions);
                   return handler.resolve(cloneRes);
+                } catch (retryError) {
+                  if (retryError is DioException) {
+                    return handler.reject(retryError);
+                  }
                 }
-              } catch (_) {
+              } else {
                 TokenStorage.instance.clear();
                 onSessionExpired?.call();
               }
@@ -108,6 +102,36 @@ class ApiClient {
         },
       ),
     );
+  }
+
+  Future<bool> _executeTokenRefresh() async {
+    final refreshToken = TokenStorage.instance.refreshToken;
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+
+    try {
+      final refreshRes = await _refreshDio.post('/auth/refresh', data: {
+        'refreshToken': refreshToken,
+      });
+
+      final resData = refreshRes.data;
+      final dataObj = (resData is Map && resData.containsKey('data')) ? resData['data'] : resData;
+
+      final newAccessToken = dataObj['accessToken'] as String?;
+      final newRefreshToken = dataObj['refreshToken'] as String?;
+      final expiresIn = (dataObj['expiresIn'] as num?)?.toInt() ?? 1800;
+
+      if (newAccessToken != null) {
+        TokenStorage.instance.saveTokens(
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken ?? refreshToken,
+          expiresIn: expiresIn,
+        );
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Unwraps standard backend { data: T, meta: { ... } } responses

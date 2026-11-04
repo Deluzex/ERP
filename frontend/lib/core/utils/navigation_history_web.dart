@@ -18,6 +18,23 @@ class NavigationHistory {
   static dynamic _popStateSubscription;
 
   static bool get canGoBack => _historyStack.length > 1;
+  static bool get isHandlingPopState => _isHandlingPopState;
+
+  static ErpNavSection? getInitialSection() {
+    try {
+      return sectionFromPath(html.window.location.hash);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static int getInitialSettingsTab() {
+    try {
+      return settingsTabFromPath(html.window.location.hash);
+    } catch (_) {
+      return 0;
+    }
+  }
 
   static void initialize(WidgetRef ref, {GlobalKey<NavigatorState>? navigatorKey}) {
     _ref = ref;
@@ -27,9 +44,10 @@ class NavigationHistory {
 
     _historyStack.clear();
 
-    // Check if user loaded the page with a specific URL hash (e.g. #/production-invoices)
+    // Check if user loaded the page with a specific URL hash (e.g. #/settings/users)
     final currentHash = html.window.location.hash;
     final initialFromHash = sectionFromPath(currentHash);
+    final initialTabFromHash = settingsTabFromPath(currentHash);
 
     final ErpNavSection initialSection =
         initialFromHash ?? ref.read(currentNavSectionProvider);
@@ -38,12 +56,21 @@ class NavigationHistory {
     if (initialFromHash != null) {
       ref.read(currentNavSectionProvider.notifier).state = initialSection;
     }
+    if (initialSection == ErpNavSection.settings) {
+      ref.read(settingsActiveTabProvider.notifier).state = initialTabFromHash;
+    }
 
     try {
+      final initialPath = initialSection == ErpNavSection.settings && initialTabFromHash != 0
+          ? '#/${pathToSettingsTab(initialTabFromHash)}'
+          : '#/${pathToSection(initialSection)}';
       html.window.history.replaceState(
-        {'section': initialSection.name},
+        {
+          'section': initialSection.name,
+          if (initialSection == ErpNavSection.settings) 'settingsTab': initialTabFromHash,
+        },
         initialSection.name,
-        '#/${pathToSection(initialSection)}',
+        initialPath,
       );
     } catch (_) {}
 
@@ -68,17 +95,25 @@ class NavigationHistory {
       // 3. Extract target section from event state or location hash
       final state = event.state;
       ErpNavSection? targetSection;
+      int? targetSettingsTab;
 
-      if (state is Map && state['section'] != null) {
-        for (final s in ErpNavSection.values) {
-          if (s.name == state['section'].toString()) {
-            targetSection = s;
-            break;
+      if (state is Map) {
+        if (state['section'] != null) {
+          for (final s in ErpNavSection.values) {
+            if (s.name == state['section'].toString()) {
+              targetSection = s;
+              break;
+            }
           }
+        }
+        if (state['settingsTab'] != null) {
+          targetSettingsTab = int.tryParse(state['settingsTab'].toString());
         }
       }
 
-      targetSection ??= sectionFromPath(html.window.location.hash);
+      final hash = html.window.location.hash;
+      targetSection ??= sectionFromPath(hash);
+      targetSettingsTab ??= settingsTabFromPath(hash);
 
       if (targetSection != null) {
         _isHandlingPopState = true;
@@ -92,6 +127,9 @@ class NavigationHistory {
             }
           }
           _ref!.read(currentNavSectionProvider.notifier).state = targetSection;
+          if (targetSection == ErpNavSection.settings && targetSettingsTab != null) {
+            _ref!.read(settingsActiveTabProvider.notifier).state = targetSettingsTab;
+          }
         } finally {
           _isHandlingPopState = false;
         }
@@ -109,11 +147,35 @@ class NavigationHistory {
     _historyStack.add(section);
 
     try {
-      final targetPath = '#/${pathToSection(section)}';
+      String targetPath;
+      final Map<String, dynamic> stateData = {'section': section.name};
+      if (section == ErpNavSection.settings && _ref != null) {
+        final currentTab = _ref!.read(settingsActiveTabProvider);
+        targetPath = '#/${pathToSettingsTab(currentTab)}';
+        stateData['settingsTab'] = currentTab;
+      } else {
+        targetPath = '#/${pathToSection(section)}';
+      }
+
       if (html.window.location.hash != targetPath) {
         html.window.history.pushState(
-          {'section': section.name},
+          stateData,
           section.name,
+          targetPath,
+        );
+      }
+    } catch (_) {}
+  }
+
+  static void onSettingsTabChanged(int tabIndex) {
+    if (_isHandlingPopState) return;
+
+    try {
+      final targetPath = '#/${pathToSettingsTab(tabIndex)}';
+      if (html.window.location.hash != targetPath) {
+        html.window.history.pushState(
+          {'section': ErpNavSection.settings.name, 'settingsTab': tabIndex},
+          'Settings',
           targetPath,
         );
       }
@@ -158,6 +220,32 @@ class NavigationHistory {
     _navigatorKey = null;
     _isHandlingPopState = false;
     _historyStack.clear();
+  }
+
+  static String pathToSettingsTab(int tabIndex) {
+    switch (tabIndex) {
+      case 1:
+        return 'settings/users';
+      case 2:
+        return 'settings/whatsapp';
+      case 0:
+      default:
+        return 'settings';
+    }
+  }
+
+  static int settingsTabFromPath(String path) {
+    final clean = path.replaceAll('#', '').trim();
+    if (clean.isEmpty || clean == '/') return 0;
+    final segments = clean.split('/').where((s) => s.isNotEmpty).toList();
+    if (segments.isEmpty) return 0;
+    if (segments.first.toLowerCase() == 'settings' && segments.length >= 2) {
+      final sub = segments[1].toLowerCase();
+      if (sub == 'users' || sub == 'rbac' || sub == 'user-management') return 1;
+      if (sub == 'whatsapp' || sub == 'wa' || sub == 'gateway') return 2;
+      return 0;
+    }
+    return 0;
   }
 
   static String pathToSection(ErpNavSection section) {
@@ -287,4 +375,3 @@ class NavigationHistory {
     return null;
   }
 }
-

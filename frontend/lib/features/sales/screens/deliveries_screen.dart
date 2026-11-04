@@ -203,110 +203,128 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
   }
 
   void _showCreateInvoiceFromDeliveryDialog(BuildContext context, Sale delivery, MockDatabaseService db) {
+    if (delivery.isInvoiced) {
+      ErpToast.showWarning(context, 'An invoice has already been generated for Challan ${delivery.invoiceNumber}.');
+      return;
+    }
+
     final discountCtrl = TextEditingController(text: '0');
     final initialPaidCtrl = TextEditingController(text: '0');
     final notesCtrl = TextEditingController(text: 'Invoice against Delivery ${delivery.invoiceNumber}');
+    bool isGenerating = false;
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.receipt_long_outlined, color: AppColors.success, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Generate Tax Invoice from Delivery', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  Text('Delivery Challan: ${delivery.invoiceNumber} (Delivered Qty only)', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        content: Container(
-          constraints: const BoxConstraints(maxWidth: 480),
-          width: double.infinity,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          title: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.receipt_long_outlined, color: AppColors.success, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      const Text('Delivered Material Value:'),
-                      Text(Formatters.formatCurrency(delivery.totalAmount), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ]),
-                    const SizedBox(height: 4),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      Text('Customer / Party:', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-                      Text(delivery.partyName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-                    ]),
+                    const Text('Generate Tax Invoice from Delivery', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text('Delivery Challan: ${delivery.invoiceNumber} (Delivered Qty only)', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: discountCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Invoice Discount (₹)'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: initialPaidCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Initial Payment Received (₹)', helperText: 'Enter 0 if payment is pending / credit period'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: notesCtrl,
-                decoration: const InputDecoration(labelText: 'Invoice Notes / Dispatch Reference'),
-              ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ErpButton(
-            text: 'Generate Tax Invoice',
-            icon: Icons.check,
-            onPressed: () async {
-              final discount = double.tryParse(discountCtrl.text.trim()) ?? 0.0;
-              final paid = double.tryParse(initialPaidCtrl.text.trim()) ?? 0.0;
-
-              try {
-                final invoice = await db.createSalesInvoiceFromDeliveryAsync(
-                  deliveryId: delivery.id,
-                  discountAmount: discount,
-                  initialPaidAmount: paid,
-                  notes: notesCtrl.text.trim(),
-                );
-
-                Navigator.pop(ctx);
-                ErpToast.showSuccess(
-                  context,
-                  'Tax Invoice ${invoice.invoiceNumber} created from delivered items!',
-                );
-                ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
-              } catch (e) {
-                ErpToast.showError(
-                  context,
-                  'Failed to generate invoice: $e',
-                );
-              }
-            },
+          content: Container(
+            constraints: const BoxConstraints(maxWidth: 480),
+            width: double.infinity,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
+                  child: Column(
+                    children: [
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        const Text('Delivered Material Value:'),
+                        Text(Formatters.formatCurrency(delivery.totalAmount), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ]),
+                      const SizedBox(height: 4),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        Text('Customer / Party:', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                        Text(delivery.partyName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      ]),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: discountCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Invoice Discount (₹)'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: initialPaidCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Initial Payment Received (₹)', helperText: 'Enter 0 if payment is pending / credit period'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: notesCtrl,
+                  decoration: const InputDecoration(labelText: 'Invoice Notes / Dispatch Reference'),
+                ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: isGenerating ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ErpButton(
+              text: isGenerating ? 'Generating...' : 'Generate Tax Invoice',
+              icon: isGenerating ? null : Icons.check,
+              isLoading: isGenerating,
+              onPressed: isGenerating
+                  ? null
+                  : () async {
+                      final discount = double.tryParse(discountCtrl.text.trim()) ?? 0.0;
+                      final paid = double.tryParse(initialPaidCtrl.text.trim()) ?? 0.0;
+
+                      setDialogState(() => isGenerating = true);
+                      try {
+                        final invoice = await db.createSalesInvoiceFromDeliveryAsync(
+                          deliveryId: delivery.id,
+                          discountAmount: discount,
+                          initialPaidAmount: paid,
+                          notes: notesCtrl.text.trim(),
+                        );
+
+                        if (!context.mounted) return;
+                        Navigator.pop(ctx);
+                        ErpToast.showSuccess(
+                          context,
+                          'Tax Invoice ${invoice.invoiceNumber} created from delivered items!',
+                        );
+                        ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+                      } catch (e) {
+                        setDialogState(() => isGenerating = false);
+                        if (!context.mounted) return;
+                        ErpToast.showError(
+                          context,
+                          'Failed to generate invoice: $e',
+                        );
+                      }
+                    },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -355,8 +373,8 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
               final cardWidth = constraints.maxWidth > 850
                   ? (constraints.maxWidth - (3 * 12)) / 4
                   : (constraints.maxWidth > 550 ? (constraints.maxWidth - 12) / 2 : double.infinity);
-              final invoicedCount = db.deliveries.where((d) => d.status == 'invoiced').length;
-              final pendingInvoiceCount = db.deliveries.where((d) => d.status != 'invoiced').length;
+              final invoicedCount = db.deliveries.where((d) => d.isInvoiced).length;
+              final pendingInvoiceCount = db.deliveries.where((d) => !d.isInvoiced).length;
               final totalValue = db.deliveries.fold(0.0, (sum, d) => sum + d.totalAmount);
 
               return Wrap(
@@ -698,7 +716,9 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                   ),
 
                   // 7. Status
-                  ErpStatusBadge.success('DISPATCHED'),
+                  dlv.isInvoiced
+                      ? ErpStatusBadge.categoryPurple('INVOICED')
+                      : ErpStatusBadge.success('DISPATCHED'),
 
                   // 8. Actions
                   PopupMenuButton<String>(
@@ -708,6 +728,21 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                       switch (action) {
                         case 'view':
                           SalesPdfGeneratorDialog.show(context, dlv, db);
+                          break;
+                        case 'view_invoice':
+                          Sale? inv;
+                          if (dlv.linkedInvoiceId != null && dlv.linkedInvoiceId!.isNotEmpty) {
+                            inv = db.sales.where((s) => s.id == dlv.linkedInvoiceId).firstOrNull;
+                          }
+                          inv ??= db.sales.where((s) => s.documentType == SalesDocumentType.invoice &&
+                              ((dlv.linkedInvoiceNumber != null && s.invoiceNumber == dlv.linkedInvoiceNumber) ||
+                               s.deliveryReferenceId == dlv.id ||
+                               (s.notes != null && s.notes!.contains(dlv.invoiceNumber)))).firstOrNull;
+                          if (inv != null) {
+                            SalesPdfGeneratorDialog.show(context, inv, db);
+                          } else {
+                            ref.read(currentNavSectionProvider.notifier).state = ErpNavSection.salesInvoiceList;
+                          }
                           break;
                         case 'invoice':
                           final fullDlv = await db.getDeliveryDetailAsync(dlv.id);
@@ -742,16 +777,28 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
-                        value: 'invoice',
-                        child: Row(
-                          children: [
-                            Icon(Icons.receipt_long, size: 16, color: AppColors.primary),
-                            SizedBox(width: 8),
-                            Expanded(child: Text('Create Invoice')),
-                          ],
+                      if (dlv.isInvoiced)
+                        const PopupMenuItem(
+                          value: 'view_invoice',
+                          child: Row(
+                            children: [
+                              Icon(Icons.receipt_long, size: 16, color: AppColors.info),
+                              SizedBox(width: 8),
+                              Expanded(child: Text('View Invoice')),
+                            ],
+                          ),
+                        )
+                      else
+                        const PopupMenuItem(
+                          value: 'invoice',
+                          child: Row(
+                            children: [
+                              Icon(Icons.receipt_long, size: 16, color: AppColors.primary),
+                              SizedBox(width: 8),
+                              Expanded(child: Text('Create Invoice')),
+                            ],
+                          ),
                         ),
-                      ),
                       const PopupMenuItem(
                         value: 'tracking',
                         child: Row(
