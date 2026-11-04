@@ -43,12 +43,12 @@ export class ChatController {
   @Post('broadcast')
   @AllowAuthenticated()
   @ApiOperation({ summary: 'Admin-only: broadcast WhatsApp + in-app message to selected users' })
-  async broadcast(@Body() dto: BroadcastRequestDto, @Ctx() ctx: RequestContext) {
-    const role = (ctx.roleId || '').toLowerCase();
+  async broadcast(@Body() dto: BroadcastRequestDto, @Ctx() ctx?: RequestContext) {
+    const role = (ctx?.roleId || '').toLowerCase();
     const isAdmin = role === 'admin' || role === 'super_admin';
     if (!isAdmin) {
       throw new ForbiddenException('Only administrators can send broadcast messages');
     }
-    return this.chatService.broadcastMessage(dto, ctx.userId);
+    return this.chatService.broadcastMessage(dto, ctx?.userId || '');
   }
 }

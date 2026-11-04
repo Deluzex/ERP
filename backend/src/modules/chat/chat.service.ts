@@ -22,7 +22,7 @@ export class ChatService {
     private readonly config: ConfigService,
     private readonly notificationsService: NotificationsService,
   ) {
-    this.gatewayUrl = this.config.get<string>('WHATSAPP_GATEWAY_URL', '');
+    this.gatewayUrl = (this.config.get<string>('WHATSAPP_GATEWAY_URL', '') || '').replace(/\/+$/, '');
     this.apiKey = this.config.get<string>('WHATSAPP_GATEWAY_KEY', '');
     this.configuredSessionId = this.config.get<string>('WHATSAPP_GATEWAY_SESSION_ID', '');
     this.activeSessionId = this.configuredSessionId;
@@ -38,6 +38,9 @@ export class ChatService {
     if (this.configuredSessionId) {
       this.activeSessionId = this.configuredSessionId;
       return this.activeSessionId;
+    }
+    if (!this.gatewayUrl) {
+      return '';
     }
     try {
       const res = await axios.get(`${this.gatewayUrl}/v1/sessions/pair`, {
@@ -84,9 +87,13 @@ export class ChatService {
   }
 
   /**
-   * Cleans phone number to international format without + or spaces (e.g., 919876543210)
+   * Cleans phone number to international format without + or spaces (e.g., 919876543210).
+   * Safely returns empty string if phone is null, undefined, or not a string.
    */
-  private cleanPhoneNumber(phone: string): string {
+  private cleanPhoneNumber(phone?: string | null): string {
+    if (!phone || typeof phone !== 'string') {
+      return '';
+    }
     let clean = phone.replace(/\D/g, '');
     if (clean.length === 10) {
       clean = '91' + clean;
@@ -96,84 +103,89 @@ export class ChatService {
 
   async broadcastMessage(dto: BroadcastRequestDto, actorUserId: string): Promise<BroadcastResult> {
     const result: BroadcastResult = { sent: 0, failed: 0, inAppCreated: 0 };
-    const formattedMessage = `*${dto.subject}*\n\n${dto.message}`;
 
-    for (let i = 0; i < dto.recipients.length; i++) {
-      const recipient = dto.recipients[i];
-      // ── WhatsApp channel ──────────────────────────────────────────────────
-      if (dto.sendWhatsApp !== false) {
-        const cleanPhone = this.cleanPhoneNumber(recipient.phone);
-        const idempotencyKey = `broadcast-${Date.now()}-${recipient.userId}`;
-        try {
-          const activeSessionId = await this.getEffectiveSessionId();
-          const sendPayload: Record<string, any> = {
-            to: cleanPhone,
-            message: formattedMessage,
-          };
-          if (activeSessionId) {
-            sendPayload.sessionId = activeSessionId;
-          }
+    try {
+      const subject = dto?.subject ? String(dto.subject).trim() : 'Notice';
+      const body = dto?.message ? String(dto.message).trim() : '';
+      const formattedMessage = `*${subject}*\n\n${body}`;
+      const recipients = Array.isArray(dto?.recipients) ? dto.recipients : [];
 
-          // Zero-Session-ID / Targeted Session POST /v1/messages/send
-          await axios.post(
-            `${this.gatewayUrl}/v1/messages/send`,
-            sendPayload,
-            {
-              headers: {
-                'X-API-Key': this.apiKey,
-                'Idempotency-Key': idempotencyKey,
-                'Content-Type': 'application/json',
-              },
-              timeout: 10_000,
-            },
-          );
-          result.sent++;
-          this.logger.log(`WA sent to ${recipient.name} (${cleanPhone})`);
-        } catch (err: any) {
-          result.failed++;
-          this.logger.error(
-            `WA failed for ${recipient.name} (${cleanPhone}): ${err?.response?.data ? JSON.stringify(err.response.data) : err.message}`,
-          );
+      for (let i = 0; i < recipients.length; i++) {
+        const recipient = recipients[i];
+        if (!recipient) {
+          continue;
         }
 
-        // Anti-ban humanized pacing (random jitter 3.5s - 6.5s + batch cooldown)
-        await this.humanizedAntiBanDelay(i, dto.recipients.length);
-      }
+        // ── WhatsApp channel ──────────────────────────────────────────────────
+        if (dto.sendWhatsApp !== false) {
+          const cleanPhone = this.cleanPhoneNumber(recipient.phone);
+          const idempotencyKey = `broadcast-${Date.now()}-${recipient.userId || i}`;
 
-      // ── In-App Notification channel ───────────────────────────────────────
-      if (dto.sendInApp !== false) {
-        try {
-          let recipientUserId: string | undefined = undefined;
-          if (
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-              recipient.userId,
-            )
-          ) {
-            recipientUserId = recipient.userId;
+          if (!cleanPhone || cleanPhone.length < 10) {
+            result.failed++;
+            this.logger.warn(
+              `WA skipped for ${recipient.name || 'unknown'}: missing or invalid phone number (${recipient.phone})`,
+            );
+          } else {
+            try {
+              const activeSessionId = await this.getEffectiveSessionId();
+              const sendPayload: Record<string, any> = {
+                to: cleanPhone,
+                message: formattedMessage,
+              };
+              if (activeSessionId) {
+                sendPayload.sessionId = activeSessionId;
+              }
+
+              // Zero-Session-ID / Targeted Session POST /v1/messages/send
+              await axios.post(
+                `${this.gatewayUrl}/v1/messages/send`,
+                sendPayload,
+                {
+                  headers: {
+                    'X-API-Key': this.apiKey,
+                    'Idempotency-Key': idempotencyKey,
+                    'Content-Type': 'application/json',
+                  },
+                  timeout: 10_000,
+                },
+              );
+              result.sent++;
+              this.logger.log(`WA sent to ${recipient.name} (${cleanPhone})`);
+            } catch (err: any) {
+              result.failed++;
+              this.logger.error(
+                `WA failed for ${recipient.name} (${cleanPhone}): ${err?.response?.data ? JSON.stringify(err.response.data) : err.message}`,
+              );
+            }
           }
 
+          // Anti-ban humanized pacing (random jitter 3.5s - 6.5s + batch cooldown)
           try {
-            await this.notificationsService.createNotification(
-              {
-                title: dto.subject,
-                message: dto.message,
-                notificationType: 'team_broadcast',
-                recipientUserId,
-                recipientName: recipient.name,
-                sourceModule: 'chat',
-                relatedEntityType: 'broadcast',
-                data: { broadcastedBy: actorUserId, recipientUserId: recipient.userId },
-              },
-              actorUserId,
-            );
-            result.inAppCreated++;
-          } catch (fkError: any) {
-            if (recipientUserId && fkError.message?.includes('foreign key constraint')) {
+            await this.humanizedAntiBanDelay(i, recipients.length);
+          } catch (_) {}
+        }
+
+        // ── In-App Notification channel ───────────────────────────────────────
+        if (dto.sendInApp !== false) {
+          try {
+            let recipientUserId: string | undefined = undefined;
+            if (
+              recipient.userId &&
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                recipient.userId,
+              )
+            ) {
+              recipientUserId = recipient.userId;
+            }
+
+            try {
               await this.notificationsService.createNotification(
                 {
-                  title: dto.subject,
-                  message: dto.message,
+                  title: subject,
+                  message: body,
                   notificationType: 'team_broadcast',
+                  recipientUserId,
                   recipientName: recipient.name,
                   sourceModule: 'chat',
                   relatedEntityType: 'broadcast',
@@ -182,16 +194,34 @@ export class ChatService {
                 actorUserId,
               );
               result.inAppCreated++;
-            } else {
-              throw fkError;
+            } catch (fkError: any) {
+              if (recipientUserId && fkError.message?.includes('foreign key constraint')) {
+                await this.notificationsService.createNotification(
+                  {
+                    title: subject,
+                    message: body,
+                    notificationType: 'team_broadcast',
+                    recipientName: recipient.name,
+                    sourceModule: 'chat',
+                    relatedEntityType: 'broadcast',
+                    data: { broadcastedBy: actorUserId, recipientUserId: recipient.userId },
+                  },
+                  actorUserId,
+                );
+                result.inAppCreated++;
+              } else {
+                throw fkError;
+              }
             }
+          } catch (err: any) {
+            this.logger.error(
+              `In-app notification failed for ${recipient?.userId}: ${err.message}`,
+            );
           }
-        } catch (err: any) {
-          this.logger.error(
-            `In-app notification failed for ${recipient.userId}: ${err.message}`,
-          );
         }
       }
+    } catch (topLevelError: any) {
+      this.logger.error(`Critical broadcast failure: ${topLevelError.message}`, topLevelError.stack);
     }
 
     return result;
@@ -241,7 +271,7 @@ export class ChatService {
     message?: string;
   }> {
     try {
-      // Zero-Session-ID Edition: GET /v1/sessions/pair?force=true
+      // Zero-Session-ID Edition: GET /v1/sessions/pair?force=${force}
       const res = await axios.get(`${this.gatewayUrl}/v1/sessions/pair?force=${force}`, {
         headers: { 'X-API-Key': this.apiKey },
         timeout: 10000,

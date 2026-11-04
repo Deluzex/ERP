@@ -13,10 +13,10 @@ export class BroadcastRecipientDto {
   @IsNotEmpty()
   name!: string;
 
-  @ApiProperty({ description: 'Recipient Phone Number' })
+  @ApiPropertyOptional({ description: 'Recipient Phone Number' })
   @IsString()
-  @IsNotEmpty()
-  phone!: string;
+  @IsOptional()
+  phone?: string;
 }
 
 export class BroadcastRequestDto {
